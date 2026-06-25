@@ -38,8 +38,8 @@
             @timeupdate="onTimeUpdate"
             @loadedmetadata="onMetadataLoaded"
             @durationchange="onDurationChange"
-            @play="isPaused = false"
-            @pause="isPaused = true"
+            @play="onPlayTrigger"
+            @pause="onPauseTrigger"
             @ended="handleVideoEnded"
             @volumechange="onVolumeChange"
             @waiting="isBuffering = true"
@@ -768,6 +768,53 @@ const onTimeUpdate = () => {
   }
 };
 
+const updateMediaSession = () => {
+  if (process.client && 'mediaSession' in navigator && video.value) {
+    const v = videoPlayer.value;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: video.value.title || 'YouKeep Video',
+      artist: video.value.channel_title || 'YouKeep',
+      album: 'YouKeep Archive',
+      artwork: [
+        { 
+          src: video.value.local_thumbnail_path || (video.value.id ? `https://i.ytimg.com/vi/${video.value.id}/hqdefault.jpg` : ''),
+          sizes: '512x512',
+          type: 'image/jpeg' 
+        }
+      ]
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      if (v) v.play();
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      if (v) v.pause();
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', () => {
+      skip(-10);
+    });
+    navigator.mediaSession.setActionHandler('seekforward', () => {
+      skip(10);
+    });
+    try {
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (v && details.seekTime !== undefined) {
+          v.currentTime = details.seekTime;
+        }
+      });
+    } catch (e) {}
+  }
+};
+
+const onPlayTrigger = () => {
+  isPaused.value = false;
+  updateMediaSession();
+};
+
+const onPauseTrigger = () => {
+  isPaused.value = true;
+};
+
 const onMetadataLoaded = () => {
   const v = videoPlayer.value;
   if (!v) return;
@@ -778,6 +825,7 @@ const onMetadataLoaded = () => {
   v.play().catch(() => {
     isPaused.value = true;
   });
+  updateMediaSession();
 };
 
 const onDurationChange = () => {
@@ -935,9 +983,38 @@ const onDocumentClick = (e: MouseEvent) => {
   }
 };
 
+const wasPlayingBeforeVisibilityChange = ref(false);
+
+const handleVisibilityChange = () => {
+  const v = videoPlayer.value;
+  if (!v) return;
+  
+  if (document.hidden) {
+    wasPlayingBeforeVisibilityChange.value = !v.paused;
+    if (wasPlayingBeforeVisibilityChange.value) {
+      // In background: wait a moment and try to resume if browser auto-paused it.
+      setTimeout(() => {
+        if (v.paused) {
+          v.play().catch(err => {
+            console.log('Background play request failed:', err);
+          });
+        }
+      }, 200);
+    }
+  } else {
+    // Returned to foreground
+    if (wasPlayingBeforeVisibilityChange.value && v.paused) {
+      v.play().catch(() => {});
+    }
+  }
+};
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('click', onDocumentClick);
+  if (process.client) {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
   
   // Focus player container for keyboard shortcuts
   nextTick(() => {
@@ -948,6 +1025,9 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange);
   document.removeEventListener('click', onDocumentClick);
+  if (process.client) {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }
   if (controlsTimeout) clearTimeout(controlsTimeout);
 });
 
