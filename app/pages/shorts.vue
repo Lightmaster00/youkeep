@@ -7,17 +7,14 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="videos.length === 0" class="empty-state glass-panel">
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-gradient">
-        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-        <line x1="7" y1="2" x2="7" y2="22"></line>
-        <line x1="17" y1="2" x2="17" y2="22"></line>
-        <line x1="2" y1="12" x2="22" y2="12"></line>
-      </svg>
-      <h3>No Shorts available</h3>
-      <p>There are no archived videos in MyTeub yet or ready to be recommended.</p>
-      <NuxtLink to="/" class="btn btn-primary mt-4">Back to Home</NuxtLink>
-    </div>
+    <EmptyState
+      v-else-if="videos.length === 0"
+      title="No Shorts available"
+      description="There are no archived videos in YouKeep yet or ready to be recommended."
+      icon="shorts"
+      action-text="Back to Home"
+      action-route="/"
+    />
 
     <!-- Combined layout: video on the left (smartphone-frame) and comments on the right (comments-pane) -->
     <div v-else class="shorts-layout-wrapper">
@@ -122,14 +119,14 @@
             </select>
           </div>
           <p v-if="activeIndex !== -1 && videos[activeIndex]" class="video-date-sub">
-            Published on {{ formatVideoDate(videos[activeIndex].upload_date) }}
+            Published on {{ formatVideoDate(videos[activeIndex]?.upload_date) }}
           </p>
         </div>
         <div class="comments-pane-body">
           <div v-if="activeTrackingVideoId && commentsLoadingMap[activeTrackingVideoId]" class="comments-pane-loading">
             <div class="spinner-sm"></div>
           </div>
-          <div v-else-if="!activeTrackingVideoId || !commentsMap[activeTrackingVideoId] || commentsMap[activeTrackingVideoId].length === 0" class="comments-pane-empty">
+          <div v-else-if="!activeTrackingVideoId || !commentsMap[activeTrackingVideoId || ''] || commentsMap[activeTrackingVideoId || '']?.length === 0" class="comments-pane-empty">
             No comments for this Short.
           </div>
           <div v-else class="comments-pane-list">
@@ -182,6 +179,7 @@ interface Video {
   channel_id: string;
   channel_title: string;
   channel_avatar: string;
+  upload_date: string | null;
   watchTimeTracked?: number;
 }
 
@@ -515,7 +513,7 @@ const shareShort = (video: Video) => {
   toast.success('Short link copied to clipboard!');
 };
 
-const formatVideoDate = (dateStr: string | null): string => {
+const formatVideoDate = (dateStr: string | null | undefined): string => {
   if (!dateStr || dateStr.length !== 8) return 'Unknown date';
   const year = dateStr.slice(0, 4);
   const month = dateStr.slice(4, 6);
@@ -554,8 +552,8 @@ const handleAvatarError = (event: Event) => {
   overflow: hidden;
 }
 
-/* loading / empty */
-.loading-state, .empty-state {
+/* loading */
+.loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;

@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
                 pt: 'Portuguese',
               };
               // Match codes like en-US, fr-FR, etc.
-              const cleanCode = langCode.split('-')[0].toLowerCase();
+              const cleanCode = langCode.split('-')[0]?.toLowerCase() || langCode.toLowerCase();
               const label = labelMap[cleanCode] || langCode.toUpperCase();
               const url = `/downloads/${channelFolder}/${file}`;
               subtitles.push({ code: langCode, label, url });

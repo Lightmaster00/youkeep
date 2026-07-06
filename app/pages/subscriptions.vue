@@ -1,6 +1,6 @@
 <template>
   <div class="subscriptions-page">
-    <h1 class="page-title">Subscriptions</h1>
+    <h1 v-if="channels && channels.length > 0" class="page-title">Subscriptions</h1>
 
     <!-- Subscribed Channels UI -->
     <div v-if="channels && channels.length > 0" class="subscribed-channels-section">
@@ -30,53 +30,24 @@
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="videos.length === 0" class="empty-state glass-panel">
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-      <h3 v-if="inactiveChannelIds.length === channels.length && channels.length > 0">All channels are disabled</h3>
-      <h3 v-else>No videos in your subscriptions</h3>
-      <p>Subscribe to YouTube channels in the archive to see their downloaded videos here.</p>
-      <NuxtLink to="/channels" class="btn btn-primary mt-4">
-        Discover channels
-      </NuxtLink>
-    </div>
+    <EmptyState
+      v-else-if="videos.length === 0"
+      :title="inactiveChannelIds.length === channels.length && channels.length > 0 ? 'All channels are disabled' : 'No videos in your subscriptions'"
+      description="Subscribe to YouTube channels in the archive to see their downloaded videos here."
+      icon="book"
+      action-text="Discover channels"
+      action-route="/channels"
+    />
 
     <!-- Video Grid -->
     <div v-else class="video-grid-wrapper">
       <div class="video-grid">
-        <div v-for="video in videos" :key="video.id" class="video-card premium-card" @click="playVideo(video.id)">
-          <!-- Thumbnail Wrapper -->
-            <div class="thumbnail-wrapper">
-              <img 
-                :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
-                class="thumbnail-img" 
-                alt="Thumbnail"
-                loading="lazy"
-              />
-              <span class="duration-badge">{{ formatDuration(video.duration) }}</span>
-              <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
-            </div>
-
-          <!-- Video Details -->
-          <div class="video-info">
-            <div class="avatar-col">
-              <img 
-                :src="video.channel_avatar || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'" 
-                @error="handleAvatarError"
-                class="channel-avatar" 
-                alt="Avatar"
-              />
-            </div>
-            <div class="details-col">
-              <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
-              <p class="channel-title">{{ video.channel_title }}</p>
-              <div class="metadata-row">
-                <span>{{ formatViews(video.view_count) }} views</span>
-                <span class="dot">•</span>
-                <span>{{ formatUploadDate(video.upload_date) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <VideoCard
+          v-for="video in videos"
+          :key="video.id"
+          :video="video"
+          @hidden="onVideoHidden"
+        />
       </div>
 
       <!-- Infinite Scroll Trigger -->
@@ -155,7 +126,7 @@ const fetchVideos = async (isLoadMore = false) => {
 
 const setupObserver = () => {
   observer = new IntersectionObserver((entries) => {
-    if (entries[0].isIntersecting && hasMore.value && !loadingMore.value && !pending.value) {
+    if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value && !pending.value) {
       page.value++;
       fetchVideos(true);
     }
@@ -189,55 +160,8 @@ watch(inactiveChannelIds, () => {
   fetchVideos();
 }, { deep: true });
 
-// Play video
-const playVideo = (id: string) => {
-  navigateTo(`/watch/${id}`);
-};
-
 const onVideoHidden = (id: string) => {
   videos.value = videos.value.filter((v: any) => v.id !== id);
-};
-
-/* Format Helpers */
-const formatDuration = (seconds: number | null): string => {
-  if (!seconds) return '--:--';
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
-
-const formatViews = (views: number | null): string => {
-  if (views === null || views === undefined) return '0';
-  if (views >= 1000000) {
-    return (views / 1000000).toFixed(1).replace('.0', '') + 'M';
-  }
-  if (views >= 1000) {
-    return (views / 1000).toFixed(1).replace('.0', '') + 'k';
-  }
-  return views.toString();
-};
-
-const formatUploadDate = (dateStr: string | null): string => {
-  if (!dateStr || dateStr.length !== 8) return 'Unknown date';
-  const year = dateStr.slice(0, 4);
-  const month = dateStr.slice(4, 6);
-  const day = dateStr.slice(6, 8);
-  
-  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
-};
-
-const handleAvatarError = (event: Event) => {
-  const target = event.target as HTMLImageElement;
-  const fallback = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"><circle cx="12" cy="12" r="10"></circle><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z"></path></svg>';
-  if (target && target.src !== fallback) {
-    target.src = fallback;
-  }
 };
 </script>
 
@@ -248,10 +172,7 @@ const handleAvatarError = (event: Event) => {
   gap: 24px;
 }
 
-.page-title {
-  font-size: 24px;
-  font-weight: 800;
-}
+
 
 /* Subscribed Channels Bar */
 .subscribed-channels-section {
@@ -350,27 +271,7 @@ const handleAvatarError = (event: Event) => {
   margin-top: 20px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 40px;
-  text-align: center;
-  border-radius: var(--border-radius-md);
-  gap: 16px;
-}
 
-.empty-state h3 {
-  font-size: 20px;
-}
-
-.empty-state p {
-  color: var(--text-secondary);
-  font-size: 14px;
-  max-width: 450px;
-  line-height: 1.5;
-}
 
 .video-grid {
   display: grid;

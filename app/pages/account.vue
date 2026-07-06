@@ -59,7 +59,7 @@
               </div>
             </div>
 
-            <div v-if="profileMessage" class="form-msg mt-3 success-msg">
+            <div v-if="profileMessage" class="form-msg mt-3" :class="profileSuccess ? 'success-msg' : 'error-msg'">
               {{ profileMessage }}
             </div>
 
@@ -127,12 +127,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 
 const { user: currentUser } = useAuth();
 
-// --- Profile Info Logic (Visual for now) ---
+// --- Profile Info Logic ---
 const profile = reactive({
   firstName: '',
   lastName: '',
@@ -142,15 +142,42 @@ const profile = reactive({
 });
 const savingProfile = ref(false);
 const profileMessage = ref('');
+const profileSuccess = ref(true);
 
-const handleSavePersonalInfo = () => {
+const fetchProfile = async () => {
+  try {
+    const data = await $fetch('/api/account/profile');
+    profile.firstName = data.firstName;
+    profile.lastName = data.lastName;
+    profile.email = data.email;
+    profile.phone = data.phone;
+    profile.dob = data.dob;
+  } catch (err: any) {
+    console.error('Failed to load profile data', err);
+  }
+};
+
+onMounted(() => {
+  fetchProfile();
+});
+
+const handleSavePersonalInfo = async () => {
   savingProfile.value = true;
   profileMessage.value = '';
-  // Simulate network request
-  setTimeout(() => {
+  profileSuccess.value = true;
+  try {
+    await $fetch('/api/account/profile', {
+      method: 'PUT',
+      body: profile
+    });
+    profileSuccess.value = true;
+    profileMessage.value = 'Personal information saved successfully!';
+  } catch (err: any) {
+    profileSuccess.value = false;
+    profileMessage.value = err.data?.statusMessage || 'Saving profile failed.';
+  } finally {
     savingProfile.value = false;
-    profileMessage.value = 'Personal information saved successfully! (Visual preview)';
-  }, 800);
+  }
 };
 
 // --- Password Change Logic ---
@@ -205,17 +232,11 @@ const handleChangeOwnPassword = async () => {
 .account-container {
   max-width: 1000px;
   margin: 0 auto;
-  padding: 40px 20px;
+  width: 100%;
 }
 
 .account-header {
   margin-bottom: 30px;
-}
-
-.page-title {
-  font-size: 32px;
-  font-weight: 800;
-  margin-bottom: 8px;
 }
 
 .page-subtitle {
@@ -329,27 +350,18 @@ h4 {
 .form-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 32px;
-  margin-bottom: 32px;
+  gap: 36px;
+  margin-bottom: 36px;
 }
 
 .half-width {
   flex: 1;
-  min-width: 200px;
-}
-
-.form-group {
-  margin-bottom: 28px;
+  min-width: 220px;
 }
 
 .form-row .form-group {
   margin-bottom: 0;
 }
 
-.btn-block {
-  width: 100%;
-  justify-content: center;
-  padding: 14px;
-  margin-top: 16px;
-}
+
 </style>

@@ -1,203 +1,128 @@
 <template>
-  <div class="dashboard-container">
+  <div class="home-container">
 
-    <!-- Empty State -->
-    <div v-if="pending" class="loading-state">
+    <!-- Loading -->
+    <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
       <p>Loading library...</p>
     </div>
 
-    <div v-else-if="!videosData?.videos || videosData.videos.length === 0" class="empty-state glass-panel">
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-      <h3>No videos found</h3>
-      <p v-if="searchQuery">No results match your search "{{ searchQuery }}".</p>
-      <p v-else>Your archive is empty. Log in as administrator to add channels or videos.</p>
-      <NuxtLink v-if="isAdmin" to="/settings?tab=downloads" class="btn btn-primary mt-4">
-        Go to downloads
-      </NuxtLink>
+    <!-- Empty -->
+    <EmptyState
+      v-else-if="allVideos.length === 0 && !searchQuery"
+      title="No videos found"
+      description="Your archive is empty. Log in as administrator to add channels or videos."
+      icon="video"
+      :action-text="isAdmin ? 'Go to downloads' : undefined"
+      action-route="/settings?tab=downloads"
+    />
+
+    <!-- Search Mode -->
+    <div v-else-if="searchQuery" class="search-results">
+      <!-- Channel results -->
+      <div v-if="searchedChannels.length > 0" class="search-channels-section">
+        <h3 class="row-title">Channels</h3>
+        <div class="channels-row">
+          <NuxtLink 
+            v-for="channel in searchedChannels.slice(0, 6)" 
+            :key="channel.id" 
+            :to="`/channels?id=${channel.id}`"
+            class="search-channel-pill"
+          >
+            <img :src="channel.avatar_url || fallbackAvatar" @error="handleAvatarError" class="pill-avatar" alt="" />
+            <div class="pill-info">
+              <span class="pill-name">{{ channel.title }}</span>
+              <span class="pill-count">{{ channel.total_count }} videos</span>
+            </div>
+          </NuxtLink>
+        </div>
+      </div>
+
+      <h3 class="row-title">Videos matching "{{ searchQuery }}"</h3>
+      <div class="video-grid">
+        <VideoCard v-for="video in allVideos" :key="video.id" :video="video" @hidden="onVideoHidden" />
+      </div>
+
+      <!-- Search Pagination -->
+      <div v-if="searchPagination && searchPagination.totalPages > 1" class="pagination">
+        <button class="pagination-btn" :disabled="page === 1" @click="changePage(page - 1)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          Previous
+        </button>
+        <span class="pagination-info">Page {{ page }} / {{ searchPagination.totalPages }}</span>
+        <button class="pagination-btn" :disabled="page === searchPagination.totalPages" @click="changePage(page + 1)">
+          Next
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
     </div>
 
-    <!-- Video Grid -->
-    <div v-else class="video-grid-wrapper">
-      <!-- Recommendations Section (Homepage, no search query) -->
-      <div v-if="!searchQuery" class="recommendations-container">
-        <h2 class="section-title">Recommended for you</h2>
-        
-        <!-- Hero Featured Video -->
-        <div v-if="videosData.videos[0]" class="hero-video-card glass-panel" @click="playVideo(videosData.videos[0].id)">
-          <div class="hero-thumbnail-wrapper">
-            <img 
-              :src="videosData.videos[0].local_thumbnail_path || `https://i.ytimg.com/vi/${videosData.videos[0].id}/hqdefault.jpg`" 
-              class="hero-thumbnail-img" 
-              alt="Thumbnail"
-            />
-            <span class="duration-badge hero-duration">{{ formatDuration(videosData.videos[0].duration) }}</span>
-            <div class="hero-badge">Featured</div>
-            <VideoDropdownMenu :video="videosData.videos[0]" @hidden="onVideoHidden" />
+    <!-- Netflix-style Home Feed -->
+    <div v-else class="netflix-feed">
+
+      <!-- Hero Banner -->
+      <div v-if="heroVideo" class="hero-banner" @click="navigateTo(`/watch/${heroVideo.id}`)">
+        <div class="hero-backdrop">
+          <img :src="heroVideo.local_thumbnail_path || `https://i.ytimg.com/vi/${heroVideo.id}/maxresdefault.jpg`" @error="handleHeroError" class="hero-bg-img" alt="" />
+          <div class="hero-gradient-left"></div>
+          <div class="hero-gradient-bottom"></div>
+        </div>
+        <div class="hero-content">
+          <div class="hero-channel-badge">
+            <img :src="heroVideo.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
+            <span>{{ heroVideo.channel_title }}</span>
           </div>
-          <div class="hero-video-info">
-            <div class="hero-details">
-              <span class="hero-tag">RECOMMENDED FULL VIDEO</span>
-              <h3 class="hero-video-title">{{ videosData.videos[0].title }}</h3>
-              <p class="hero-video-description">{{ videosData.videos[0].description || 'No description available.' }}</p>
-              
-              <div class="hero-channel-row">
-                <img 
-                  :src="videosData.videos[0].channel_avatar || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'" 
-                  @error="handleAvatarError"
-                  class="hero-channel-avatar" 
-                  alt="Avatar"
-                />
-                <span class="hero-channel-name">{{ videosData.videos[0].channel_title }}</span>
-              </div>
-              
-              <div class="hero-metadata">
-                <span>{{ formatViews(videosData.videos[0].view_count) }} views</span>
-                <span class="dot">•</span>
-                <span>{{ formatUploadDate(videosData.videos[0].upload_date) }}</span>
-              </div>
-            </div>
+          <h1 class="hero-title">{{ heroVideo.title }}</h1>
+          <p v-if="heroVideo.description" class="hero-desc">{{ heroVideo.description }}</p>
+          <div class="hero-meta">
+            <span>{{ formatViews(heroVideo.view_count) }} views</span>
+            <span class="meta-dot">•</span>
+            <span>{{ formatUploadDate(heroVideo.upload_date) }}</span>
+            <span class="meta-dot">•</span>
+            <span>{{ formatDuration(heroVideo.duration) }}</span>
+          </div>
+          <div class="hero-actions">
+            <button class="hero-play-btn" @click.stop="navigateTo(`/watch/${heroVideo.id}`)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Play
+            </button>
           </div>
         </div>
+      </div>
 
-        <!-- Suggestions Grid (Next 6 recommended videos) -->
-        <div class="recommended-section-header">
-          <h3 class="subsection-title">Personalized suggestions</h3>
-        </div>
-        <div class="video-grid">
-          <div 
-            v-for="video in videosData.videos.slice(1, 7)" 
-            :key="video.id" 
-            class="video-card premium-card" 
-            @click="playVideo(video.id)"
-          >
-            <!-- Thumbnail Wrapper -->
-            <div class="thumbnail-wrapper">
-              <img 
-                :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
-                class="thumbnail-img" 
-                alt="Thumbnail"
-                loading="lazy"
-              />
-              <span class="duration-badge">{{ formatDuration(video.duration) }}</span>
-              <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
-            </div>
-
-            <!-- Video Details -->
-            <div class="video-info">
-              <div class="avatar-col">
-                <img 
-                  :src="video.channel_avatar || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'" 
-                  @error="handleAvatarError"
-                  class="channel-avatar" 
-                  alt="Avatar"
-                />
-              </div>
-              <div class="details-col">
-                <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
-                <p class="channel-title">{{ video.channel_title }}</p>
-                <div class="metadata-row">
-                  <span>{{ formatViews(video.view_count) }} views</span>
-                  <span class="dot">•</span>
-                  <span>{{ formatUploadDate(video.upload_date) }}</span>
-                </div>
-              </div>
+      <!-- Recently Added Row -->
+      <div v-if="recentVideos.length > 0" class="content-row">
+        <h3 class="row-title">Recently Added</h3>
+        <div class="scroll-row">
+          <div class="scroll-track">
+            <div v-for="video in recentVideos" :key="video.id" class="scroll-card">
+              <VideoCard :video="video" @hidden="onVideoHidden" />
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Standard Grid (For Search / Categories) -->
-      <div v-else>
-        <!-- Channels Search Results -->
-        <div v-if="searchQuery && searchedChannels.length > 0" class="search-channels-section">
-          <h3 class="subsection-title">Channels matching "{{ searchQuery }}"</h3>
-          <div class="channels-row">
-            <NuxtLink 
-              v-for="channel in searchedChannels.slice(0, 4)" 
-              :key="channel.id" 
-              :to="`/channels?id=${channel.id}`"
-              class="search-channel-card glass-panel"
-            >
-              <img 
-                :src="channel.avatar_url || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'" 
-                @error="handleAvatarError"
-                class="search-channel-avatar" 
-                alt="Avatar"
-              />
-              <div class="search-channel-info">
-                <h4 class="search-channel-title">{{ channel.title }}</h4>
-                <p class="search-channel-meta">{{ formatViewsShort(channel.total_count) }} videos</p>
-              </div>
-            </NuxtLink>
-          </div>
+      <!-- Channel Rows -->
+      <div v-for="group in channelGroups" :key="group.channelId" class="content-row">
+        <div class="row-header">
+          <h3 class="row-title">{{ group.channelTitle }}</h3>
+          <NuxtLink :to="`/channels?id=${group.channelId}`" class="see-all-link">See all →</NuxtLink>
         </div>
-
-        <h3 v-if="searchQuery" class="subsection-title">Videos matching "{{ searchQuery }}"</h3>
-        <div class="video-grid">
-          <div v-for="video in videosData.videos" :key="video.id" class="video-card premium-card" @click="playVideo(video.id)">
-            <!-- Thumbnail Wrapper -->
-            <div class="thumbnail-wrapper">
-              <img 
-                :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
-                class="thumbnail-img" 
-                alt="Thumbnail"
-                loading="lazy"
-              />
-              <span class="duration-badge">{{ formatDuration(video.duration) }}</span>
-              <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
-            </div>
-
-            <!-- Video Details -->
-            <div class="video-info">
-              <div class="avatar-col">
-                <img 
-                  :src="video.channel_avatar || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'" 
-                  @error="handleAvatarError"
-                  class="channel-avatar" 
-                  alt="Avatar"
-                />
-              </div>
-              <div class="details-col">
-                <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
-                <p class="channel-title">{{ video.channel_title }}</p>
-                <div class="metadata-row">
-                  <span>{{ formatViews(video.view_count) }} views</span>
-                  <span class="dot">•</span>
-                  <span>{{ formatUploadDate(video.upload_date) }}</span>
-                </div>
-              </div>
+        <div class="scroll-row">
+          <div class="scroll-track">
+            <div v-for="video in group.videos" :key="video.id" class="scroll-card">
+              <VideoCard :video="video" :show-channel-info="false" @hidden="onVideoHidden" />
             </div>
           </div>
-        </div>
-
-        <!-- Pagination Controls -->
-        <div v-if="videosData.pagination.totalPages > 1" class="pagination">
-          <button 
-            class="btn btn-secondary" 
-            :disabled="page === 1"
-            @click="changePage(page - 1)"
-          >
-            Previous
-          </button>
-          <span class="pagination-info">
-            Page {{ page }} of {{ videosData.pagination.totalPages }}
-          </span>
-          <button 
-            class="btn btn-secondary" 
-            :disabled="page === videosData.pagination.totalPages"
-            @click="changePage(page + 1)"
-          >
-            Next
-          </button>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 
@@ -205,26 +130,34 @@ const { isAdmin } = useAuth();
 const route = useRoute();
 const router = useRouter();
 
-// Computed query filters
 const searchQuery = computed(() => route.query.q ? String(route.query.q) : '');
 const page = computed(() => route.query.page ? parseInt(String(route.query.page), 10) : 1);
 
-// Fetch videos
-const { data: videosData, pending, refresh } = await useFetch<{ videos: any[], pagination: any }>(() => '/api/videos', {
+const loading = ref(true);
+const allVideos = ref<any[]>([]);
+const searchPagination = ref<any>(null);
+
+// Fetch for search mode
+const { data: searchData, pending: searchPending } = await useFetch<{ videos: any[], pagination: any }>(() => '/api/videos', {
   query: computed(() => ({
     page: page.value,
-    limit: 12,
+    limit: 24,
     q: searchQuery.value || undefined,
     status: 'completed'
   })),
-  watch: [searchQuery, page]
+  watch: [searchQuery, page],
+  immediate: !!searchQuery.value
 });
 
-// Fetch channels (for search)
+// Fetch for home feed (larger batch for grouping)
+const { data: feedData, pending: feedPending } = await useFetch<{ videos: any[], pagination: any }>('/api/videos', {
+  query: { limit: 60, status: 'completed' },
+  immediate: !searchQuery.value
+});
+
+// Fetch channels for search
 const { data: channelsData } = await useFetch<{ channels: any[] }>(() => '/api/channels', {
-  query: computed(() => ({
-    search: searchQuery.value || undefined
-  })),
+  query: computed(() => ({ search: searchQuery.value || undefined })),
   watch: [searchQuery]
 });
 
@@ -233,81 +166,108 @@ const searchedChannels = computed(() => {
   return channelsData.value?.channels || [];
 });
 
-// Page changes
+// Reactive data
+const computeData = () => {
+  if (searchQuery.value) {
+    allVideos.value = searchData.value?.videos || [];
+    searchPagination.value = searchData.value?.pagination || null;
+  } else {
+    allVideos.value = feedData.value?.videos || [];
+  }
+  loading.value = false;
+};
+
+// Watch for data changes
+watch([searchData, feedData, searchQuery], computeData, { immediate: true });
+
+// Hero video: first video
+const heroVideo = computed(() => allVideos.value[0] || null);
+
+// Recently added: first 10 (skip hero)
+const recentVideos = computed(() => allVideos.value.slice(1, 11));
+
+// Group remaining videos by channel (skip first 11 used above)
+const channelGroups = computed(() => {
+  const remaining = allVideos.value.slice(1); // include all except hero for channel rows
+  const groups: Record<string, { channelId: string; channelTitle: string; channelAvatar: string; videos: any[] }> = {};
+  
+  for (const video of remaining) {
+    const cid = video.channel_id;
+    if (!groups[cid]) {
+      groups[cid] = {
+        channelId: cid,
+        channelTitle: video.channel_title,
+        channelAvatar: video.channel_avatar,
+        videos: []
+      };
+    }
+    if (groups[cid].videos.length < 12) {
+      groups[cid].videos.push(video);
+    }
+  }
+  
+  // Only show channels with 2+ videos, sorted by video count
+  return Object.values(groups)
+    .filter(g => g.videos.length >= 2)
+    .sort((a, b) => b.videos.length - a.videos.length);
+});
+
 const changePage = (newPage: number) => {
   router.push({ path: '/', query: { ...route.query, page: newPage } });
 };
 
-// Play video
-const playVideo = (id: string) => {
-  navigateTo(`/watch/${id}`);
-};
+const fallbackAvatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"><circle cx="12" cy="12" r="10"></circle><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z"></path></svg>';
 
 const handleAvatarError = (event: Event) => {
   const target = event.target as HTMLImageElement;
-  const fallback = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"><circle cx="12" cy="12" r="10"></circle><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z"></path></svg>';
-  if (target && target.src !== fallback) {
-    target.src = fallback;
+  if (target && target.src !== fallbackAvatar) target.src = fallbackAvatar;
+};
+
+const handleHeroError = (event: Event) => {
+  const target = event.target as HTMLImageElement;
+  if (target) {
+    const hq = `https://i.ytimg.com/vi/${heroVideo.value?.id}/hqdefault.jpg`;
+    if (target.src !== hq) target.src = hq;
   }
 };
 
 const onVideoHidden = (id: string) => {
-  if (videosData.value) {
-    videosData.value.videos = videosData.value.videos.filter((v: any) => v.id !== id);
-  }
+  allVideos.value = allVideos.value.filter(v => v.id !== id);
 };
 
-/* Format Helpers */
+/* Formatters */
 const formatDuration = (seconds: number | null): string => {
   if (!seconds) return '--:--';
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
 const formatViews = (views: number | null): string => {
-  if (views === null || views === undefined) return '0';
-  if (views >= 1000000) {
-    return (views / 1000000).toFixed(1).replace('.0', '') + 'M';
-  }
-  if (views >= 1000) {
-    return (views / 1000).toFixed(1).replace('.0', '') + 'k';
-  }
-  return views.toString();
-};
-
-const formatViewsShort = (views: number | null): string => {
-  if (views === null || views === undefined) return '0';
-  if (views >= 1000) {
-    return (views / 1000).toFixed(1).replace('.0', '') + 'k';
-  }
+  if (!views) return '0';
+  if (views >= 1000000) return (views / 1000000).toFixed(1).replace('.0', '') + 'M';
+  if (views >= 1000) return (views / 1000).toFixed(1).replace('.0', '') + 'k';
   return views.toString();
 };
 
 const formatUploadDate = (dateStr: string | null): string => {
-  if (!dateStr || dateStr.length !== 8) return 'Unknown date';
-  const year = dateStr.slice(0, 4);
-  const month = dateStr.slice(4, 6);
-  const day = dateStr.slice(6, 8);
-  
-  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (!dateStr || dateStr.length !== 8) return '';
+  const y = dateStr.slice(0, 4), mo = dateStr.slice(4, 6), d = dateStr.slice(6, 8);
+  return new Date(+y, +mo - 1, +d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 </script>
 
 <style scoped>
-.dashboard-container {
+/* ===== Container ===== */
+.home-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  min-height: 100%;
 }
 
-
+/* ===== Loading ===== */
 .loading-state {
   display: flex;
   flex-direction: column;
@@ -327,382 +287,346 @@ const formatUploadDate = (dateStr: string | null): string => {
   animation: spin 0.8s linear infinite;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 40px;
-  text-align: center;
-  border-radius: var(--border-radius-md);
-  gap: 16px;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
 
-.empty-state h3 {
-  font-size: 20px;
-}
-
-.empty-state p {
-  color: var(--text-secondary);
-  font-size: 14px;
-  max-width: 450px;
-  line-height: 1.5;
-}
-
-.video-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
-}
-
-.video-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  cursor: pointer;
-  border-radius: var(--border-radius-md);
-  overflow: hidden;
-}
-
-.thumbnail-wrapper {
+/* ===== Hero Banner ===== */
+.hero-banner {
   position: relative;
-  aspect-ratio: 16/9;
-  border-radius: var(--border-radius-md);
+  width: calc(100% + 48px);
+  margin: -24px -24px 28px -24px;
+  height: 420px;
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  background: #000;
-  border: 1px solid transparent;
-  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  cursor: pointer;
 }
 
-.thumbnail-img {
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+}
+
+.hero-bg-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+  filter: brightness(0.55);
+  transition: transform 8s ease, filter 0.5s ease;
 }
 
-.thumbnail-wrapper::after {
-  content: '';
+.hero-banner:hover .hero-bg-img {
+  transform: scale(1.03);
+  filter: brightness(0.45);
+}
+
+.hero-gradient-left {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 10, 15, 0.95) 0%, rgba(10, 10, 15, 0.6) 40%, transparent 70%);
+}
+
+.hero-gradient-bottom {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
-  height: 40%;
-  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-  pointer-events: none;
+  height: 160px;
+  background: linear-gradient(to top, var(--bg-base, #0a0a0f) 0%, transparent 100%);
 }
 
-.duration-badge {
+.hero-content {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 11px;
+  bottom: 48px;
+  left: 48px;
+  max-width: 550px;
+  z-index: 2;
+}
+
+.hero-channel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.video-info {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-}
-
-.channel-avatar {
-  width: 36px;
-  height: 36px;
+.hero-channel-img {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   object-fit: cover;
-  background: var(--bg-surface);
 }
 
-.details-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 0; /* Important for ellipsis */
-}
-
-.video-title {
-  font-family: var(--font-title);
-  font-size: 15px;
-  line-height: 1.4;
-  font-weight: 600;
-  color: var(--text-primary);
+.hero-title {
+  font-size: 32px;
+  font-weight: 800;
+  color: white;
+  line-height: 1.2;
+  margin: 0 0 10px 0;
+  letter-spacing: -0.02em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.channel-title {
-  font-size: 13px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.metadata-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.dot {
-  font-weight: 700;
-}
-
-.premium-card:hover .thumbnail-img {
-  transform: scale(1.05);
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  margin-top: 48px;
-}
-
-.pagination-info {
+.hero-desc {
   font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.mt-4 {
-  margin-top: 16px;
-}
-
-/* Recommendations & Hero Styling */
-.section-title {
-  font-size: 22px;
-  font-weight: 700;
-  margin-bottom: 20px;
-  background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.subsection-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-top: 32px;
-  margin-bottom: 16px;
-  color: var(--text-primary);
-}
-
-.hero-video-card {
-  display: flex;
-  gap: 28px;
-  padding: 24px;
-  border-radius: var(--border-radius-lg);
-  cursor: pointer;
-  transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+  margin: 0 0 12px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  border: 1px solid var(--border-color);
-  background: rgba(17, 17, 34, 0.4);
+}
+
+.hero-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 18px;
+}
+
+.meta-dot { font-weight: 700; }
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.hero-play-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 28px;
+  background: white;
+  color: #0a0a0f;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hero-play-btn:hover {
+  background: rgba(255, 255, 255, 0.85);
+  transform: scale(1.03);
+}
+
+/* ===== Content Rows ===== */
+.content-row {
   margin-bottom: 32px;
 }
 
-.hero-video-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
-}
-
-.hero-thumbnail-wrapper {
-  position: relative;
-  width: 48%;
-  aspect-ratio: 16/9;
-  border-radius: var(--border-radius-md);
-  overflow: hidden;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
-  background: #000;
-}
-
-.hero-thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s ease;
-}
-
-.hero-video-card:hover .hero-thumbnail-img {
-  transform: scale(1.02);
-}
-
-.hero-duration {
-  font-size: 12px;
-  padding: 4px 8px;
-}
-
-.hero-badge {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: white;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 700;
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.4);
-}
-
-.hero-video-info {
+.row-header {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.row-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 14px 0;
+  letter-spacing: -0.01em;
+}
+
+.row-header .row-title {
+  margin-bottom: 0;
+}
+
+.see-all-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-primary);
+  text-decoration: none;
+  transition: color 0.2s;
+  white-space: nowrap;
+}
+
+.see-all-link:hover {
+  color: var(--accent-primary-hover);
+}
+
+/* ===== Horizontal Scroll ===== */
+.scroll-row {
+  position: relative;
+  width: calc(100% + 48px);
+  margin-left: -24px;
+  padding: 0 24px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.scroll-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.scroll-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-row::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.scroll-track {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+
+.scroll-card {
+  flex: 0 0 260px;
   min-width: 0;
 }
 
-.hero-details {
+@media (max-width: 900px) {
+  .scroll-card {
+    flex: 0 0 220px;
+  }
+}
+
+/* ===== Search Grid ===== */
+.search-results {
   display: flex;
   flex-direction: column;
+}
+
+.video-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+@media (max-width: 1400px) {
+  .video-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 1000px) {
+  .video-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .video-grid { grid-template-columns: 1fr; }
+}
+
+/* ===== Search Channels ===== */
+.search-channels-section {
+  margin-bottom: 24px;
+}
+
+.channels-row {
+  display: flex;
   gap: 10px;
-  flex: 1;
+  flex-wrap: wrap;
 }
 
-.hero-tag {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--accent-primary);
-  letter-spacing: 0.1em;
-}
-
-.hero-video-title {
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.hero-video-description {
-  font-size: 13.5px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 4px;
-}
-
-.hero-channel-row {
+.search-channel-pill {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 6px;
+  padding: 8px 16px 8px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 40px;
+  text-decoration: none;
+  transition: all 0.2s ease;
 }
 
-.hero-channel-avatar {
+.search-channel-pill:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.pill-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
   object-fit: cover;
-  border: 1.5px solid var(--border-color);
 }
 
-.hero-channel-name {
-  font-size: 14px;
-  color: var(--text-primary);
+.pill-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pill-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+}
+
+.pill-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ===== Pagination ===== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px 0;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: white;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
-.hero-metadata {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: auto;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Channels Search Row Styling */
-.search-channels-section {
-  margin-bottom: 32px;
-}
-.channels-row {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-}
-.search-channel-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  border-radius: var(--border-radius-md);
-  min-width: 250px;
-  flex: 1;
-  text-decoration: none;
-  border: 1px solid var(--border-color);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.search-channel-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
-}
-.search-channel-avatar {
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  object-fit: cover;
-}
-.search-channel-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.search-channel-title {
-  color: var(--text-primary);
-  font-weight: 600;
-  font-size: 15px;
-  margin: 0;
-}
-.search-channel-meta {
-  color: var(--text-secondary);
-  font-size: 13px;
-  margin: 0;
-}
-
+/* ===== Responsive Hero ===== */
 @media (max-width: 900px) {
-  .hero-video-card {
-    flex-direction: column;
-    gap: 16px;
-    padding: 16px;
-  }
-  .hero-thumbnail-wrapper {
-    width: 100%;
-  }
-  .hero-video-title {
-    font-size: 18px;
-  }
+  .hero-banner { height: 320px; }
+  .hero-content { left: 24px; bottom: 32px; max-width: 90%; }
+  .hero-title { font-size: 24px; }
+}
+
+@media (max-width: 640px) {
+  .hero-banner { height: 260px; }
+  .hero-title { font-size: 20px; }
+  .hero-desc { display: none; }
 }
 </style>

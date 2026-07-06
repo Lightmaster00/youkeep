@@ -17,8 +17,14 @@
         <!-- Sidebar Playlist Details -->
         <div class="playlist-sidebar-info glass-panel">
         <div class="sidebar-cover">
-          <img v-if="videos.length && videos[0].local_thumbnail_path" :src="videos[0].local_thumbnail_path" class="playlist-cover-img" alt="Playlist Cover" />
-          <img v-else src="/default-playlist.png" class="playlist-cover-img" alt="Empty Playlist Cover" />
+          <img 
+            v-if="videos.length" 
+            :src="videos[0].local_thumbnail_path || `https://i.ytimg.com/vi/${videos[0].id}/hqdefault.jpg`" 
+            @error="handleThumbnailError($event, videos[0].id)"
+            class="playlist-cover-img" 
+            alt="Playlist Cover" 
+          />
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(255,255,255,0.6);"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
         </div>
         <div class="sidebar-details">
           <h1 class="playlist-title">{{ playlist.title }}</h1>
@@ -58,17 +64,19 @@
             </button>
           </div>
         </div>
-      </div>
-
+        </div>
       </div>
 
       <!-- Videos List -->
       <div class="playlist-videos-section">
-        <div v-if="!videos.length" class="empty-videos-state glass-panel">
-          <p>No videos in this playlist yet.</p>
-          <p class="help-text">Go to any video watch page to add items to this playlist.</p>
-          <button class="btn btn-secondary mt-4" @click="navigateTo('/')">Browse Videos</button>
-        </div>
+        <EmptyState
+          v-if="!videos.length"
+          title="No videos in this playlist yet"
+          description="Go to any video watch page to add items to this playlist."
+          icon="video"
+          action-text="Browse Videos"
+          @action="navigateTo('/')"
+        />
 
         <div v-else class="videos-list">
           <div 
@@ -81,12 +89,11 @@
             
             <div class="video-thumbnail-container">
               <img 
-                v-if="video.local_thumbnail_path" 
-                :src="video.local_thumbnail_path" 
+                :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
+                @error="handleThumbnailError($event, video.id)"
                 class="video-thumbnail" 
                 alt="Thumbnail" 
               />
-              <div v-else class="video-thumbnail-placeholder">No Image</div>
               <span class="video-duration">{{ formatDuration(video.duration) }}</span>
             </div>
 
@@ -112,64 +119,49 @@
     </div>
 
     <!-- Settings Modal -->
-    <div v-if="showSettingsModal" class="modal-overlay" @click="showSettingsModal = false">
-      <div class="modal-card glass-panel" @click.stop>
-        <div class="modal-header">
-          <h3>Playlist Settings</h3>
-          <button class="close-modal-btn" @click="showSettingsModal = false">&times;</button>
+    <BaseModal :show="showSettingsModal" title="Playlist Settings" @close="showSettingsModal = false">
+      <div style="padding: 4px 0;">
+        <div class="form-group mb-4">
+          <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">Privacy Mode</label>
+          <select v-model="playlist.visibility" @change="updateVisibility" class="form-input" style="width: 100%; background: rgba(0,0,0,0.3); padding: 12px; font-size: 14px; border: 1px solid rgba(255,255,255,0.1);">
+            <option value="private">🔒 Private (Only you)</option>
+            <option value="unlisted">🔗 Unlisted (Anyone with link)</option>
+            <option value="public">🌍 Public (Discoverable)</option>
+          </select>
         </div>
         
-        <div class="modal-body" style="padding: 20px;">
-          <div class="form-group mb-4">
-            <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">Privacy Mode</label>
-            <select v-model="playlist.visibility" @change="updateVisibility" class="form-input" style="width: 100%; background: rgba(0,0,0,0.3); padding: 12px; font-size: 14px; border: 1px solid rgba(255,255,255,0.1);">
-              <option value="private">🔒 Private (Only you)</option>
-              <option value="unlisted">🔗 Unlisted (Anyone with link)</option>
-              <option value="public">🌍 Public (Discoverable)</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">Share Link</label>
-            <button class="btn btn-secondary" @click="copyShareLink" style="width: 100%; justify-content: center; gap: 8px; display: flex; align-items: center;" :disabled="playlist.visibility === 'private'">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-              Copy Link to Clipboard
-            </button>
-            <p v-if="playlist.visibility === 'private'" style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 12px;">
-              Your playlist is private. Change it to Unlisted or Public to share.
-            </p>
-          </div>
-          <div class="form-group" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
-            <button class="btn" style="width: 100%; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);" @click="showSettingsModal = false; showDeleteModal = true">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-              Delete Playlist
-            </button>
-          </div>
-        </div>
-        
-        <div class="modal-footer">
-          <button class="btn btn-primary" @click="showSettingsModal = false">Done</button>
-        </div>
-      </div>
-    </div>
-    <!-- Delete Confirmation Modal -->
-    <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
-      <div class="modal-card glass-panel" @click.stop style="max-width: 400px;">
-        <div class="modal-header">
-          <h3>Delete Playlist</h3>
-          <button class="close-modal-btn" @click="showDeleteModal = false">&times;</button>
-        </div>
-        <div class="modal-body" style="padding: 20px;">
-          <p style="color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">
-            Are you sure you want to delete the playlist <strong style="color: white;">"{{ playlist.title }}"</strong>? This action cannot be undone.
+        <div class="form-group" style="margin-top: 16px;">
+          <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">Share Link</label>
+          <button class="btn btn-secondary" @click="copyShareLink" style="width: 100%; justify-content: center; gap: 8px; display: flex; align-items: center;" :disabled="playlist.visibility === 'private'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+            Copy Link to Clipboard
+          </button>
+          <p v-if="playlist.visibility === 'private'" style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 12px;">
+            Your playlist is private. Change it to Unlisted or Public to share.
           </p>
         </div>
-        <div class="modal-footer" style="gap: 12px;">
-          <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
-          <button class="btn" style="background: #ef4444; color: white;" @click="deletePlaylist">Delete</button>
+        <div class="form-group" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+          <button class="btn" style="width: 100%; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);" @click="showSettingsModal = false; showDeleteModal = true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+            Delete Playlist
+          </button>
         </div>
       </div>
-    </div>
+      <template #footer>
+        <button class="btn btn-primary" @click="showSettingsModal = false">Done</button>
+      </template>
+    </BaseModal>
+
+    <!-- Delete Confirmation Modal -->
+    <BaseModal :show="showDeleteModal" title="Delete Playlist" @close="showDeleteModal = false">
+      <p style="color: var(--text-secondary); line-height: 1.5; margin: 0;">
+        Are you sure you want to delete the playlist <strong style="color: white;">"{{ playlist.title }}"</strong>? This action cannot be undone.
+      </p>
+      <template #footer>
+        <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
+        <button class="btn" style="background: #ef4444; color: white;" @click="deletePlaylist">Delete</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -247,6 +239,16 @@ const deletePlaylist = async () => {
     navigateTo('/playlists');
   } catch (e: any) {
     toast.error(e.message || 'Failed to delete playlist.');
+  }
+};
+
+const handleThumbnailError = (event: Event, videoId: string) => {
+  const target = event.target as HTMLImageElement;
+  if (target) {
+    const ytUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    if (target.src !== ytUrl) {
+      target.src = ytUrl;
+    }
   }
 };
 
@@ -365,19 +367,11 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-.btn-primary {
-  background: var(--accent-primary);
-  color: white;
-  border: none;
-}
-.btn-primary:hover {
-  opacity: 0.9;
-}
+
 
 .playlist-detail-container {
   max-width: 1200px;
   margin: 0 auto;
-  min-height: calc(100vh - var(--header-height));
   animation: fadeIn 0.3s ease-out;
 }
 
@@ -559,23 +553,7 @@ onMounted(() => {
   flex-direction: column;
 }
 
-.empty-videos-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px;
-  text-align: center;
-}
 
-.empty-videos-state p {
-  margin: 4px 0;
-}
-
-.help-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
 
 .videos-list {
   display: flex;
@@ -688,29 +666,7 @@ onMounted(() => {
   background: rgba(239, 68, 68, 0.1);
 }
 
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
 
 .mt-4 {
   margin-top: 16px;

@@ -9,7 +9,7 @@ export interface UserSession {
   mustChangePassword: boolean;
 }
 
-const SESSION_COOKIE_NAME = 'myteub_session';
+const SESSION_COOKIE_NAME = 'youkeep_session';
 const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 export function hashPassword(password: string): string {

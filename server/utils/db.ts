@@ -13,7 +13,7 @@ export function getDb(): Database.Database {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
-  const dbPath = path.join(dataDir, 'myteub.db');
+  const dbPath = path.join(dataDir, 'youkeep.db');
   const db = new Database(dbPath);
   
   // Enable foreign keys
@@ -196,6 +196,11 @@ export function getDb(): Database.Database {
   try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_share_token ON videos(share_token);`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN is_manually_queued INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN first_name TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN last_name TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN email TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN phone TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN dob TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE channels ADD COLUMN custom_save_path TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN is_short INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN like_count INTEGER DEFAULT 0;`); } catch (e) {}

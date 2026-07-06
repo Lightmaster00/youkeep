@@ -2,11 +2,11 @@
   <div class="login-container">
     <div class="login-card glass-panel">
       <div class="logo-container">
-        <span class="logo-you">My</span><span class="logo-teub">Teub</span>
+        <span class="logo-you">You</span><span class="logo-keep">Keep</span>
       </div>
       
       <h2 class="login-title">
-        {{ setupRequired ? 'MyTeub Setup' : 'Login to your archive' }}
+        {{ setupRequired ? 'YouKeep Setup' : 'Login to your archive' }}
       </h2>
       <p class="login-subtitle">
         {{ setupRequired ? 'Create your main administrator profile to start.' : 'Enter your credentials to access the archived videos.' }}
@@ -59,7 +59,7 @@
 
         <button type="submit" class="btn btn-primary login-btn" :disabled="loadingSubmit">
           <span v-if="loadingSubmit" class="spinner"></span>
-          <span v-else>{{ setupRequired ? 'Setup MyTeub' : 'Log in' }}</span>
+          <span v-else>{{ setupRequired ? 'Setup YouKeep' : 'Log in' }}</span>
         </button>
       </form>
     </div>
@@ -186,7 +186,7 @@ const handleLogin = async () => {
   font-weight: 800;
 }
 
-.logo-teub {
+.logo-keep {
   color: var(--text-primary);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
@@ -218,10 +218,7 @@ const handleLogin = async () => {
   gap: 20px;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
+
 
 .error-box {
   display: flex;

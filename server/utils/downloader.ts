@@ -11,7 +11,20 @@ export function sanitizeFolderName(name: string): string {
     .trim();
 }
 
-let activeCronJob: Cron | null = null;
+// Define global-backed state to survive development HMR module hot reloads
+const _g = globalThis as any;
+const G_CRON = Symbol.for('YouKeep.activeCronJob');
+const G_PROCESSING = Symbol.for('YouKeep.isProcessing');
+const G_SHOULD_RUN = Symbol.for('YouKeep.workerShouldRun');
+const G_PROCESSES = Symbol.for('YouKeep.activeProcesses');
+
+if (!(G_CRON in _g)) _g[G_CRON] = null;
+if (!(G_PROCESSING in _g)) _g[G_PROCESSING] = false;
+if (!(G_SHOULD_RUN in _g)) _g[G_SHOULD_RUN] = false;
+if (!(G_PROCESSES in _g)) _g[G_PROCESSES] = new Map<string, any>();
+
+function getActiveCronJob(): Cron | null { return _g[G_CRON]; }
+function setActiveCronJob(val: Cron | null) { _g[G_CRON] = val; }
 
 export const latestLogs: string[] = [];
 
@@ -32,9 +45,13 @@ export interface QueueItem {
   progress: number;
 }
 
-let isProcessing = false;
-let workerShouldRun = false; // persistent flag to keep worker alive
-export const activeProcesses = new Map<string, any>();
+function getIsProcessing(): boolean { return _g[G_PROCESSING]; }
+function setIsProcessing(val: boolean) { _g[G_PROCESSING] = val; }
+
+function getWorkerShouldRun(): boolean { return _g[G_SHOULD_RUN]; }
+function setWorkerShouldRun(val: boolean) { _g[G_SHOULD_RUN] = val; }
+
+export const activeProcesses: Map<string, any> = _g[G_PROCESSES];
 
 let workerWakeResolver: (() => void) | null = null;
 
@@ -130,7 +147,7 @@ export async function getYtdlPath(): Promise<string> {
   const tmpPath = ytdlPath + '.tmp';
   const downloadFile = (currentUrl: string): Promise<void> => {
     return new Promise<void>((resolve, reject) => {
-      https.get(currentUrl, { headers: { 'User-Agent': 'MyTeub-Archiver' } }, (response) => {
+      https.get(currentUrl, { headers: { 'User-Agent': 'YouKeep-Archiver' } }, (response) => {
         if (response.statusCode === 301 || response.statusCode === 302) {
           const redirectUrl = response.headers.location!;
           downloadFile(redirectUrl).then(resolve).catch(reject);
@@ -199,21 +216,21 @@ export async function updateYtdl(): Promise<string> {
  * Persistent: polls every few seconds instead of exiting when empty.
  */
 export async function startQueueWorker() {
-  if (isProcessing) {
+  if (getIsProcessing()) {
     // Worker already running — wake it up if it is sleeping so it checks the queue instantly
     addLog('Worker déjà en cours d\'exécution. Réveil du worker...');
     wakeWorker();
     return;
   }
-  isProcessing = true;
-  workerShouldRun = true;
+  setIsProcessing(true);
+  setWorkerShouldRun(true);
   addLog('Démarrage du worker de file d\'attente (mode persistant)...');
 
   try {
     const db = getDb();
     let consecutiveSystemErrors = 0;
     
-    while (workerShouldRun) {
+    while (getWorkerShouldRun()) {
       try {
         // Check if global download is paused
         const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
@@ -309,8 +326,8 @@ export async function startQueueWorker() {
   } catch (err: any) {
     addLog(`Erreur générale fatale du worker : ${err.message || err}`);
   } finally {
-    isProcessing = false;
-    workerShouldRun = false;
+    setIsProcessing(false);
+    setWorkerShouldRun(false);
     addLog('Worker de file d\'attente arrêté.');
   }
 }
@@ -319,7 +336,7 @@ export async function startQueueWorker() {
  * Stops the persistent queue worker gracefully after the current download finishes.
  */
 export function stopQueueWorker() {
-  workerShouldRun = false;
+  setWorkerShouldRun(false);
   addLog('Arrêt du worker de file d\'attente demandé.');
 }
 
@@ -1449,15 +1466,15 @@ export function initScheduler(): void {
   const enabled = enabledSetting ? enabledSetting.value === '1' : false;
   const cronExpression = scheduleSetting?.value || '0 3 * * *';
 
-  if (activeCronJob) {
-    activeCronJob.stop();
-    activeCronJob = null;
+  if (getActiveCronJob()) {
+    getActiveCronJob()!.stop();
+    setActiveCronJob(null);
   }
 
   if (enabled) {
     console.log(`Scheduling auto-sync cron job with expression: "${cronExpression}"`);
     try {
-      activeCronJob = new Cron(cronExpression, async () => {
+      const job = new Cron(cronExpression, async () => {
         console.log('Automated cron trigger: starting channel synchronization...');
         const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'sync_all_active'").get() as { value: string } | undefined;
         if (syncSetting?.value === '1') {
@@ -1466,6 +1483,7 @@ export function initScheduler(): void {
         }
         await syncAllChannels();
       });
+      setActiveCronJob(job);
     } catch (err) {
       console.error(`Failed to register cron expression "${cronExpression}":`, err);
     }

@@ -46,7 +46,7 @@
                   <input 
                     type="checkbox" 
                     :checked="playlist.contains_video" 
-                    @change="togglePlaylist(playlist, $event.target.checked)"
+                    @change="togglePlaylist(playlist, ($event.target as HTMLInputElement).checked)"
                   />
                   <span class="playlist-name">{{ playlist.title }}</span>
                   <span class="visibility-icon">

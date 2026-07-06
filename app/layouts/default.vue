@@ -4,7 +4,7 @@
     <header class="header">
       <div class="header-left">
         <NuxtLink to="/" class="logo">
-          <span class="logo-you">My</span><span class="logo-teub">Teub</span>
+          <span class="logo-you">You</span><span class="logo-keep">Keep</span>
         </NuxtLink>
       </div>
       
@@ -251,7 +251,7 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-.logo-teub {
+.logo-keep {
   color: var(--text-primary);
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
@@ -501,6 +501,8 @@ onUnmounted(() => {
   scrollbar-gutter: stable;
   padding: 24px;
   background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
 }
 
 @media (max-width: 768px) {

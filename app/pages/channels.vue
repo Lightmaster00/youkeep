@@ -54,7 +54,7 @@
               @click="showDrawer = true" 
               class="btn btn-secondary settings-trigger-btn"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.5 1z"></path></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.5 1z"></path></svg>
               <span>Tracking options</span>
             </button>
 
@@ -70,7 +70,7 @@
             {{ triggeringSync ? 'Initial video search...' : 'Empty or unsynced channel' }}
           </h4>
           <p style="font-size: 13.5px; color: var(--text-secondary); margin: 4px 0 0 0; line-height: 1.45;">
-            {{ triggeringSync ? 'MyTeub is querying YouTube to retrieve the list of videos for this channel. Please wait.' : 'No videos have been discovered for this channel yet. MyTeub will automatically launch a search in the background to synchronize the list.' }}
+            {{ triggeringSync ? 'YouKeep is querying YouTube to retrieve the list of videos for this channel. Please wait.' : 'No videos have been discovered for this channel yet. YouKeep will automatically launch a search in the background to synchronize the list.' }}
           </p>
         </div>
       </div>
@@ -119,22 +119,22 @@
       </div>
 
       <!-- Target Archiving Status Summary Panel -->
-      <div v-if="singleChannelData?.stats && channel" class="archive-targets-summary glass-panel" style="margin-top: 16px; margin-bottom: 8px; padding: 20px; border-radius: var(--border-radius-md); background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06);">
-        <h3 style="margin-top: 0; margin-bottom: 14px; font-size: 14px; font-weight: 700; color: white; display: flex; align-items: center; gap: 8px;">
+      <div v-if="singleChannelData?.stats && channel" class="archive-targets-summary glass-panel">
+        <h3 class="summary-title">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary);"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
           Channel Archiving Status Summary
         </h3>
         
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <div class="summary-grid-layout">
           <!-- Column 1: YouTube Content Stats -->
-          <div style="background: rgba(255, 255, 255, 0.01); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.04);">
-            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Channel Content (Indexed)</span>
-            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: white;">
-              <div style="display: flex; justify-content: space-between;">
+          <div class="summary-card-item">
+            <span class="summary-card-label">Channel Content (Indexed)</span>
+            <div class="summary-card-content">
+              <div class="flex-align-between">
                 <span>Regular videos:</span>
                 <strong>{{ singleChannelData.stats.completedVideosCount + singleChannelData.stats.pendingVideosCount + singleChannelData.stats.downloadingVideosCount + singleChannelData.stats.failedVideosCount }}</strong>
               </div>
-              <div style="display: flex; justify-content: space-between;">
+              <div class="flex-align-between">
                 <span>Shorts :</span>
                 <strong>{{ singleChannelData.stats.completedShortsCount + singleChannelData.stats.pendingShortsCount + singleChannelData.stats.downloadingShortsCount + singleChannelData.stats.failedShortsCount }}</strong>
               </div>
@@ -142,14 +142,14 @@
           </div>
 
           <!-- Column 2: Locally Archived Stats -->
-          <div style="background: rgba(255, 255, 255, 0.01); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.04);">
-            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Already Downloaded (Archived)</span>
-            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: white;">
-              <div style="display: flex; justify-content: space-between;">
+          <div class="summary-card-item">
+            <span class="summary-card-label">Already Downloaded (Archived)</span>
+            <div class="summary-card-content">
+              <div class="flex-align-between">
                 <span>Regular videos:</span>
                 <strong style="color: var(--accent-primary);">{{ singleChannelData.stats.completedVideosCount }}</strong>
               </div>
-              <div style="display: flex; justify-content: space-between;">
+              <div class="flex-align-between">
                 <span>Archived shorts:</span>
                 <strong style="color: var(--accent-primary);">{{ singleChannelData.stats.completedShortsCount }}</strong>
               </div>
@@ -157,16 +157,16 @@
           </div>
 
           <!-- Column 3: Scheduled / Queue Stats -->
-          <div style="background: rgba(255, 255, 255, 0.01); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.04);">
-            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Remaining to download</span>
-            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: white;">
-              <div style="display: flex; justify-content: space-between;">
+          <div class="summary-card-item">
+            <span class="summary-card-label">Remaining to download</span>
+            <div class="summary-card-content">
+              <div class="flex-align-between">
                 <span>Scheduled videos:</span>
                 <strong :style="{ color: (singleChannelData.stats.pendingVideosCount + singleChannelData.stats.downloadingVideosCount) > 0 ? '#fbbf24' : 'white' }">
                   {{ singleChannelData.stats.pendingVideosCount + singleChannelData.stats.downloadingVideosCount }}
                 </strong>
               </div>
-              <div style="display: flex; justify-content: space-between;">
+              <div class="flex-align-between">
                 <span>Scheduled shorts:</span>
                 <strong :style="{ color: (singleChannelData.stats.pendingShortsCount + singleChannelData.stats.downloadingShortsCount) > 0 ? '#fbbf24' : 'white' }">
                   {{ singleChannelData.stats.pendingShortsCount + singleChannelData.stats.downloadingShortsCount }}
@@ -176,24 +176,20 @@
           </div>
 
           <!-- Column 4: Exclusions / Preferences Summary -->
-          <div style="background: rgba(255, 255, 255, 0.01); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.04);">
-            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Active Filters & Preferences</span>
-            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: white;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="summary-card-item">
+            <span class="summary-card-label">Active Filters & Preferences</span>
+            <div class="summary-card-content">
+              <div class="flex-align-between">
                 <span>Regular videos:</span>
                 <span class="badge" :class="channel.download_videos === 1 ? 'badge-completed' : 'badge-failed'" style="font-size: 9px; padding: 1px 4px; font-weight: 700; line-height: 1;">
                   {{ channel.download_videos === 1 ? 'ACTIVE' : 'IGNORED' }}
                 </span>
               </div>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div class="flex-align-between">
                 <span>Shorts :</span>
                 <span class="badge" :class="channel.download_shorts === 1 ? 'badge-completed' : 'badge-failed'" style="font-size: 9px; padding: 1px 4px; font-weight: 700; line-height: 1;">
                   {{ channel.download_shorts === 1 ? 'ACTIVE' : 'IGNORED' }}
                 </span>
-              </div>
-              <div v-if="channel.date_after" style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #fbbf24; margin-top: 1px;">
-                <span>Since:</span>
-                <strong>{{ formatUploadDate(channel.date_after) }}</strong>
               </div>
             </div>
           </div>
@@ -234,7 +230,7 @@
       <!-- Tab Content: Archived Videos -->
       <div v-show="activeTab === 'archived'" class="channel-videos-section">
         <!-- Filter and Sort Bar -->
-        <div class="filter-sort-bar glass-panel">
+        <div v-if="singleChannelData?.stats?.completedVideosCount > 0" class="filter-sort-bar glass-panel">
           <div class="search-box">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input 
@@ -264,24 +260,14 @@
           <div class="spinner"></div>
         </div>
 
-        <div v-else-if="archivedVideos.length === 0" class="videos-empty glass-panel" style="padding: 40px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-          <div v-if="channelVideos.length === 0">
-            <h3 style="font-size: 16px; font-weight: 700; color: white;">Channel not synchronized</h3>
-            <p style="font-size: 13px; color: var(--text-secondary); max-width: 500px; margin-top: 6px;">
-              No videos have been indexed for this channel yet. You need to start a sync to fetch available videos from YouTube.
-            </p>
-            <button v-if="isAdmin" @click="handleToggleSync(true)" class="btn btn-primary" style="margin-top: 14px;">
-              Start initial sync
-            </button>
-          </div>
-          <div v-else>
-            <h3 style="font-size: 16px; font-weight: 700; color: white;">No videos archived locally</h3>
-            <p style="font-size: 13px; color: var(--text-secondary); max-width: 500px; margin-top: 6px;">
-              There are currently {{ channelVideos.length }} videos indexed in our database, but none have been successfully downloaded yet.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          v-else-if="archivedVideos.length === 0"
+          :title="channelVideos.length === 0 ? 'Channel not synchronized' : 'No videos archived locally'"
+          :description="channelVideos.length === 0 ? 'No videos have been indexed for this channel yet. You need to start a sync to fetch available videos from YouTube.' : `There are currently ${channelVideos.length} videos indexed in our database, but none have been successfully downloaded yet.`"
+          icon="video"
+          :action-text="channelVideos.length === 0 && isAdmin ? 'Start initial sync' : undefined"
+          @action="handleToggleSync(true)"
+        />
 
         <div v-else class="video-grid">
           <div 
@@ -291,7 +277,7 @@
             @click="playVideo(video.id)"
           >
             <div class="thumbnail-wrapper">
-              <img :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" class="thumbnail-img" alt="Thumbnail" />
+              <img :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" @error="handleThumbnailError($event, video.id)" class="thumbnail-img" alt="Thumbnail" />
               <span class="duration-badge">{{ formatDuration(video.duration) }}</span>
               <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
 
@@ -346,7 +332,7 @@
       <!-- Tab Content: Archived Shorts -->
       <div v-show="activeTab === 'shorts'" class="channel-videos-section">
         <!-- Filter and Sort Bar -->
-        <div class="filter-sort-bar glass-panel">
+        <div v-if="singleChannelData?.stats?.completedShortsCount > 0" class="filter-sort-bar glass-panel">
           <div class="search-box">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input 
@@ -374,15 +360,12 @@
           <div class="spinner"></div>
         </div>
 
-        <div v-else-if="archivedShorts.length === 0" class="videos-empty glass-panel" style="padding: 40px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-          <div>
-            <h3 style="font-size: 16px; font-weight: 700; color: white;">No Shorts archived</h3>
-            <p style="font-size: 13px; color: var(--text-secondary); max-width: 500px; margin-top: 6px;">
-              No Shorts have been downloaded for this channel yet. Make sure the Shorts archiving option is enabled in the channel settings.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          v-else-if="archivedShorts.length === 0"
+          title="No Shorts archived"
+          description="No Shorts have been downloaded for this channel yet. Make sure the Shorts archiving option is enabled in the channel settings."
+          icon="shorts"
+        />
 
         <div v-else class="shorts-grid">
           <div 
@@ -458,15 +441,12 @@
             <div class="spinner"></div>
           </div>
 
-          <div v-else-if="channelPlaylists.length === 0" class="videos-empty glass-panel" style="padding: 40px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 16px;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-            <div>
-              <h3 style="font-size: 16px; font-weight: 700; color: white;">Aucune playlist trouvée</h3>
-              <p style="font-size: 13px; color: var(--text-secondary); max-width: 500px; margin-top: 6px;">
-                Aucune playlist publique n'est répertoriée pour cette chaîne. Vous pouvez cliquer sur "Sync Playlists" ci-dessus pour rechercher les playlists publiques existantes.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            v-else-if="channelPlaylists.length === 0"
+            title="No playlists found"
+            description="No public playlists are listed for this channel. Click 'Sync Playlists' above to scan for public playlists."
+            icon="folder"
+          />
 
           <div v-else class="video-grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
             <div 
@@ -515,9 +495,12 @@
             <div class="spinner"></div>
           </div>
 
-          <div v-else-if="!selectedPlaylistData?.videos?.length" class="videos-empty glass-panel" style="padding: 40px; text-align: center;">
-            <p style="color: var(--text-secondary);">Cette playlist ne contient aucune vidéo.</p>
-          </div>
+          <EmptyState
+            v-else-if="!selectedPlaylistData?.videos?.length"
+            title="Empty playlist"
+            description="This playlist does not contain any videos."
+            icon="video"
+          />
 
           <div v-else class="video-grid">
             <div 
@@ -555,7 +538,7 @@
 
     <!-- DIRECTORY VIEW: List of Channels -->
     <div v-else class="channel-directory-view">
-      <div class="directory-header-row">
+      <div v-if="channels && channels.length > 0" class="directory-header-row">
         <h1 class="page-title">Archived Channels</h1>
       </div>
       
@@ -564,14 +547,14 @@
         <p>Loading channels...</p>
       </div>
 
-      <div v-else-if="!channels || channels.length === 0" class="empty-state glass-panel">
-        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
-        <h3>No channels archived</h3>
-        <p>Start adding YouTube channels in the downloader settings to see them here.</p>
-        <NuxtLink v-if="isAdmin" to="/settings?tab=downloads" class="btn btn-primary mt-4">
-          Add a channel
-        </NuxtLink>
-      </div>
+      <EmptyState
+        v-else-if="!channels || channels.length === 0"
+        title="No channels archived"
+        description="Start adding YouTube channels in the downloader settings to see them here."
+        icon="channels"
+        :action-text="isAdmin ? 'Add a channel' : undefined"
+        action-route="/settings?tab=downloads"
+      />
 
       <div v-else class="channel-grid">
         <div 
@@ -672,16 +655,7 @@
               </label>
             </div>
 
-            <!-- Date picker -->
-            <div class="pref-date-picker">
-              <label class="form-label" for="drawerDateAfter" style="font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">Only download videos published after:</label>
-              <input 
-                type="date" 
-                id="drawerDateAfter" 
-                v-model="formPref.dateAfter" 
-                class="form-input" 
-              />
-            </div>
+
 
             <!-- Custom save path -->
             <div class="pref-path-picker">
@@ -1120,7 +1094,6 @@ const getVisBadgeClass = (vis: string): string => {
 const formPref = reactive({
   downloadVideos: true,
   downloadShorts: false,
-  dateAfter: '',
   customSavePath: ''
 });
 const savingPref = ref(false);
@@ -1164,14 +1137,7 @@ watch(channel, (newVal) => {
       formPref.downloadShorts = newVal.download_shorts === 1;
       formPref.customSavePath = newVal.custom_save_path || '';
       
-      if (newVal.date_after && newVal.date_after.length === 8) {
-        const y = newVal.date_after.slice(0, 4);
-        const m = newVal.date_after.slice(4, 6);
-        const d = newVal.date_after.slice(6, 8);
-        formPref.dateAfter = `${y}-${m}-${d}`;
-      } else {
-        formPref.dateAfter = '';
-      }
+      // date_after is deprecated
     }
 
     fetchSubscriptionStatus();
@@ -1192,7 +1158,7 @@ const handleSavePreferences = async () => {
       body: {
         downloadVideos: formPref.downloadVideos,
         downloadShorts: formPref.downloadShorts,
-        dateAfter: formPref.dateAfter || null,
+        dateAfter: null,
         customSavePath: formPref.customSavePath || null
       }
     });
@@ -1435,6 +1401,16 @@ const handleAvatarError = (event: Event) => {
   }
 };
 
+const handleThumbnailError = (event: Event, videoId: string) => {
+  const target = event.target as HTMLImageElement;
+  if (target) {
+    const ytUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    if (target.src !== ytUrl) {
+      target.src = ytUrl;
+    }
+  }
+};
+
 const formatBytes = (bytes: number | null): string => {
   if (!bytes) return '0 B';
   const k = 1024;
@@ -1500,14 +1476,7 @@ const getBadgeClass = (status: string): string => {
   gap: 12px;
 }
 
-.directory-header-row .page-title {
-  margin-bottom: 0;
-}
 
-.page-title {
-  font-size: 24px;
-  margin-bottom: 24px;
-}
 
 .loading-state {
   display: flex;
@@ -1528,27 +1497,7 @@ const getBadgeClass = (status: string): string => {
   animation: spin 0.8s linear infinite;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 40px;
-  text-align: center;
-  border-radius: var(--border-radius-md);
-  gap: 16px;
-}
 
-.empty-state h3 {
-  font-size: 20px;
-}
-
-.empty-state p {
-  color: var(--text-secondary);
-  font-size: 14px;
-  max-width: 450px;
-  line-height: 1.5;
-}
 
 .channel-grid {
   display: grid;
@@ -1721,7 +1670,10 @@ const getBadgeClass = (status: string): string => {
 .channel-detail-view {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .back-btn {
@@ -1964,10 +1916,7 @@ const getBadgeClass = (status: string): string => {
   padding-top: 24px;
 }
 
-.section-title {
-  font-size: 18px;
-  margin-bottom: 20px;
-}
+
 
 .videos-loading {
   display: flex;
@@ -2153,11 +2102,7 @@ const getBadgeClass = (status: string): string => {
   color: var(--text-primary);
 }
 
-.btn-sm {
-  height: 28px;
-  padding: 0 10px;
-  font-size: 11px;
-}
+
 
 .btn-text {
   background: transparent;
@@ -2351,14 +2296,43 @@ const getBadgeClass = (status: string): string => {
   }
 }
 .channel-stats-row .stat-card {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  padding: 16px;
-  border-radius: var(--border-radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 18px;
+  border-radius: var(--border-radius-lg);
   display: flex;
   align-items: center;
   gap: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: var(--shadow-sm);
 }
+
+.channel-stats-row .stat-card:hover {
+  transform: translateY(-3px);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Individual glowing metrics on hover */
+.channel-stats-row .stat-card:nth-child(1):hover {
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.18);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+.channel-stats-row .stat-card:nth-child(2):hover {
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.18);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.channel-stats-row .stat-card:nth-child(3):hover {
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+.channel-stats-row .stat-card:nth-child(4):hover {
+  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.18);
+  border-color: rgba(236, 72, 153, 0.3);
+}
+
 .channel-stats-row .stat-icon {
   background: rgba(139, 92, 246, 0.1);
   border-radius: var(--border-radius-sm);
@@ -2393,6 +2367,70 @@ const getBadgeClass = (status: string): string => {
   letter-spacing: 0.05em;
 }
 
+/* Redesigned Target Summary layout and micro-animations */
+.archive-targets-summary {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  padding: 20px;
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.summary-title {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.summary-card-item {
+  background: rgba(255, 255, 255, 0.01);
+  padding: 12px 16px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: all 0.25s ease;
+}
+
+.summary-card-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(139, 92, 246, 0.15);
+  transform: translateY(-1px);
+}
+
+.summary-card-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.summary-card-content {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: white;
+}
+
+.flex-align-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 /* Tabs Bar */
 .channel-tabs-bar {
   display: flex;
@@ -2400,30 +2438,7 @@ const getBadgeClass = (status: string): string => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   margin-bottom: 24px;
 }
-.channel-tabs-bar .tab-btn {
-  background: transparent;
-  border: none;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 10px 16px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0;
-}
-.channel-tabs-bar .tab-btn.active {
-  color: white !important;
-  border-bottom-color: var(--accent-primary) !important;
-  background: rgba(255, 255, 255, 0.03);
-}
-.channel-tabs-bar .tab-btn:hover {
-  color: white !important;
-  background: rgba(255, 255, 255, 0.02);
-}
+
 .channel-tabs-bar .tab-count {
   background: rgba(255, 255, 255, 0.08);
   padding: 1px 6px;

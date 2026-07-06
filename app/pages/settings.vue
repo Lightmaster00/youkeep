@@ -53,57 +53,95 @@
         
         <!-- ================= STATS TAB ================= -->
         <div v-if="activeTab === 'stats' && isAdmin" class="tab-pane">
-          <div class="pane-header">
-            <h2>Dashboard & Statistiques</h2>
-            <p>Overview of the global storage and archiving status.</p>
+          <!-- Premium Welcome & Summary Banner -->
+          <div class="dashboard-banner glass-panel">
+            <div class="banner-content">
+              <span class="system-status-badge">
+                <span class="pulse-dot"></span>
+                System Online & Syncing
+              </span>
+              <h2>Library Diagnostic Dashboard</h2>
+              <p>Comprehensive overview of local storage consumption, catalog data, and channel archiving metrics.</p>
+            </div>
+            <div class="banner-quick-stats">
+              <div class="quick-stat-item">
+                <span class="stat-number text-gradient">{{ formatViews(stats?.totalViews || 0) }}</span>
+                <span class="stat-label">Catalog Views</span>
+              </div>
+              <div class="quick-stat-divider"></div>
+              <div class="quick-stat-item">
+                <span class="stat-number">{{ stats?.totalComments?.toLocaleString() || 0 }}</span>
+                <span class="stat-label">Indexed Comments</span>
+              </div>
+              <div class="quick-stat-divider"></div>
+              <div class="quick-stat-item">
+                <span class="stat-number" :class="{ 'text-accent': (stats?.totalQueue || 0) > 0 }">{{ stats?.totalQueue || 0 }}</span>
+                <span class="stat-label">Queue Tasks</span>
+              </div>
+            </div>
           </div>
 
           <!-- Quick Metrics Grid -->
           <div class="metrics-grid">
-            <div class="metric-card glass-panel">
-              <span class="metric-label">Archived Videos</span>
-              <span class="metric-value">{{ stats?.totalVideos || 0 }}</span>
-              <div class="metric-sub">In the local library</div>
+            <!-- Archived Videos Card -->
+            <div class="metric-card glass-panel glow-purple">
+              <div class="metric-card-header">
+                <span class="metric-label">Archived Videos</span>
+                <div class="metric-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                </div>
+              </div>
+              <span class="metric-value">{{ stats?.totalVideos?.toLocaleString() || 0 }}</span>
+              <div class="metric-sub">Videos locally cataloged & verified</div>
             </div>
 
-            <div class="metric-card glass-panel">
-              <span class="metric-label">Followed Channels</span>
-              <span class="metric-value">{{ stats?.totalChannels || 0 }}</span>
-              <div class="metric-sub">Configured archiving sources</div>
-            </div>
-
-            <div class="metric-card glass-panel">
-              <span class="metric-label">Media Disk Space</span>
+            <!-- Media Disk Space Card -->
+            <div class="metric-card glass-panel glow-blue">
+              <div class="metric-card-header">
+                <span class="metric-label">Media Disk Space</span>
+                <div class="metric-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                </div>
+              </div>
               <span class="metric-value text-gradient">{{ formatBytes(stats?.mediaSize || 0) }}</span>
-              <div class="metric-sub">Consumed by MP4/JPG files</div>
+              <div class="metric-sub">Total space used by MP4/JPG files</div>
             </div>
 
-            <div class="metric-card glass-panel">
-              <span class="metric-label">Archived Duration</span>
+            <!-- Archived Duration Card -->
+            <div class="metric-card glass-panel glow-green">
+              <div class="metric-card-header">
+                <span class="metric-label">Archived Duration</span>
+                <div class="metric-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+              </div>
               <span class="metric-value">{{ formatSecondsToHours(stats?.totalDuration || 0) }}</span>
-              <div class="metric-sub">Cumulative time of local videos</div>
+              <div class="metric-sub">Cumulative playback playtime</div>
             </div>
 
-            <div class="metric-card glass-panel">
-              <span class="metric-label">Archived Comments</span>
-              <span class="metric-value">{{ stats?.totalComments || 0 }}</span>
-              <div class="metric-sub">Extracted from YouTube</div>
-            </div>
-
-            <div class="metric-card glass-panel">
-              <span class="metric-label">SQLite Database</span>
+            <!-- SQLite Database Card -->
+            <div class="metric-card glass-panel glow-pink">
+              <div class="metric-card-header">
+                <span class="metric-label">SQLite Database</span>
+                <div class="metric-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
+                </div>
+              </div>
               <span class="metric-value">{{ formatBytes(stats?.dbSize || 0) }}</span>
-              <div class="metric-sub">Indexing and database</div>
+              <div class="metric-sub">Metadata & search indexing database</div>
             </div>
           </div>
 
           <!-- Graphs & Storage Breakdown Row -->
-          <div class="stats-row" style="grid-template-columns: 1fr;">
-            <!-- Channels breakdown -->
+          <div class="stats-row">
+            <!-- Channels breakdown (Left Column) -->
             <div class="stats-col glass-panel">
-              <h3>Top Channels (by videos)</h3>
+              <div class="col-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <h3>Top Channels (by videos)</h3>
+              </div>
               <div v-if="channels.length === 0" class="stats-empty">
-                No channels found.
+                No channels found. Start tracking channels to view archiving metrics.
               </div>
               <div v-else class="stats-list">
                 <div 
@@ -112,10 +150,13 @@
                   class="stats-list-item"
                 >
                   <div class="stats-item-info">
-                    <span class="item-title">{{ ch.title }}</span>
-                    <span class="item-count">{{ ch.completed_count }} / {{ ch.total_count }} vid.</span>
+                    <div class="stats-item-title-col">
+                      <span class="item-title" :title="ch.title">{{ ch.title }}</span>
+                      <span v-if="ch.visibility" :class="['visibility-tag mini-tag', ch.visibility]">{{ ch.visibility }}</span>
+                    </div>
+                    <span class="item-count">{{ ch.completed_count }} / {{ ch.total_count }} videos</span>
                   </div>
-                  <!-- Mini Progress Bar -->
+                  <!-- Progress Bar -->
                   <div class="stats-item-bar-bg">
                     <div 
                       class="stats-item-bar" 
@@ -125,210 +166,306 @@
                 </div>
               </div>
             </div>
+
+            <!-- Diagnostics & Storage Breakdown (Right Column) -->
+            <div class="stats-col glass-panel diagnostic-panel">
+              <div class="col-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-secondary);"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                <h3>Infrastructure & Analytics</h3>
+              </div>
+              
+              <div class="diagnostic-list">
+                <div class="diag-item">
+                  <div class="diag-label">Active tracked channels</div>
+                  <div class="diag-value font-highlight">{{ stats?.totalChannels || 0 }} channels</div>
+                </div>
+                
+                <div class="diag-item">
+                  <div class="diag-label">Total YouTube catalog views</div>
+                  <div class="diag-value">{{ formatViews(stats?.totalViews || 0) }} views</div>
+                </div>
+
+                <div class="diag-item">
+                  <div class="diag-label">Comments database load</div>
+                  <div class="diag-value">{{ stats?.totalComments?.toLocaleString() || 0 }} rows</div>
+                </div>
+
+                <div class="diag-item">
+                  <div class="diag-label">Pending sync downloads</div>
+                  <div class="diag-value" :class="{ 'warning-highlight': (stats?.totalQueue || 0) > 0 }">
+                    {{ stats?.totalQueue || 0 }} in queue
+                  </div>
+                </div>
+
+                <div class="diag-item">
+                  <div class="diag-label">Database indexing engine</div>
+                  <div class="diag-value">better-sqlite3 v9.x</div>
+                </div>
+              </div>
+
+              <div class="diagnostic-check">
+                <div class="check-radar">
+                  <span class="radar-dot"></span>
+                  <span class="radar-ring"></span>
+                </div>
+                <div class="check-text">
+                  <h4>All Services Operational</h4>
+                  <p>Archiver engine listening for sync triggers.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- ================= DOWNLOADS TAB ================= -->
         <div v-if="activeTab === 'downloads' && isAdmin" class="tab-pane">
-          <div class="pane-header">
-            <h2>Downloads Manager</h2>
-            <p>Add videos or monitor active streams in your queue.</p>
+          <!-- Downloads Header & Controls Row -->
+          <div class="downloads-header-panel glass-panel">
+            <div class="header-text">
+              <h2>Downloads Manager & Queue</h2>
+              <p>Add new channels, update background worker sync schedules, or control the download pipeline.</p>
+            </div>
+            
+            <div class="queue-actions-row">
+              <!-- Global Pause/Resume Button -->
+              <button 
+                @click="toggleGlobalPause" 
+                class="btn" 
+                :class="isPaused ? 'btn-primary-glow' : 'btn-secondary-dark'"
+                :disabled="pausingOrResuming"
+              >
+                <svg v-if="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                <span>{{ isPaused ? 'Resume Sync' : 'Pause Sync' }}</span>
+              </button>
+
+              <button @click="handleSyncAll" class="btn btn-secondary-dark" :disabled="syncingAll">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2" :class="{ 'spin-anim': syncingAll }"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                <span>{{ syncingAll ? 'Syncing...' : 'Sync All Channels' }}</span>
+              </button>
+
+              <button v-if="failedCount > 0" @click="handleRetryAllFailed" class="btn btn-secondary-dark" :disabled="retryingFailed">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                <span>Retry {{ failedCount }} Failed</span>
+              </button>
+
+              <button v-if="queue.length > 0" @click="handleClearQueue" class="btn btn-danger-outline btn-clean">
+                Clear Queue
+              </button>
+            </div>
           </div>
 
-          <!-- Add Ingest / Channel Search Box -->
-          <div class="ingest-box glass-panel">
-            <h3>Search for a YouTube Channel</h3>
-            <p class="section-desc">Enter the name of the YouTube channel you want to add.</p>
-            <form @submit.prevent="handleSearchOrIngest" class="ingest-form mt-2">
-              <input 
-                type="text" 
-                v-model="channelSearchInput" 
-                placeholder="Channel name (e.g. Marques Brownlee, Veritasium...)" 
-                class="form-input" 
-                required
-                :disabled="searching || ingesting"
-              />
-              <button type="submit" class="btn btn-primary" :disabled="searching || ingesting">
-                <span v-if="searching">Searching...</span>
-                <span v-else>Search</span>
-              </button>
-            </form>
-            <div v-if="ingestMessage" class="form-msg mt-3" :class="ingestSuccess ? 'success-msg' : 'error-msg'">
-              {{ ingestMessage }}
-            </div>
-
-            <!-- Search Results -->
-            <div v-if="searchResults.length > 0" class="search-results-list mt-3">
-              <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);">Search Results :</h4>
-              <div class="search-results-grid">
-                <div v-for="ch in searchResults" :key="ch.id" class="search-channel-card">
-                  <img :src="ch.avatarUrl || '/img/default-avatar.png'" class="channel-avatar-thumb" />
-                  <div class="channel-search-info">
-                    <h5>{{ ch.title }}</h5>
-                    <p class="channel-search-meta">{{ ch.subscriberCount }} • {{ ch.videoCount }}</p>
-                    <p class="channel-search-desc" v-if="ch.description">{{ ch.description }}</p>
+          <div class="downloads-dashboard-layout">
+            <!-- Left Side: Config & Ingest (60% width on desktop) -->
+            <div class="downloads-main-col">
+              <!-- Add Ingest / Channel Search Box -->
+              <div class="ingest-box glass-panel">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-purple">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
                   </div>
-                  <button @click="openIngestModal(ch)" class="btn btn-secondary btn-xs">
-                    Add
+                  <div>
+                    <h3>Track YouTube Channel</h3>
+                    <p class="section-desc">Search for a channel to add it to your local offline library.</p>
+                  </div>
+                </div>
+
+                <form @submit.prevent="handleSearchOrIngest" class="ingest-form mt-3">
+                  <div class="search-input-wrapper">
+                    <input 
+                      type="text" 
+                      v-model="channelSearchInput" 
+                      placeholder="Channel name (e.g. Marques Brownlee, Veritasium...)" 
+                      class="form-input search-input" 
+                      required
+                      :disabled="searching || ingesting"
+                    />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  </div>
+                  <button type="submit" class="btn btn-primary" :disabled="searching || ingesting">
+                    <span v-if="searching">Searching...</span>
+                    <span v-else>Search Channel</span>
                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Default Downloads Directory Configuration -->
-          <div class="ingest-box glass-panel mt-3">
-            <h3>Default Downloads Directory</h3>
-            <p class="section-desc">Set the absolute path on the server where all channels will be archived by default.</p>
-            <form @submit.prevent="handleSaveDefaultDir" class="ingest-form mt-2">
-              <input 
-                type="text" 
-                v-model="defaultDownloadsDir" 
-                placeholder="e.g. /downloads/videos" 
-                class="form-input" 
-                required
-                :disabled="savingDir"
-              />
-              <button type="submit" class="btn btn-primary" :disabled="savingDir">
-                <span>{{ savingDir ? 'Enregistrement...' : 'Enregistrer' }}</span>
-              </button>
-            </form>
-            <div v-if="saveDirMessage" class="form-msg mt-3" :class="saveDirSuccess ? 'success-msg' : 'error-msg'">
-              {{ saveDirMessage }}
-            </div>
-          </div>
-
-          <!-- Planification (Cron) Configuration Box -->
-          <div class="ingest-box glass-panel mt-3">
-            <h3>Sync Scheduling (Cron)</h3>
-            <p class="section-desc">
-              Determine the interval at which the server will query YouTube to identify and catalog new videos for tracked channels.
-            </p>
-
-            <form @submit.prevent="handleSaveSchedule" class="ingest-form mt-2" style="display: flex; flex-direction: column; gap: 12px; align-items: stretch; width: 100%;">
-              <div class="form-group" style="margin: 0;">
-                <label class="checkbox-container">
-                  <input type="checkbox" v-model="scheduleForm.enabled" />
-                  <span class="checkmark"></span>
-                  Enable automatic background synchronization
-                </label>
-              </div>
-
-              <div v-if="scheduleForm.enabled" class="schedule-settings-row" style="display: flex; gap: 16px; align-items: flex-end; width: 100%; flex-wrap: wrap;">
-                <div class="form-group" style="flex: 1; min-width: 200px; margin: 0;">
-                  <label class="form-label" for="preset">Preset Interval</label>
-                  <select id="preset" v-model="scheduleForm.preset" @change="applyPreset" class="form-select" style="width: 100%;">
-                    <option value="hourly">Hourly</option>
-                    <option value="twelve_hours">Every 12 hours</option>
-                    <option value="daily">Daily (at 3 AM)</option>
-                    <option value="weekly">Weekly (Sunday at 3 AM)</option>
-                    <option value="custom">Custom Cron Expression</option>
-                  </select>
+                </form>
+                
+                <div v-if="ingestMessage" class="form-msg mt-3" :class="ingestSuccess ? 'success-msg' : 'error-msg'">
+                  {{ ingestMessage }}
                 </div>
 
-                <div class="form-group" v-if="scheduleForm.preset === 'custom'" style="flex: 1; min-width: 200px; margin: 0;">
-                  <label class="form-label" for="cron">Cron Expression</label>
-                  <input type="text" id="cron" v-model="scheduleForm.schedule" class="form-input" placeholder="*/30 * * * *" required style="width: 100%;" />
-                </div>
-              </div>
-
-              <div class="form-actions" style="margin-top: 8px;">
-                <button type="submit" class="btn btn-primary" :disabled="savingSchedule">
-                  {{ savingSchedule ? 'Saving...' : 'Save schedule' }}
-                </button>
-              </div>
-            </form>
-            <div v-if="scheduleMessage" class="form-msg mt-3 success-msg">
-              {{ scheduleMessage }}
-            </div>
-          </div>
-
-          <!-- Synchronize Button & Queue Actions -->
-          <div class="queue-actions-row">
-            <!-- Global Pause/Resume Button -->
-            <button 
-              @click="toggleGlobalPause" 
-              class="btn" 
-              :class="isPaused ? 'btn-primary' : 'btn-secondary'"
-              :disabled="pausingOrResuming"
-            >
-              <svg v-if="isPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-              <span>{{ isPaused ? 'Resume downloads' : 'Pause downloads' }}</span>
-            </button>
-
-            <button @click="handleSyncAll" class="btn btn-secondary" :disabled="syncingAll">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2" :class="{ 'spin-anim': syncingAll }"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-              <span>{{ syncingAll ? 'Synchronizing...' : 'Synchronize entire library' }}</span>
-            </button>
-
-            <button v-if="failedCount > 0" @click="handleRetryAllFailed" class="btn btn-secondary" :disabled="retryingFailed">
-              <span>Retry {{ failedCount }} failed</span>
-            </button>
-
-            <button v-if="queue.length > 0" @click="handleClearQueue" class="btn btn-danger-outline">
-              Clear queue
-            </button>
-          </div>
-
-          <!-- Queue Section -->
-          <div class="queue-box glass-panel">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-              <h3 style="margin: 0; font-size: 16px;">Processing Queue</h3>
-              <span :class="isPaused ? 'badge-paused-global' : 'badge-active-global'">
-                {{ isPaused ? 'Downloads Suspended' : 'Active' }}
-              </span>
-            </div>
-
-            <div v-if="queue.length === 0" class="queue-empty">
-              No active or pending downloads.
-            </div>
-            <div v-else class="queue-list">
-              <div v-for="video in queue" :key="video.id" class="queue-card">
-                <div class="queue-details">
-                  <div class="queue-text">
-                    <h4 class="queue-title" :title="video.title">{{ video.title }}</h4>
-                    <p class="queue-channel">{{ video.channel_title }} • <code>{{ video.id }}</code></p>
+                <!-- Search Results -->
+                <div v-if="searchResults.length > 0" class="search-results-list mt-4">
+                  <h4 class="results-header">Matching Channels :</h4>
+                  <div class="search-results-grid">
+                    <div v-for="ch in searchResults" :key="ch.id" class="search-channel-card">
+                      <img 
+                        :src="ch.avatarUrl || '/img/default-avatar.png'" 
+                        class="channel-avatar-thumb" 
+                        referrerpolicy="no-referrer"
+                        @error="($event) => { const target = $event.target as HTMLImageElement; if (target) { target.src = '/img/default-avatar.png'; } }"
+                      />
+                      <div class="channel-search-info">
+                        <h5>{{ ch.title }}</h5>
+                        <p class="channel-search-meta">
+                          <span class="subscribers">{{ ch.subscriberCount }} subs</span>
+                          <span class="meta-dot">•</span>
+                          <span class="videos-count">{{ ch.videoCount }} videos</span>
+                        </p>
+                        <p class="channel-search-desc" v-if="ch.description">{{ ch.description }}</p>
+                      </div>
+                      <button @click="openIngestModal(ch)" class="btn btn-primary btn-xs">
+                        Track
+                      </button>
+                    </div>
                   </div>
-                  <span class="badge" :class="`badge-${video.download_status}`">
-                    {{ formatStatus(video.download_status) }}
+                </div>
+              </div>
+
+              <!-- Archiver System Policy Panel -->
+              <div class="ingest-box glass-panel mt-4">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-blue">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </div>
+                  <div>
+                    <h3>Archiving Policy & Scheduling</h3>
+                    <p class="section-desc">Manage your downloads path and synchronize automation scheduling triggers.</p>
+                  </div>
+                </div>
+
+                <div class="policy-forms-grid mt-3">
+                  <!-- Storage Path Form -->
+                  <form @submit.prevent="handleSaveDefaultDir" class="policy-form-block">
+                    <div class="form-group">
+                      <label class="form-label" for="default_dir">Default Server Downloads Folder</label>
+                      <div class="input-action-row">
+                        <input 
+                          type="text" 
+                          id="default_dir" 
+                          v-model="defaultDownloadsDir" 
+                          placeholder="e.g. /downloads/videos" 
+                          class="form-input" 
+                          required
+                          :disabled="savingDir"
+                        />
+                        <button type="submit" class="btn btn-secondary-dark" :disabled="savingDir">
+                          <span>{{ savingDir ? 'Saving...' : 'Apply Path' }}</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div v-if="saveDirMessage" class="form-msg mt-2" :class="saveDirSuccess ? 'success-msg' : 'error-msg'">
+                      {{ saveDirMessage }}
+                    </div>
+                  </form>
+
+                  <!-- Scheduling Form -->
+                  <form @submit.prevent="handleSaveSchedule" class="policy-form-block mt-3 pt-3 border-t">
+                    <div class="form-group">
+                      <label class="checkbox-container">
+                        <input type="checkbox" v-model="scheduleForm.enabled" />
+                        <span class="checkmark"></span>
+                        Enable background sync worker automation
+                      </label>
+                    </div>
+
+                    <div v-if="scheduleForm.enabled" class="schedule-settings-row mt-2">
+                      <div class="form-group flex-1">
+                        <label class="form-label" for="preset">Preset Interval</label>
+                        <select id="preset" v-model="scheduleForm.preset" @change="applyPreset" class="form-select">
+                          <option value="hourly">Hourly (Every hour)</option>
+                          <option value="twelve_hours">Every 12 hours</option>
+                          <option value="daily">Daily (archiving at 3 AM)</option>
+                          <option value="weekly">Weekly (Sunday at 3 AM)</option>
+                          <option value="custom">Custom Cron Expression</option>
+                        </select>
+                      </div>
+
+                      <div class="form-group flex-1" v-if="scheduleForm.preset === 'custom'">
+                        <label class="form-label" for="cron">Cron Expression</label>
+                        <input type="text" id="cron" v-model="scheduleForm.schedule" class="form-input" placeholder="*/30 * * * *" required />
+                      </div>
+                    </div>
+
+                    <div class="form-actions mt-3">
+                      <button type="submit" class="btn btn-secondary-dark" :disabled="savingSchedule">
+                        {{ savingSchedule ? 'Saving...' : 'Save Sync Trigger' }}
+                      </button>
+                    </div>
+                  </form>
+                  <div v-if="scheduleMessage" class="form-msg mt-3 success-msg">
+                    {{ scheduleMessage }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: Processing Queue (40% width on desktop) -->
+            <div class="downloads-side-col">
+              <div class="queue-box glass-panel">
+                <div class="queue-header-row">
+                  <div class="flex-align-center gap-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-secondary);"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 700;">Worker Queue</h3>
+                  </div>
+                  <span :class="isPaused ? 'badge-paused-global' : 'badge-active-global'">
+                    {{ isPaused ? 'Suspended' : 'Active' }}
                   </span>
                 </div>
 
-                <!-- Progress indicators -->
-                <div class="queue-progress-row">
-                  <div class="progress-bar-bg">
-                    <div 
-                      class="progress-bar-fill" 
-                      :style="{ width: (smoothProgress[video.id] !== undefined ? smoothProgress[video.id] : (video.download_progress || 0)) + '%' }"
-                    ></div>
+                <div v-if="queue.length === 0" class="queue-empty-state">
+                  <div class="empty-icon-cloud">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19A3.5 3.5 0 0 0 21 15.5a3.42 3.42 0 0 0-.22-1.2A3.5 3.5 0 0 0 17.5 11h-1a7 7 0 0 0-14 0h-1a3.5 3.5 0 0 0 0 7h16.5z"></path><polyline points="12 18 12 12 15 15"></polyline></svg>
                   </div>
-                  <span class="progress-percent">{{ Math.round(smoothProgress[video.id] !== undefined ? smoothProgress[video.id] : (video.download_progress || 0)) }}%</span>
+                  <h4>Archive Pipeline Idle</h4>
+                  <p>Queue is empty. Active channels are queried automatically.</p>
                 </div>
+                <div v-else class="queue-list-premium">
+                  <div v-for="video in queue" :key="video.id" class="queue-card-premium">
+                    <div class="queue-card-details">
+                      <div class="queue-card-meta-main">
+                        <h4 class="queue-card-title" :title="video.title">{{ video.title }}</h4>
+                        <span class="queue-card-channel-name">{{ video.channel_title }}</span>
+                      </div>
+                      <span class="status-badge" :class="`status-${video.download_status}`">
+                        {{ formatStatus(video.download_status) }}
+                      </span>
+                    </div>
 
-                <div class="queue-meta" v-if="video.download_status === 'downloading'">
-                  <span v-if="video.download_speed">Speed: {{ video.download_speed }}</span>
-                  <span v-if="video.download_eta">ETA: {{ video.download_eta }}</span>
-                </div>
+                    <!-- Progress Bar Component -->
+                    <div class="queue-progress-container">
+                      <div class="progress-bar-glow-bg">
+                        <div 
+                          class="progress-bar-glow-fill" 
+                          :style="{ width: (smoothProgress[video.id] !== undefined ? smoothProgress[video.id] : (video.download_progress || 0)) + '%' }"
+                        ></div>
+                      </div>
+                      <span class="progress-percent-text">{{ Math.round(smoothProgress[video.id] !== undefined ? smoothProgress[video.id] : (video.download_progress || 0)) }}%</span>
+                    </div>
 
-                <div class="queue-error" v-if="video.download_status === 'failed' && video.last_error">
-                  <strong>Error:</strong> {{ video.last_error }}
-                </div>
+                    <div class="queue-diagnostics-row" v-if="video.download_status === 'downloading'">
+                      <span v-if="video.download_speed" class="diag-meta-spec">Speed: {{ video.download_speed }}</span>
+                      <span v-if="video.download_eta" class="diag-meta-spec">ETA: {{ video.download_eta }}</span>
+                    </div>
 
-                <div class="queue-card-actions">
-                  <button 
-                    v-if="video.download_status === 'pending'"
-                    @click="handlePrioritizeTask(video.id)" 
-                    class="btn btn-secondary btn-xs"
-                  >
-                    Prioritize
-                  </button>
-                  <button 
-                    @click="handleCancelDownload(video.id)" 
-                    class="btn btn-danger-outline btn-xs"
-                  >
-                    Cancel
-                  </button>
+                    <div class="queue-error-box" v-if="video.download_status === 'failed' && video.last_error">
+                      <strong>Log:</strong> {{ video.last_error }}
+                    </div>
+
+                    <div class="queue-card-action-bar">
+                      <button 
+                        v-if="video.download_status === 'pending'"
+                        @click="handlePrioritizeTask(video.id)" 
+                        class="btn-action-premium"
+                      >
+                        Prioritize
+                      </button>
+                      <button 
+                        @click="handleCancelDownload(video.id)" 
+                        class="btn-action-premium btn-action-danger"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -381,15 +518,7 @@
                 </div>
               </div>
 
-              <div class="form-group">
-                <label class="form-label" for="date_after">Only download after (optional)</label>
-                <input 
-                  type="date" 
-                  id="date_after" 
-                  v-model="modalForm.date_after" 
-                  class="form-input" 
-                />
-              </div>
+
 
               <div class="form-group mt-3">
                 <label class="checkbox-container">
@@ -421,80 +550,97 @@
 
         <!-- ================= SYSTEM & MAINTENANCE TAB ================= -->
         <div v-if="activeTab === 'system' && isAdmin" class="tab-pane">
-          <div class="pane-header">
-            <h2>Maintenance & System Tools</h2>
-            <p>Verify server dependencies status and observe the log console in real time.</p>
-          </div>
+          <div class="system-dashboard-layout">
+            <!-- Left Column: Diagnostic & Tools (40% width) -->
+            <div class="system-diagnostic-col">
+              <div class="config-section glass-panel">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-pink">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                  </div>
+                  <div>
+                    <h3>Engine Binaries</h3>
+                    <p class="section-desc">Verify background yt-dlp/ffmpeg local processes operational status.</p>
+                  </div>
+                </div>
 
-          <!-- yt-dlp & FFmpeg Diagnostic Tools -->
-          <div class="config-section glass-panel">
-            <h3>Server Dependencies Diagnostic</h3>
-            <p class="section-desc">Local archiving binary path: <code>{{ diagnosticYtdlPath || 'loading...' }}</code></p>
-            <div class="btn-group mt-3">
-              <button @click="handleTestBinary" class="btn btn-secondary" :disabled="diagnosticBinaryTesting">
-                {{ diagnosticBinaryTesting ? 'Testing...' : 'Test Binaries' }}
-              </button>
-              
-              <button @click="handleUpdateYtdl" class="btn btn-secondary" :disabled="updatingYtdl">
-                {{ updatingYtdl ? 'Updating...' : 'Update yt-dlp' }}
-              </button>
+                <div class="binary-path-box mt-3">
+                  <span class="path-label">Server yt-dlp path :</span>
+                  <code class="path-code">{{ diagnosticYtdlPath || 'resolving path...' }}</code>
+                </div>
+
+                <div class="btn-group mt-3" style="width: 100%; display: flex; gap: 10px;">
+                  <button @click="handleTestBinary" class="btn btn-secondary-dark flex-1" :disabled="diagnosticBinaryTesting">
+                    {{ diagnosticBinaryTesting ? 'Testing...' : 'Diagnostic Check' }}
+                  </button>
+                  
+                  <button @click="handleUpdateYtdl" class="btn btn-secondary-dark flex-1" :disabled="updatingYtdl">
+                    {{ updatingYtdl ? 'Updating...' : 'Update yt-dlp' }}
+                  </button>
+                </div>
+
+                <!-- Diagnostics results panel -->
+                <div v-if="diagnosticBinaryResult" class="test-result-box mt-3 border-t pt-3">
+                  <div class="diagnostic-status-item">
+                    <span class="diagnostic-label">yt-dlp Engine Status:</span>
+                    <span :class="diagnosticBinaryResult.success ? 'badge-status badge-success' : 'badge-status badge-danger'">
+                      {{ diagnosticBinaryResult.success ? 'Operational' : 'Error' }}
+                    </span>
+                    <div v-if="diagnosticBinaryResult.success" class="diagnostic-version-sub mt-1">
+                      Version: <code>{{ diagnosticBinaryResult.version }}</code>
+                    </div>
+                  </div>
+                  
+                  <div class="diagnostic-status-item mt-3">
+                    <span class="diagnostic-label">FFmpeg Merging status:</span>
+                    <span :class="diagnosticBinaryResult.ffmpegAvailable ? 'badge-status badge-success' : 'badge-status badge-warning'">
+                      {{ diagnosticBinaryResult.ffmpegAvailable ? 'AV Merge active' : 'Not detected' }}
+                    </span>
+                  </div>
+
+                  <div v-if="!diagnosticBinaryResult.ffmpegAvailable" class="ffmpeg-warning-box mt-3">
+                    <strong class="warning-title">💡 Standard Formats only (720p max):</strong>
+                    <p class="warning-desc">FFmpeg was not detected in system execution paths. Thumbnails cannot be converted to JPG, and downloads will be capped at combined formats. Install <code>ffmpeg</code> on the host system to enable high-quality (1080p, 4K) downloads.</p>
+                  </div>
+
+                  <div v-if="diagnosticBinaryResult.stderr" class="diagnostic-stderr-box mt-3">
+                    <h5>stderr capture:</h5>
+                    <pre class="diagnostic-pre mt-1">{{ diagnosticBinaryResult.stderr }}</pre>
+                  </div>
+                </div>
+
+                <div v-if="updatingYtdl || updateConsoleOutput" class="test-result-box mt-3 border-t pt-3">
+                  <h4>Worker output log:</h4>
+                  <pre class="diagnostic-pre mt-2">{{ updateConsoleOutput || 'Executing path binaries update...' }}</pre>
+                </div>
+              </div>
             </div>
 
-            <!-- Diagnostics results panel -->
-            <div v-if="diagnosticBinaryResult" class="test-result-box mt-3">
-              <div class="diagnostic-status-item">
-                <span class="diagnostic-label">yt-dlp:</span>
-                <span :class="diagnosticBinaryResult.success ? 'badge-status badge-success' : 'badge-status badge-danger'">
-                  {{ diagnosticBinaryResult.success ? 'Operational' : 'Error' }}
-                </span>
-                <span v-if="diagnosticBinaryResult.success" class="diagnostic-version-text ml-2">
-                  (version: <code>{{ diagnosticBinaryResult.version }}</code>)
-                </span>
-              </div>
-              
-              <div class="diagnostic-status-item mt-2">
-                <span class="diagnostic-label">FFmpeg:</span>
-                <span :class="diagnosticBinaryResult.ffmpegAvailable ? 'badge-status badge-success' : 'badge-status badge-warning'">
-                  {{ diagnosticBinaryResult.ffmpegAvailable ? 'Available (A/V Merge active)' : 'Not detected' }}
-                </span>
-              </div>
-
-              <div v-if="!diagnosticBinaryResult.ffmpegAvailable" class="ffmpeg-warning-box mt-3">
-                <strong class="warning-title">💡 Note on video quality:</strong>
-                <p class="warning-desc">FFmpeg was not detected on your system. Videos will be downloaded in their default combined format (usually limited to 720p maximum) and thumbnails cannot be converted to JPG. For maximum quality (1080p, 4K, etc.), please install <code>ffmpeg</code> (for example via <code>brew install ffmpeg</code> on macOS or <code>sudo apt install ffmpeg</code> on Linux) and restart MyTeub.</p>
-              </div>
-
-              <div v-if="diagnosticBinaryResult.stderr" class="diagnostic-stderr-box mt-3">
-                <h5>Error output:</h5>
-                <pre class="diagnostic-pre mt-1">{{ diagnosticBinaryResult.stderr }}</pre>
-              </div>
-            </div>
-
-            <div v-if="updatingYtdl || updateConsoleOutput" class="test-result-box mt-3">
-              <h4>Update Output:</h4>
-              <pre class="diagnostic-pre mt-2">{{ updateConsoleOutput || 'Waiting...' }}</pre>
-            </div>
-          </div>
-
-          <!-- Interactive Live Logs Terminal -->
-          <div class="logs-container glass-panel mt-4">
-            <div class="logs-header">
-              <h3>Worker Console (Background Logs)</h3>
-              <button @click="fetchDiagnostics" class="btn btn-secondary btn-icon-sm" title="Refresh logs">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-              </button>
-            </div>
-            <div class="logs-terminal" ref="terminalBody">
-              <div v-if="diagnosticLogs.length === 0" class="log-line text-muted">
-                No logs available at the moment.
-              </div>
-              <div 
-                v-for="(log, idx) in diagnosticLogs" 
-                :key="idx" 
-                class="log-line"
-                :class="getLogLineClass(log)"
-              >
-                {{ log }}
+            <!-- Right Column: Interactive terminal logs (60% width) -->
+            <div class="system-logs-col">
+              <div class="logs-container glass-panel">
+                <div class="logs-header">
+                  <div class="flex-align-center gap-10">
+                    <span class="terminal-dot green"></span>
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: white;">System Ingestion Logs</h3>
+                  </div>
+                  <button @click="fetchDiagnostics" class="btn btn-secondary-dark btn-icon-sm" title="Refresh logs">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                  </button>
+                </div>
+                <div class="logs-terminal" ref="terminalBody">
+                  <div v-if="diagnosticLogs.length === 0" class="log-line text-muted">
+                    No log buffer entries captured.
+                  </div>
+                  <div 
+                    v-for="(log, idx) in diagnosticLogs" 
+                    :key="idx" 
+                    class="log-line"
+                    :class="getLogLineClass(log)"
+                  >
+                    {{ log }}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -502,159 +648,184 @@
 
         <!-- ================= USERS TAB ================= -->
         <div v-if="activeTab === 'users' && isAdmin" class="tab-pane">
-          <div class="pane-header">
-            <h2>Manage User Accounts</h2>
-            <p>Create new profiles or assign access permissions.</p>
-          </div>
-
-          <div class="users-layout">
-            <!-- Save User Form -->
-            <div class="user-form-panel glass-panel">
-              <h3>{{ editingUserId ? 'Edit user' : 'Create user' }}</h3>
-              
-              <form @submit.prevent="handleSaveUser" class="user-form mt-3">
-                <div class="form-group">
-                  <label class="form-label" for="u_username">Username</label>
-                  <input 
-                    type="text" 
-                    id="u_username" 
-                    v-model="userForm.username" 
-                    class="form-input" 
-                    placeholder="e.g. Paul" 
-                    required
-                    :disabled="!!editingUserId"
-                  />
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label" for="u_password">
-                    {{ editingUserId ? 'New password (leave empty to keep unchanged)' : 'Password (leave empty to auto-generate)' }}
-                  </label>
-                  <input 
-                    type="password" 
-                    id="u_password" 
-                    v-model="userForm.password" 
-                    class="form-input" 
-                    placeholder="•••••••• (Optional)" 
-                  />
-                </div>
-
-                <div class="form-group">
-                  <label class="form-label">Role</label>
-                  <div class="role-selector">
-                    <label class="role-option" :class="{ selected: userForm.role === 'user' }">
-                      <input type="radio" v-model="userForm.role" value="user" />
-                      <span>Standard User</span>
-                    </label>
-                    <label class="role-option" :class="{ selected: userForm.role === 'admin' }">
-                      <input type="radio" v-model="userForm.role" value="admin" />
-                      <span>Administrator</span>
-                    </label>
+          <div class="users-dashboard-layout">
+            <!-- Left Side: User profile config (40% width) -->
+            <div class="user-config-col">
+              <div class="user-form-panel glass-panel">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-purple">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                  </div>
+                  <div>
+                    <h3>{{ editingUserId ? 'Modify User Profile' : 'Register Account' }}</h3>
+                    <p class="section-desc">Create profiles, define access roles, and assign channel track lists permissions.</p>
                   </div>
                 </div>
-
-                <!-- Access checklist for user role -->
-                <div v-if="userForm.role === 'user'" class="permissions-section mt-3">
-                  <h4>Access Permissions</h4>
-                  
-                  <div class="form-group mt-2">
-                    <label class="checkbox-container">
-                      <input type="checkbox" v-model="fullChannelAccess" />
-                      <span class="checkmark"></span>
-                      Full access to all channels
-                    </label>
+                
+                <form @submit.prevent="handleSaveUser" class="user-form mt-4">
+                  <div class="form-group">
+                    <label class="form-label" for="u_username">Username</label>
+                    <input 
+                      type="text" 
+                      id="u_username" 
+                      v-model="userForm.username" 
+                      class="form-input" 
+                      placeholder="e.g. Paul" 
+                      required
+                      :disabled="!!editingUserId"
+                    />
                   </div>
 
-                  <!-- Channels list (only if NOT full access) -->
-                  <div v-if="!fullChannelAccess" class="perm-col mt-2">
-                    <span class="perm-label">Select allowed channels</span>
-                    <div class="checklist-container" style="max-height: 200px;">
-                      <label v-for="ch in channels" :key="ch.id" class="check-item">
-                        <input type="checkbox" v-model="userForm.channelAccess" :value="ch.id" />
-                        <span>{{ ch.title }}</span>
+                  <div class="form-group">
+                    <label class="form-label" for="u_password">
+                      {{ editingUserId ? 'New password (leave empty to keep unchanged)' : 'Password (leave empty to auto-generate)' }}
+                    </label>
+                    <input 
+                      type="password" 
+                      id="u_password" 
+                      v-model="userForm.password" 
+                      class="form-input" 
+                      placeholder="•••••••• (Optional)" 
+                    />
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Authorization Role</label>
+                    <div class="role-selector-premium">
+                      <label class="role-card" :class="{ active: userForm.role === 'user' }">
+                        <input type="radio" v-model="userForm.role" value="user" style="display: none;" />
+                        <div class="role-card-inner">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                          <span>Standard User</span>
+                        </div>
+                      </label>
+                      <label class="role-card" :class="{ active: userForm.role === 'admin' }">
+                        <input type="radio" v-model="userForm.role" value="admin" style="display: none;" />
+                        <div class="role-card-inner">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                          <span>Administrator</span>
+                        </div>
                       </label>
                     </div>
                   </div>
-                </div>
 
-                 <div v-if="generatedPassword" class="form-msg success-msg mt-3" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); padding: 14px; border-radius: 8px;">
-                  <strong style="display: block; margin-bottom: 4px; font-size: 14px;">Account successfully configured!</strong>
-                  Username: <code>{{ oldUsername || userForm.username }}</code><br />
-                  Temporary password: <code style="font-size: 15px; background: rgba(0, 0, 0, 0.4); padding: 2px 6px; border-radius: 4px; color: #4ade80; font-weight: bold;">{{ generatedPassword }}</code>
-                  
-                  <div class="mt-2">
-                    <button type="button" @click="copyCredentials" class="btn btn-secondary btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                      Copy credentials
-                    </button>
+                  <!-- Access checklist for user role -->
+                  <div v-if="userForm.role === 'user'" class="permissions-section-premium mt-3">
+                    <h4>Channel Scope Permissions</h4>
+                    
+                    <div class="form-group mt-2">
+                      <label class="checkbox-container">
+                        <input type="checkbox" v-model="fullChannelAccess" />
+                        <span class="checkmark"></span>
+                        Full visibility on all channels
+                      </label>
+                    </div>
+
+                    <!-- Channels list (only if NOT full access) -->
+                    <div v-if="!fullChannelAccess" class="perm-col mt-2">
+                      <span class="perm-label">Restrict access to specific channels :</span>
+                      <div class="checklist-container-premium mt-2">
+                        <label v-for="ch in channels" :key="ch.id" class="check-item-premium">
+                          <input type="checkbox" v-model="userForm.channelAccess" :value="ch.id" />
+                          <span class="checkmark-mini"></span>
+                          <span>{{ ch.title }}</span>
+                        </label>
+                      </div>
+                    </div>
                   </div>
 
-                  <p style="font-size: 11px; color: var(--text-secondary); margin-top: 6px; line-height: 1.4;">
-                    Copy these credentials and send them to the user. They must change their password on their first login.
-                  </p>
-                </div>
+                   <div v-if="generatedPassword" class="credentials-alert-box mt-3">
+                    <strong class="alert-title">Account configured successfully!</strong>
+                    <div class="credentials-display mt-2">
+                      <div>Username: <code>{{ oldUsername || userForm.username }}</code></div>
+                      <div class="mt-1">Temporary password: <code class="pass-code">{{ generatedPassword }}</code></div>
+                    </div>
+                    
+                    <div class="mt-3">
+                      <button type="button" @click="copyCredentials" class="btn btn-secondary-dark btn-xs">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                        Copy credentials
+                      </button>
+                    </div>
+                  </div>
 
-                <div v-if="userFormMessage" class="form-msg mt-3" :class="userFormSuccess ? 'success-msg' : 'error-msg'">
-                  {{ userFormMessage }}
-                </div>
+                  <div v-if="userFormMessage" class="form-msg mt-3" :class="userFormSuccess ? 'success-msg' : 'error-msg'">
+                    {{ userFormMessage }}
+                  </div>
 
-                <div class="form-actions mt-3">
-                  <button type="submit" class="btn btn-primary">
-                    {{ editingUserId ? 'Update' : 'Create user' }}
-                  </button>
-                  <button v-if="editingUserId" type="button" @click="cancelEditUser" class="btn btn-secondary ml-2">
-                    Cancel
-                  </button>
-                </div>
-              </form>
+                  <div class="form-actions mt-3">
+                    <button type="submit" class="btn btn-primary">
+                      {{ editingUserId ? 'Update Profile' : 'Create Account' }}
+                    </button>
+                    <button v-if="editingUserId" type="button" @click="cancelEditUser" class="btn btn-secondary-dark ml-2">
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
 
-            <!-- Users List Panel -->
-            <div class="users-list-panel glass-panel">
-              <h3>Saved Accounts</h3>
-              
-              <div v-if="usersPending" class="users-loading mt-3">
-                <div class="spinner"></div>
-              </div>
-              <div v-else-if="users.length === 0" class="users-empty mt-3">
-                No user accounts.
-              </div>
-              <div v-else class="users-list mt-3">
-                <div v-for="u in users" :key="u.id" class="user-card">
-                  <div class="user-info">
-                    <div class="user-headline">
-                      <strong>{{ u.username }}</strong>
-                      <span class="badge" :class="u.role === 'admin' ? 'badge-completed' : 'badge-pending'">
-                        {{ u.role === 'admin' ? 'Admin' : 'Standard' }}
+            <!-- Right Side: Accounts List (60% width) -->
+            <div class="users-list-col">
+              <div class="users-list-panel glass-panel">
+                <div class="col-header-row">
+                  <div class="flex-align-center gap-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: white;">Saved User Accounts</h3>
+                  </div>
+                </div>
+
+                <div v-if="usersPending" class="users-loading-state mt-4">
+                  <div class="spinner"></div>
+                </div>
+                <div v-else-if="users.length === 0" class="users-empty-state mt-4">
+                  No registered profiles. Add a profile using the config panel.
+                </div>
+                <div v-else class="users-list-grid mt-3">
+                  <div v-for="u in users" :key="u.id" class="user-card-premium">
+                    <div class="user-card-header">
+                      <div class="user-avatar-circle">
+                        {{ u.username.slice(0, 2).toUpperCase() }}
+                      </div>
+                      <div class="user-headline-col">
+                        <h4>{{ u.username }}</h4>
+                        <span class="user-card-role-badge" :class="u.role">
+                          {{ u.role === 'admin' ? 'Administrator' : 'Standard User' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="user-card-meta mt-2">
+                      <span class="user-date">Registered: {{ formatDate(u.created_at) }}</span>
+                      <span class="user-scope" v-if="u.role === 'user'">
+                        Scoped visibility: {{ u.channelAccess?.length ? u.channelAccess.length + ' channels' : 'All channels' }}
                       </span>
                     </div>
-                    <span class="user-created text-muted">Created on: {{ formatDate(u.created_at) }}</span>
-                    
-                    <div class="user-access-summary text-muted" v-if="u.role === 'user'">
-                      <span>Channels: {{ u.channelAccess?.length || 0 }}</span>
-                    </div>
-                  </div>
 
-                  <div class="user-actions">
-                    <button 
-                      @click="handleResetPassword(u.id, u.username)" 
-                      class="btn btn-secondary btn-icon-sm" 
-                      title="Reset password"
-                      :disabled="u.id === currentUser?.id"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                    </button>
-                    <button @click="loadUserForEdit(u)" class="btn btn-secondary btn-icon-sm" title="Edit">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    </button>
-                    <button 
-                      @click="handleDeleteUser(u.id, u.username)" 
-                      class="btn btn-danger-outline btn-icon-sm" 
-                      title="Delete"
-                      :disabled="u.id === currentUser?.id || u.username === 'admin'"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                    </button>
+                    <div class="user-card-action-bar border-t mt-3 pt-2">
+                      <button 
+                        @click="handleResetPassword(u.id, u.username)" 
+                        class="btn-action-premium-icon" 
+                        title="Reset password"
+                        :disabled="u.id === currentUser?.id"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        <span>Reset Password</span>
+                      </button>
+                      <button @click="loadUserForEdit(u)" class="btn-action-premium-icon" title="Edit Profile">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        <span>Edit</span>
+                      </button>
+                      <button 
+                        @click="handleDeleteUser(u.id, u.username)" 
+                        class="btn-action-premium-icon danger-icon" 
+                        title="Delete Profile"
+                        :disabled="u.id === currentUser?.id || u.username === 'admin'"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        <span>Delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -717,6 +888,13 @@ const formatSecondsToHours = (secs: number) => {
   if (!secs) return '0h';
   const hours = Math.round(secs / 3600);
   return `${hours.toLocaleString()} h`;
+};
+
+const formatViews = (views: number) => {
+  if (!views) return '0';
+  if (views >= 1000000) return (views / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (views >= 1000) return (views / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return views.toLocaleString();
 };
 
 /* ================= 2. DOWNLOADS TAB ================= */
@@ -1208,7 +1386,7 @@ const userFormSuccess = ref(false);
 const oldUsername = ref('');
 
 const copyCredentials = () => {
-  const text = `MyTeub Credentials:\nUsername: ${oldUsername.value || userForm.username}\nTemporary password: ${generatedPassword.value}`;
+  const text = `YouKeep Credentials:\nUsername: ${oldUsername.value || userForm.username}\nTemporary password: ${generatedPassword.value}`;
   navigator.clipboard.writeText(text).then(() => {
     toast.success('Credentials copied to clipboard!');
   }).catch(() => {
@@ -1368,7 +1546,10 @@ onUnmounted(() => {
 .settings-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .settings-layout {
@@ -1402,29 +1583,9 @@ onUnmounted(() => {
 }
 
 .tab-btn {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
   width: 100%;
   text-align: left;
-}
-
-.tab-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
-}
-
-.tab-btn.active {
-  background: rgba(139, 92, 246, 0.1);
-  color: white;
-  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.2);
+  justify-content: flex-start;
 }
 
 .tab-badge {
@@ -1445,7 +1606,7 @@ onUnmounted(() => {
 .tab-pane {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .pane-header h2 {
@@ -1496,19 +1657,13 @@ onUnmounted(() => {
 }
 
 .stats-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-@media (max-width: 768px) {
-  .stats-row {
-    grid-template-columns: 1fr;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .stats-col {
-  padding: 24px;
+  padding: 20px;
   border-radius: var(--border-radius-md);
   display: flex;
   flex-direction: column;
@@ -1601,68 +1756,9 @@ onUnmounted(() => {
   }
 }
 
-.form-input, .form-select {
-  flex: 1;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 10px 16px;
-  border-radius: 8px;
-  font-size: 14px;
-  color: white;
-  transition: border-color 0.2s;
-}
 
-.form-input:focus, .form-select:focus {
-  border-color: var(--accent-primary);
-  background: rgba(0, 0, 0, 0.6);
-}
 
-.form-select {
-  cursor: pointer;
-}
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: white;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-}
-
-.btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.btn-danger-outline {
-  background: transparent;
-  border: 1px solid #ef4444;
-  color: #ef4444;
-}
-
-.btn-danger-outline:hover {
-  background: rgba(239, 68, 68, 0.1);
-}
 
 .queue-actions-row {
   display: flex;
@@ -1828,11 +1924,7 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 
-.btn-xs {
-  padding: 4px 10px;
-  font-size: 11px;
-  border-radius: 4px;
-}
+
 
 /* Logs Terminal */
 .logs-header {
@@ -1925,18 +2017,7 @@ onUnmounted(() => {
   }
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
 
-.form-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
 
 .diagnostic-pre {
   background: #030307;
@@ -2413,5 +2494,990 @@ onUnmounted(() => {
 @keyframes slideUp {
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Diagnostic Dashboard Enhancements */
+.dashboard-banner {
+  margin-bottom: 16px;
+  padding: 24px;
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+  background: linear-gradient(135deg, rgba(30, 30, 50, 0.4) 0%, rgba(15, 15, 25, 0.5) 100%);
+}
+
+.banner-content h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: white;
+  margin: 0 0 6px 0;
+  letter-spacing: -0.01em;
+}
+
+.banner-content p {
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  margin: 0;
+  max-width: 600px;
+  line-height: 1.5;
+}
+
+.system-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulse-badge 2s infinite ease-in-out;
+}
+
+@keyframes pulse-badge {
+  0% { transform: scale(0.85); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.6; }
+  100% { transform: scale(0.85); opacity: 1; }
+}
+
+.banner-quick-stats {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 24px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.quick-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-number {
+  font-size: 20px;
+  font-weight: 800;
+  color: white;
+  font-family: var(--font-title);
+}
+
+.text-accent {
+  color: var(--accent-secondary) !important;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.quick-stat-divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.metric-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.metric-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover .metric-icon {
+  color: white;
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.metric-card.glow-purple:hover {
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 8px 30px rgba(139, 92, 246, 0.1);
+}
+
+.metric-card.glow-blue:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 8px 30px rgba(59, 130, 246, 0.1);
+}
+
+.metric-card.glow-green:hover {
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 8px 30px rgba(16, 185, 129, 0.1);
+}
+
+.metric-card.glow-pink:hover {
+  border-color: rgba(236, 72, 153, 0.3);
+  box-shadow: 0 8px 30px rgba(236, 72, 153, 0.1);
+}
+
+.col-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 12px;
+}
+
+.col-header h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: white;
+}
+
+.stats-item-title-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-tag {
+  font-size: 8px !important;
+  padding: 1px 4px !important;
+  border-radius: 4px !important;
+  line-height: 1 !important;
+}
+
+.diagnostic-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.diagnostic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.diag-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.diag-label {
+  color: var(--text-secondary);
+}
+
+.diag-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.font-highlight {
+  color: var(--accent-primary) !important;
+}
+
+.warning-highlight {
+  color: #fbbf24 !important;
+}
+
+.diagnostic-check {
+  margin-top: auto;
+  background: rgba(16, 185, 129, 0.02);
+  border: 1px solid rgba(16, 185, 129, 0.1);
+  border-radius: var(--border-radius-md);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.check-radar {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.radar-dot {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  width: 6px;
+  height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+}
+
+.radar-ring {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #10b981;
+  border-radius: 50%;
+  animation: radar-ripple 1.8s infinite ease-out;
+  opacity: 0;
+}
+
+@keyframes radar-ripple {
+  0% { transform: scale(0.4); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.check-text h4 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #34d399;
+  margin: 0;
+}
+
+.check-text p {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+}
+
+/* Premium Settings Layout System */
+.downloads-dashboard-layout, .system-dashboard-layout, .users-dashboard-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .downloads-dashboard-layout, .system-dashboard-layout, .users-dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.downloads-header-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 24px;
+  border-radius: var(--border-radius-lg);
+  margin-bottom: 16px;
+}
+
+.downloads-header-panel h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 4px 0;
+}
+
+.downloads-header-panel p {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Button & Card Styles */
+.btn-primary-glow {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.2);
+}
+
+.btn-primary-glow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.45);
+}
+
+.btn-secondary-dark {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.btn-secondary-dark:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: white;
+}
+
+.btn-clean {
+  border-radius: var(--border-radius-md) !important;
+  font-size: 13px !important;
+}
+
+/* Form items icons */
+.section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 16px;
+}
+
+.section-title-row h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 2px 0;
+}
+
+.section-title-row .section-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.icon-orb {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon-orb.bg-purple {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+}
+
+.icon-orb.bg-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.icon-orb.bg-pink {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.25);
+}
+
+/* Custom search elements */
+.search-input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.search-input {
+  padding-left: 40px !important;
+}
+
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.results-header {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.search-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* Custom forms integration */
+.policy-form-block {
+  width: 100%;
+}
+
+.border-t {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.input-action-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.input-action-row .form-input {
+  flex: 1;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+.flex-align-center {
+  display: flex;
+  align-items: center;
+}
+
+.gap-10 {
+  gap: 10px;
+}
+
+/* Queue Premium list */
+.queue-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.queue-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  height: calc(100% - 80px);
+  min-height: 250px;
+}
+
+.empty-icon-cloud {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--text-muted);
+}
+
+.queue-empty-state h4 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: white;
+}
+
+.queue-empty-state p {
+  margin: 0;
+  font-size: 12px;
+  max-width: 200px;
+  line-height: 1.4;
+}
+
+.queue-list-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.queue-card-premium {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--border-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.3s ease;
+}
+
+.queue-card-premium:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.queue-card-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.queue-card-meta-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.queue-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-card-channel-name {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.status-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 12px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.status-pending { background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); }
+.status-downloading { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.25); }
+.status-completed { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+.status-failed { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+
+.queue-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar-glow-bg {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 3px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.progress-bar-glow-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  border-radius: 3px;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+  transition: width 0.3s ease;
+}
+
+.progress-percent-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  min-width: 32px;
+  text-align: right;
+}
+
+.queue-diagnostics-row {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.queue-error-box {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-sm);
+  color: #f87171;
+  font-size: 11px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.queue-card-action-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-action-premium {
+  padding: 4px 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-action-premium:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.btn-action-danger {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.btn-action-danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+/* System diagnostics tab improvements */
+.system-diagnostic-col .binary-path-box {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 10px 14px;
+  border-radius: var(--border-radius-md);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.path-label {
+  color: var(--text-secondary);
+}
+
+.path-code {
+  color: #a78bfa;
+  word-break: break-all;
+}
+
+.diagnostic-version-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.ffmpeg-warning-box {
+  background: rgba(245, 158, 11, 0.03);
+  border: 1px solid rgba(245, 158, 11, 0.1);
+  padding: 12px;
+  border-radius: var(--border-radius-md);
+}
+
+.warning-title {
+  color: #fbbf24;
+  font-size: 12px;
+  display: block;
+}
+
+.warning-desc {
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 4px 0 0 0;
+  color: var(--text-secondary);
+}
+
+/* Terminal enhancement */
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  margin-bottom: 14px;
+}
+
+.terminal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.terminal-dot.green {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.logs-terminal {
+  background: #09090f;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.6);
+  padding: 16px;
+  border-radius: 6px;
+  max-height: 480px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  overflow-y: auto;
+}
+
+.log-line {
+  line-height: 1.6;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.01);
+}
+
+/* User management improvements */
+.role-selector-premium {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.role-card {
+  flex: 1;
+  cursor: pointer;
+}
+
+.role-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border-radius: var(--border-radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: all 0.25s ease;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-card:hover .role-card-inner {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.role-card.active .role-card-inner {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: white;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.08);
+}
+
+.permissions-section-premium {
+  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 16px;
+  border-radius: var(--border-radius-md);
+}
+
+.permissions-section-premium h4 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  color: white;
+}
+
+.checklist-container-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.check-item-premium {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.check-item-premium:hover {
+  color: var(--text-primary);
+}
+
+.credentials-alert-box {
+  background: rgba(16, 185, 129, 0.04);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+  padding: 16px;
+  border-radius: var(--border-radius-md);
+}
+
+.alert-title {
+  color: #34d399;
+  font-size: 13.5px;
+  display: block;
+}
+
+.credentials-display {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pass-code {
+  font-size: 13px !important;
+  color: #34d399 !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  padding: 3px 8px !important;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.user-card-premium {
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+}
+
+.user-card-premium:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.user-card-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.user-avatar-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 14px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.15);
+}
+
+.user-headline-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-headline-col h4 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+}
+
+.user-card-role-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 10px;
+  letter-spacing: 0.05em;
+  width: fit-content;
+}
+
+.user-card-role-badge.admin {
+  background: rgba(139, 92, 246, 0.1);
+  color: #c084fc;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.user-card-role-badge.user {
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.user-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  padding-left: 56px;
+}
+
+.user-card-action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-left: 56px;
+}
+
+.btn-action-premium-icon {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.btn-action-premium-icon:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: white;
+}
+
+.btn-action-premium-icon.danger-icon:hover {
+  background: rgba(239, 68, 68, 0.08);
+  color: #f87171;
+}
+
+.btn-action-premium-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Redesigned grid results for fluid layout */
+.users-list-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.ingest-form .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 </style>

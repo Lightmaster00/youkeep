@@ -24,5 +24,5 @@ export default defineEventHandler(async (event) => {
     ORDER BY p.title ASC
   `).all(channelId);
 
-  return playlists;
+  return { playlists };
 });

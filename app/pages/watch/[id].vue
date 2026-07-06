@@ -5,12 +5,14 @@
       <p>Loading video...</p>
     </div>
 
-    <div v-else-if="error || !video" class="error-state glass-panel">
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gradient"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-      <h3>Loading Error</h3>
-      <p>{{ errorMsg || 'This video is not found or you don\'t have permission to view it.' }}</p>
-      <NuxtLink to="/" class="btn btn-secondary mt-4">Back to Home</NuxtLink>
-    </div>
+    <EmptyState
+      v-else-if="error || !video"
+      title="Loading Error"
+      :description="errorMsg || 'This video was not found or you do not have permission to view it.'"
+      icon="video"
+      action-text="Back to Home"
+      action-route="/"
+    />
 
     <div v-else class="watch-content">
       <!-- Left Column (Player + Description) -->
@@ -38,8 +40,8 @@
             @timeupdate="onTimeUpdate"
             @loadedmetadata="onMetadataLoaded"
             @durationchange="onDurationChange"
-            @play="isPaused = false"
-            @pause="isPaused = true"
+            @play="onPlayTrigger"
+            @pause="onPauseTrigger"
             @ended="handleVideoEnded"
             @volumechange="onVolumeChange"
             @waiting="isBuffering = true"
@@ -228,7 +230,7 @@
             />
             <div>
               <h3 class="channel-name">{{ video.channel_title }}</h3>
-              <p class="sub-count">Archived in MyTeub</p>
+              <p class="sub-count">Archived in YouKeep</p>
             </div>
           </div>
           
@@ -655,7 +657,7 @@ const playlistId = computed(() => route.query.playlistId ? String(route.query.pl
 // Fetch playlist details and videos
 const { data: playlistData, pending: playlistPending } = await useAsyncData<any>(
   'watch-playlist-data',
-  () => playlistId.value ? $fetch(`/api/playlists/${playlistId.value}`) : Promise.resolve(null),
+  () => playlistId.value ? $fetch<any>(`/api/playlists/${playlistId.value}` as any) : Promise.resolve(null),
   { immediate: !!playlistId.value, watch: [playlistId] }
 );
 
@@ -768,6 +770,53 @@ const onTimeUpdate = () => {
   }
 };
 
+const updateMediaSession = () => {
+  if (process.client && 'mediaSession' in navigator && video.value) {
+    const v = videoPlayer.value;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: video.value.title || 'YouKeep Video',
+      artist: video.value.channel_title || 'YouKeep',
+      album: 'YouKeep Archive',
+      artwork: [
+        { 
+          src: video.value.local_thumbnail_path || (video.value.id ? `https://i.ytimg.com/vi/${video.value.id}/hqdefault.jpg` : ''),
+          sizes: '512x512',
+          type: 'image/jpeg' 
+        }
+      ]
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => {
+      if (v) v.play();
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      if (v) v.pause();
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', () => {
+      skip(-10);
+    });
+    navigator.mediaSession.setActionHandler('seekforward', () => {
+      skip(10);
+    });
+    try {
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (v && details.seekTime !== undefined) {
+          v.currentTime = details.seekTime;
+        }
+      });
+    } catch (e) {}
+  }
+};
+
+const onPlayTrigger = () => {
+  isPaused.value = false;
+  updateMediaSession();
+};
+
+const onPauseTrigger = () => {
+  isPaused.value = true;
+};
+
 const onMetadataLoaded = () => {
   const v = videoPlayer.value;
   if (!v) return;
@@ -778,6 +827,7 @@ const onMetadataLoaded = () => {
   v.play().catch(() => {
     isPaused.value = true;
   });
+  updateMediaSession();
 };
 
 const onDurationChange = () => {
@@ -935,9 +985,38 @@ const onDocumentClick = (e: MouseEvent) => {
   }
 };
 
+const wasPlayingBeforeVisibilityChange = ref(false);
+
+const handleVisibilityChange = () => {
+  const v = videoPlayer.value;
+  if (!v) return;
+  
+  if (document.hidden) {
+    wasPlayingBeforeVisibilityChange.value = !v.paused;
+    if (wasPlayingBeforeVisibilityChange.value) {
+      // In background: wait a moment and try to resume if browser auto-paused it.
+      setTimeout(() => {
+        if (v.paused) {
+          v.play().catch(err => {
+            console.log('Background play request failed:', err);
+          });
+        }
+      }, 200);
+    }
+  } else {
+    // Returned to foreground
+    if (wasPlayingBeforeVisibilityChange.value && v.paused) {
+      v.play().catch(() => {});
+    }
+  }
+};
+
 onMounted(() => {
   document.addEventListener('fullscreenchange', onFullscreenChange);
   document.addEventListener('click', onDocumentClick);
+  if (process.client) {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
   
   // Focus player container for keyboard shortcuts
   nextTick(() => {
@@ -948,6 +1027,9 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange);
   document.removeEventListener('click', onDocumentClick);
+  if (process.client) {
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }
   if (controlsTimeout) clearTimeout(controlsTimeout);
 });
 
@@ -1188,7 +1270,7 @@ const onVideoHidden = (id: string) => {
   margin: 0 auto;
 }
 
-.loading-state, .error-state {
+.loading-state {
   display: flex;
   flex-direction: column;
   align-items: center;

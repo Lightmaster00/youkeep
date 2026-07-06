@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  youkeep:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: youkeep
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Map the configuration database and downloaded videos folder to your host
+      - ./data:/app/data
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - PORT=3000
+      - HOST=0.0.0.0
+      - NODE_ENV=production

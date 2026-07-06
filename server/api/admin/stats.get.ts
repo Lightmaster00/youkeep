@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   const totalQueue = (db.prepare("SELECT COUNT(*) as count FROM videos WHERE download_status IN ('pending', 'downloading')").get() as any).count;
   const totalChannels = (db.prepare("SELECT COUNT(*) as count FROM channels").get() as any).count;
   // Database size
-  const dbPath = path.resolve(process.cwd(), 'data/myteub.db');
+  const dbPath = path.resolve(process.cwd(), 'data/youkeep.db');
   const dbSize = fs.existsSync(dbPath) ? fs.statSync(dbPath).size : 0;
 
   // Library-wide aggregate stats (instead of traversing files recursively)
