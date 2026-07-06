@@ -3,7 +3,7 @@ import crypto from 'crypto';
 
 export default defineEventHandler(async (event) => {
   const videoId = event.context.params?.id;
-  const user = event.context.user;
+  const user = await getUserFromSession(event);
 
   if (!videoId) {
     throw createError({ statusCode: 400, statusMessage: 'Video ID required' });

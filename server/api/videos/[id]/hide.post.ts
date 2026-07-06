@@ -2,11 +2,7 @@ import { defineEventHandler, createError, readBody } from 'h3';
 
 export default defineEventHandler(async (event) => {
   const videoId = event.context.params?.id;
-  const user = event.context.user;
-
-  if (!user) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
-  }
+  const user = await requireUser(event);
 
   if (!videoId) {
     throw createError({ statusCode: 400, statusMessage: 'Video ID required' });

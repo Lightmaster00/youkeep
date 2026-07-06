@@ -69,7 +69,9 @@ export default defineEventHandler(async (event) => {
   }
 
   // Vérification de sécurité pour les fichiers vidéo
-  if (filePath.endsWith('.mp4')) {
+  const videoExtensions = ['.mp4', '.webm', '.mkv', '.3gp', '.flv'];
+  const fileExt = path.extname(filePath).toLowerCase();
+  if (videoExtensions.includes(fileExt)) {
     const dbPath = '/downloads/' + filePath;
     const db = getDb();
     const video = db.prepare('SELECT id FROM videos WHERE local_video_path = ?').get(dbPath) as { id: string } | undefined;

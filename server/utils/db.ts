@@ -250,6 +250,14 @@ export function getDb(): Database.Database {
         );
       END;
     `);
+
+    // Backfill any missing entries in FTS index
+    db.exec(`
+      INSERT INTO videos_fts(rowid, id, title, description, channel_title)
+      SELECT rowid, id, title, description, (SELECT title FROM channels WHERE id = channel_id)
+      FROM videos
+      WHERE rowid NOT IN (SELECT rowid FROM videos_fts);
+    `);
   } catch (err) {
     console.error('FTS5 virtual table initialization warning (ensure your SQLite build supports FTS5):', err);
   }

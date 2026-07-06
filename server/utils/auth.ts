@@ -153,6 +153,15 @@ export async function canAccessVideo(videoId: string, event: any, token?: string
     return true;
   }
 
+  // Si l'utilisateur possède un accès explicite à la chaîne de la vidéo
+  const channelAccessCheck = db.prepare(`
+    SELECT 1 FROM user_channel_access 
+    WHERE user_id = ? AND channel_id = (SELECT channel_id FROM videos WHERE id = ?)
+  `).get(user.id, videoId);
+  if (channelAccessCheck) {
+    return true;
+  }
+
   // Ultra Privé : réservé uniquement à l'admin
   return false;
 }
@@ -178,6 +187,12 @@ export async function canAccessChannel(channelId: string, event: any): Promise<b
   }
 
   if (channel.visibility === 'private') {
+    return true;
+  }
+
+  // Vérifier l'accès explicite accordé à l'utilisateur
+  const explicitAccess = db.prepare('SELECT 1 FROM user_channel_access WHERE user_id = ? AND channel_id = ?').get(user.id, channelId);
+  if (explicitAccess) {
     return true;
   }
 
