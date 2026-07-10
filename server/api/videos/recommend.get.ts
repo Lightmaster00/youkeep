@@ -34,7 +34,10 @@ export default defineEventHandler(async (event) => {
     watchedTimeMap.set(row.video_id, row.watch_time_seconds);
   }
 
-  // 3. Get all completed videos with channel info
+  // 3. Get a bounded pool of completed videos with channel info to score.
+  // Capped so this endpoint stays cheap regardless of archive size; biased
+  // toward recent uploads, which is a reasonable pool for a "for you" feed.
+  const CANDIDATE_POOL_SIZE = 500;
   const candidates = db.prepare(`
     SELECT v.id, v.title, v.description, v.duration, v.view_count, v.local_video_path, v.local_thumbnail_path, v.is_short, v.channel_id, v.upload_date,
            c.title as channel_title, c.avatar_url as channel_avatar
@@ -47,7 +50,9 @@ export default defineEventHandler(async (event) => {
         OR
         v.channel_id IN (SELECT channel_id FROM user_channel_access WHERE user_id = ?)
       )
-  `).all(session.id, session.id) as any[];
+    ORDER BY v.upload_date DESC
+    LIMIT ?
+  `).all(session.id, session.id, CANDIDATE_POOL_SIZE) as any[];
 
   if (candidates.length === 0) {
     return { videos: [] };

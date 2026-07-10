@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
-import { getYtdlPath, runProcessAsync } from '../../../utils/downloader';
+import { getYtdlPath, runProcessAsync, buildSpawnEnv } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -11,8 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const ytdlPath = await getYtdlPath();
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
 
   try {
     // Run yt-dlp asynchronously to dump json for the single video (very fast check)

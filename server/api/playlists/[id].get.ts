@@ -22,6 +22,15 @@ export default defineEventHandler(async (event) => {
   let videos = [];
 
   if (playlist) {
+    // Access control check for channel playlist
+    const hasAccess = await canAccessChannel(playlist.channel_id, event);
+    if (!hasAccess) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Access denied to this playlist.'
+      });
+    }
+
     videos = db.prepare(`
       SELECT 
         v.id, 

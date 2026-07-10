@@ -124,28 +124,33 @@ const fetchVideos = async (isLoadMore = false) => {
   }
 };
 
-const setupObserver = () => {
-  observer = new IntersectionObserver((entries) => {
-    if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value && !pending.value) {
-      page.value++;
-      fetchVideos(true);
-    }
-  }, { rootMargin: '200px' });
-
-  if (loadMoreTrigger.value) {
-    observer.observe(loadMoreTrigger.value);
+// Setup observer reactively when trigger element is bound
+watch(loadMoreTrigger, (el) => {
+  if (observer) {
+    observer.disconnect();
+    observer = null;
   }
-};
+  if (el) {
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value && !pending.value) {
+        page.value++;
+        fetchVideos(true);
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(el);
+  }
+});
 
 onMounted(async () => {
   await fetchChannels();
   await fetchVideos();
-  // Observer setup delayed slightly to ensure DOM is rendered
-  setTimeout(setupObserver, 100);
 });
 
 onUnmounted(() => {
-  if (observer) observer.disconnect();
+  if (observer) {
+    observer.disconnect();
+    observer = null;
+  }
 });
 
 const toggleChannelFilter = (id: string) => {
