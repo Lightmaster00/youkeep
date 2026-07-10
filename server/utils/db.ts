@@ -207,6 +207,16 @@ export function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE videos ADD COLUMN last_error TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE user_history ADD COLUMN watch_time_seconds INTEGER DEFAULT 0;`); } catch (e) {}
 
+  // Indexes on frequently filtered/joined columns that lack one (primary keys
+  // and the FTS/share_token indexes above already cover the rest).
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_videos_channel_id ON videos(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_videos_download_status ON videos(download_status);
+    CREATE INDEX IF NOT EXISTS idx_videos_visibility ON videos(visibility);
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_history(user_id);
+    CREATE INDEX IF NOT EXISTS idx_personal_playlist_videos_playlist_id ON personal_playlist_videos(playlist_id);
+  `);
 
   // Setup FTS5 Virtual Table for Search (if not exists)
   try {

@@ -2,23 +2,6 @@ import { defineEventHandler } from 'h3';
 import fs from 'fs';
 import path from 'path';
 
-function getFolderSize(dirPath: string): number {
-  let totalSize = 0;
-  if (!fs.existsSync(dirPath)) return 0;
-
-  const items = fs.readdirSync(dirPath);
-  for (const item of items) {
-    const itemPath = path.join(dirPath, item);
-    const stats = fs.statSync(itemPath);
-    if (stats.isDirectory()) {
-      totalSize += getFolderSize(itemPath);
-    } else {
-      totalSize += stats.size;
-    }
-  }
-  return totalSize;
-}
-
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
   const db = getDb();

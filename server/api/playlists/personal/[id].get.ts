@@ -40,13 +40,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const videos = db.prepare(`
-    SELECT 
-      v.id, 
-      v.title, 
+    SELECT
+      v.id,
+      v.title,
       v.description,
-      v.duration, 
-      v.view_count, 
-      v.download_status, 
+      v.duration,
+      v.view_count,
+      v.download_status,
       v.download_progress,
       v.local_thumbnail_path,
       c.title as channel_title,
@@ -56,10 +56,17 @@ export default defineEventHandler(async (event) => {
     JOIN channels c ON v.channel_id = c.id
     WHERE pv.playlist_id = ?
     ORDER BY pv.position ASC
-  `).all(id);
+  `).all(id) as { id: string }[];
+
+  // A public/shared playlist link must not leak videos the viewer wouldn't
+  // otherwise be allowed to see (e.g. a private/ultra_private video added by the owner).
+  const accessibleVideos = isOwner
+    ? videos
+    : (await Promise.all(videos.map(async (v) => (await canAccessVideo(v.id, event)) ? v : null)))
+        .filter((v): v is typeof videos[number] => v !== null);
 
   return {
     playlist,
-    videos
+    videos: accessibleVideos
   };
 });

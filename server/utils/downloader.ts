@@ -11,6 +11,37 @@ export function sanitizeFolderName(name: string): string {
     .trim();
 }
 
+// Builds a process env with common Homebrew/local bin dirs prepended to PATH,
+// so spawned binaries (yt-dlp, ffmpeg) are found regardless of the parent
+// process's environment (e.g. when started from a GUI app or minimal shell).
+export function buildSpawnEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  return env;
+}
+
+// Removes a video's downloaded/partial files from disk, honoring the
+// channel's custom_save_path if set. Used both on explicit cancel and on
+// watchdog timeout so partial downloads never linger indefinitely.
+export function cleanupPartialFiles(videoId: string, channelId: string): void {
+  const db = getDb();
+  const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
+  const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0 && isDirWritable(channel.custom_save_path)
+    ? channel.custom_save_path
+    : getDownloadsDir();
+  const channelDir = path.join(basePath, sanitizeFolderName(channel?.title || channelId));
+  const mp4File = path.join(channelDir, `${videoId}.mp4`);
+  const jpgFile = path.join(channelDir, `${videoId}.jpg`);
+  const partFile = path.join(channelDir, `${videoId}.mp4.part`);
+  const ytdlPartFile = path.join(channelDir, `${videoId}.mp4.ytdl`);
+
+  [mp4File, jpgFile, partFile, ytdlPartFile].forEach(f => {
+    if (fs.existsSync(f)) {
+      try { fs.unlinkSync(f); } catch (e) {}
+    }
+  });
+}
+
 // Define global-backed state to survive development HMR module hot reloads
 const _g = globalThis as any;
 const G_CRON = Symbol.for('YouKeep.activeCronJob');
@@ -197,8 +228,7 @@ export async function updateYtdl(): Promise<string> {
   addLog('Vérification des mises à jour de yt-dlp...');
   
   // Make sure ffmpeg is in path
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
 
   try {
     const res = await runProcessAsync(ytdlPath, ['-U'], env);
@@ -366,8 +396,7 @@ export function resetStaleDownloads() {
  * Checks if ffmpeg is available in the current PATH.
  */
 export function isFfmpegAvailable(): boolean {
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
   try {
     const res = spawnSync('ffmpeg', ['-version'], { env });
     return res.status === 0;
@@ -600,8 +629,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
       targetVideoUrl
     );
 
-    const env = { ...process.env };
-    env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+    const env = buildSpawnEnv();
 
     addLog(`Lancement de la commande de téléchargement (ffmpeg disponible: ${ffmpegAvailable}) : ${ytdlPath} ${args.join(' ')}`);
     const child = spawn(ytdlPath, args, { env });
@@ -625,6 +653,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
         addLog(`yt-dlp [${videoId}] timeout après ${DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
         try { child.kill('SIGKILL'); } catch (e) {}
         activeProcesses.delete(videoId);
+        cleanupPartialFiles(videoId, channelId);
         settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
       }
     }, DOWNLOAD_TIMEOUT_MS);
@@ -870,22 +899,7 @@ export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pendin
   if (!keepProgressAndFiles) {
     const video = db.prepare('SELECT channel_id FROM videos WHERE id = ?').get(videoId) as { channel_id: string } | undefined;
     if (video) {
-      const channelId = video.channel_id;
-      const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
-      const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0 && isDirWritable(channel.custom_save_path)
-        ? channel.custom_save_path
-        : getDownloadsDir();
-      const channelDir = path.join(basePath, sanitizeFolderName(channel?.title || channelId));
-      const mp4File = path.join(channelDir, `${videoId}.mp4`);
-      const jpgFile = path.join(channelDir, `${videoId}.jpg`);
-      const partFile = path.join(channelDir, `${videoId}.mp4.part`);
-      const ytdlPartFile = path.join(channelDir, `${videoId}.mp4.ytdl`);
-
-      [mp4File, jpgFile, partFile, ytdlPartFile].forEach(f => {
-        if (fs.existsSync(f)) {
-          try { fs.unlinkSync(f); } catch (e) {}
-        }
-      });
+      cleanupPartialFiles(videoId, video.channel_id);
     }
   }
 
@@ -934,8 +948,10 @@ export async function ingestUrl(
       try {
         const shortsRes = await ingestUrl(`${baseUrl}/shorts`, options);
         shortsCount = shortsRes.count;
-      } catch (e) {
+      } catch (e: any) {
+        const msg = e?.message || String(e);
         console.warn(`Could not ingest shorts for channel ${baseUrl}:`, e);
+        addLog(`Échec de l'ingestion des shorts pour la chaîne ${baseUrl} : ${msg}`);
       }
     }
     
@@ -961,8 +977,7 @@ export async function ingestUrl(
   
   console.log(`Ingesting URL: ${url}`);
   
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
 
   // Run with dump-json to inspect what we are dealing with.
   // We use --flat-playlist to get entries quickly.
@@ -1360,8 +1375,7 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
     return;
   }
 
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
 
   let updated = 0;
   let commentsUpdated = 0;
@@ -1505,8 +1519,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
 
   addLog(`Synchronisation des playlists pour la chaîne: "${channel.title}" (${channelId})`);
 
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
 
   // Flat playlist scan of the playlists tab
   const playlistsUrl = `https://www.youtube.com/channel/${channelId}/playlists`;

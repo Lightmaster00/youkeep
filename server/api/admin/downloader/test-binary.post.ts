@@ -1,12 +1,11 @@
 import { defineEventHandler, createError } from 'h3';
-import { getYtdlPath, isFfmpegAvailable, runProcessAsync } from '../../../utils/downloader';
+import { getYtdlPath, isFfmpegAvailable, runProcessAsync, buildSpawnEnv } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
 
   const ytdlPath = await getYtdlPath();
-  const env = { ...process.env };
-  env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH || ''}`;
+  const env = buildSpawnEnv();
 
   try {
     const child = await runProcessAsync(ytdlPath, ['--version'], env);

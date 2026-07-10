@@ -23,20 +23,36 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Video not found.' });
   }
 
+  // Resolve the channel's actual on-disk directory (default downloads dir or
+  // a custom_save_path) *before* deleting, so custom-path channels don't leak files.
+  const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(video.channel_id) as {
+    title: string;
+    custom_save_path: string | null;
+  } | undefined;
+  const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0
+    ? channel.custom_save_path
+    : getDownloadsDir();
+  const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || video.channel_id));
+
   // 2. Kill the download if it's running
   cancelDownload(videoId);
 
   // 3. Delete from database
   db.prepare('DELETE FROM videos WHERE id = ?').run(videoId);
 
-  // 4. Remove local files from disk
-  const channelDir = path.resolve(process.cwd(), 'data/downloads', video.channel_id);
-  const mp4File = path.join(channelDir, `${videoId}.mp4`);
-  const jpgFile = path.join(channelDir, `${videoId}.jpg`);
-  const partFile = path.join(channelDir, `${videoId}.mp4.part`);
-  const ytdlPartFile = path.join(channelDir, `${videoId}.mp4.ytdl`);
+  // 4. Remove local files from disk (any container extension, thumbnail,
+  // subtitles, metadata, and partial-download leftovers)
+  const videoExtensions = ['mp4', 'webm', 'mkv', '3gp', 'flv'];
+  const filesToRemove = [
+    ...videoExtensions.map(ext => path.join(channelDir, `${videoId}.${ext}`)),
+    ...videoExtensions.map(ext => path.join(channelDir, `${videoId}.${ext}.part`)),
+    ...videoExtensions.map(ext => path.join(channelDir, `${videoId}.${ext}.ytdl`)),
+    path.join(channelDir, `${videoId}.jpg`),
+    path.join(channelDir, `${videoId}.vtt`),
+    path.join(channelDir, `${videoId}.info.json`),
+  ];
 
-  [mp4File, jpgFile, partFile, ytdlPartFile].forEach(f => {
+  filesToRemove.forEach(f => {
     if (fs.existsSync(f)) {
       try {
         fs.unlinkSync(f);

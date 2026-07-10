@@ -77,7 +77,6 @@ export default defineEventHandler(async (event) => {
         ? channel.custom_save_path
         : downloadsDir;
       
-      const sanitizeFolderName = (name: string) => name.replace(/[\\/:*?"<>|]/g, '_').trim();
       const channelFolder = sanitizeFolderName(channel?.title || video.channel_id);
       const dirPath = path.join(basePath, channelFolder);
 
