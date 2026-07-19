@@ -798,7 +798,7 @@
                     <div class="user-card-meta mt-2">
                       <span class="user-date">Registered: {{ formatDate(u.created_at) }}</span>
                       <span class="user-scope" v-if="u.role === 'user'">
-                        Scoped visibility: {{ u.channelAccess?.length ? u.channelAccess.length + ' channels' : 'All channels' }}
+                        {{ u.channelAccess?.length ? `Ultra-private access: ${u.channelAccess.length} channel(s)` : 'No ultra-private access' }}
                       </span>
                     </div>
 

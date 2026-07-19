@@ -31,14 +31,14 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    videos = db.prepare(`
-      SELECT 
-        v.id, 
-        v.title, 
+    const channelVideos = db.prepare(`
+      SELECT
+        v.id,
+        v.title,
         v.description,
-        v.duration, 
-        v.view_count, 
-        v.download_status, 
+        v.duration,
+        v.view_count,
+        v.download_status,
         v.download_progress,
         v.local_thumbnail_path,
         pv.position
@@ -46,7 +46,12 @@ export default defineEventHandler(async (event) => {
       JOIN videos v ON pv.video_id = v.id
       WHERE pv.playlist_id = ?
       ORDER BY pv.position ASC
-    `).all(id);
+    `).all(id) as { id: string }[];
+
+    // A channel's own visibility being accessible doesn't mean every video in it
+    // is: a video can be individually marked private/ultra_private. Filter per-video.
+    videos = (await Promise.all(channelVideos.map(async (v) => (await canAccessVideo(v.id, event)) ? v : null)))
+      .filter((v): v is typeof channelVideos[number] => v !== null);
   } else {
     // Try fetching personal playlist
     playlist = db.prepare(`
@@ -79,14 +84,14 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    videos = db.prepare(`
-      SELECT 
-        v.id, 
-        v.title, 
+    const personalVideos = db.prepare(`
+      SELECT
+        v.id,
+        v.title,
         v.description,
-        v.duration, 
-        v.view_count, 
-        v.download_status, 
+        v.duration,
+        v.view_count,
+        v.download_status,
         v.download_progress,
         v.local_thumbnail_path,
         c.title as channel_title,
@@ -96,7 +101,14 @@ export default defineEventHandler(async (event) => {
       JOIN channels c ON v.channel_id = c.id
       WHERE pv.playlist_id = ?
       ORDER BY pv.position ASC
-    `).all(id);
+    `).all(id) as { id: string }[];
+
+    // A public/shared playlist link must not leak videos the viewer wouldn't
+    // otherwise be allowed to see (e.g. a private/ultra_private video added by the owner).
+    videos = isOwner
+      ? personalVideos
+      : (await Promise.all(personalVideos.map(async (v) => (await canAccessVideo(v.id, event)) ? v : null)))
+          .filter((v): v is typeof personalVideos[number] => v !== null);
   }
 
   return {

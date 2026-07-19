@@ -11,7 +11,11 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const ip = getRequestIP(event, { xForwardedFor: true }) || 'unknown';
+  // Only trust X-Forwarded-For when explicitly running behind a reverse proxy
+  // that overwrites/strips it; otherwise a client can set it to any value and
+  // get a fresh rate-limit bucket on every attempt.
+  const trustProxy = process.env.TRUST_PROXY === 'true';
+  const ip = getRequestIP(event, { xForwardedFor: trustProxy }) || 'unknown';
   const rateLimitKey = `${ip}:${String(username).toLowerCase()}`;
 
   const { locked, retryAfterMs } = isLoginLocked(rateLimitKey);

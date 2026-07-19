@@ -7,8 +7,8 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event);
   const { password } = body;
 
-  if (!password || password.trim().length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'Password cannot be empty.' });
+  if (!password || password.length < 8) {
+    throw createError({ statusCode: 400, statusMessage: 'Password must be at least 8 characters long.' });
   }
 
   const db = getDb();

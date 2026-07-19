@@ -9,6 +9,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const hasAccess = await canAccessChannel(channelId, event);
+  if (!hasAccess) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Access denied. You do not have permission to view this channel.'
+    });
+  }
+
   const db = getDb();
 
   const playlists = db.prepare(`

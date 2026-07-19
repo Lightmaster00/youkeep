@@ -3,7 +3,7 @@ import { syncChannelPlaylists } from '../../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const channelId = event.context.params?.channelId;
+  const channelId = event.context.params?.id;
 
   if (!channelId) {
     throw createError({

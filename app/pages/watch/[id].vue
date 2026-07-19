@@ -1172,7 +1172,7 @@ const createPlaylist = async () => {
   if (!newPlaylistTitle.value.trim()) return;
   creatingPlaylist.value = true;
   try {
-    const newPl = await $fetch<any>('/api/playlists/personal', {
+    const { playlist: newPl } = await $fetch<any>('/api/playlists/personal', {
       method: 'POST',
       body: {
         title: newPlaylistTitle.value.trim(),
@@ -1180,10 +1180,10 @@ const createPlaylist = async () => {
         description: ''
       }
     });
-    
+
     // Add to local list
     userPlaylists.value.push({ ...newPl, contains_video: 1 });
-    
+
     // Automatically add this video to the new playlist
     await $fetch(`/api/playlists/personal/${newPl.id}/videos`, {
       method: 'POST',
