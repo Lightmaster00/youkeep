@@ -25,3 +25,6 @@ logs
 
 # Local data (SQLite database, yt-dlp binaries, and video downloads)
 data/
+
+# Brainstorming visual companion sessions
+.superpowers/

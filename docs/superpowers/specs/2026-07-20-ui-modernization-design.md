@@ -26,8 +26,21 @@ Pure presentation, no business logic — pages keep their existing data-fetching
 
 - **`UiButton.vue`** — wraps the existing `.btn` / `.btn-primary` / `.btn-secondary` / `.btn-danger` classes behind a component with `variant`, `size`, and a new `loading` prop (inline spinner) — most async actions across the app currently give no in-flight feedback.
 - **`UiBadge.vue`** — unifies the various one-off badge styles (`PUBLIC`, role badges, download-status badges) behind one component with a `tone` prop.
-- **`UiCard.vue`** — wraps `.glass-panel` / `.premium-card` with a consistent hover treatment (lift + glow) for video/channel/playlist/user cards.
+- **`UiCard.vue`** — wraps `.glass-panel` / `.premium-card` with the signature depth-glass treatment (below) for video/channel/playlist/user cards.
 - **`UiSkeleton.vue`** — animated pulse placeholders to replace bare centered spinners while lists load.
+
+### Signature visual treatment — "calm depth glass"
+
+Validated through mockup comparison (see Design Process below). This is the one deliberate visual signature of the redesign — everything else stays understated so this reads as intentional rather than decorative:
+
+- **At rest**: fully neutral, no color. Background `rgba(20,20,28,0.7)`, border `1px solid rgba(255,255,255,0.06)`, shadow `0 8px 18px rgba(0,0,0,0.35)`.
+- **On hover/focus**: the shadow gains a soft violet glow underneath — `0 10px 22px rgba(0,0,0,0.35), 0 4px 16px -4px rgba(139,92,246,0.15)` — over a `.3s ease` transition.
+- **No idle animation.** Nothing pulses, breathes, or moves on its own; the card only reacts to actual interaction. This was a deliberate choice after trying — and rejecting — animated/ambient glow variants (too showy for a "sober futuristic" feel).
+- Applied consistently to `UiCard.vue`, the secondary `UiButton.vue` variant, and active nav items, so it reads as one signature rather than a one-off card effect.
+
+### Design process (for context, not itself a requirement)
+
+Explored via the brainstorming visual companion: started from an open "organic" prompt, which the user redirected toward "glassmorphism but sober, futuristic" instead of literal organic motion (blobs, spring physics, cursor-follow light). Compared three glass directions (refined liquid glass, permanent gradient edge, depth glow), then iterated the winning "depth glow" direction from a strong animated version down to the fully static hover-only treatment above, which is the one that stuck.
 
 ## 3. Video player (`app/components/VideoPlayer.vue`)
 
