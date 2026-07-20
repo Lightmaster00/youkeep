@@ -491,10 +491,7 @@ textarea.form-input {
 }
 
 .premium-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
-  background: linear-gradient(145deg, rgba(40, 40, 65, 0.7) 0%, rgba(20, 20, 35, 0.8) 100%);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35), 0 4px 16px -4px rgba(139, 92, 246, 0.15);
 }
 
 /* Cohesive Modern Empty State Component */
