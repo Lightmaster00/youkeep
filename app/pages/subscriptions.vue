@@ -24,9 +24,16 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="pending" class="loading-state">
-      <div class="spinner"></div>
-      <p>Loading your subscriptions...</p>
+    <div v-if="pending" class="video-grid">
+      <UiCard v-for="n in 6" :key="n" flat>
+        <UiSkeleton height="140px" rounded="lg" />
+        <div style="padding: var(--space-3, 12px);">
+          <UiSkeleton height="14px" width="70%" />
+          <div style="margin-top: var(--space-2, 8px);">
+            <UiSkeleton height="12px" width="40%" />
+          </div>
+        </div>
+      </UiCard>
     </div>
 
     <!-- Empty State -->
