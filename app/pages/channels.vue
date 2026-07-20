@@ -485,6 +485,7 @@
               :video="video"
               :show-channel-info="false"
               :clickable="video.download_status === 'completed'"
+              :to="`/watch/${video.id}?playlistId=${selectedPlaylistId}`"
               @hidden="onVideoHidden"
             >
               <template #thumbnail-overlay>
@@ -732,10 +733,6 @@ const openPlaylist = async (playlistId: string) => {
 const closePlaylist = () => {
   selectedPlaylistId.value = '';
   selectedPlaylistData.value = null;
-};
-
-const playVideoInPlaylist = (id: string, playlistId: string) => {
-  navigateTo(`/watch/${id}?playlistId=${playlistId}`);
 };
 
 // Filter/Sort/Search State

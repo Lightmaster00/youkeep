@@ -55,6 +55,7 @@ const props = withDefaults(defineProps<{
   };
   showChannelInfo?: boolean;
   clickable?: boolean;
+  to?: string;
 }>(), {
   showChannelInfo: true,
   clickable: true
@@ -75,7 +76,7 @@ const handleAvatarError = (event: Event) => {
 
 const playVideo = () => {
   if (!props.clickable) return;
-  navigateTo(`/watch/${props.video.id}`);
+  navigateTo(props.to || `/watch/${props.video.id}`);
 };
 
 const handleThumbnailError = (event: Event) => {
