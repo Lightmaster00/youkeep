@@ -1,5 +1,5 @@
 <template>
-  <div class="video-card premium-card" @click="playVideo">
+  <UiCard class="video-card" @click="playVideo">
     <!-- Thumbnail Wrapper -->
     <div class="thumbnail-wrapper">
       <img 
@@ -35,7 +35,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </UiCard>
 </template>
 
 <script setup lang="ts">
@@ -146,13 +146,6 @@ const formattedUploadDate = computed(() => {
   overflow: hidden;
   background: #0a0a0f;
   border: 1px solid rgba(255, 255, 255, 0.04);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-}
-
-.video-card:hover .thumbnail-wrapper {
-  border-color: rgba(139, 92, 246, 0.2);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  transform: translateY(-3px);
 }
 
 .thumbnail-img {
