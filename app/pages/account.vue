@@ -64,9 +64,9 @@
             </div>
 
             <div class="form-actions mt-4">
-              <button type="submit" class="btn btn-secondary" :disabled="savingProfile">
-                {{ savingProfile ? 'Saving...' : 'Save Information' }}
-              </button>
+              <UiButton variant="primary" type="submit" :loading="savingProfile">
+                Save Information
+              </UiButton>
             </div>
           </form>
         </div>
@@ -115,9 +115,9 @@
             </div>
 
             <div class="form-actions mt-4">
-              <button type="submit" class="btn btn-primary btn-block" :disabled="savingOwnPassword">
-                {{ savingOwnPassword ? 'Updating...' : 'Update Password' }}
-              </button>
+              <UiButton variant="primary" type="submit" class="btn-block" :loading="savingOwnPassword">
+                Update Password
+              </UiButton>
             </div>
           </form>
         </div>

@@ -57,10 +57,9 @@
           <span>{{ errorMessage }}</span>
         </div>
 
-        <button type="submit" class="btn btn-primary login-btn" :disabled="loadingSubmit">
-          <span v-if="loadingSubmit" class="spinner"></span>
-          <span v-else>{{ setupRequired ? 'Setup YouKeep' : 'Log in' }}</span>
-        </button>
+        <UiButton variant="primary" type="submit" class="login-btn" :loading="loadingSubmit">
+          {{ setupRequired ? 'Setup YouKeep' : 'Log in' }}
+        </UiButton>
       </form>
     </div>
   </div>
@@ -238,16 +237,4 @@ const handleLogin = async () => {
   border-radius: var(--border-radius-md);
 }
 
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2.5px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 </style>
