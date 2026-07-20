@@ -269,7 +269,7 @@
           @action="handleToggleSync(true)"
         />
 
-        <div v-else class="video-grid">
+        <div v-else class="video-grid stagger-in">
           <VideoCard
             v-for="video in archivedVideos"
             :key="video.id"
