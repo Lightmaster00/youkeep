@@ -1,17 +1,18 @@
 <template>
-  <UiCard class="video-card" @click="playVideo">
+  <UiCard class="video-card" :style="{ cursor: clickable ? 'pointer' : 'default' }" @click="playVideo">
     <!-- Thumbnail Wrapper -->
     <div class="thumbnail-wrapper">
-      <img 
-        :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
+      <img
+        :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`"
         @error="handleThumbnailError"
-        class="thumbnail-img" 
+        class="thumbnail-img"
         alt="Thumbnail"
         loading="lazy"
         referrerpolicy="no-referrer"
       />
       <span class="duration-badge">{{ formattedDuration }}</span>
       <VideoDropdownMenu :video="video" @hidden="$emit('hidden', video.id)" />
+      <slot name="thumbnail-overlay" />
     </div>
 
     <!-- Video Details -->
@@ -53,8 +54,10 @@ const props = withDefaults(defineProps<{
     local_thumbnail_path?: string;
   };
   showChannelInfo?: boolean;
+  clickable?: boolean;
 }>(), {
-  showChannelInfo: true
+  showChannelInfo: true,
+  clickable: true
 });
 
 defineEmits<{
@@ -71,6 +74,7 @@ const handleAvatarError = (event: Event) => {
 };
 
 const playVideo = () => {
+  if (!props.clickable) return;
   navigateTo(`/watch/${props.video.id}`);
 };
 
