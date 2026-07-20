@@ -14,7 +14,7 @@
       action-route="/"
     />
 
-    <div v-else class="watch-content">
+    <div v-else class="watch-content" :class="{ 'theater-mode': theaterMode }">
       <!-- Left Column (Player + Description) -->
       <div class="player-column">
         <!-- Custom Video Player -->
@@ -27,6 +27,7 @@
           @ended="handleVideoEnded"
           @prev="playPrevVideo"
           @next="playNextVideo"
+          @theater-mode-change="onTheaterModeChange"
         />
 
         <!-- Video Header Info -->
@@ -343,6 +344,12 @@ const token = computed(() => route.query.token ? String(route.query.token) : '')
 
 const descriptionExpanded = ref(false);
 const techDetailsExpanded = ref(false);
+
+const theaterMode = ref(false);
+
+function onTheaterModeChange(value: boolean) {
+  theaterMode.value = value;
+}
 
 const showPlaylistsModal = ref(false);
 const loadingPlaylists = ref(false);
@@ -747,6 +754,20 @@ const onVideoHidden = (id: string) => {
   .watch-content {
     grid-template-columns: 1fr;
   }
+}
+
+.watch-content.theater-mode {
+  grid-template-columns: 1fr;
+}
+
+.watch-content.theater-mode .sidebar-column {
+  display: none;
+}
+
+.watch-content.theater-mode .player-column {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .player-column {

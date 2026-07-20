@@ -185,6 +185,11 @@
             </div>
           </div>
 
+          <!-- Theater Mode -->
+          <button class="ctrl-btn" @click="toggleTheaterMode" :title="isTheaterMode ? 'Exit Theater Mode' : 'Theater Mode'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>
+          </button>
+
           <!-- Fullscreen -->
           <button class="ctrl-btn" @click="toggleFullscreen" title="Fullscreen (F)">
             <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
@@ -211,6 +216,7 @@ const emit = defineEmits<{
   ended: [];
   prev: [];
   next: [];
+  'theater-mode-change': [boolean];
 }>();
 
 const videoPlayer = ref<HTMLVideoElement | null>(null);
@@ -226,6 +232,7 @@ const isPaused = ref(true);
 const isBuffering = ref(false);
 const isMuted = ref(false);
 const isFullscreen = ref(false);
+const isTheaterMode = ref(false);
 const showControls = ref(true);
 const currentTime = ref(0);
 const videoDuration = ref(0);
@@ -427,6 +434,11 @@ const toggleFullscreen = () => {
       isFullscreen.value = false;
     }).catch(() => {});
   }
+};
+
+const toggleTheaterMode = () => {
+  isTheaterMode.value = !isTheaterMode.value;
+  emit('theater-mode-change', isTheaterMode.value);
 };
 
 // Progress Bar Scrubbing
