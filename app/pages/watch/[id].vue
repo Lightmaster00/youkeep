@@ -18,17 +18,35 @@
       <!-- Left Column (Player + Description) -->
       <div class="player-column">
         <!-- Custom Video Player -->
-        <VideoPlayer
-          :video="video"
-          :subtitles="subtitles"
-          :token="token"
-          :has-prev-video="hasPrevVideo"
-          :has-next-video="hasNextVideo"
-          @ended="handleVideoEnded"
-          @prev="playPrevVideo"
-          @next="playNextVideo"
-          @theater-mode-change="onTheaterModeChange"
-        />
+        <div ref="playerContainerEl">
+          <VideoPlayer
+            ref="videoPlayerRef"
+            :video="video"
+            :subtitles="subtitles"
+            :token="token"
+            :has-prev-video="hasPrevVideo"
+            :has-next-video="hasNextVideo"
+            @ended="handleVideoEnded"
+            @prev="playPrevVideo"
+            @next="playNextVideo"
+            @theater-mode-change="onTheaterModeChange"
+          />
+        </div>
+
+        <div v-if="showMiniPlayer" class="mini-player" @click="scrollToPlayer">
+          <div class="mini-player-thumb">
+            <img :src="video.local_thumbnail_path" alt="" />
+          </div>
+          <div class="mini-player-info">
+            <p class="mini-player-title">{{ video.title }}</p>
+          </div>
+          <button class="mini-player-btn" @click.stop="toggleMiniPlayerPlayback" title="Play/Pause">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </button>
+          <button class="mini-player-close" @click.stop="closeMiniPlayer" title="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
 
         <!-- Video Header Info -->
         <h1 class="video-title">{{ video.title }}</h1>
@@ -333,6 +351,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from '~/composables/useToast';
 import { useAuth } from '~/composables/useAuth';
+import VideoPlayer from '~/components/VideoPlayer.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -676,6 +695,59 @@ const onVideoHidden = (id: string) => {
     relatedData.value.videos = relatedData.value.videos.filter((v: any) => v.id !== id);
   }
 };
+
+/* Floating mini-player */
+const videoPlayerRef = ref<InstanceType<typeof VideoPlayer> | null>(null);
+const showMiniPlayer = ref(false);
+const playerContainerEl = ref<HTMLElement | null>(null);
+
+function handleScroll() {
+  if (!playerContainerEl.value) return;
+  const rect = playerContainerEl.value.getBoundingClientRect();
+  const videoEl = videoPlayerRef.value?.videoEl;
+  const isPlaying = videoEl && !videoEl.paused;
+  showMiniPlayer.value = isPlaying === true && rect.bottom < 0;
+}
+
+// The app layout (app/layouts/default.vue) scrolls inside <main class="content-area">
+// rather than on window/body, so the scroll listener must be attached to the nearest
+// scrollable ancestor of the player (falling back to window if none is found).
+let scrollTarget: HTMLElement | Window = window;
+
+function findScrollableAncestor(el: HTMLElement | null): HTMLElement | null {
+  let node = el?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    if ((style.overflowY === 'auto' || style.overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+onMounted(() => {
+  scrollTarget = findScrollableAncestor(playerContainerEl.value) ?? window;
+  scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+});
+onUnmounted(() => {
+  scrollTarget.removeEventListener('scroll', handleScroll);
+});
+
+function closeMiniPlayer() {
+  videoPlayerRef.value?.videoEl?.pause();
+  showMiniPlayer.value = false;
+}
+
+function scrollToPlayer() {
+  playerContainerEl.value?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function toggleMiniPlayerPlayback() {
+  const videoEl = videoPlayerRef.value?.videoEl;
+  if (!videoEl) return;
+  if (videoEl.paused) videoEl.play(); else videoEl.pause();
+}
 </script>
 
 <style scoped>
@@ -1393,5 +1465,61 @@ code.tech-value {
 }
 .playlist-vids-list::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+.mini-player {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  width: 280px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--border-radius-md);
+  background: rgba(20, 20, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  z-index: 500;
+}
+
+.mini-player-thumb {
+  width: 64px;
+  height: 36px;
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.mini-player-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mini-player-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mini-player-title {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-player-btn,
+.mini-player-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
 }
 </style>

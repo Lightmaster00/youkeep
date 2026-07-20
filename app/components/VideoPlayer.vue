@@ -629,6 +629,8 @@ const formatTime = (seconds: number): string => {
   }
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
+
+defineExpose({ videoEl: videoPlayer });
 </script>
 
 <style scoped>
