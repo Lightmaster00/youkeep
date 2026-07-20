@@ -567,13 +567,13 @@ onMounted(() => {
   padding: 12px 16px;
   border-radius: var(--border-radius-md);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: box-shadow var(--duration-base) var(--ease-standard), background-color var(--duration-base) var(--ease-standard);
   gap: 16px;
 }
 
 .video-row:hover {
   background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px -4px rgba(139, 92, 246, 0.15);
 }
 
 .video-index {
