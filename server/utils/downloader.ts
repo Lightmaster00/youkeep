@@ -538,10 +538,31 @@ function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPa
         return;
       }
 
+      let infoData: any;
       try {
-        const infoData = JSON.parse(stdoutData);
+        infoData = JSON.parse(stdoutData);
+      } catch (err) {
+        console.warn(`Failed to parse comments JSON for video ${videoId}:`, err);
+        resolve();
+        return;
+      }
+
+      try {
         if (infoData.comments && Array.isArray(infoData.comments)) {
           const db = getDb();
+
+          // This extraction runs unawaited alongside the download and can
+          // outlive the video row (deleted via clear-queue, manual removal,
+          // or an archiving-preference change while comments were still
+          // being fetched under YouTube rate limiting) - skip rather than
+          // hit the video_id foreign key constraint.
+          const videoStillExists = db.prepare('SELECT 1 FROM videos WHERE id = ?').get(videoId);
+          if (!videoStillExists) {
+            console.log(`Skipping comment insert for video ${videoId}: video no longer exists.`);
+            resolve();
+            return;
+          }
+
           const insertComment = db.prepare(`
             INSERT INTO comments (id, video_id, author, author_thumbnail, text, time_text, like_count, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -572,7 +593,7 @@ function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPa
           console.log(`Parallel comment extraction succeeded: inserted ${infoData.comments.length} comments for video ${videoId}`);
         }
       } catch (err) {
-        console.warn(`Failed to parse comments JSON for video ${videoId}:`, err);
+        console.warn(`Failed to insert comments for video ${videoId}:`, err);
       }
       resolve();
     });
@@ -1234,15 +1255,28 @@ export async function ingestUrl(
       ON CONFLICT(id) DO NOTHING
     `).run(channelId, channelTitle, '', avatarUrl, null, Date.now());
 
-    // Asynchronously fetch full channel details (avatar, banner, description) in background without inserting other videos
-    setTimeout(async () => {
-      try {
-        console.log(`Background fetching details for new channel: ${channelTitle} (${channelId})`);
-        await ingestUrl(`https://www.youtube.com/channel/${channelId}`, { channelMetadataOnly: true });
-      } catch (err) {
-        console.error(`Failed to background ingest channel ${channelId}:`, err);
-      }
-    }, 1000);
+    // Asynchronously fetch full channel details (avatar, banner, description) in background
+    // without inserting other videos. Retried a few times since this is a single fire-and-forget
+    // request that can otherwise leave the channel with no avatar forever if it hits a transient
+    // yt-dlp/network error.
+    const retryDelaysMs = [1000, 5000, 15000];
+    const fetchChannelDetails = (attempt: number) => {
+      setTimeout(async () => {
+        try {
+          addLog(`Récupération des détails de la nouvelle chaîne "${channelTitle}" (${channelId}), tentative ${attempt + 1}/${retryDelaysMs.length}...`);
+          await ingestUrl(`https://www.youtube.com/channel/${channelId}`, { channelMetadataOnly: true });
+        } catch (err: any) {
+          const nextAttempt = attempt + 1;
+          if (nextAttempt < retryDelaysMs.length) {
+            addLog(`Échec de la récupération des détails de la chaîne "${channelTitle}" (${channelId}) : ${err.message || err}. Nouvel essai...`);
+            fetchChannelDetails(nextAttempt);
+          } else {
+            addLog(`Échec définitif de la récupération des détails (avatar, bannière) de la chaîne "${channelTitle}" (${channelId}) après ${retryDelaysMs.length} tentatives : ${err.message || err}`);
+          }
+        }
+      }, retryDelaysMs[attempt]);
+    };
+    fetchChannelDetails(0);
   }
 
   // Insert or update video
