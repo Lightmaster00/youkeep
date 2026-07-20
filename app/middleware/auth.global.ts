@@ -7,7 +7,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // Si non connecté et essaie d'aller sur une page protégée
-  const publicRoutes = ['/login', '/', '/channels', '/categories'];
+  const publicRoutes = ['/login', '/', '/channels', '/categories', '/shorts'];
   const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/watch/');
   if (!auth.isLoggedIn.value && !isPublicRoute) {
     return navigateTo('/login');
