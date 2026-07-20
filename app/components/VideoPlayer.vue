@@ -739,7 +739,7 @@ const formatTime = (seconds: number): string => {
   border-radius: 2px;
   cursor: pointer;
   margin-bottom: 8px;
-  transition: height 0.15s ease;
+  /* impeccable-disable layout-transition */ transition: height var(--duration-fast) var(--ease-standard);
 }
 
 .progress-bar-container:hover {
@@ -803,12 +803,13 @@ const formatTime = (seconds: number): string => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 var(--space-4) var(--space-3);
 }
 
 .controls-left, .controls-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .ctrl-btn {
@@ -821,7 +822,7 @@ const formatTime = (seconds: number): string => {
   background: none;
   cursor: pointer;
   border-radius: 50%;
-  transition: background 0.15s ease;
+  transition: background-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
   color: white;
   flex-shrink: 0;
 }
