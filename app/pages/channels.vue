@@ -1934,7 +1934,9 @@ const getBadgeClass = (status: string): string => {
 .video-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
+  column-gap: 24px;
+  row-gap: 40px;
+  margin-bottom: 40px;
 }
 
 @media (max-width: 1024px) {
