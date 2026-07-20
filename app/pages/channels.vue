@@ -269,24 +269,21 @@
           @action="handleToggleSync(true)"
         />
 
-        <div v-else class="video-grid">
-          <div 
-            v-for="video in archivedVideos" 
-            :key="video.id" 
-            class="video-card premium-card" 
-            @click="playVideo(video.id)"
+        <div v-else class="video-grid stagger-in">
+          <VideoCard
+            v-for="video in archivedVideos"
+            :key="video.id"
+            :video="video"
+            :show-channel-info="false"
+            @hidden="onVideoHidden"
           >
-            <div class="thumbnail-wrapper">
-              <img :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" @error="handleThumbnailError($event, video.id)" class="thumbnail-img" alt="Thumbnail" />
-              <span class="duration-badge">{{ formatDuration(video.duration) }}</span>
-              <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
-
+            <template #thumbnail-overlay>
               <!-- Admin Actions on Thumbnail -->
               <div v-if="isAdmin" class="admin-video-actions" @click.stop>
 
                 <!-- Share button -->
-                <button 
-                  class="action-icon-btn" 
+                <button
+                  class="action-icon-btn"
                   @click="copyShareLink(video)"
                   title="Copy share link"
                 >
@@ -294,8 +291,8 @@
                 </button>
 
                 <!-- Visibility select -->
-                <select 
-                  :value="video.visibility || 'public'" 
+                <select
+                  :value="video.visibility || 'public'"
                   @change="handleUpdateVideoVisibility(video.id, $event)"
                   class="visibility-quick-select"
                   title="Edit visibility"
@@ -306,26 +303,16 @@
                 </select>
 
                 <!-- Delete icon -->
-                <button 
-                  class="delete-video-btn-overlay" 
-                  @click="handleDeleteVideo(video.id, video.title)" 
+                <button
+                  class="delete-video-btn-overlay"
+                  @click="handleDeleteVideo(video.id, video.title)"
                   title="Delete video"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
               </div>
-            </div>
-            <div class="video-info">
-              <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
-              <div class="metadata-row">
-                <span>{{ formatViews(video.view_count) }} views</span>
-                <template v-if="video.upload_date && video.upload_date.length === 8">
-                  <span>•</span>
-                  <span>{{ formatUploadDate(video.upload_date) }}</span>
-                </template>
-              </div>
-            </div>
-          </div>
+            </template>
+          </VideoCard>
         </div>
       </div>
 
@@ -368,23 +355,22 @@
         />
 
         <div v-else class="shorts-grid">
-          <div 
-            v-for="video in archivedShorts" 
-            :key="video.id" 
-            class="video-card premium-card" 
-            @click="playVideo(video.id)"
+          <VideoCard
+            v-for="video in archivedShorts"
+            :key="video.id"
+            :video="video"
+            :show-channel-info="false"
+            @hidden="onVideoHidden"
           >
-            <div class="thumbnail-wrapper">
-              <img :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" class="thumbnail-img" alt="Thumbnail" />
+            <template #thumbnail-overlay>
               <span class="short-badge">Short</span>
-              <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
 
               <!-- Admin Actions on Thumbnail -->
               <div v-if="isAdmin" class="admin-video-actions" @click.stop>
 
                 <!-- Share button -->
-                <button 
-                  class="action-icon-btn" 
+                <button
+                  class="action-icon-btn"
                   @click="copyShareLink(video)"
                   title="Copy share link"
                 >
@@ -392,8 +378,8 @@
                 </button>
 
                 <!-- Visibility select -->
-                <select 
-                  :value="video.visibility || 'public'" 
+                <select
+                  :value="video.visibility || 'public'"
                   @change="handleUpdateVideoVisibility(video.id, $event)"
                   class="visibility-quick-select"
                   title="Edit visibility"
@@ -404,26 +390,16 @@
                 </select>
 
                 <!-- Delete icon -->
-                <button 
-                  class="delete-video-btn-overlay" 
-                  @click="handleDeleteVideo(video.id, video.title)" 
+                <button
+                  class="delete-video-btn-overlay"
+                  @click="handleDeleteVideo(video.id, video.title)"
                   title="Delete video"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
               </div>
-            </div>
-            <div class="video-info">
-              <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
-              <div class="metadata-row">
-                <span>{{ formatViews(video.view_count) }} views</span>
-                <template v-if="video.upload_date && video.upload_date.length === 8">
-                  <span>•</span>
-                  <span>{{ formatUploadDate(video.upload_date) }}</span>
-                </template>
-              </div>
-            </div>
-          </div>
+            </template>
+          </VideoCard>
         </div>
       </div>
 
@@ -503,34 +479,24 @@
           />
 
           <div v-else class="video-grid">
-            <div 
-              v-for="video in selectedPlaylistData.videos" 
-              :key="video.id" 
-              class="video-card premium-card"
-              @click="video.download_status === 'completed' ? playVideoInPlaylist(video.id, selectedPlaylistId) : null"
-              :style="{ cursor: video.download_status === 'completed' ? 'pointer' : 'default' }"
+            <VideoCard
+              v-for="video in selectedPlaylistData.videos"
+              :key="video.id"
+              :video="video"
+              :show-channel-info="false"
+              :clickable="video.download_status === 'completed'"
+              :to="`/watch/${video.id}?playlistId=${selectedPlaylistId}`"
+              @hidden="onVideoHidden"
             >
-              <div class="thumbnail-wrapper">
-                <img :src="`https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" class="thumbnail-img" alt="Thumbnail" />
-                <span class="duration-badge">{{ formatDuration(video.duration) }}</span>
-                <VideoDropdownMenu :video="video" @hidden="onVideoHidden" />
+              <template #thumbnail-overlay>
                 <span class="badge queue-status-badge" :class="getBadgeClass(video.download_status)" style="top: 8px; right: 8px;">
                   {{ formatStatus(video.download_status) }}
                 </span>
                 <span class="badge" style="position: absolute; bottom: 8px; left: 8px; background: rgba(0, 0, 0, 0.7); font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 700; z-index: 2;">
                   #{{ video.position }}
                 </span>
-              </div>
-
-              <div class="video-info" style="padding: 10px; display: flex; flex-direction: column; flex: 1;">
-                <h4 class="video-title" :title="video.title" style="font-size: 13.5px; font-weight: 600; line-height: 1.4; color: white; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                  {{ video.title }}
-                </h4>
-                <div class="metadata-row" style="font-size: 11.5px; color: var(--text-secondary); display: flex; gap: 6px; align-items: center; margin-top: auto; padding-top: 6px;">
-                  <span>{{ formatViews(video.view_count) }} views</span>
-                </div>
-              </div>
-            </div>
+              </template>
+            </VideoCard>
           </div>
         </template>
       </div>
@@ -542,9 +508,16 @@
         <h1 class="page-title">Archived Channels</h1>
       </div>
       
-      <div v-if="pending" class="loading-state">
-        <div class="spinner"></div>
-        <p>Loading channels...</p>
+      <div v-if="pending" class="channel-grid">
+        <UiCard v-for="n in 6" :key="n" flat>
+          <UiSkeleton height="120px" rounded="lg" />
+          <div style="padding: var(--space-3, 12px);">
+            <UiSkeleton height="14px" width="70%" />
+            <div style="margin-top: var(--space-2, 8px);">
+              <UiSkeleton height="12px" width="40%" />
+            </div>
+          </div>
+        </UiCard>
       </div>
 
       <EmptyState
@@ -767,10 +740,6 @@ const openPlaylist = async (playlistId: string) => {
 const closePlaylist = () => {
   selectedPlaylistId.value = '';
   selectedPlaylistData.value = null;
-};
-
-const playVideoInPlaylist = (id: string, playlistId: string) => {
-  navigateTo(`/watch/${id}?playlistId=${playlistId}`);
 };
 
 // Filter/Sort/Search State
@@ -1987,18 +1956,6 @@ const getBadgeClass = (status: string): string => {
   pointer-events: none;
 }
 
-.duration-badge {
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 2px 4px;
-  border-radius: 2px;
-  font-size: 10px;
-  font-weight: 600;
-  z-index: 2;
-}
-
 .status-overlay-badge {
   position: absolute;
   bottom: 6px;
@@ -2051,13 +2008,6 @@ const getBadgeClass = (status: string): string => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.metadata-row {
-  display: flex;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-secondary);
 }
 
 .premium-card:hover .thumbnail-img {

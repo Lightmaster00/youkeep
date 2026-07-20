@@ -1,17 +1,18 @@
 <template>
-  <div class="video-card premium-card" @click="playVideo">
+  <UiCard class="video-card" :style="{ cursor: clickable ? 'pointer' : 'default' }" @click="playVideo">
     <!-- Thumbnail Wrapper -->
     <div class="thumbnail-wrapper">
-      <img 
-        :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
+      <img
+        :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`"
         @error="handleThumbnailError"
-        class="thumbnail-img" 
+        class="thumbnail-img"
         alt="Thumbnail"
         loading="lazy"
         referrerpolicy="no-referrer"
       />
       <span class="duration-badge">{{ formattedDuration }}</span>
       <VideoDropdownMenu :video="video" @hidden="$emit('hidden', video.id)" />
+      <slot name="thumbnail-overlay" />
     </div>
 
     <!-- Video Details -->
@@ -35,7 +36,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </UiCard>
 </template>
 
 <script setup lang="ts">
@@ -53,8 +54,11 @@ const props = withDefaults(defineProps<{
     local_thumbnail_path?: string;
   };
   showChannelInfo?: boolean;
+  clickable?: boolean;
+  to?: string;
 }>(), {
-  showChannelInfo: true
+  showChannelInfo: true,
+  clickable: true
 });
 
 defineEmits<{
@@ -71,7 +75,8 @@ const handleAvatarError = (event: Event) => {
 };
 
 const playVideo = () => {
-  navigateTo(`/watch/${props.video.id}`);
+  if (!props.clickable) return;
+  navigateTo(props.to || `/watch/${props.video.id}`);
 };
 
 const handleThumbnailError = (event: Event) => {
@@ -146,13 +151,6 @@ const formattedUploadDate = computed(() => {
   overflow: hidden;
   background: #0a0a0f;
   border: 1px solid rgba(255, 255, 255, 0.04);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
-}
-
-.video-card:hover .thumbnail-wrapper {
-  border-color: rgba(139, 92, 246, 0.2);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  transform: translateY(-3px);
 }
 
 .thumbnail-img {

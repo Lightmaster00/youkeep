@@ -44,7 +44,23 @@
   --border-radius-sm: 6px;
   --border-radius-md: 12px;
   --border-radius-lg: 20px;
-  
+
+  /* Spacing Scale (base unit: 4px) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.25, 0.8, 0.25, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 350ms;
+
   /* Fonts */
   --font-title: 'Outfit', 'Inter', sans-serif;
   --font-body: 'Inter', sans-serif;
@@ -272,6 +288,20 @@ textarea.form-input {
   border-radius: 6px;
 }
 
+/* Global spinner (was duplicated per-page — see plan Task 4) */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Badge Styling */
 .badge {
   display: inline-flex;
@@ -308,6 +338,12 @@ textarea.form-input {
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
   border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Organic Transitions & Effects */
@@ -475,10 +511,7 @@ textarea.form-input {
 }
 
 .premium-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(139, 92, 246, 0.15);
-  border-color: rgba(139, 92, 246, 0.3);
-  background: linear-gradient(145deg, rgba(40, 40, 65, 0.7) 0%, rgba(20, 20, 35, 0.8) 100%);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35), 0 4px 16px -4px rgba(139, 92, 246, 0.15);
 }
 
 /* Cohesive Modern Empty State Component */
@@ -760,3 +793,30 @@ textarea.form-input {
   box-shadow: 0 0 15px rgba(139, 92, 246, 0.15);
 }
 
+/* Page transition */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity var(--duration-base) var(--ease-standard);
+}
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+/* Staggered list entrance — apply to a grid/list container */
+.stagger-in > * {
+  animation: stagger-fade-in var(--duration-slow) var(--ease-standard) both;
+}
+.stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-in > *:nth-child(2) { animation-delay: 30ms; }
+.stagger-in > *:nth-child(3) { animation-delay: 60ms; }
+.stagger-in > *:nth-child(4) { animation-delay: 90ms; }
+.stagger-in > *:nth-child(5) { animation-delay: 120ms; }
+.stagger-in > *:nth-child(6) { animation-delay: 150ms; }
+.stagger-in > *:nth-child(7) { animation-delay: 180ms; }
+.stagger-in > *:nth-child(n+8) { animation-delay: 210ms; }
+
+@keyframes stagger-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}

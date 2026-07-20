@@ -789,9 +789,9 @@
                       </div>
                       <div class="user-headline-col">
                         <h4>{{ u.username }}</h4>
-                        <span class="user-card-role-badge" :class="u.role">
+                        <UiBadge :tone="u.role === 'admin' ? 'completed' : 'neutral'">
                           {{ u.role === 'admin' ? 'Administrator' : 'Standard User' }}
-                        </span>
+                        </UiBadge>
                       </div>
                     </div>
 
@@ -3400,27 +3400,6 @@ onUnmounted(() => {
   margin: 0;
 }
 
-.user-card-role-badge {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 10px;
-  letter-spacing: 0.05em;
-  width: fit-content;
-}
-
-.user-card-role-badge.admin {
-  background: rgba(139, 92, 246, 0.1);
-  color: #c084fc;
-  border: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-.user-card-role-badge.user {
-  background: rgba(59, 130, 246, 0.1);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.2);
-}
 
 .user-card-meta {
   display: flex;
