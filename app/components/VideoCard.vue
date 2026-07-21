@@ -1,5 +1,11 @@
 <template>
-  <UiCard class="video-card" :style="{ cursor: clickable ? 'pointer' : 'default' }" @click="playVideo">
+  <UiCard
+    class="video-card"
+    :style="{ cursor: clickable ? 'pointer' : 'default' }"
+    @click="playVideo"
+    @mouseenter="handleCardMouseEnter"
+    @mouseleave="handleCardMouseLeave"
+  >
     <!-- Thumbnail Wrapper -->
     <div class="thumbnail-wrapper">
       <img
@@ -10,6 +16,19 @@
         loading="lazy"
         referrerpolicy="no-referrer"
       />
+      <video
+        v-if="isPreviewActive"
+        ref="previewVideoEl"
+        :src="video.local_video_path"
+        class="thumbnail-preview-video"
+        muted
+        playsinline
+        @timeupdate="handlePreviewTimeUpdate"
+      ></video>
+      <span v-if="isPreviewActive" class="preview-badge">APERÇU</span>
+      <div v-if="isPreviewActive" class="preview-progress">
+        <div class="preview-progress-fill" :style="{ width: previewProgressPercent + '%' }"></div>
+      </div>
       <span class="duration-badge">{{ formattedDuration }}</span>
       <VideoDropdownMenu :video="video" @hidden="$emit('hidden', video.id)" />
       <slot name="thumbnail-overlay" />
@@ -45,7 +64,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onUnmounted, ref, watch } from 'vue';
+import { useVideoPreview } from '~/composables/useVideoPreview';
 
 const props = withDefaults(defineProps<{
   video: {
@@ -57,6 +77,7 @@ const props = withDefaults(defineProps<{
     view_count: number | null;
     upload_date: string | null;
     local_thumbnail_path?: string;
+    local_video_path?: string;
   };
   showChannelInfo?: boolean;
   clickable?: boolean;
@@ -69,6 +90,70 @@ const props = withDefaults(defineProps<{
 defineEmits<{
   (e: 'hidden', id: string): void;
 }>();
+
+const HOVER_DELAY_MS = 550;
+const PREVIEW_START_RATIO = 0.10;
+const PREVIEW_END_RATIO = 0.40;
+
+const { activePreviewId } = useVideoPreview();
+const isPreviewActive = computed(() => activePreviewId.value === props.video.id);
+const previewVideoEl = ref<HTMLVideoElement | null>(null);
+const previewProgressPercent = ref(0);
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+const handleCardMouseEnter = () => {
+  if (!props.video.local_video_path || !props.video.duration) return;
+  hoverTimer = setTimeout(() => {
+    activePreviewId.value = props.video.id;
+  }, HOVER_DELAY_MS);
+};
+
+const handleCardMouseLeave = () => {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
+  if (activePreviewId.value === props.video.id) {
+    activePreviewId.value = null;
+  }
+};
+
+const handlePreviewTimeUpdate = () => {
+  const el = previewVideoEl.value;
+  const duration = props.video.duration;
+  if (!el || !duration) return;
+  const startTime = duration * PREVIEW_START_RATIO;
+  const endTime = duration * PREVIEW_END_RATIO;
+  if (el.currentTime >= endTime) {
+    el.currentTime = startTime;
+  }
+  previewProgressPercent.value = ((el.currentTime - startTime) / (endTime - startTime)) * 100;
+};
+
+watch(isPreviewActive, (active) => {
+  if (!active) {
+    previewProgressPercent.value = 0;
+    return;
+  }
+  const duration = props.video.duration;
+  requestAnimationFrame(() => {
+    const el = previewVideoEl.value;
+    if (!el || !duration) return;
+    el.currentTime = duration * PREVIEW_START_RATIO;
+    el.play().catch(() => {
+      // Autoplay can be blocked in some contexts even when muted; failing
+      // silently just means the thumbnail stays static, which is a safe
+      // fallback rather than a broken UI.
+    });
+  });
+});
+
+onUnmounted(() => {
+  if (hoverTimer) clearTimeout(hoverTimer);
+  if (activePreviewId.value === props.video.id) {
+    activePreviewId.value = null;
+  }
+});
 
 const fallbackAvatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23666"><circle cx="12" cy="12" r="10"></circle><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z"></path></svg>';
 
@@ -179,6 +264,44 @@ const formattedUploadDate = computed(() => {
   height: 50%;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
   pointer-events: none;
+}
+
+.thumbnail-preview-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.preview-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  z-index: 3;
+}
+
+.preview-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  z-index: 3;
+}
+
+.preview-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
 }
 
 .duration-badge {
