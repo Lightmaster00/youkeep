@@ -75,6 +75,14 @@ export default defineEventHandler(async (event) => {
 
   const usedIds = new Set<string>();
 
+  // Claims every video's id into usedIds so later sections can't re-include
+  // videos already picked by an earlier section, and returns the same list
+  // for convenient inline use.
+  const claim = (videos: FeedVideo[]) => {
+    for (const v of videos) usedIds.add(v.id);
+    return videos;
+  };
+
   // --- Featured block ---
   const large = popularPool[0] ?? null;
   if (large) usedIds.add(large.id);
@@ -110,19 +118,19 @@ export default defineEventHandler(async (event) => {
   // --- Sections ---
   const sections: any[] = [];
 
-  const recentSection = recentPool.filter(v => !usedIds.has(v.id)).slice(0, 15);
+  const recentSection = claim(recentPool.filter(v => !usedIds.has(v.id)).slice(0, 15));
   if (recentSection.length > 0) {
     sections.push({ id: 'recent', title: 'Ajoutés récemment', videos: recentSection });
   }
 
-  const popularSection = popularPool.filter(v => !usedIds.has(v.id)).slice(0, 15);
+  const popularSection = claim(popularPool.filter(v => !usedIds.has(v.id)).slice(0, 15));
   if (popularSection.length > 0) {
     sections.push({ id: 'popular', title: 'Populaires', videos: popularSection });
   }
 
   if (session) {
     const suggestions = getRecommendedVideos(db, session.id, { type: 'all', limit: 20 }) as unknown as FeedVideo[];
-    const suggestedSection = suggestions.filter(v => !usedIds.has(v.id)).slice(0, 15);
+    const suggestedSection = claim(suggestions.filter(v => !usedIds.has(v.id)).slice(0, 15));
     if (suggestedSection.length > 0) {
       sections.push({ id: 'suggested', title: 'Suggéré pour toi', videos: suggestedSection });
     }
@@ -155,7 +163,7 @@ export default defineEventHandler(async (event) => {
           channelId: ch.id,
           channelTitle: ch.title,
           channelAvatar: ch.avatar_url,
-          videos: filtered.slice(0, 12)
+          videos: claim(filtered.slice(0, 12))
         });
       }
     }

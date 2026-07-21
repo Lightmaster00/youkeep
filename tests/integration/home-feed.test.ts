@@ -42,9 +42,20 @@ describe('GET /api/home/feed', () => {
   it('includes suggested and subscriptions sections for a logged-in user with data', async () => {
     insertChannel(db, { id: 'c1' });
     insertChannel(db, { id: 'c2' });
-    insertVideo(db, { id: 'v1', channelId: 'c1', uploadDate: '20260101' });
-    insertVideo(db, { id: 'v2', channelId: 'c2', uploadDate: '20260101' });
-    insertVideo(db, { id: 'v3', channelId: 'c2', uploadDate: '20260102' });
+    // c1 is a large, recent, popular "filler" channel: it deterministically
+    // fills (and is fully eligible to fill) the recent/popular sections on
+    // its own, since every c1 video is newer and more-viewed than every c2
+    // video. c2 (subscribed, old, unpopular) is therefore never selected by
+    // the recentPool/popularPool SQL queries (LIMIT 30 each), so — now that
+    // every section claims its picks into usedIds — c2's videos remain
+    // available for the suggested/subscriptions sections regardless of how
+    // much of c1 the recent/popular sections consume.
+    for (let i = 0; i < 30; i++) {
+      insertVideo(db, { id: `c1v${i}`, channelId: 'c1', uploadDate: '20260101', viewCount: 100000 - i, createdAt: Date.now() - i * 1000 });
+    }
+    for (let i = 0; i < 30; i++) {
+      insertVideo(db, { id: `c2v${i}`, channelId: 'c2', uploadDate: '20200101', viewCount: 0, createdAt: 1000 + i });
+    }
     const event = loginAs('u1');
     insertSubscription(db, { userId: 'u1', channelId: 'c2' });
     const result: any = await handler(event);
@@ -53,23 +64,35 @@ describe('GET /api/home/feed', () => {
     expect(sectionIds).toContain('subscriptions');
   });
 
-  it('never shows the same video in both the featured block and a section', async () => {
+  it('never shows the same video ID twice anywhere in the response (featured, or across sections)', async () => {
     insertChannel(db, { id: 'c1' });
-    for (let i = 0; i < 10; i++) {
-      insertVideo(db, { id: `v${i}`, channelId: 'c1', uploadDate: '20260101', viewCount: 100 - i, createdAt: Date.now() - i * 1000 });
+    // 30 videos is comfortably more than the 15+15 caps on recentSection and
+    // popularSection, and view_count/created_at are ordered identically here,
+    // so — absent proper cross-section exclusion — recentPool and popularPool
+    // would independently pick largely the same leftover videos after the
+    // featured block is filled. This is the shape that previously produced
+    // fully identical recent/popular sections.
+    for (let i = 0; i < 30; i++) {
+      insertVideo(db, { id: `v${i}`, channelId: 'c1', uploadDate: '20260101', viewCount: 1000 - i, createdAt: Date.now() - i * 1000 });
     }
     const result: any = await handler(guestEvent());
-    const featuredIds = new Set([
-      ...(result.featured.large ? [result.featured.large.id] : []),
-      ...result.featured.small.map((v: any) => v.id)
-    ]);
+
+    const allIds: string[] = [];
+    if (result.featured.large) allIds.push(result.featured.large.id);
+    for (const v of result.featured.small) allIds.push(v.id);
     for (const section of result.sections) {
       if (section.videos) {
-        for (const v of section.videos) {
-          expect(featuredIds.has(v.id)).toBe(false);
+        for (const v of section.videos) allIds.push(v.id);
+      }
+      if (section.channels) {
+        for (const ch of section.channels) {
+          for (const v of ch.videos) allIds.push(v.id);
         }
       }
     }
+
+    expect(allIds.length).toBeGreaterThan(0);
+    expect(allIds.length).toBe(new Set(allIds).size);
   });
 
   it('excludes a subscribed channel row entirely if the user has fewer than 2 visible videos left from it after exclusion', async () => {
