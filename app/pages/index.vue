@@ -164,8 +164,6 @@ const { data: homeFeedData, pending: homeFeedPending } = await useFetch<{
   immediate: !searchQuery.value
 });
 
-watch(homeFeedData, () => { loading.value = false; }, { immediate: true });
-
 // Fetch channels for search
 const { data: channelsData } = await useFetch<{ channels: any[] }>(() => '/api/channels', {
   query: computed(() => ({ search: searchQuery.value || undefined })),
@@ -183,19 +181,19 @@ const computeData = () => {
     allVideos.value = searchData.value?.videos || [];
     searchPagination.value = searchData.value?.pagination || null;
   }
-  loading.value = false;
+  loading.value = searchQuery.value ? searchPending.value : false;
 };
 
 // Watch for data changes
 watch([searchData, searchQuery], computeData, { immediate: true });
 
+watch(homeFeedPending, (pending) => {
+  if (!searchQuery.value) loading.value = pending;
+}, { immediate: true });
+
 const featuredLarge = computed(() => homeFeedData.value?.featured?.large ?? null);
 const featuredSmall = computed(() => homeFeedData.value?.featured?.small ?? []);
 const feedSections = computed(() => homeFeedData.value?.sections ?? []);
-
-// Keep recentVideos and channelGroups for now; Task 9 will clean them up
-const recentVideos = computed(() => []);
-const channelGroups = computed(() => []);
 
 const changePage = (newPage: number) => {
   router.push({ path: '/', query: { ...route.query, page: newPage } });
