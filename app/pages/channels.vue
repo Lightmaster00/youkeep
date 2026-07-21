@@ -409,8 +409,15 @@
       <div v-show="activeTab === 'playlists'" class="channel-videos-section">
         <!-- Playlist List View -->
         <template v-if="!selectedPlaylistId">
-          <div class="videos-section-header">
+          <div class="videos-section-header" style="display: flex; align-items: center; justify-content: space-between;">
             <h2 class="section-title">Playlists</h2>
+            <button
+              @click="handleSyncPlaylists"
+              class="btn btn-secondary btn-sm"
+              :disabled="syncingPlaylists"
+            >
+              {{ syncingPlaylists ? 'Syncing...' : 'Sync Playlists' }}
+            </button>
           </div>
 
           <div v-if="playlistsPending" class="videos-loading">
@@ -1069,6 +1076,7 @@ const savingPref = ref(false);
 const prefMessage = ref('');
 const showDrawer = ref(false);
 const triggeringSync = ref(false);
+const syncingPlaylists = ref(false);
 
 const subscribed = ref(false);
 
@@ -1171,6 +1179,23 @@ async function handleTriggerManualSync() {
     triggeringSync.value = false;
   }
 };
+
+async function handleSyncPlaylists() {
+  if (!channelId.value) return;
+  syncingPlaylists.value = true;
+  try {
+    const res = await $fetch<any>(`/api/admin/channels/${channelId.value}/sync-playlists`, {
+      method: 'POST'
+    });
+    toast.success(res.message || 'Playlist sync started.');
+    // The sync runs in the background on the server; give it a moment before refreshing.
+    setTimeout(() => refreshPlaylists(), 5000);
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to start playlist sync.');
+  } finally {
+    syncingPlaylists.value = false;
+  }
+}
 
 const handleDeleteChannel = async () => {
   if (!confirm(`WARNING: Are you sure you want to permanently delete the channel "${channel.value.title}" from the archive?\nThis will delete all downloaded videos from your disk and the database.`)) {
