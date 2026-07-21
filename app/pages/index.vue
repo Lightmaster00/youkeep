@@ -94,32 +94,35 @@
         </div>
       </div>
 
-      <!-- Recently Added Row -->
-      <div v-if="recentVideos.length > 0" class="content-row">
-        <h3 class="row-title">Recently Added</h3>
-        <div class="scroll-row">
-          <div class="scroll-track">
-            <div v-for="video in recentVideos" :key="video.id" class="scroll-card">
-              <VideoCard :video="video" @hidden="onVideoHidden" />
+      <!-- Content Discovery Rows -->
+      <template v-for="section in feedSections" :key="section.id">
+        <div v-if="section.videos" class="content-row">
+          <h3 class="row-title">{{ section.title }}</h3>
+          <div class="scroll-row">
+            <div class="scroll-track">
+              <div v-for="video in section.videos" :key="video.id" class="scroll-card">
+                <VideoCard :video="video" @hidden="onVideoHidden" />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Channel Rows -->
-      <div v-for="group in channelGroups" :key="group.channelId" class="content-row">
-        <div class="row-header">
-          <h3 class="row-title">{{ group.channelTitle }}</h3>
-          <NuxtLink :to="`/channels?id=${group.channelId}`" class="see-all-link">See all →</NuxtLink>
-        </div>
-        <div class="scroll-row">
-          <div class="scroll-track">
-            <div v-for="video in group.videos" :key="video.id" class="scroll-card">
-              <VideoCard :video="video" :show-channel-info="false" @hidden="onVideoHidden" />
+        <template v-else-if="section.channels">
+          <div v-for="channelRow in section.channels" :key="channelRow.channelId" class="content-row">
+            <div class="row-header">
+              <h3 class="row-title">{{ channelRow.channelTitle }}</h3>
+              <NuxtLink :to="`/channels?id=${channelRow.channelId}`" class="see-all-link">See all →</NuxtLink>
+            </div>
+            <div class="scroll-row">
+              <div class="scroll-track">
+                <div v-for="video in channelRow.videos" :key="video.id" class="scroll-card">
+                  <VideoCard :video="video" :show-channel-info="false" @hidden="onVideoHidden" />
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </template>
 
     </div>
   </div>
@@ -214,6 +217,22 @@ const handleHeroError = (event: Event) => {
 };
 
 const onVideoHidden = (id: string) => {
+  if (homeFeedData.value) {
+    homeFeedData.value.featured.small = homeFeedData.value.featured.small.filter((v: any) => v.id !== id);
+    if (homeFeedData.value.featured.large?.id === id) {
+      homeFeedData.value.featured.large = null;
+    }
+    for (const section of homeFeedData.value.sections) {
+      if (section.videos) {
+        section.videos = section.videos.filter((v: any) => v.id !== id);
+      }
+      if (section.channels) {
+        for (const ch of section.channels) {
+          ch.videos = ch.videos.filter((v: any) => v.id !== id);
+        }
+      }
+    }
+  }
   allVideos.value = allVideos.value.filter(v => v.id !== id);
 };
 
