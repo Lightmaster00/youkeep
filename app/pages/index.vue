@@ -402,6 +402,18 @@ const formatUploadDate = (dateStr: string | null): string => {
   overflow: hidden;
 }
 
+.featured-small :deep(.thumbnail-wrapper) {
+  aspect-ratio: 16 / 7;
+}
+
+.featured-small :deep(.video-info) {
+  padding-top: 8px;
+}
+
+.featured-small :deep(.video-title) {
+  margin-bottom: 6px;
+}
+
 @media (max-width: 900px) {
   .featured-bento {
     grid-template-columns: 1fr 1fr;
