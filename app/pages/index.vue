@@ -9,7 +9,7 @@
 
     <!-- Empty -->
     <EmptyState
-      v-else-if="allVideos.length === 0 && !searchQuery"
+      v-else-if="!featuredLarge && !searchQuery"
       title="No videos found"
       description="Your archive is empty. Log in as administrator to add channels or videos."
       icon="video"
