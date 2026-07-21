@@ -208,7 +208,7 @@ const handleAvatarError = (event: Event) => {
 const handleHeroError = (event: Event) => {
   const target = event.target as HTMLImageElement;
   if (target) {
-    const hq = `https://i.ytimg.com/vi/${heroVideo.value?.id}/hqdefault.jpg`;
+    const hq = `https://i.ytimg.com/vi/${featuredLarge.value?.id}/hqdefault.jpg`;
     if (target.src !== hq) target.src = hq;
   }
 };
@@ -634,16 +634,4 @@ const formatUploadDate = (dateStr: string | null): string => {
   font-weight: 500;
 }
 
-/* ===== Responsive Hero ===== */
-@media (max-width: 900px) {
-  .hero-banner { height: 320px; }
-  .hero-content { left: 24px; bottom: 32px; max-width: 90%; }
-  .hero-title { font-size: 24px; }
-}
-
-@media (max-width: 640px) {
-  .hero-banner { height: 260px; }
-  .hero-title { font-size: 20px; }
-  .hero-desc { display: none; }
-}
 </style>
