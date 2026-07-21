@@ -2,28 +2,28 @@
 
 :root {
   /* Color Tokens */
-  --bg-base: #0a0a0f; /* Deep dark cosmic void */
-  --bg-surface: rgba(22, 22, 30, 0.6); /* Card surface dark glass background */
-  --bg-surface-hover: rgba(32, 32, 45, 0.8);
-  --bg-surface-active: rgba(45, 45, 60, 0.9);
-  
-  --bg-elevated-1: rgba(30, 30, 42, 0.7);
-  --bg-elevated-2: rgba(40, 40, 55, 0.8);
+  --bg-base: #0c0a12; /* Near-black with a faint violet undertone, not gray */
+  --bg-surface: rgba(28, 24, 38, 0.65); /* Violet-tinted glass, was neutral gray */
+  --bg-surface-hover: rgba(38, 32, 50, 0.85);
+  --bg-surface-active: rgba(50, 42, 64, 0.92);
+
+  --bg-elevated-1: rgba(36, 30, 48, 0.75);
+  --bg-elevated-2: rgba(46, 38, 60, 0.85);
 
   --accent-primary: #8b5cf6; /* Futuristic violet/purple */
   --accent-primary-hover: #a78bfa;
   --accent-primary-glow: rgba(139, 92, 246, 0.4);
-  
+
   --accent-secondary: #ec4899; /* Vibrant cosmic pink */
   --accent-secondary-hover: #f472b6;
   --accent-secondary-glow: rgba(236, 72, 153, 0.4);
 
-  
+
   --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  
-  --border-color: rgba(255, 255, 255, 0.08);
+  --text-secondary: #a5a3b8;
+  --text-muted: #6e6b82;
+
+  --border-color: rgba(167, 139, 250, 0.12);
   --border-color-glow: rgba(139, 92, 246, 0.25);
 
   /* Glassmorphism Details */
@@ -80,6 +80,10 @@ html, body {
 
 body {
   background-color: var(--bg-base);
+  background-image:
+    radial-gradient(ellipse 120% 80% at 30% -10%, rgba(139, 92, 246, 0.12), transparent),
+    radial-gradient(ellipse 100% 60% at 100% 100%, rgba(236, 72, 153, 0.06), transparent);
+  background-repeat: no-repeat;
   color: var(--text-primary);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
