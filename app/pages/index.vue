@@ -90,7 +90,7 @@
           </div>
         </div>
         <div v-for="video in featuredSmall" :key="video.id" class="featured-small">
-          <VideoCard :video="video" />
+          <VideoCard :video="video" @hidden="onVideoHidden" />
         </div>
       </div>
 
@@ -327,7 +327,7 @@ const formatUploadDate = (dateStr: string | null): string => {
 .hero-gradient-left {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(10, 10, 15, 0.95) 0%, rgba(10, 10, 15, 0.6) 40%, transparent 70%);
+  background: linear-gradient(90deg, rgba(12, 10, 18, 0.95) 0%, rgba(12, 10, 18, 0.6) 40%, transparent 70%);
 }
 
 .hero-gradient-bottom {
