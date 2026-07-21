@@ -27,15 +27,24 @@ export function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       visibility TEXT DEFAULT 'public',
+      avatar_url TEXT,
       created_at INTEGER NOT NULL
     );
 
     CREATE TABLE videos (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
+      description TEXT,
       channel_id TEXT NOT NULL,
       visibility TEXT DEFAULT 'public',
       share_token TEXT,
+      download_status TEXT DEFAULT 'completed',
+      upload_date TEXT,
+      duration INTEGER,
+      view_count INTEGER DEFAULT 0,
+      is_short INTEGER DEFAULT 0,
+      local_video_path TEXT,
+      local_thumbnail_path TEXT,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
     );
@@ -43,6 +52,28 @@ export function createTestDb(): Database.Database {
     CREATE TABLE user_channel_access (
       user_id TEXT NOT NULL,
       channel_id TEXT NOT NULL,
+      PRIMARY KEY (user_id, channel_id)
+    );
+
+    CREATE TABLE user_history (
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      watched_at INTEGER NOT NULL,
+      watch_time_seconds INTEGER DEFAULT 0,
+      PRIMARY KEY (user_id, video_id)
+    );
+
+    CREATE TABLE user_hidden_videos (
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      hidden_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, video_id)
+    );
+
+    CREATE TABLE user_subscriptions (
+      user_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, channel_id)
     );
   `);
@@ -71,11 +102,39 @@ export function insertChannel(db: Database.Database, opts: { id: string; visibil
   `).run(opts.id, `Channel ${opts.id}`, opts.visibility ?? 'public', Date.now());
 }
 
-export function insertVideo(db: Database.Database, opts: { id: string; channelId: string; visibility?: string; shareToken?: string | null }) {
+export function insertVideo(db: Database.Database, opts: {
+  id: string;
+  channelId: string;
+  visibility?: string;
+  shareToken?: string | null;
+  downloadStatus?: string;
+  uploadDate?: string | null;
+  duration?: number | null;
+  viewCount?: number;
+  isShort?: boolean;
+  localVideoPath?: string | null;
+  localThumbnailPath?: string | null;
+  createdAt?: number;
+}) {
   db.prepare(`
-    INSERT INTO videos (id, title, channel_id, visibility, share_token, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(opts.id, `Video ${opts.id}`, opts.channelId, opts.visibility ?? 'public', opts.shareToken ?? null, Date.now());
+    INSERT INTO videos (id, title, description, channel_id, visibility, share_token, download_status, upload_date, duration, view_count, is_short, local_video_path, local_thumbnail_path, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    opts.id,
+    `Video ${opts.id}`,
+    null,
+    opts.channelId,
+    opts.visibility ?? 'public',
+    opts.shareToken ?? null,
+    opts.downloadStatus ?? 'completed',
+    opts.uploadDate ?? null,
+    opts.duration ?? null,
+    opts.viewCount ?? 0,
+    opts.isShort ? 1 : 0,
+    opts.localVideoPath ?? null,
+    opts.localThumbnailPath ?? null,
+    opts.createdAt ?? Date.now()
+  );
 }
 
 export function grantChannelAccess(db: Database.Database, userId: string, channelId: string) {
@@ -98,4 +157,25 @@ export function mockEvent(cookieHeader?: string): any {
 
 export function sessionCookie(sessionId: string): string {
   return `youkeep_session=${sessionId}`;
+}
+
+export function insertUserHistory(db: Database.Database, opts: { userId: string; videoId: string; watchTimeSeconds?: number; watchedAt?: number }) {
+  db.prepare(`
+    INSERT INTO user_history (user_id, video_id, watched_at, watch_time_seconds)
+    VALUES (?, ?, ?, ?)
+  `).run(opts.userId, opts.videoId, opts.watchedAt ?? Date.now(), opts.watchTimeSeconds ?? 0);
+}
+
+export function insertHiddenVideo(db: Database.Database, opts: { userId: string; videoId: string }) {
+  db.prepare(`
+    INSERT INTO user_hidden_videos (user_id, video_id, hidden_at)
+    VALUES (?, ?, ?)
+  `).run(opts.userId, opts.videoId, Date.now());
+}
+
+export function insertSubscription(db: Database.Database, opts: { userId: string; channelId: string }) {
+  db.prepare(`
+    INSERT INTO user_subscriptions (user_id, channel_id, created_at)
+    VALUES (?, ?, ?)
+  `).run(opts.userId, opts.channelId, Date.now());
 }
