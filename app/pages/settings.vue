@@ -396,6 +396,38 @@
                   </div>
                 </div>
               </div>
+
+              <div class="ingest-box glass-panel mt-4">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-blue">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                  </div>
+                  <div>
+                    <h3>Sponsor Segment Handling</h3>
+                    <p class="section-desc">Applies to new downloads only, using the community SponsorBlock database. Each category can be ignored, marked as a chapter, or cut from the file.</p>
+                  </div>
+                </div>
+
+                <form @submit.prevent="handleSaveSponsorBlock" class="policy-forms-grid mt-3">
+                  <div class="form-group" v-for="cat in sponsorBlockCategoryList" :key="cat.key">
+                    <label class="form-label" :for="`sb-${cat.key}`">{{ cat.label }}</label>
+                    <select :id="`sb-${cat.key}`" v-model="sponsorBlockSettings[cat.key]" class="form-select">
+                      <option value="ignore">Ignore</option>
+                      <option value="mark">Mark as chapter</option>
+                      <option value="remove">Remove from file</option>
+                    </select>
+                  </div>
+
+                  <div class="form-actions mt-3">
+                    <button type="submit" class="btn btn-secondary-dark" :disabled="savingSponsorBlock">
+                      {{ savingSponsorBlock ? 'Saving...' : 'Save SponsorBlock Settings' }}
+                    </button>
+                  </div>
+                </form>
+                <div v-if="sponsorBlockMessage" class="form-msg mt-3" :class="sponsorBlockSuccess ? 'success-msg' : 'error-msg'">
+                  {{ sponsorBlockMessage }}
+                </div>
+              </div>
             </div>
 
             <!-- Right Side: Processing Queue (40% width on desktop) -->
@@ -1106,6 +1138,48 @@ const savingDir = ref(false);
 const saveDirMessage = ref('');
 const saveDirSuccess = ref(false);
 
+const sponsorBlockCategoryList = [
+  { key: 'sponsor', label: 'Sponsor' },
+  { key: 'intro', label: 'Intro' },
+  { key: 'outro', label: 'Outro' },
+  { key: 'selfpromo', label: 'Self-Promo' },
+  { key: 'interaction', label: 'Like/Subscribe Reminders' },
+  { key: 'filler', label: 'Filler / Tangents' },
+];
+const sponsorBlockSettings = ref<Record<string, string>>({
+  sponsor: 'ignore', intro: 'ignore', outro: 'ignore', selfpromo: 'ignore', interaction: 'ignore', filler: 'ignore'
+});
+const savingSponsorBlock = ref(false);
+const sponsorBlockMessage = ref('');
+const sponsorBlockSuccess = ref(false);
+
+const fetchSponsorBlockSettings = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/downloader/sponsorblock');
+    sponsorBlockSettings.value = data.settings;
+  } catch (e) {
+    console.error('Failed to fetch SponsorBlock settings:', e);
+  }
+};
+
+const handleSaveSponsorBlock = async () => {
+  savingSponsorBlock.value = true;
+  sponsorBlockMessage.value = '';
+  try {
+    await $fetch('/api/admin/downloader/sponsorblock', {
+      method: 'POST',
+      body: sponsorBlockSettings.value
+    });
+    sponsorBlockSuccess.value = true;
+    sponsorBlockMessage.value = 'SponsorBlock settings saved.';
+  } catch (e: any) {
+    sponsorBlockSuccess.value = false;
+    sponsorBlockMessage.value = e?.data?.statusMessage || 'Failed to save settings.';
+  } finally {
+    savingSponsorBlock.value = false;
+  }
+};
+
 const fetchDefaultDir = async () => {
   try {
     const data = await $fetch<any>('/api/admin/downloader/default-dir');
@@ -1533,6 +1607,7 @@ onMounted(() => {
   if (isAdmin.value) {
     fetchSchedule();
     fetchDefaultDir();
+    fetchSponsorBlockSettings();
     runPolling();
   }
 });
