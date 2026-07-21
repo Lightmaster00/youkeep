@@ -17,23 +17,28 @@
 
     <!-- Video Details -->
     <div class="video-info">
-      <div v-if="showChannelInfo" class="avatar-col">
-        <img 
-          :src="video.channel_avatar || fallbackAvatar" 
+      <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
+      <div v-if="showChannelInfo" class="channel-row">
+        <img
+          :src="video.channel_avatar || fallbackAvatar"
           @error="handleAvatarError"
-          class="channel-avatar" 
+          class="channel-avatar"
           alt="Avatar"
           referrerpolicy="no-referrer"
         />
-      </div>
-      <div class="details-col">
-        <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
-        <p v-if="showChannelInfo" class="channel-title">{{ video.channel_title }}</p>
-        <div class="metadata-row">
-          <span>{{ formattedViews }} views</span>
-          <span class="dot">•</span>
-          <span>{{ formattedUploadDate }}</span>
+        <div class="channel-meta">
+          <p class="channel-title">{{ video.channel_title }}</p>
+          <div class="metadata-row">
+            <span>{{ formattedViews }} views</span>
+            <span class="dot">•</span>
+            <span>{{ formattedUploadDate }}</span>
+          </div>
         </div>
+      </div>
+      <div v-else class="metadata-row metadata-row-standalone">
+        <span>{{ formattedViews }} views</span>
+        <span class="dot">•</span>
+        <span>{{ formattedUploadDate }}</span>
       </div>
     </div>
   </UiCard>
@@ -193,33 +198,12 @@ const formattedUploadDate = computed(() => {
 /* ===== Info Section ===== */
 .video-info {
   display: flex;
-  gap: 10px;
-  padding: 10px 2px 4px 2px;
-}
-
-.avatar-col {
-  flex-shrink: 0;
-}
-
-.channel-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: rgba(255, 255, 255, 0.05);
-  margin-top: 2px;
-}
-
-.details-col {
-  display: flex;
   flex-direction: column;
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
+  padding: 12px 2px 4px 2px;
 }
 
 .video-title {
-  font-size: 14px;
+  font-size: 14.5px;
   line-height: 1.35;
   font-weight: 600;
   color: white;
@@ -229,16 +213,43 @@ const formattedUploadDate = computed(() => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin: 0;
+  margin: 0 0 9px 0;
+}
+
+.channel-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.channel-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+
+.channel-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .channel-title {
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  color: #c4b5fd;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 0;
+  transition: color var(--duration-base) var(--ease-standard);
+}
+
+.video-card:hover .channel-title {
+  color: #e9d5ff;
 }
 
 .metadata-row {
@@ -246,7 +257,16 @@ const formattedUploadDate = computed(() => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
+  color: #8a87a0;
+  transition: color var(--duration-base) var(--ease-standard);
+}
+
+.video-card:hover .metadata-row {
+  color: #a5a3b8;
+}
+
+.metadata-row-standalone {
+  margin-top: 1px;
 }
 
 .dot {
