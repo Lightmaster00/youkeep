@@ -66,7 +66,7 @@
         <div class="progress-scrubber" :style="{ left: playedPercent + '%' }"></div>
         <div
           v-for="chapter in chapterMarkers"
-          :key="chapter.start_time"
+          :key="`${chapter.source}-${chapter.start_time}`"
           class="progress-chapter-marker"
           :class="{ 'progress-chapter-marker--sponsorblock': chapter.source === 'sponsorblock' }"
           :style="{ left: chapter.percent + '%' }"
