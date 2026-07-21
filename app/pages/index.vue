@@ -60,33 +60,37 @@
     <!-- Netflix-style Home Feed -->
     <div v-else class="netflix-feed">
 
-      <!-- Hero Banner -->
-      <div v-if="heroVideo" class="hero-banner" @click="navigateTo(`/watch/${heroVideo.id}`)">
-        <div class="hero-backdrop">
-          <img :src="heroVideo.local_thumbnail_path || `https://i.ytimg.com/vi/${heroVideo.id}/maxresdefault.jpg`" @error="handleHeroError" class="hero-bg-img" alt="" />
-          <div class="hero-gradient-left"></div>
-          <div class="hero-gradient-bottom"></div>
+      <!-- Featured Bento Block -->
+      <div v-if="featuredLarge" class="featured-bento">
+        <div class="featured-large" @click="navigateTo(`/watch/${featuredLarge.id}`)">
+          <div class="hero-backdrop">
+            <img :src="featuredLarge.local_thumbnail_path || `https://i.ytimg.com/vi/${featuredLarge.id}/maxresdefault.jpg`" @error="handleHeroError" class="hero-bg-img" alt="" />
+            <div class="hero-gradient-left"></div>
+            <div class="hero-gradient-bottom"></div>
+          </div>
+          <div class="hero-content">
+            <div class="hero-channel-badge">
+              <img :src="featuredLarge.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
+              <span>{{ featuredLarge.channel_title }}</span>
+            </div>
+            <h1 class="hero-title">{{ featuredLarge.title }}</h1>
+            <div class="hero-meta">
+              <span>{{ formatViews(featuredLarge.view_count) }} views</span>
+              <span class="meta-dot">•</span>
+              <span>{{ formatUploadDate(featuredLarge.upload_date) }}</span>
+              <span class="meta-dot">•</span>
+              <span>{{ formatDuration(featuredLarge.duration) }}</span>
+            </div>
+            <div class="hero-actions">
+              <button class="hero-play-btn" @click.stop="navigateTo(`/watch/${featuredLarge.id}`)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Play
+              </button>
+            </div>
+          </div>
         </div>
-        <div class="hero-content">
-          <div class="hero-channel-badge">
-            <img :src="heroVideo.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
-            <span>{{ heroVideo.channel_title }}</span>
-          </div>
-          <h1 class="hero-title">{{ heroVideo.title }}</h1>
-          <p v-if="heroVideo.description" class="hero-desc">{{ heroVideo.description }}</p>
-          <div class="hero-meta">
-            <span>{{ formatViews(heroVideo.view_count) }} views</span>
-            <span class="meta-dot">•</span>
-            <span>{{ formatUploadDate(heroVideo.upload_date) }}</span>
-            <span class="meta-dot">•</span>
-            <span>{{ formatDuration(heroVideo.duration) }}</span>
-          </div>
-          <div class="hero-actions">
-            <button class="hero-play-btn" @click.stop="navigateTo(`/watch/${heroVideo.id}`)">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              Play
-            </button>
-          </div>
+        <div v-for="video in featuredSmall" :key="video.id" class="featured-small">
+          <VideoCard :video="video" />
         </div>
       </div>
 
@@ -149,11 +153,15 @@ const { data: searchData, pending: searchPending } = await useFetch<{ videos: an
   immediate: !!searchQuery.value
 });
 
-// Fetch for home feed (larger batch for grouping)
-const { data: feedData, pending: feedPending } = await useFetch<{ videos: any[], pagination: any }>('/api/videos', {
-  query: { limit: 60, status: 'completed' },
+// Fetch for home feed (featured block + discovery rows)
+const { data: homeFeedData, pending: homeFeedPending } = await useFetch<{
+  featured: { large: any; small: any[] };
+  sections: any[];
+}>('/api/home/feed', {
   immediate: !searchQuery.value
 });
+
+watch(homeFeedData, () => { loading.value = false; }, { immediate: true });
 
 // Fetch channels for search
 const { data: channelsData } = await useFetch<{ channels: any[] }>(() => '/api/channels', {
@@ -171,46 +179,20 @@ const computeData = () => {
   if (searchQuery.value) {
     allVideos.value = searchData.value?.videos || [];
     searchPagination.value = searchData.value?.pagination || null;
-  } else {
-    allVideos.value = feedData.value?.videos || [];
   }
   loading.value = false;
 };
 
 // Watch for data changes
-watch([searchData, feedData, searchQuery], computeData, { immediate: true });
+watch([searchData, searchQuery], computeData, { immediate: true });
 
-// Hero video: first video
-const heroVideo = computed(() => allVideos.value[0] || null);
+const featuredLarge = computed(() => homeFeedData.value?.featured?.large ?? null);
+const featuredSmall = computed(() => homeFeedData.value?.featured?.small ?? []);
+const feedSections = computed(() => homeFeedData.value?.sections ?? []);
 
-// Recently added: first 10 (skip hero)
-const recentVideos = computed(() => allVideos.value.slice(1, 11));
-
-// Group remaining videos by channel (skip first 11 used above)
-const channelGroups = computed(() => {
-  const remaining = allVideos.value.slice(1); // include all except hero for channel rows
-  const groups: Record<string, { channelId: string; channelTitle: string; channelAvatar: string; videos: any[] }> = {};
-  
-  for (const video of remaining) {
-    const cid = video.channel_id;
-    if (!groups[cid]) {
-      groups[cid] = {
-        channelId: cid,
-        channelTitle: video.channel_title,
-        channelAvatar: video.channel_avatar,
-        videos: []
-      };
-    }
-    if (groups[cid].videos.length < 12) {
-      groups[cid].videos.push(video);
-    }
-  }
-  
-  // Only show channels with 2+ videos, sorted by video count
-  return Object.values(groups)
-    .filter(g => g.videos.length >= 2)
-    .sort((a, b) => b.videos.length - a.videos.length);
-});
+// Keep recentVideos and channelGroups for now; Task 9 will clean them up
+const recentVideos = computed(() => []);
+const channelGroups = computed(() => []);
 
 const changePage = (newPage: number) => {
   router.push({ path: '/', query: { ...route.query, page: newPage } });
@@ -289,12 +271,20 @@ const formatUploadDate = (dateStr: string | null): string => {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===== Hero Banner ===== */
-.hero-banner {
-  position: relative;
-  width: calc(100% + 48px);
-  margin: -24px -24px 28px -24px;
+/* ===== Featured Bento Block ===== */
+.featured-bento {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-rows: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
   height: 420px;
+}
+
+.featured-large {
+  grid-row: span 2;
+  position: relative;
+  border-radius: var(--border-radius-lg);
   overflow: hidden;
   cursor: pointer;
 }
@@ -312,7 +302,7 @@ const formatUploadDate = (dateStr: string | null): string => {
   transition: transform 8s ease, filter 0.5s ease;
 }
 
-.hero-banner:hover .hero-bg-img {
+.featured-large:hover .hero-bg-img {
   transform: scale(1.03);
   filter: brightness(0.45);
 }
@@ -329,14 +319,14 @@ const formatUploadDate = (dateStr: string | null): string => {
   left: 0;
   right: 0;
   height: 160px;
-  background: linear-gradient(to top, var(--bg-base, #0a0a0f) 0%, transparent 100%);
+  background: linear-gradient(to top, var(--bg-base) 0%, transparent 100%);
 }
 
 .hero-content {
   position: absolute;
-  bottom: 48px;
-  left: 48px;
-  max-width: 550px;
+  bottom: 32px;
+  left: 32px;
+  max-width: 90%;
   z-index: 2;
 }
 
@@ -358,24 +348,12 @@ const formatUploadDate = (dateStr: string | null): string => {
 }
 
 .hero-title {
-  font-size: 32px;
+  font-size: 26px;
   font-weight: 800;
   color: white;
   line-height: 1.2;
-  margin: 0 0 10px 0;
-  letter-spacing: -0.02em;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.hero-desc {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
-  line-height: 1.5;
   margin: 0 0 12px 0;
+  letter-spacing: -0.02em;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -405,7 +383,7 @@ const formatUploadDate = (dateStr: string | null): string => {
   gap: 8px;
   padding: 10px 28px;
   background: white;
-  color: #0a0a0f;
+  color: #0c0a12;
   border: none;
   border-radius: 6px;
   font-size: 15px;
@@ -417,6 +395,33 @@ const formatUploadDate = (dateStr: string | null): string => {
 .hero-play-btn:hover {
   background: rgba(255, 255, 255, 0.85);
   transform: scale(1.03);
+}
+
+.featured-small {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .featured-bento {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 240px repeat(2, auto);
+    height: auto;
+  }
+  .featured-large {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    height: 240px;
+  }
+  .hero-content { left: 24px; bottom: 24px; }
+  .hero-title { font-size: 20px; }
+}
+
+@media (max-width: 640px) {
+  .featured-bento {
+    grid-template-columns: 1fr;
+  }
+  .featured-large { height: 220px; }
 }
 
 /* ===== Content Rows ===== */
