@@ -256,18 +256,20 @@ const isScrubbing = ref(false);
 let controlsTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const chapterMarkers = computed(() => {
-  if (!videoDuration.value) return [];
+  const duration = videoDuration.value || props.video?.duration || 0;
+  if (!duration) return [];
   return (props.chapters || []).map((chapter) => ({
     start_time: chapter.start_time,
     title: chapter.title,
     source: chapter.source,
-    percent: (chapter.start_time / videoDuration.value) * 100,
+    percent: (chapter.start_time / duration) * 100,
   }));
 });
 
 const hoveredChapterTitle = computed(() => {
-  if (progressHoverPercent.value < 0 || !videoDuration.value) return null;
-  const hoveredTime = (progressHoverPercent.value / 100) * videoDuration.value;
+  const duration = videoDuration.value || props.video?.duration || 0;
+  if (progressHoverPercent.value < 0 || !duration) return null;
+  const hoveredTime = (progressHoverPercent.value / 100) * duration;
   const chaptersBeforeHover = (props.chapters || [])
     .filter((chapter) => chapter.start_time <= hoveredTime)
     .sort((a, b) => b.start_time - a.start_time);
