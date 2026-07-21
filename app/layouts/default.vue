@@ -64,32 +64,34 @@
     <div class="main-wrapper">
       <!-- Sidebar Navigation -->
       <aside class="sidebar">
-        <nav class="sidebar-nav">
-          <NuxtLink v-if="!user?.mustChangePassword" to="/" class="sidebar-link" active-class="active">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-            <span>Home</span>
-          </NuxtLink>
+        <div class="sidebar-inner">
+          <nav class="sidebar-nav">
+            <NuxtLink v-if="!user?.mustChangePassword" to="/" class="sidebar-link" active-class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <span>Home</span>
+            </NuxtLink>
 
-          <NuxtLink v-if="!user?.mustChangePassword" to="/shorts" class="sidebar-link" active-class="active">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-            <span>Shorts</span>
-          </NuxtLink>
+            <NuxtLink v-if="!user?.mustChangePassword" to="/shorts" class="sidebar-link" active-class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+              <span>Shorts</span>
+            </NuxtLink>
 
-          <NuxtLink v-if="!user?.mustChangePassword" to="/channels" class="sidebar-link" active-class="active">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
-            <span>Channels</span>
-          </NuxtLink>
+            <NuxtLink v-if="!user?.mustChangePassword" to="/channels" class="sidebar-link" active-class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
+              <span>Channels</span>
+            </NuxtLink>
 
-          <NuxtLink v-if="!user?.mustChangePassword" to="/subscriptions" class="sidebar-link" active-class="active">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
-            <span>Subscriptions</span>
-          </NuxtLink>
+            <NuxtLink v-if="!user?.mustChangePassword" to="/subscriptions" class="sidebar-link" active-class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+              <span>Subscriptions</span>
+            </NuxtLink>
 
-          <NuxtLink v-if="!user?.mustChangePassword" to="/playlists" class="sidebar-link" active-class="active">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-            <span>Playlists</span>
-          </NuxtLink>
-        </nav>
+            <NuxtLink v-if="!user?.mustChangePassword" to="/playlists" class="sidebar-link" active-class="active">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              <span>Playlists</span>
+            </NuxtLink>
+          </nav>
+        </div>
       </aside>
 
       <!-- Main Content Page slot -->
@@ -441,14 +443,33 @@ onUnmounted(() => {
 }
 
 .sidebar {
-  width: var(--sidebar-width);
-  background: transparent;
+  width: var(--sidebar-collapsed-width);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.sidebar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--sidebar-collapsed-width);
+  height: 100%;
   border-right: 1px solid rgba(255, 255, 255, 0.03);
   padding: 20px 12px;
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  transition: width var(--duration-base) var(--ease-standard), background-color var(--duration-base) var(--ease-standard), box-shadow var(--duration-base) var(--ease-standard);
+  z-index: 50;
+}
+
+.sidebar-inner:hover {
+  width: var(--sidebar-width);
   overflow-y: auto;
+  background-color: rgba(28, 24, 38, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .sidebar-nav {
@@ -468,6 +489,20 @@ onUnmounted(() => {
   color: var(--text-secondary);
   transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
   margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.sidebar-link svg {
+  flex-shrink: 0;
+}
+
+.sidebar-link span {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar-inner:hover .sidebar-link span {
+  opacity: 1;
 }
 
 .sidebar-link:hover {
@@ -506,8 +541,12 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .sidebar {
+  .sidebar-inner:hover {
     width: var(--sidebar-collapsed-width);
+    background-color: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    box-shadow: none;
   }
   .sidebar-link span, .sidebar-divider-title {
     display: none;
