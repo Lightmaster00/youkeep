@@ -95,8 +95,9 @@ const HOVER_DELAY_MS = 550;
 const PREVIEW_START_RATIO = 0.10;
 const PREVIEW_END_RATIO = 0.40;
 
+const instanceId = crypto.randomUUID();
 const { activePreviewId } = useVideoPreview();
-const isPreviewActive = computed(() => activePreviewId.value === props.video.id);
+const isPreviewActive = computed(() => activePreviewId.value === instanceId);
 const previewVideoEl = ref<HTMLVideoElement | null>(null);
 const previewProgressPercent = ref(0);
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
@@ -104,7 +105,7 @@ let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 const handleCardMouseEnter = () => {
   if (!props.video.local_video_path || !props.video.duration) return;
   hoverTimer = setTimeout(() => {
-    activePreviewId.value = props.video.id;
+    activePreviewId.value = instanceId;
   }, HOVER_DELAY_MS);
 };
 
@@ -113,7 +114,7 @@ const handleCardMouseLeave = () => {
     clearTimeout(hoverTimer);
     hoverTimer = null;
   }
-  if (activePreviewId.value === props.video.id) {
+  if (activePreviewId.value === instanceId) {
     activePreviewId.value = null;
   }
 };
@@ -150,7 +151,7 @@ watch(isPreviewActive, (active) => {
 
 onUnmounted(() => {
   if (hoverTimer) clearTimeout(hoverTimer);
-  if (activePreviewId.value === props.video.id) {
+  if (activePreviewId.value === instanceId) {
     activePreviewId.value = null;
   }
 });
