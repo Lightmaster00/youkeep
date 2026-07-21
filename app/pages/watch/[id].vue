@@ -23,6 +23,7 @@
             ref="videoPlayerRef"
             :video="video"
             :subtitles="subtitles"
+            :chapters="chapters"
             :token="token"
             :has-prev-video="hasPrevVideo"
             :has-next-video="hasNextVideo"
@@ -414,12 +415,13 @@ const reportWatchVideo = async () => {
 };
 
 // Fetch video metadata, comments and categories
-const { data: videoResponse, pending, error, refresh: refreshVideo } = await useFetch<{ video: any; comments?: any[]; categories?: any[]; subtitles?: any[] }>(() => {
+const { data: videoResponse, pending, error, refresh: refreshVideo } = await useFetch<{ video: any; comments?: any[]; categories?: any[]; subtitles?: any[]; chapters?: any[] }>(() => {
   return `/api/videos/${videoId.value}${token.value ? `?token=${token.value}` : ''}`;
 });
 const video = computed(() => videoResponse.value?.video || null);
 const comments = computed(() => videoResponse.value?.comments || []);
 const subtitles = computed(() => videoResponse.value?.subtitles || []);
+const chapters = computed(() => videoResponse.value?.chapters || []);
 
 // Custom error message extractor
 const errorMsg = computed(() => {

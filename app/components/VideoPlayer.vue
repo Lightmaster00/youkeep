@@ -64,12 +64,21 @@
         <div class="progress-buffered" :style="{ width: bufferedPercent + '%' }"></div>
         <div class="progress-played" :style="{ width: playedPercent + '%' }"></div>
         <div class="progress-scrubber" :style="{ left: playedPercent + '%' }"></div>
+        <div
+          v-for="chapter in chapterMarkers"
+          :key="chapter.start_time"
+          class="progress-chapter-marker"
+          :class="{ 'progress-chapter-marker--sponsorblock': chapter.source === 'sponsorblock' }"
+          :style="{ left: chapter.percent + '%' }"
+          :title="chapter.title"
+        ></div>
         <!-- Time Preview Tooltip -->
         <div
           v-if="progressHoverPercent >= 0"
           class="progress-tooltip"
           :style="{ left: Math.min(Math.max(progressHoverPercent, 5), 95) + '%' }"
         >
+          <span v-if="hoveredChapterTitle" class="progress-tooltip-chapter">{{ hoveredChapterTitle }}</span>
           {{ formatTime((progressHoverPercent / 100) * videoDuration) }}
         </div>
       </div>
@@ -202,11 +211,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 
 const props = defineProps<{
   video: any;
   subtitles: { code: string; label: string; url: string }[];
+  chapters?: { start_time: number; title: string; source: 'youtube' | 'sponsorblock' }[];
   token?: string;
   hasPrevVideo?: boolean;
   hasNextVideo?: boolean;
@@ -244,6 +254,25 @@ const bufferedPercent = ref(0);
 const progressHoverPercent = ref(-1);
 const isScrubbing = ref(false);
 let controlsTimeout: ReturnType<typeof setTimeout> | null = null;
+
+const chapterMarkers = computed(() => {
+  if (!videoDuration.value) return [];
+  return (props.chapters || []).map((chapter) => ({
+    start_time: chapter.start_time,
+    title: chapter.title,
+    source: chapter.source,
+    percent: (chapter.start_time / videoDuration.value) * 100,
+  }));
+});
+
+const hoveredChapterTitle = computed(() => {
+  if (progressHoverPercent.value < 0 || !videoDuration.value) return null;
+  const hoveredTime = (progressHoverPercent.value / 100) * videoDuration.value;
+  const chaptersBeforeHover = (props.chapters || [])
+    .filter((chapter) => chapter.start_time <= hoveredTime)
+    .sort((a, b) => b.start_time - a.start_time);
+  return chaptersBeforeHover.length > 0 ? chaptersBeforeHover[0].title : null;
+});
 
 const playbackSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -810,6 +839,26 @@ defineExpose({ videoEl: videoPlayer });
   font-weight: 600;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.progress-chapter-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.progress-chapter-marker--sponsorblock {
+  background: rgba(239, 68, 68, 0.6);
+}
+
+.progress-tooltip-chapter {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 2px;
 }
 
 /* Controls Row */

@@ -62,9 +62,16 @@ export default defineEventHandler(async (event) => {
 
   // Récupérer les commentaires associés
   const comments = db.prepare(`
-    SELECT * FROM comments 
-    WHERE video_id = ? 
+    SELECT * FROM comments
+    WHERE video_id = ?
     ORDER BY like_count DESC, created_at DESC
+  `).all(videoId);
+
+  // Retrieve chapters for this video
+  const chapters = db.prepare(`
+    SELECT start_time, title, source FROM video_chapters
+    WHERE video_id = ?
+    ORDER BY start_time ASC
   `).all(videoId);
 
   // Détecter les sous-titres locaux disponibles (.vtt)
@@ -113,5 +120,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { video, comments, subtitles };
+  return { video, comments, subtitles, chapters };
 });
