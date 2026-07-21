@@ -4,6 +4,8 @@ import path from 'path';
 import https from 'https';
 import crypto from 'crypto';
 import { Cron } from 'croner';
+import { getDb } from './db';
+import { parseChaptersFromInfoData, buildSponsorBlockArgs } from './chapters';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -606,7 +608,16 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
       const ytdlPath = await getYtdlPath();
     const db = getDb();
     const ffmpegAvailable = isFfmpegAvailable();
-    
+
+    const sponsorBlockSettingRows = db.prepare(
+      `SELECT key, value FROM settings WHERE key LIKE 'sponsorblock_%'`
+    ).all() as { key: string; value: string }[];
+    const sponsorBlockSettings: Record<string, string> = {};
+    for (const row of sponsorBlockSettingRows) {
+      sponsorBlockSettings[row.key.replace('sponsorblock_', '')] = row.value;
+    }
+    const sponsorBlockArgs = buildSponsorBlockArgs(sponsorBlockSettings);
+
     const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
     const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0 && isDirWritable(channel.custom_save_path)
       ? channel.custom_save_path
@@ -642,6 +653,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     if (ffmpegAvailable) {
       args.push('--convert-thumbnails', 'jpg');
       args.push('--merge-output-format', 'mp4');
+      args.push(...sponsorBlockArgs);
     }
 
     args.push(
@@ -845,7 +857,23 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
               });
               transaction(infoData.comments);
             }
-            
+
+            // Ingest chapters (native YouTube chapters + any SponsorBlock-marked segments)
+            const parsedChapters = parseChaptersFromInfoData(infoData);
+            db.prepare('DELETE FROM video_chapters WHERE video_id = ?').run(videoId);
+            if (parsedChapters.length > 0) {
+              const insertChapter = db.prepare(`
+                INSERT INTO video_chapters (id, video_id, start_time, title, source)
+                VALUES (?, ?, ?, ?, ?)
+              `);
+              const chapterTransaction = db.transaction((chaptersToInsert: typeof parsedChapters) => {
+                for (const chapter of chaptersToInsert) {
+                  insertChapter.run(crypto.randomUUID(), videoId, chapter.start_time, chapter.title, chapter.source);
+                }
+              });
+              chapterTransaction(parsedChapters);
+            }
+
             // Remove the info JSON to save disk space
             fs.unlinkSync(infoJsonFile);
           } catch (err) {

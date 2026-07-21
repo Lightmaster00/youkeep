@@ -135,6 +135,15 @@ export function getDb(): Database.Database {
       FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS video_chapters (
+      id TEXT PRIMARY KEY,
+      video_id TEXT NOT NULL,
+      start_time REAL NOT NULL,
+      title TEXT NOT NULL,
+      source TEXT NOT NULL CHECK(source IN ('youtube', 'sponsorblock')),
+      FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS user_history (
       user_id TEXT NOT NULL,
       video_id TEXT NOT NULL,
@@ -301,6 +310,16 @@ export function getDb(): Database.Database {
   if (defaultDirCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('default_downloads_dir', '')").run();
     console.log('Seeded setting default_downloads_dir: empty');
+  }
+
+  const sponsorBlockCategorySeeds = ['sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'filler'];
+  for (const category of sponsorBlockCategorySeeds) {
+    const key = `sponsorblock_${category}`;
+    const check = db.prepare('SELECT COUNT(*) as count FROM settings WHERE key = ?').get(key) as { count: number };
+    if (check.count === 0) {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, 'ignore');
+      console.log(`Seeded setting ${key}: ignore`);
+    }
   }
 
   // Backfill size_bytes for completed videos if null
