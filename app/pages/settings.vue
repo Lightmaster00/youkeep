@@ -228,9 +228,9 @@
             
             <div class="queue-actions-row">
               <!-- Global Pause/Resume Button -->
-              <button 
-                @click="toggleGlobalPause" 
-                class="btn" 
+              <button
+                @click="toggleGlobalPause"
+                class="btn"
                 :class="isPaused ? 'btn-primary-glow' : 'btn-secondary-dark'"
                 :disabled="pausingOrResuming"
               >
@@ -238,6 +238,21 @@
                 <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
                 <span>{{ isPaused ? 'Resume Sync' : 'Pause Sync' }}</span>
               </button>
+
+              <div class="concurrency-control" style="display: inline-flex; align-items: center; gap: 8px;">
+                <label for="max-concurrent-downloads" style="font-size: 13px; color: var(--text-secondary);">Max concurrent downloads</label>
+                <input
+                  id="max-concurrent-downloads"
+                  type="number"
+                  min="1"
+                  v-model.number="maxConcurrentDownloads"
+                  class="form-input"
+                  style="width: 64px;"
+                />
+                <button @click="handleSaveConcurrency" class="btn btn-secondary-dark btn-sm" :disabled="savingConcurrency">
+                  {{ savingConcurrency ? 'Saving...' : 'Save' }}
+                </button>
+              </div>
 
               <button @click="handleSyncAll" class="btn btn-secondary-dark" :disabled="syncingAll">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2" :class="{ 'spin-anim': syncingAll }"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
@@ -936,6 +951,8 @@ const syncingAll = ref(false);
 const retryingFailed = ref(false);
 const isPaused = ref(false);
 const pausingOrResuming = ref(false);
+const maxConcurrentDownloads = ref(2);
+const savingConcurrency = ref(false);
 
 const activeDownloadCount = computed(() => {
   return queue.value.filter(v => v.download_status === 'downloading').length;
@@ -1059,6 +1076,30 @@ const toggleGlobalPause = async () => {
     toast.error(err.data?.statusMessage || 'An error occurred.');
   } finally {
     pausingOrResuming.value = false;
+  }
+};
+
+const fetchConcurrency = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/downloader/concurrency');
+    maxConcurrentDownloads.value = data.maxConcurrentDownloads ?? 2;
+  } catch (err) {
+    console.error('Failed to fetch concurrency setting:', err);
+  }
+};
+
+const handleSaveConcurrency = async () => {
+  savingConcurrency.value = true;
+  try {
+    await $fetch('/api/admin/downloader/concurrency', {
+      method: 'POST',
+      body: { maxConcurrentDownloads: maxConcurrentDownloads.value }
+    });
+    toast.success('Concurrency setting saved.');
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to save concurrency setting.');
+  } finally {
+    savingConcurrency.value = false;
   }
 };
 
@@ -1608,6 +1649,7 @@ onMounted(() => {
     fetchSchedule();
     fetchDefaultDir();
     fetchSponsorBlockSettings();
+    fetchConcurrency();
     runPolling();
   }
 });
