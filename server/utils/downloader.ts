@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { parseChaptersFromInfoData, buildSponsorBlockArgs } from './chapters';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads } from './concurrency';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -50,11 +51,13 @@ const G_CRON = Symbol.for('YouKeep.activeCronJob');
 const G_PROCESSING = Symbol.for('YouKeep.isProcessing');
 const G_SHOULD_RUN = Symbol.for('YouKeep.workerShouldRun');
 const G_PROCESSES = Symbol.for('YouKeep.activeProcesses');
+const G_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeDownloadCount');
 
 if (!(G_CRON in _g)) _g[G_CRON] = null;
 if (!(G_PROCESSING in _g)) _g[G_PROCESSING] = false;
 if (!(G_SHOULD_RUN in _g)) _g[G_SHOULD_RUN] = false;
 if (!(G_PROCESSES in _g)) _g[G_PROCESSES] = new Map<string, any>();
+if (!(G_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_ACTIVE_DOWNLOAD_COUNT] = 0;
 
 function getActiveCronJob(): Cron | null { return _g[G_CRON]; }
 function setActiveCronJob(val: Cron | null) { _g[G_CRON] = val; }
@@ -85,6 +88,10 @@ function getWorkerShouldRun(): boolean { return _g[G_SHOULD_RUN]; }
 function setWorkerShouldRun(val: boolean) { _g[G_SHOULD_RUN] = val; }
 
 export const activeProcesses: Map<string, any> = _g[G_PROCESSES];
+
+function getActiveDownloadCount(): number { return _g[G_ACTIVE_DOWNLOAD_COUNT]; }
+function incrementActiveDownloadCount() { _g[G_ACTIVE_DOWNLOAD_COUNT]++; }
+function decrementActiveDownloadCount() { _g[G_ACTIVE_DOWNLOAD_COUNT] = Math.max(0, _g[G_ACTIVE_DOWNLOAD_COUNT] - 1); }
 
 let workerWakeResolver: (() => void) | null = null;
 
@@ -261,7 +268,7 @@ export async function startQueueWorker() {
   try {
     const db = getDb();
     let consecutiveSystemErrors = 0;
-    
+
     while (getWorkerShouldRun()) {
       try {
         // Check if global download is paused
@@ -272,13 +279,21 @@ export async function startQueueWorker() {
           continue;
         }
 
+        // Respect the concurrency limit, read fresh every iteration so changes apply live
+        const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'max_concurrent_downloads'").get() as { value: string } | undefined;
+        const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
+        if (!hasCapacityForMoreDownloads(getActiveDownloadCount(), maxConcurrent)) {
+          await sleepOrWakeable(1000);
+          continue;
+        }
+
         // Find next pending video from active channels or manually queued, respecting priority and resuming partial downloads first
         const video = db.prepare(`
-          SELECT v.id, v.title, v.channel_id 
+          SELECT v.id, v.title, v.channel_id
           FROM videos v
           JOIN channels c ON v.channel_id = c.id
           WHERE v.download_status = 'pending' AND (c.sync_status = 'downloading' OR v.is_manually_queued = 1)
-          ORDER BY 
+          ORDER BY
             v.priority DESC,
             v.is_short DESC,
             CASE WHEN v.download_progress > 0 THEN 0 ELSE 1 END,
@@ -294,56 +309,23 @@ export async function startQueueWorker() {
 
         consecutiveSystemErrors = 0;
         addLog(`Lancement du téléchargement : "${video.title}" (ID: ${video.id})`);
-        
+
         // Update status to downloading, keeping the existing progress if it exists
         db.prepare(`
-          UPDATE videos 
-          SET download_status = 'downloading', 
-              download_progress = COALESCE(download_progress, 0), 
-              download_speed = '0KB/s', 
-              download_eta = '--:--', 
+          UPDATE videos
+          SET download_status = 'downloading',
+              download_progress = COALESCE(download_progress, 0),
+              download_speed = '0KB/s',
+              download_eta = '--:--',
               last_error = null
           WHERE id = ?
         `).run(video.id);
 
-        try {
-          await downloadVideoFile(video.id, video.channel_id);
-          
-          // Mark as completed
-          db.prepare(`
-            UPDATE videos 
-            SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = null
-            WHERE id = ?
-          `).run(video.id);
-          addLog(`Téléchargement RÉUSSI : "${video.title}"`);
-        } catch (err: any) {
-          const errMsg = err.message || String(err);
-          addLog(`ÉCHEC du téléchargement pour la vidéo "${video.title}" (${video.id}) : ${errMsg}`);
-          
-          // Check if the download was interrupted intentionally (e.g. paused/cancelled via API or global paused setting)
-          const currentVideo = db.prepare('SELECT download_status FROM videos WHERE id = ?').get(video.id) as { download_status: string } | undefined;
-          const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
-          const isPausedGlobal = pausedSetting?.value === '1';
-
-          if (isPausedGlobal || currentVideo?.download_status === 'pending') {
-            addLog(`Téléchargement de la vidéo "${video.title}" (${video.id}) interrompu ou mis en pause intentionnellement.`);
-            // Ensure status is pending, speed/eta are null, but preserve progress and files
-            db.prepare(`
-              UPDATE videos 
-              SET download_status = 'pending', download_speed = null, download_eta = null
-              WHERE id = ?
-            `).run(video.id);
-          } else {
-            // Put the video back to pending but move it to the end of the queue by updating created_at
-            db.prepare(`
-              UPDATE videos 
-              SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, created_at = ?
-              WHERE id = ?
-            `).run(errMsg, Date.now(), video.id);
-          }
-          // Brief pause before trying next video to avoid hammering on repeat errors
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
+        // Claim a capacity slot synchronously (no await between the check above and here,
+        // so no other loop iteration can interleave) then launch the download without
+        // awaiting it, so the orchestrator can immediately go check for more capacity/work.
+        incrementActiveDownloadCount();
+        runSingleDownload(video.id, video.title, video.channel_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
         addLog(`Erreur système dans la boucle du worker (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
@@ -361,6 +343,58 @@ export async function startQueueWorker() {
     setIsProcessing(false);
     setWorkerShouldRun(false);
     addLog('Worker de file d\'attente arrêté.');
+  }
+}
+
+/**
+ * Runs a single video download to completion and updates its DB status accordingly.
+ * Deliberately not awaited by the orchestrator loop in startQueueWorker: a failure or
+ * long runtime here is isolated to this video and never blocks other concurrent downloads.
+ */
+async function runSingleDownload(videoId: string, videoTitle: string, channelId: string): Promise<void> {
+  const db = getDb();
+  try {
+    await downloadVideoFile(videoId, channelId);
+
+    // Mark as completed
+    db.prepare(`
+      UPDATE videos
+      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = null
+      WHERE id = ?
+    `).run(videoId);
+    addLog(`Téléchargement RÉUSSI : "${videoTitle}"`);
+  } catch (err: any) {
+    const errMsg = err.message || String(err);
+    addLog(`ÉCHEC du téléchargement pour la vidéo "${videoTitle}" (${videoId}) : ${errMsg}`);
+
+    // Check if the download was interrupted intentionally (e.g. paused/cancelled via API or global paused setting)
+    const currentVideo = db.prepare('SELECT download_status FROM videos WHERE id = ?').get(videoId) as { download_status: string } | undefined;
+    const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
+    const isPausedGlobal = pausedSetting?.value === '1';
+
+    if (isPausedGlobal || currentVideo?.download_status === 'pending') {
+      addLog(`Téléchargement de la vidéo "${videoTitle}" (${videoId}) interrompu ou mis en pause intentionnellement.`);
+      // Ensure status is pending, speed/eta are null, but preserve progress and files
+      db.prepare(`
+        UPDATE videos
+        SET download_status = 'pending', download_speed = null, download_eta = null
+        WHERE id = ?
+      `).run(videoId);
+    } else {
+      // Put the video back to pending but move it to the end of the queue by updating created_at
+      db.prepare(`
+        UPDATE videos
+        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, created_at = ?
+        WHERE id = ?
+      `).run(errMsg, Date.now(), videoId);
+    }
+    // Brief pause so a rapidly-failing video isn't immediately re-picked; scoped to this
+    // video's own task so it doesn't block the orchestrator or other concurrent downloads.
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } finally {
+    decrementActiveDownloadCount();
+    // Wake the orchestrator in case it's sleeping on a "no capacity" or "no work" check
+    wakeWorker();
   }
 }
 
