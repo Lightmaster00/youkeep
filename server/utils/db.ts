@@ -190,6 +190,59 @@ export function getDb(): Database.Database {
       FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
       FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS music_artists (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT UNIQUE,
+      name TEXT NOT NULL,
+      description TEXT,
+      avatar_url TEXT,
+      banner_url TEXT,
+      sync_status TEXT DEFAULT 'paused',
+      visibility TEXT DEFAULT 'public',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS music_albums (
+      id TEXT PRIMARY KEY,
+      artist_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      release_year INTEGER,
+      cover_url TEXT,
+      source TEXT NOT NULL CHECK(source IN ('youtube', 'manual')),
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS music_tracks (
+      id TEXT PRIMARY KEY,
+      artist_id TEXT NOT NULL,
+      album_id TEXT,
+      title TEXT NOT NULL,
+      track_number INTEGER,
+      genre TEXT,
+      language TEXT,
+      duration INTEGER,
+      view_count INTEGER,
+      upload_date TEXT,
+      download_status TEXT DEFAULT 'pending',
+      download_progress INTEGER DEFAULT 0,
+      download_speed TEXT,
+      download_eta TEXT,
+      last_error TEXT,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE,
+      FOREIGN KEY (album_id) REFERENCES music_albums(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS music_track_artists (
+      track_id TEXT NOT NULL,
+      artist_id TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('primary', 'feat')),
+      PRIMARY KEY (track_id, artist_id),
+      FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE,
+      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
+    );
   `);
 
   // Run schema updates if columns are missing (database migration)
