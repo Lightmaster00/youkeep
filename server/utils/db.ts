@@ -322,6 +322,12 @@ export function getDb(): Database.Database {
     }
   }
 
+  const maxConcurrentCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'max_concurrent_downloads'").get() as { count: number };
+  if (maxConcurrentCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('max_concurrent_downloads', '2')").run();
+    console.log('Seeded setting max_concurrent_downloads: 2');
+  }
+
   // Backfill size_bytes for completed videos if null
   try {
     const completedVideos = db.prepare("SELECT id, channel_id FROM videos WHERE download_status = 'completed' AND size_bytes IS NULL").all() as any[];
