@@ -188,6 +188,11 @@ export async function ingestMusicUrl(
     ON CONFLICT(id) DO UPDATE SET title = excluded.title
   `).run(trackId, artistId, data.title || `Track ${trackId}`, data.duration || null, data.view_count || null, data.upload_date || null, Date.now());
 
+  const artistState = db.prepare('SELECT sync_status FROM music_artists WHERE id = ?').get(artistId) as { sync_status: string } | undefined;
+  if (artistState?.sync_status === 'downloading') {
+    startMusicQueueWorker();
+  }
+
   return {
     success: true,
     message: `Track "${data.title || trackId}" ingested.`,
