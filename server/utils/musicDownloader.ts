@@ -13,10 +13,12 @@ const _g = globalThis as any;
 const G_MUSIC_PROCESSING = Symbol.for('YouKeep.isMusicProcessing');
 const G_MUSIC_SHOULD_RUN = Symbol.for('YouKeep.musicWorkerShouldRun');
 const G_MUSIC_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeMusicDownloadCount');
+const G_MUSIC_PROCESSES = Symbol.for('YouKeep.activeMusicProcesses');
 
 if (!(G_MUSIC_PROCESSING in _g)) _g[G_MUSIC_PROCESSING] = false;
 if (!(G_MUSIC_SHOULD_RUN in _g)) _g[G_MUSIC_SHOULD_RUN] = false;
 if (!(G_MUSIC_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] = 0;
+if (!(G_MUSIC_PROCESSES in _g)) _g[G_MUSIC_PROCESSES] = new Map<string, any>();
 
 function getIsMusicProcessing(): boolean { return _g[G_MUSIC_PROCESSING]; }
 function setIsMusicProcessing(val: boolean) { _g[G_MUSIC_PROCESSING] = val; }
@@ -53,7 +55,7 @@ export function wakeMusicWorker() {
 // and avoids coupling this file to an unrelated module's internals.
 const MUSIC_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
-export const activeMusicProcesses: Map<string, any> = new Map();
+export const activeMusicProcesses: Map<string, any> = _g[G_MUSIC_PROCESSES];
 
 export function getMusicDownloadsDir(): string {
   const defaultPath = '/downloads/music';
