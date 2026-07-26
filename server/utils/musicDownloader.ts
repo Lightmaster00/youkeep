@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { getDb } from './db';
-import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable } from './downloader';
+import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads } from './concurrency';
 
@@ -75,11 +75,14 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string): voi
   const artistDir = path.join(basePath, sanitizeFolderName(artist?.name || artistId));
 
   const audioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
+  const thumbExtensions = ['jpg', 'jpeg', 'webp', 'png'];
   const filesToRemove = [
     ...audioExtensions.map(ext => path.join(artistDir, `${trackId}.${ext}`)),
-    path.join(artistDir, `${trackId}.jpg`),
-    path.join(artistDir, `${trackId}.mp4.part`),
-    path.join(artistDir, `${trackId}.mp4.ytdl`),
+    ...audioExtensions.flatMap(ext => [
+      path.join(artistDir, `${trackId}.${ext}.part`),
+      path.join(artistDir, `${trackId}.${ext}.ytdl`),
+    ]),
+    ...thumbExtensions.map(ext => path.join(artistDir, `${trackId}.${ext}`)),
   ];
 
   filesToRemove.forEach(f => {
@@ -225,12 +228,21 @@ export async function ingestMusicUrl(
   let artistId: string;
   if (existingArtist) {
     artistId = existingArtist.id;
+    if (options.sync_status !== undefined || options.visibility !== undefined) {
+      db.prepare(`
+        UPDATE music_artists
+        SET sync_status = COALESCE(?, sync_status), visibility = COALESCE(?, visibility)
+        WHERE id = ?
+      `).run(options.sync_status ?? null, options.visibility ?? null, artistId);
+    }
   } else {
     artistId = crypto.randomUUID();
+    const initialSyncStatus = options.sync_status || 'paused';
+    const initialVisibility = options.visibility || 'public';
     db.prepare(`
       INSERT INTO music_artists (id, channel_id, name, sync_status, visibility, created_at)
-      VALUES (?, ?, ?, 'paused', 'public', ?)
-    `).run(artistId, channelId, channelTitle, Date.now());
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(artistId, channelId, channelTitle, initialSyncStatus, initialVisibility, Date.now());
   }
 
   const exists = db.prepare('SELECT 1 FROM music_tracks WHERE id = ?').get(trackId);
@@ -261,6 +273,11 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
     try {
       const ytdlPath = await getYtdlPath();
       const db = getDb();
+
+      if (!isFfmpegAvailable()) {
+        reject(new Error('ffmpeg est requis pour l\'extraction audio et n\'a pas été trouvé sur le système.'));
+        return;
+      }
 
       const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
       const folderName = sanitizeFolderName(artist?.name || artistId);
@@ -589,4 +606,24 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
   }
 
   return true;
+}
+
+/**
+ * Resets any stale music downloads stuck in 'downloading' status back to 'pending'.
+ * Mirrors resetStaleDownloads in downloader.ts.
+ */
+export function resetStaleMusicDownloads() {
+  try {
+    const db = getDb();
+    const result = db.prepare(`
+      UPDATE music_tracks
+      SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null
+      WHERE download_status = 'downloading'
+    `).run();
+    if (result.changes > 0) {
+      addLog(`Réinitialisation de ${result.changes} téléchargements musicaux interrompus.`);
+    }
+  } catch (err: any) {
+    console.error('Failed to reset stale music downloads:', err);
+  }
 }
