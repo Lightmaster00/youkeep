@@ -5,6 +5,47 @@ import crypto from 'crypto';
 import { getDb } from './db';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads } from './concurrency';
+
+// Define global-backed state to survive development HMR module hot reloads,
+// same pattern as downloader.ts's own worker state.
+const _g = globalThis as any;
+const G_MUSIC_PROCESSING = Symbol.for('YouKeep.isMusicProcessing');
+const G_MUSIC_SHOULD_RUN = Symbol.for('YouKeep.musicWorkerShouldRun');
+const G_MUSIC_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeMusicDownloadCount');
+
+if (!(G_MUSIC_PROCESSING in _g)) _g[G_MUSIC_PROCESSING] = false;
+if (!(G_MUSIC_SHOULD_RUN in _g)) _g[G_MUSIC_SHOULD_RUN] = false;
+if (!(G_MUSIC_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] = 0;
+
+function getIsMusicProcessing(): boolean { return _g[G_MUSIC_PROCESSING]; }
+function setIsMusicProcessing(val: boolean) { _g[G_MUSIC_PROCESSING] = val; }
+function getMusicWorkerShouldRun(): boolean { return _g[G_MUSIC_SHOULD_RUN]; }
+function setMusicWorkerShouldRun(val: boolean) { _g[G_MUSIC_SHOULD_RUN] = val; }
+function getActiveMusicDownloadCount(): number { return _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT]; }
+function incrementActiveMusicDownloadCount() { _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT]++; }
+function decrementActiveMusicDownloadCount() { _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] = Math.max(0, _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] - 1); }
+
+let musicWorkerWakeResolver: (() => void) | null = null;
+
+function sleepOrWakeableMusic(ms: number) {
+  return new Promise<void>(resolve => {
+    let timeoutId: any = null;
+    const cleanResolve = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      musicWorkerWakeResolver = null;
+      resolve();
+    };
+    musicWorkerWakeResolver = cleanResolve;
+    timeoutId = setTimeout(cleanResolve, ms);
+  });
+}
+
+export function wakeMusicWorker() {
+  if (musicWorkerWakeResolver) {
+    musicWorkerWakeResolver();
+  }
+}
 
 // Maximum time (ms) a single audio download is allowed to run before being killed.
 // Duplicated from downloader.ts's DOWNLOAD_TIMEOUT_MS (not exported there) rather
@@ -384,4 +425,166 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
       reject(err);
     }
   });
+}
+
+export async function startMusicQueueWorker() {
+  if (getIsMusicProcessing()) {
+    addLog('Worker musique déjà en cours d\'exécution. Réveil du worker...');
+    wakeMusicWorker();
+    return;
+  }
+  setIsMusicProcessing(true);
+  setMusicWorkerShouldRun(true);
+  addLog('Démarrage du worker de musique (mode persistant)...');
+
+  try {
+    const db = getDb();
+    let consecutiveSystemErrors = 0;
+
+    while (getMusicWorkerShouldRun()) {
+      try {
+        const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
+        if (pausedSetting?.value === '1') {
+          await sleepOrWakeableMusic(5000);
+          continue;
+        }
+
+        const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'music_max_concurrent_downloads'").get() as { value: string } | undefined;
+        const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
+        if (!hasCapacityForMoreDownloads(getActiveMusicDownloadCount(), maxConcurrent)) {
+          await sleepOrWakeableMusic(1000);
+          continue;
+        }
+
+        const track = db.prepare(`
+          SELECT t.id, t.title, t.artist_id
+          FROM music_tracks t
+          JOIN music_artists a ON t.artist_id = a.id
+          WHERE t.download_status = 'pending' AND a.sync_status = 'downloading'
+          ORDER BY
+            CASE WHEN t.download_progress > 0 THEN 0 ELSE 1 END,
+            t.created_at ASC
+          LIMIT 1
+        `).get() as { id: string; title: string; artist_id: string } | undefined;
+
+        if (!track) {
+          await sleepOrWakeableMusic(3000);
+          continue;
+        }
+
+        consecutiveSystemErrors = 0;
+        addLog(`Lancement du téléchargement audio : "${track.title}" (ID: ${track.id})`);
+
+        db.prepare(`
+          UPDATE music_tracks
+          SET download_status = 'downloading',
+              download_progress = COALESCE(download_progress, 0),
+              download_speed = '0KB/s',
+              download_eta = '--:--',
+              last_error = null
+          WHERE id = ?
+        `).run(track.id);
+
+        incrementActiveMusicDownloadCount();
+        runSingleMusicDownload(track.id, track.title, track.artist_id);
+      } catch (loopErr: any) {
+        consecutiveSystemErrors++;
+        addLog(`Erreur système dans la boucle du worker musique (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
+        if (consecutiveSystemErrors >= 5) {
+          addLog('Trop d\'erreurs système consécutives. Arrêt du worker musique.');
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+  } catch (err: any) {
+    addLog(`Erreur générale fatale du worker musique : ${err.message || err}`);
+  } finally {
+    setIsMusicProcessing(false);
+    setMusicWorkerShouldRun(false);
+    addLog('Worker de musique arrêté.');
+  }
+}
+
+/**
+ * Runs a single track download to completion and updates its DB status accordingly.
+ * Not awaited by the orchestrator loop above — mirrors runSingleDownload in downloader.ts.
+ */
+async function runSingleMusicDownload(trackId: string, trackTitle: string, artistId: string): Promise<void> {
+  const db = getDb();
+  try {
+    await downloadMusicTrackFile(trackId, artistId);
+
+    db.prepare(`
+      UPDATE music_tracks
+      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = null
+      WHERE id = ?
+    `).run(trackId);
+    addLog(`Téléchargement audio RÉUSSI : "${trackTitle}"`);
+  } catch (err: any) {
+    const errMsg = err.message || String(err);
+    addLog(`ÉCHEC du téléchargement audio pour la track "${trackTitle}" (${trackId}) : ${errMsg}`);
+
+    const currentTrack = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
+    const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
+    const isPausedGlobal = pausedSetting?.value === '1';
+
+    if (isPausedGlobal || currentTrack?.download_status === 'pending') {
+      addLog(`Téléchargement de la track "${trackTitle}" (${trackId}) interrompu ou mis en pause intentionnellement.`);
+      db.prepare(`
+        UPDATE music_tracks
+        SET download_status = 'pending', download_speed = null, download_eta = null
+        WHERE id = ?
+      `).run(trackId);
+    } else {
+      db.prepare(`
+        UPDATE music_tracks
+        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?
+        WHERE id = ?
+      `).run(errMsg, Date.now(), trackId);
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } finally {
+    decrementActiveMusicDownloadCount();
+    wakeMusicWorker();
+  }
+}
+
+/**
+ * Terminates an active music download process and deletes temporary files.
+ * Mirrors cancelDownload in downloader.ts.
+ */
+export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'pending' = 'pending', keepProgressAndFiles = false): boolean {
+  const child = activeMusicProcesses.get(trackId);
+  const db = getDb();
+
+  if (child) {
+    try {
+      child.kill('SIGKILL');
+    } catch (e) {}
+    activeMusicProcesses.delete(trackId);
+  }
+
+  if (keepProgressAndFiles) {
+    db.prepare(`
+      UPDATE music_tracks
+      SET download_status = ?, download_speed = null, download_eta = null
+      WHERE id = ?
+    `).run(targetStatus, trackId);
+  } else {
+    db.prepare(`
+      UPDATE music_tracks
+      SET download_status = ?, download_progress = 0, download_speed = null, download_eta = null
+      WHERE id = ?
+    `).run(targetStatus, trackId);
+  }
+
+  if (!keepProgressAndFiles) {
+    const track = db.prepare('SELECT artist_id FROM music_tracks WHERE id = ?').get(trackId) as { artist_id: string } | undefined;
+    if (track) {
+      cleanupPartialMusicFiles(trackId, track.artist_id);
+    }
+  }
+
+  return true;
 }
