@@ -492,7 +492,7 @@ Note: this references `startMusicQueueWorker`, which doesn't exist yet — it's 
 
 - [ ] **Step 2: Confirm the expected, specific type error**
 
-Run: `npx vue-tsc --noEmit -p .`
+Run: `npx vue-tsc -b --noEmit`
 Expected: exactly one error, referencing `startMusicQueueWorker` as not found/not defined in `server/utils/musicDownloader.ts`. If there are other errors, or a different error, stop and report — something else is wrong.
 
 - [ ] **Step 3: Commit**
@@ -734,7 +734,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
 
 - [ ] **Step 3: Confirm the same single expected type error persists**
 
-Run: `npx vue-tsc --noEmit -p .`
+Run: `npx vue-tsc -b --noEmit`
 Expected: still exactly one error, still about `startMusicQueueWorker` not being defined — nothing new. If `downloadMusicTrackFile` or the new imports introduce any other error, stop and fix before proceeding; do not carry a second, different error into Task 6.
 
 - [ ] **Step 4: Commit**
@@ -987,7 +987,7 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
 
 - [ ] **Step 3: Full type-check — must now be completely clean**
 
-Run: `npx vue-tsc --noEmit -p .`
+Run: `npx vue-tsc -b --noEmit`
 Expected: no errors at all. The forward reference from Task 4 is now resolved.
 
 - [ ] **Step 4: Run the full test suite**
@@ -1187,7 +1187,7 @@ export default defineEventHandler(async (event) => {
 
 - [ ] **Step 6: Type-check**
 
-Run: `npx vue-tsc --noEmit -p .`
+Run: `npx vue-tsc -b --noEmit`
 Expected: no errors.
 
 - [ ] **Step 7: Commit**
