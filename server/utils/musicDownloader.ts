@@ -4,6 +4,15 @@ import path from 'path';
 import crypto from 'crypto';
 import { getDb } from './db';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable } from './downloader';
+import { parseMusicMetadataFromInfoData } from './musicMetadata';
+
+// Maximum time (ms) a single audio download is allowed to run before being killed.
+// Duplicated from downloader.ts's DOWNLOAD_TIMEOUT_MS (not exported there) rather
+// than exporting it — this is a constant, not logic, so the duplication is cheap
+// and avoids coupling this file to an unrelated module's internals.
+const MUSIC_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+export const activeMusicProcesses: Map<string, any> = new Map();
 
 export function getMusicDownloadsDir(): string {
   const defaultPath = '/downloads/music';
@@ -198,4 +207,181 @@ export async function ingestMusicUrl(
     message: `Track "${data.title || trackId}" ingested.`,
     count: exists ? 0 : 1
   };
+}
+
+/**
+ * Downloads a track's audio using the spawned yt-dlp process.
+ * Mirrors downloadVideoFile in downloader.ts, adapted for audio-only extraction.
+ */
+function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void> {
+  return new Promise<void>(async (resolve, reject) => {
+    try {
+      const ytdlPath = await getYtdlPath();
+      const db = getDb();
+
+      const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
+      const folderName = sanitizeFolderName(artist?.name || artistId);
+      const baseDir = getMusicDownloadsDir();
+      const artistDir = path.join(baseDir, folderName);
+
+      if (!fs.existsSync(artistDir)) {
+        fs.mkdirSync(artistDir, { recursive: true });
+      }
+
+      const outputTemplate = path.join(artistDir, `${trackId}.%(ext)s`);
+      const targetUrl = `https://www.youtube.com/watch?v=${trackId}`;
+
+      const args = [
+        '-x',
+        '-f', 'bestaudio/best',
+        '-o', outputTemplate,
+        '--write-thumbnail',
+        '--write-info-json',
+        '--no-playlist',
+        targetUrl
+      ];
+
+      const env = buildSpawnEnv();
+      addLog(`Lancement du téléchargement audio : ${ytdlPath} ${args.join(' ')}`);
+      const child = spawn(ytdlPath, args, { env });
+      activeMusicProcesses.set(trackId, child);
+
+      let settled = false;
+      const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
+      const watchdog = setTimeout(() => {
+        if (!settled) {
+          addLog(`yt-dlp [${trackId}] timeout après ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
+          try { child.kill('SIGKILL'); } catch (e) {}
+          activeMusicProcesses.delete(trackId);
+          cleanupPartialMusicFiles(trackId, artistId);
+          settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
+        }
+      }, MUSIC_DOWNLOAD_TIMEOUT_MS);
+
+      child.on('error', (err) => {
+        clearTimeout(watchdog);
+        addLog(`yt-dlp [${trackId}] process error : ${err.message || err}`);
+        activeMusicProcesses.delete(trackId);
+        settle(() => reject(err));
+      });
+
+      child.stdout.on('data', (data) => {
+        const lines = data.toString().split(/[\r\n]+/);
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i];
+          if (!line) continue;
+          // Match progress like: [download]  12.5% of  4.32MiB at  1.10MiB/s ETA 00:03
+          const progressMatch = line.match(/\[download\]\s+([0-9.]+)%\s+of\s+~?\s*([0-9.]+)([a-zA-Z]+)\s+at\s+(\S+)\s+ETA\s+(\S+)/);
+          if (progressMatch) {
+            const progress = Math.round(parseFloat(progressMatch[1]));
+            const speed = progressMatch[4];
+            const eta = progressMatch[5];
+            db.prepare(`
+              UPDATE music_tracks
+              SET download_progress = ?, download_speed = ?, download_eta = ?
+              WHERE id = ?
+            `).run(progress, speed, eta, trackId);
+            break;
+          }
+        }
+      });
+
+      let lastStderr = '';
+      child.stderr.on('data', (data) => {
+        const msg = data.toString().trim();
+        addLog(`yt-dlp [${trackId}] stderr : ${msg}`);
+        if (msg) lastStderr = msg;
+      });
+
+      child.on('close', (code) => {
+        clearTimeout(watchdog);
+        activeMusicProcesses.delete(trackId);
+        if (settled) return;
+
+        if (code === 0) {
+          const audioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
+          let audioFile: string | null = null;
+          let localFilePath: string | null = null;
+          for (const ext of audioExtensions) {
+            const testPath = path.join(artistDir, `${trackId}.${ext}`);
+            if (fs.existsSync(testPath)) {
+              audioFile = testPath;
+              localFilePath = `/downloads-music/${folderName}/${trackId}.${ext}`;
+              break;
+            }
+          }
+
+          if (!localFilePath) {
+            const errorMsg = lastStderr ? `yt-dlp a terminé mais aucun fichier audio n'a été trouvé : ${lastStderr}` : `yt-dlp a terminé mais aucun fichier audio n'a été trouvé`;
+            settle(() => reject(new Error(errorMsg)));
+            return;
+          }
+
+          let thumbnailUrlPath: string | null = null;
+          const thumbExtensions = ['jpg', 'jpeg', 'webp', 'png'];
+          for (const ext of thumbExtensions) {
+            const testPath = path.join(artistDir, `${trackId}.${ext}`);
+            if (fs.existsSync(testPath)) {
+              thumbnailUrlPath = `/downloads-music/${folderName}/${trackId}.${ext}`;
+              break;
+            }
+          }
+
+          const infoJsonFile = path.join(artistDir, `${trackId}.info.json`);
+          let albumId: string | null = null;
+          let genre: string | null = null;
+          let trackNumber: number | null = null;
+
+          if (fs.existsSync(infoJsonFile)) {
+            try {
+              const infoData = JSON.parse(fs.readFileSync(infoJsonFile, 'utf8'));
+              const parsed = parseMusicMetadataFromInfoData(infoData);
+              genre = parsed.genre;
+              trackNumber = parsed.trackNumber;
+
+              if (parsed.album) {
+                const existingAlbum = db.prepare('SELECT id FROM music_albums WHERE artist_id = ? AND title = ?').get(artistId, parsed.album) as { id: string } | undefined;
+                if (existingAlbum) {
+                  albumId = existingAlbum.id;
+                } else {
+                  albumId = crypto.randomUUID();
+                  db.prepare(`
+                    INSERT INTO music_albums (id, artist_id, title, release_year, source, created_at)
+                    VALUES (?, ?, ?, ?, 'youtube', ?)
+                  `).run(albumId, artistId, parsed.album, parsed.releaseYear, Date.now());
+                }
+              }
+
+              fs.unlinkSync(infoJsonFile);
+            } catch (err) {
+              console.error(`Failed to parse info JSON for track ${trackId}:`, err);
+            }
+          }
+
+          const fileSize = audioFile && fs.existsSync(audioFile) ? fs.statSync(audioFile).size : null;
+
+          db.prepare(`
+            UPDATE music_tracks
+            SET local_file_path = ?, local_thumbnail_path = ?, album_id = COALESCE(?, album_id),
+                genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?
+            WHERE id = ?
+          `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, trackId);
+
+          db.prepare(`
+            INSERT INTO music_track_artists (track_id, artist_id, role)
+            VALUES (?, ?, 'primary')
+            ON CONFLICT(track_id, artist_id) DO NOTHING
+          `).run(trackId, artistId);
+
+          settle(() => resolve());
+        } else {
+          const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
+          settle(() => reject(new Error(errorMsg)));
+        }
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
