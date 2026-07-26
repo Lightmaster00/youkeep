@@ -384,6 +384,18 @@ export function getDb(): Database.Database {
     console.log('Seeded setting max_concurrent_downloads: 2');
   }
 
+  const musicPausedCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_downloader_paused'").get() as { count: number };
+  if (musicPausedCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_downloader_paused', '0')").run();
+    console.log('Seeded setting music_downloader_paused: 0');
+  }
+
+  const musicMaxConcurrentCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_max_concurrent_downloads'").get() as { count: number };
+  if (musicMaxConcurrentCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_max_concurrent_downloads', '2')").run();
+    console.log('Seeded setting music_max_concurrent_downloads: 2');
+  }
+
   // Backfill size_bytes for completed videos if null
   try {
     const completedVideos = db.prepare("SELECT id, channel_id FROM videos WHERE download_status = 'completed' AND size_bytes IS NULL").all() as any[];
