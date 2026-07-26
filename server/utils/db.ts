@@ -268,6 +268,9 @@ export function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE videos ADD COLUMN like_count INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN last_error TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE user_history ADD COLUMN watch_time_seconds INTEGER DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_tracks ADD COLUMN local_file_path TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_tracks ADD COLUMN local_thumbnail_path TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_tracks ADD COLUMN size_bytes INTEGER;`); } catch (e) {}
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
   // and the FTS/share_token indexes above already cover the rest).
