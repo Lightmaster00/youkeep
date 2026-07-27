@@ -26,10 +26,21 @@
           <span v-if="activeDownloadCount > 0" class="tab-badge">{{ activeDownloadCount }}</span>
         </button>
 
-        <button 
-          v-if="isAdmin && !currentUser?.mustChangePassword" 
-          class="tab-btn" 
-          :class="{ active: activeTab === 'users' }" 
+        <button
+          v-if="isAdmin && !currentUser?.mustChangePassword"
+          class="tab-btn"
+          :class="{ active: activeTab === 'music' }"
+          @click="activeTab = 'music'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+          <span>Music</span>
+          <span v-if="musicActiveDownloadCount > 0" class="tab-badge">{{ musicActiveDownloadCount }}</span>
+        </button>
+
+        <button
+          v-if="isAdmin && !currentUser?.mustChangePassword"
+          class="tab-btn"
+          :class="{ active: activeTab === 'users' }"
           @click="activeTab = 'users'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
@@ -507,6 +518,199 @@
                       </button>
                       <button 
                         @click="handleCancelDownload(video.id)" 
+                        class="btn-action-premium btn-action-danger"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= MUSIC TAB ================= -->
+        <div v-if="activeTab === 'music' && isAdmin" class="tab-pane">
+          <div class="downloads-header-panel glass-panel">
+            <div class="header-text">
+              <h2>Music Ingestion</h2>
+              <p>Follow YouTube channels as music artists. Audio is extracted, no re-encoding.</p>
+            </div>
+
+            <div class="queue-actions-row">
+              <button
+                @click="toggleMusicPause"
+                class="btn"
+                :class="musicIsPaused ? 'btn-primary-glow' : 'btn-secondary-dark'"
+                :disabled="pausingOrResumingMusic"
+              >
+                <svg v-if="musicIsPaused" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                <span>{{ musicIsPaused ? 'Resume Music Sync' : 'Pause Music Sync' }}</span>
+              </button>
+
+              <div class="concurrency-control" style="display: inline-flex; align-items: center; gap: 8px;">
+                <label for="max-concurrent-music-downloads" style="font-size: 13px; color: var(--text-secondary);">Max concurrent downloads</label>
+                <input
+                  id="max-concurrent-music-downloads"
+                  type="number"
+                  min="1"
+                  v-model.number="maxConcurrentMusicDownloads"
+                  class="form-input"
+                  style="width: 64px;"
+                />
+                <button @click="handleSaveMusicConcurrency" class="btn btn-secondary-dark btn-sm" :disabled="savingMusicConcurrency">
+                  {{ savingMusicConcurrency ? 'Saving...' : 'Save' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="downloads-dashboard-layout">
+            <!-- Left Side: Add artist + followed artists -->
+            <div class="downloads-main-col">
+              <div class="ingest-box glass-panel">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-purple">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                  </div>
+                  <div>
+                    <h3>Track a Music Artist</h3>
+                    <p class="section-desc">Paste a YouTube channel URL or @handle.</p>
+                  </div>
+                </div>
+
+                <form @submit.prevent="handleAddMusicArtist" class="ingest-form mt-3">
+                  <div class="search-input-wrapper">
+                    <input
+                      type="text"
+                      v-model="musicArtistInput"
+                      placeholder="YouTube channel URL or @handle"
+                      class="form-input search-input"
+                      required
+                      :disabled="addingMusicArtist"
+                    />
+                  </div>
+                  <select v-model="musicArtistVisibility" class="form-select" :disabled="addingMusicArtist">
+                    <option value="public">Public</option>
+                    <option value="private">Private</option>
+                    <option value="ultra_private">Ultra Private</option>
+                  </select>
+                  <button type="submit" class="btn btn-primary" :disabled="addingMusicArtist">
+                    <span v-if="addingMusicArtist">Adding...</span>
+                    <span v-else>Add Artist</span>
+                  </button>
+                </form>
+
+                <div class="form-group mt-2">
+                  <label class="checkbox-container">
+                    <input type="checkbox" v-model="musicAutoSync" :disabled="addingMusicArtist" />
+                    <span class="checkmark"></span>
+                    Sync automatically (start downloading right away)
+                  </label>
+                </div>
+
+                <div v-if="musicIngestMessage" class="form-msg mt-3" :class="musicIngestSuccess ? 'success-msg' : 'error-msg'">
+                  {{ musicIngestMessage }}
+                </div>
+              </div>
+
+              <div class="ingest-box glass-panel mt-4">
+                <div class="section-title-row">
+                  <div class="icon-orb bg-blue">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                  </div>
+                  <div>
+                    <h3>Followed Artists</h3>
+                    <p class="section-desc">{{ musicArtists.length }} artist(s) tracked.</p>
+                  </div>
+                </div>
+
+                <div v-if="musicArtists.length === 0" class="mt-3">
+                  <p class="section-desc">No artists followed yet.</p>
+                </div>
+                <div v-else class="search-results-grid mt-3">
+                  <div v-for="artist in musicArtists" :key="artist.id" class="search-channel-card">
+                    <img
+                      :src="artist.avatar_url || '/img/default-avatar.png'"
+                      class="channel-avatar-thumb"
+                      referrerpolicy="no-referrer"
+                      @error="($event) => { const target = $event.target as HTMLImageElement; if (target) { target.src = '/img/default-avatar.png'; } }"
+                    />
+                    <div class="channel-search-info">
+                      <h5>{{ artist.name }}</h5>
+                      <p class="channel-search-meta">
+                        <span>{{ formatStatus(artist.sync_status) }}</span>
+                        <span class="meta-dot">•</span>
+                        <span>{{ artist.visibility }}</span>
+                        <span class="meta-dot">•</span>
+                        <span>{{ artist.track_count }} track(s)</span>
+                      </p>
+                    </div>
+                    <button
+                      @click="handleSyncMusicArtist(artist.id)"
+                      class="btn btn-primary btn-xs"
+                      :disabled="syncingArtistId === artist.id"
+                    >
+                      {{ syncingArtistId === artist.id ? 'Syncing...' : 'Sync' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: Queue -->
+            <div class="downloads-side-col">
+              <div class="queue-box glass-panel">
+                <div class="queue-header-row">
+                  <div class="flex-align-center gap-10">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-secondary);"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    <h3 style="margin: 0; font-size: 15px; font-weight: 700;">Music Queue</h3>
+                  </div>
+                  <span :class="musicIsPaused ? 'badge-paused-global' : 'badge-active-global'">
+                    {{ musicIsPaused ? 'Suspended' : 'Active' }}
+                  </span>
+                </div>
+
+                <div v-if="musicQueue.length === 0" class="queue-empty-state">
+                  <h4>Music Pipeline Idle</h4>
+                  <p>Queue is empty.</p>
+                </div>
+                <div v-else class="queue-list-premium">
+                  <div v-for="track in musicQueue" :key="track.id" class="queue-card-premium">
+                    <div class="queue-card-details">
+                      <div class="queue-card-meta-main">
+                        <h4 class="queue-card-title" :title="track.title">{{ track.title }}</h4>
+                        <span class="queue-card-channel-name">{{ track.artist_name }}</span>
+                      </div>
+                      <span class="status-badge" :class="`status-${track.download_status}`">
+                        {{ formatStatus(track.download_status) }}
+                      </span>
+                    </div>
+
+                    <div class="queue-progress-container">
+                      <div class="progress-bar-glow-bg">
+                        <div
+                          class="progress-bar-glow-fill"
+                          :style="{ width: (track.download_progress || 0) + '%' }"
+                        ></div>
+                      </div>
+                      <span class="progress-percent-text">{{ Math.round(track.download_progress || 0) }}%</span>
+                    </div>
+
+                    <div class="queue-diagnostics-row" v-if="track.download_status === 'downloading'">
+                      <span v-if="track.download_speed" class="diag-meta-spec">Speed: {{ track.download_speed }}</span>
+                      <span v-if="track.download_eta" class="diag-meta-spec">ETA: {{ track.download_eta }}</span>
+                    </div>
+
+                    <div class="queue-error-box" v-if="track.download_status === 'failed' && track.last_error">
+                      <strong>Log:</strong> {{ track.last_error }}
+                    </div>
+
+                    <div class="queue-card-action-bar">
+                      <button
+                        @click="handleCancelMusicTrack(track.id)"
                         class="btn-action-premium btn-action-danger"
                       >
                         Cancel
