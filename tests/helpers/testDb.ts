@@ -76,6 +76,22 @@ export function createTestDb(): Database.Database {
       created_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, channel_id)
     );
+
+    CREATE TABLE music_artists (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      visibility TEXT DEFAULT 'public',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE music_tracks (
+      id TEXT PRIMARY KEY,
+      artist_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      local_thumbnail_path TEXT,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
+    );
   `);
 
   return db;
@@ -178,4 +194,29 @@ export function insertSubscription(db: Database.Database, opts: { userId: string
     INSERT INTO user_subscriptions (user_id, channel_id, created_at)
     VALUES (?, ?, ?)
   `).run(opts.userId, opts.channelId, Date.now());
+}
+
+export function insertMusicArtist(db: Database.Database, opts: { id: string; visibility?: string }) {
+  db.prepare(`
+    INSERT INTO music_artists (id, name, visibility, created_at)
+    VALUES (?, ?, ?, ?)
+  `).run(opts.id, `Artist ${opts.id}`, opts.visibility ?? 'public', Date.now());
+}
+
+export function insertMusicTrack(db: Database.Database, opts: {
+  id: string;
+  artistId: string;
+  localThumbnailPath?: string | null;
+  createdAt?: number;
+}) {
+  db.prepare(`
+    INSERT INTO music_tracks (id, artist_id, title, local_thumbnail_path, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    opts.id,
+    opts.artistId,
+    `Track ${opts.id}`,
+    opts.localThumbnailPath ?? null,
+    opts.createdAt ?? Date.now()
+  );
 }
