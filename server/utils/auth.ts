@@ -198,3 +198,30 @@ export async function canAccessChannel(channelId: string, event: any): Promise<b
 
   return false;
 }
+
+export async function canAccessMusicTrack(trackId: string, event: any): Promise<boolean> {
+  const db = getDb();
+
+  const track = db.prepare(`
+    SELECT a.visibility as artist_visibility
+    FROM music_tracks t
+    JOIN music_artists a ON t.artist_id = a.id
+    WHERE t.id = ?
+  `).get(trackId) as { artist_visibility: string } | undefined;
+
+  if (!track) return false;
+
+  const user = await getUserFromSession(event);
+
+  const visMap: Record<string, number> = { 'public': 0, 'private': 1, 'ultra_private': 2 };
+  const level = visMap[track.artist_visibility] ?? 0;
+
+  if (level === 0) return true; // Public: everyone
+  if (!user) return false;      // Guest: no access to restricted content
+  if (user.role === 'admin') return true; // Admin sees everything
+  if (level === 1) return true; // Private: any logged-in member
+
+  // Ultra Private: admin-only for music today — no equivalent of
+  // user_channel_access exists for music artists yet.
+  return false;
+}

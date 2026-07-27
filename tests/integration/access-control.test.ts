@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { canAccessVideo, canAccessChannel } from '../../server/utils/auth';
+import { canAccessVideo, canAccessChannel, canAccessMusicTrack } from '../../server/utils/auth';
 import {
   createTestDb,
   insertUser,
@@ -9,7 +9,9 @@ import {
   insertVideo,
   grantChannelAccess,
   mockEvent,
-  sessionCookie
+  sessionCookie,
+  insertMusicArtist,
+  insertMusicTrack
 } from '../helpers/testDb';
 
 let db: Database.Database;
@@ -134,5 +136,53 @@ describe('canAccessVideo', () => {
 
   it('returns false for a video that does not exist', async () => {
     expect(await canAccessVideo('missing', guestEvent())).toBe(false);
+  });
+});
+
+describe('canAccessMusicTrack', () => {
+  it('is accessible to a guest when the artist is public', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    expect(await canAccessMusicTrack('t1', guestEvent())).toBe(true);
+  });
+
+  it('denies a guest access to a track from a private artist', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    expect(await canAccessMusicTrack('t1', guestEvent())).toBe(false);
+  });
+
+  it('allows any logged-in user to access a track from a private artist', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const event = loginAs('u1', 'user');
+    expect(await canAccessMusicTrack('t1', event)).toBe(true);
+  });
+
+  it('is not accessible to a regular user when the artist is ultra_private (no grant mechanism exists for music)', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const event = loginAs('u1', 'user');
+    expect(await canAccessMusicTrack('t1', event)).toBe(false);
+  });
+
+  it('is always accessible to an admin regardless of visibility', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const event = loginAs('admin1', 'admin');
+    expect(await canAccessMusicTrack('t1', event)).toBe(true);
+  });
+
+  it('returns false for a track that does not exist', async () => {
+    expect(await canAccessMusicTrack('missing', guestEvent())).toBe(false);
+  });
+
+  it('returns false when the track exists but its artist row does not (orphaned data)', async () => {
+    // Exercises the INNER JOIN in the implementation: a track whose artist_id
+    // doesn't resolve should be treated as inaccessible, not throw.
+    db.exec(`PRAGMA foreign_keys = OFF;`);
+    insertMusicTrack(db, { id: 't1', artistId: 'missing-artist' });
+    db.exec(`PRAGMA foreign_keys = ON;`);
+    expect(await canAccessMusicTrack('t1', guestEvent())).toBe(false);
   });
 });
