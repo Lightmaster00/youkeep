@@ -214,7 +214,11 @@ export async function canAccessMusicTrack(trackId: string, event: any): Promise<
   const user = await getUserFromSession(event);
 
   const visMap: Record<string, number> = { 'public': 0, 'private': 1, 'ultra_private': 2 };
-  const level = visMap[track.artist_visibility] ?? 0;
+  // Unlike canAccessVideo (which defaults an unrecognized value to public),
+  // fail closed here: music_artists.visibility has no CHECK constraint and
+  // the admin ingest endpoint doesn't validate it, so a typo must never
+  // silently make restricted content world-readable.
+  const level = visMap[track.artist_visibility] ?? 2;
 
   if (level === 0) return true; // Public: everyone
   if (!user) return false;      // Guest: no access to restricted content

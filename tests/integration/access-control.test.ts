@@ -185,4 +185,11 @@ describe('canAccessMusicTrack', () => {
     db.exec(`PRAGMA foreign_keys = ON;`);
     expect(await canAccessMusicTrack('t1', guestEvent())).toBe(false);
   });
+
+  it('fails closed for an unrecognized visibility value (no CHECK constraint on music_artists.visibility)', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'oops-a-typo' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const event = loginAs('u1', 'user');
+    expect(await canAccessMusicTrack('t1', event)).toBe(false);
+  });
 });
