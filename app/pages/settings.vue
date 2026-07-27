@@ -954,6 +954,26 @@ const pausingOrResuming = ref(false);
 const maxConcurrentDownloads = ref(2);
 const savingConcurrency = ref(false);
 
+const musicQueue = ref<any[]>([]);
+const musicHistory = ref<any[]>([]);
+const musicArtists = ref<any[]>([]);
+const musicIsPaused = ref(false);
+const musicFailedCount = ref(0);
+const pausingOrResumingMusic = ref(false);
+const maxConcurrentMusicDownloads = ref(2);
+const savingMusicConcurrency = ref(false);
+const musicArtistInput = ref('');
+const musicArtistVisibility = ref('public');
+const musicAutoSync = ref(true);
+const addingMusicArtist = ref(false);
+const musicIngestMessage = ref('');
+const musicIngestSuccess = ref(false);
+const syncingArtistId = ref<string | null>(null);
+
+const musicActiveDownloadCount = computed(() => {
+  return musicQueue.value.filter(t => t.download_status === 'downloading').length;
+});
+
 const activeDownloadCount = computed(() => {
   return queue.value.filter(v => v.download_status === 'downloading').length;
 });
@@ -1100,6 +1120,110 @@ const handleSaveConcurrency = async () => {
     toast.error(err.data?.statusMessage || 'Failed to save concurrency setting.');
   } finally {
     savingConcurrency.value = false;
+  }
+};
+
+const fetchMusicQueue = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/music/queue');
+    musicQueue.value = data.queue || [];
+    musicHistory.value = data.history || [];
+    musicArtists.value = data.artists || [];
+    musicIsPaused.value = data.isPaused || false;
+    musicFailedCount.value = data.failedCount || 0;
+  } catch (err) {
+    console.error('Failed to fetch music queue:', err);
+  }
+};
+
+const toggleMusicPause = async () => {
+  pausingOrResumingMusic.value = true;
+  try {
+    const endpoint = musicIsPaused.value ? '/api/admin/music/resume' : '/api/admin/music/pause';
+    await $fetch(endpoint, { method: 'POST' });
+    musicIsPaused.value = !musicIsPaused.value;
+    toast.success(musicIsPaused.value ? 'Music downloads paused.' : 'Music downloads resumed.');
+    fetchMusicQueue();
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'An error occurred.');
+  } finally {
+    pausingOrResumingMusic.value = false;
+  }
+};
+
+const fetchMusicConcurrency = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/music/concurrency');
+    maxConcurrentMusicDownloads.value = data.maxConcurrentDownloads ?? 2;
+  } catch (err) {
+    console.error('Failed to fetch music concurrency setting:', err);
+  }
+};
+
+const handleSaveMusicConcurrency = async () => {
+  savingMusicConcurrency.value = true;
+  try {
+    await $fetch('/api/admin/music/concurrency', {
+      method: 'POST',
+      body: { maxConcurrentDownloads: maxConcurrentMusicDownloads.value }
+    });
+    toast.success('Music concurrency setting saved.');
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to save music concurrency setting.');
+  } finally {
+    savingMusicConcurrency.value = false;
+  }
+};
+
+const handleAddMusicArtist = async () => {
+  const url = musicArtistInput.value.trim();
+  if (!url) return;
+
+  addingMusicArtist.value = true;
+  musicIngestMessage.value = '';
+  try {
+    const res = await $fetch<any>('/api/admin/music/ingest', {
+      method: 'POST',
+      body: {
+        url,
+        sync_status: musicAutoSync.value ? 'downloading' : 'paused',
+        visibility: musicArtistVisibility.value
+      }
+    });
+    musicIngestSuccess.value = res.success;
+    musicIngestMessage.value = res.message;
+    musicArtistInput.value = '';
+    toast.success('Artist added.');
+    fetchMusicQueue();
+  } catch (err: any) {
+    musicIngestSuccess.value = false;
+    musicIngestMessage.value = err.data?.statusMessage || 'Failed to add artist.';
+    toast.error('Error adding artist.');
+  } finally {
+    addingMusicArtist.value = false;
+  }
+};
+
+const handleSyncMusicArtist = async (artistId: string) => {
+  syncingArtistId.value = artistId;
+  try {
+    await $fetch(`/api/admin/music/artists/${artistId}/sync`, { method: 'POST' });
+    toast.success('Artist sync started.');
+    setTimeout(() => fetchMusicQueue(), 3000);
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to sync artist.');
+  } finally {
+    syncingArtistId.value = null;
+  }
+};
+
+const handleCancelMusicTrack = async (trackId: string) => {
+  try {
+    await $fetch(`/api/admin/music/tracks/${trackId}/cancel`, { method: 'POST' });
+    toast.success('Download cancelled.');
+    fetchMusicQueue();
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Cancellation failed.');
   }
 };
 
@@ -1638,10 +1762,20 @@ const runPolling = async () => {
   if (activeDownloadCount.value > 0) {
     await fetchDiagnostics();
   }
-  
+
   // If we have active downloads, poll faster (500ms) for high reactivity, otherwise poll every 3000ms
   const nextPollDelay = activeDownloadCount.value > 0 ? 500 : 3000;
   pollingTimeout = setTimeout(runPolling, nextPollDelay);
+};
+
+let musicPollingTimeout: any = null;
+
+const runMusicPolling = async () => {
+  if (!isAdmin.value) return;
+  await fetchMusicQueue();
+  const hasActiveMusicDownload = musicQueue.value.some(t => t.download_status === 'downloading');
+  const nextPollDelay = hasActiveMusicDownload ? 500 : 3000;
+  musicPollingTimeout = setTimeout(runMusicPolling, nextPollDelay);
 };
 
 onMounted(() => {
@@ -1651,11 +1785,14 @@ onMounted(() => {
     fetchSponsorBlockSettings();
     fetchConcurrency();
     runPolling();
+    fetchMusicConcurrency();
+    runMusicPolling();
   }
 });
 
 onUnmounted(() => {
   if (pollingTimeout) clearTimeout(pollingTimeout);
+  if (musicPollingTimeout) clearTimeout(musicPollingTimeout);
 });
 </script>
 
