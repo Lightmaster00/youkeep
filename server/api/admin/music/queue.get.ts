@@ -24,6 +24,7 @@ export default defineEventHandler(async (event) => {
       END,
       CASE WHEN t.download_progress > 0 THEN 0 ELSE 1 END,
       t.created_at ASC
+    LIMIT 100
   `).all();
 
   const history = db.prepare(`

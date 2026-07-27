@@ -10,6 +10,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'URL is required.' });
   }
 
+  const VALID_VISIBILITIES = ['public', 'private', 'ultra_private'];
+  if (visibility !== undefined && !VALID_VISIBILITIES.includes(visibility)) {
+    throw createError({ statusCode: 400, statusMessage: `Invalid visibility value: ${visibility}` });
+  }
+
   try {
     const result = await ingestMusicUrl(url, {
       sync_status: sync_status !== undefined ? sync_status : undefined,

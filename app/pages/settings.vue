@@ -593,6 +593,7 @@
                     />
                   </div>
                   <select v-model="musicArtistVisibility" class="form-select" :disabled="addingMusicArtist">
+                    <option value="">Keep current (Public if new)</option>
                     <option value="public">Public</option>
                     <option value="private">Private</option>
                     <option value="ultra_private">Ultra Private</option>
@@ -1167,7 +1168,7 @@ const pausingOrResumingMusic = ref(false);
 const maxConcurrentMusicDownloads = ref(2);
 const savingMusicConcurrency = ref(false);
 const musicArtistInput = ref('');
-const musicArtistVisibility = ref('public');
+const musicArtistVisibility = ref('');
 const musicAutoSync = ref(true);
 const addingMusicArtist = ref(false);
 const musicIngestMessage = ref('');
@@ -1391,7 +1392,7 @@ const handleAddMusicArtist = async () => {
       body: {
         url,
         sync_status: musicAutoSync.value ? 'downloading' : 'paused',
-        visibility: musicArtistVisibility.value
+        ...(musicArtistVisibility.value ? { visibility: musicArtistVisibility.value } : {})
       }
     });
     musicIngestSuccess.value = res.success;
@@ -1975,7 +1976,10 @@ const runPolling = async () => {
 let musicPollingTimeout: any = null;
 
 const runMusicPolling = async () => {
-  if (!isAdmin.value) return;
+  if (!isAdmin.value || activeTab.value !== 'music') {
+    musicPollingTimeout = setTimeout(runMusicPolling, 3000);
+    return;
+  }
   await fetchMusicQueue();
   const hasActiveMusicDownload = musicQueue.value.some(t => t.download_status === 'downloading');
   const nextPollDelay = hasActiveMusicDownload ? 500 : 3000;
