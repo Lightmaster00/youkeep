@@ -7,7 +7,7 @@
           <span class="logo-you">You</span><span class="logo-keep">Keep</span>
         </NuxtLink>
 
-        <div class="space-switcher" :class="{ 'is-active': spaceMenuOpen }" @click.stop="toggleSpaceMenu">
+        <div v-if="!user?.mustChangePassword" class="space-switcher" :class="{ 'is-active': spaceMenuOpen }" @click.stop="toggleSpaceMenu">
           <i class="space-switcher-icon" v-html="activeSpace.icon"></i>
           <span class="space-switcher-label">{{ activeSpace.label }}</span>
           <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -138,7 +138,7 @@ const searchQuery = ref('');
 const router = useRouter();
 const route = useRoute();
 const activeSpace = computed(() =>
-  route.path.startsWith('/music') ? spaces.find((s) => s.id === 'music')! : spaces.find((s) => s.id === 'video')!
+  (route.path.startsWith('/music') ? spaces.find((s) => s.id === 'music') : spaces.find((s) => s.id === 'video')) ?? spaces[0]!
 );
 
 // Fill search query on mount if present in URL
@@ -626,6 +626,9 @@ onUnmounted(() => {
     box-shadow: none;
   }
   .sidebar-link span, .sidebar-divider-title {
+    display: none;
+  }
+  .space-switcher-label {
     display: none;
   }
   .sidebar-link {
