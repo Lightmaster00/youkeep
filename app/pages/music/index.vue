@@ -97,7 +97,10 @@
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
             </div>
             <div v-if="trackGroups[album.id]?.loading" class="music-loading">Chargement...</div>
-            <div v-if="trackGroups[album.id]?.error" class="music-error">Erreur lors du chargement des titres.</div>
+            <div v-if="trackGroups[album.id]?.error" class="music-error">
+              Erreur lors du chargement des titres.
+              <button @click="loadTracks(album.id)" class="btn btn-secondary load-more-btn">Réessayer</button>
+            </div>
             <button
               v-if="(trackGroups[album.id]?.tracks.length || 0) < (trackGroups[album.id]?.total || 0)"
               @click="loadTracks(album.id)"
@@ -126,7 +129,10 @@
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
             </div>
             <div v-if="trackGroups['none']?.loading" class="music-loading">Chargement...</div>
-            <div v-if="trackGroups['none']?.error" class="music-error">Erreur lors du chargement des titres.</div>
+            <div v-if="trackGroups['none']?.error" class="music-error">
+              Erreur lors du chargement des titres.
+              <button @click="loadTracks('none')" class="btn btn-secondary load-more-btn">Réessayer</button>
+            </div>
             <button
               v-if="(trackGroups['none']?.tracks.length || 0) < (trackGroups['none']?.total || 0)"
               @click="loadTracks('none')"
@@ -219,6 +225,7 @@ function ensureGroup(key: string) {
 async function loadTracks(albumIdKey: string) {
   const group = ensureGroup(albumIdKey);
   group.loading = true;
+  group.error = false;
   try {
     const data = await $fetch<any>(`/api/music/artists/${artistId.value}/tracks`, {
       params: { albumId: albumIdKey, limit: 50, offset: group.tracks.length }
@@ -351,6 +358,12 @@ const getVisBadgeClass = (vis: string): string => {
 .music-search-input {
   flex: 1;
   min-width: 200px;
+}
+
+.music-filters-bar select.form-input {
+  width: auto;
+  flex: 0 1 auto;
+  min-width: 150px;
 }
 
 .music-loading,
