@@ -80,17 +80,37 @@ export function createTestDb(): Database.Database {
     CREATE TABLE music_artists (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      description TEXT,
+      avatar_url TEXT,
+      banner_url TEXT,
       visibility TEXT DEFAULT 'public',
       created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE music_albums (
+      id TEXT PRIMARY KEY,
+      artist_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      release_year INTEGER,
+      source TEXT NOT NULL DEFAULT 'youtube',
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
     );
 
     CREATE TABLE music_tracks (
       id TEXT PRIMARY KEY,
       artist_id TEXT NOT NULL,
+      album_id TEXT,
       title TEXT NOT NULL,
+      track_number INTEGER,
+      genre TEXT,
+      language TEXT,
+      duration INTEGER,
+      download_status TEXT DEFAULT 'completed',
       local_thumbnail_path TEXT,
       created_at INTEGER NOT NULL,
-      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
+      FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE,
+      FOREIGN KEY (album_id) REFERENCES music_albums(id) ON DELETE SET NULL
     );
   `);
 
@@ -159,8 +179,10 @@ export function grantChannelAccess(db: Database.Database, userId: string, channe
 
 // Minimal H3Event stand-in: covers exactly what getUserFromSession/getCookie/
 // deleteCookie touch (event.node.req.headers.cookie, event.node.res.*).
-export function mockEvent(cookieHeader?: string): any {
+export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string> }): any {
   return {
+    path: opts?.path ?? '/',
+    context: { params: opts?.params ?? {} },
     node: {
       req: { headers: { cookie: cookieHeader || '' } },
       res: {
@@ -196,26 +218,59 @@ export function insertSubscription(db: Database.Database, opts: { userId: string
   `).run(opts.userId, opts.channelId, Date.now());
 }
 
-export function insertMusicArtist(db: Database.Database, opts: { id: string; visibility?: string }) {
+export function insertMusicArtist(db: Database.Database, opts: { id: string; name?: string; visibility?: string }) {
   db.prepare(`
     INSERT INTO music_artists (id, name, visibility, created_at)
     VALUES (?, ?, ?, ?)
-  `).run(opts.id, `Artist ${opts.id}`, opts.visibility ?? 'public', Date.now());
+  `).run(opts.id, opts.name ?? `Artist ${opts.id}`, opts.visibility ?? 'public', Date.now());
+}
+
+export function insertMusicAlbum(db: Database.Database, opts: {
+  id: string;
+  artistId: string;
+  title?: string;
+  releaseYear?: number | null;
+  source?: string;
+  createdAt?: number;
+}) {
+  db.prepare(`
+    INSERT INTO music_albums (id, artist_id, title, release_year, source, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    opts.id,
+    opts.artistId,
+    opts.title ?? `Album ${opts.id}`,
+    opts.releaseYear ?? null,
+    opts.source ?? 'youtube',
+    opts.createdAt ?? Date.now()
+  );
 }
 
 export function insertMusicTrack(db: Database.Database, opts: {
   id: string;
   artistId: string;
+  albumId?: string | null;
+  trackNumber?: number | null;
+  genre?: string | null;
+  language?: string | null;
+  duration?: number | null;
+  downloadStatus?: string;
   localThumbnailPath?: string | null;
   createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO music_tracks (id, artist_id, title, local_thumbnail_path, created_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_thumbnail_path, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.artistId,
+    opts.albumId ?? null,
     `Track ${opts.id}`,
+    opts.trackNumber ?? null,
+    opts.genre ?? null,
+    opts.language ?? null,
+    opts.duration ?? null,
+    opts.downloadStatus ?? 'completed',
     opts.localThumbnailPath ?? null,
     opts.createdAt ?? Date.now()
   );

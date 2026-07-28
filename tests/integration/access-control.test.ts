@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { canAccessVideo, canAccessChannel, canAccessMusicTrack } from '../../server/utils/auth';
+import { canAccessVideo, canAccessChannel, canAccessMusicTrack, canAccessMusicArtist } from '../../server/utils/auth';
 import {
   createTestDb,
   insertUser,
@@ -11,7 +11,8 @@ import {
   mockEvent,
   sessionCookie,
   insertMusicArtist,
-  insertMusicTrack
+  insertMusicTrack,
+  insertMusicAlbum
 } from '../helpers/testDb';
 
 let db: Database.Database;
@@ -191,5 +192,45 @@ describe('canAccessMusicTrack', () => {
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
     const event = loginAs('u1', 'user');
     expect(await canAccessMusicTrack('t1', event)).toBe(false);
+  });
+});
+
+describe('canAccessMusicArtist', () => {
+  it('is accessible to a guest when the artist is public', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    expect(await canAccessMusicArtist('a1', guestEvent())).toBe(true);
+  });
+
+  it('denies a guest access to a private artist', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
+    expect(await canAccessMusicArtist('a1', guestEvent())).toBe(false);
+  });
+
+  it('allows any logged-in user to access a private artist', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
+    const event = loginAs('u1', 'user');
+    expect(await canAccessMusicArtist('a1', event)).toBe(true);
+  });
+
+  it('is not accessible to a regular user when the artist is ultra_private', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    const event = loginAs('u1', 'user');
+    expect(await canAccessMusicArtist('a1', event)).toBe(false);
+  });
+
+  it('is always accessible to an admin regardless of visibility', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    const event = loginAs('admin1', 'admin');
+    expect(await canAccessMusicArtist('a1', event)).toBe(true);
+  });
+
+  it('returns false for an artist that does not exist', async () => {
+    expect(await canAccessMusicArtist('missing', guestEvent())).toBe(false);
+  });
+
+  it('fails closed for an unrecognized visibility value', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'oops-a-typo' });
+    const event = loginAs('u1', 'user');
+    expect(await canAccessMusicArtist('a1', event)).toBe(false);
   });
 });
