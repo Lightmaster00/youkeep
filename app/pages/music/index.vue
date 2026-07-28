@@ -7,23 +7,25 @@
           v-model="search"
           type="text"
           placeholder="Rechercher un artiste..."
-          class="search-input music-search-input"
+          class="form-input music-search-input"
         />
-        <select v-model="genre" class="form-select">
+        <select v-model="genre" class="form-input">
           <option value="">Tous les genres</option>
           <option v-for="g in facets.genres" :key="g" :value="g">{{ g }}</option>
         </select>
-        <select v-model="language" class="form-select">
+        <select v-model="language" class="form-input">
           <option value="">Toutes les langues</option>
           <option v-for="l in facets.languages" :key="l" :value="l">{{ l }}</option>
         </select>
-        <select v-model="year" class="form-select">
+        <select v-model="year" class="form-input">
           <option value="">Toutes les années</option>
           <option v-for="y in facets.years" :key="y" :value="y">{{ y }}</option>
         </select>
       </div>
 
       <div v-if="gridPending" class="music-loading">Chargement...</div>
+
+      <div v-else-if="gridError" class="music-error">Erreur lors du chargement des artistes.</div>
 
       <EmptyState
         v-else-if="artists.length === 0"
@@ -95,6 +97,7 @@
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
             </div>
             <div v-if="trackGroups[album.id]?.loading" class="music-loading">Chargement...</div>
+            <div v-if="trackGroups[album.id]?.error" class="music-error">Erreur lors du chargement des titres.</div>
             <button
               v-if="(trackGroups[album.id]?.tracks.length || 0) < (trackGroups[album.id]?.total || 0)"
               @click="loadTracks(album.id)"
@@ -123,6 +126,7 @@
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
             </div>
             <div v-if="trackGroups['none']?.loading" class="music-loading">Chargement...</div>
+            <div v-if="trackGroups['none']?.error" class="music-error">Erreur lors du chargement des titres.</div>
             <button
               v-if="(trackGroups['none']?.tracks.length || 0) < (trackGroups['none']?.total || 0)"
               @click="loadTracks('none')"
@@ -157,11 +161,16 @@ const year = ref('');
 const artists = ref<any[]>([]);
 const facets = ref<{ genres: string[]; languages: string[]; years: number[] }>({ genres: [], languages: [], years: [] });
 const gridPending = ref(true);
+const gridError = ref(false);
 
 const hasActiveFilters = computed(() => !!(search.value || genre.value || language.value || year.value));
 
+let artistsRequestId = 0;
+
 async function fetchArtists() {
+  const requestId = ++artistsRequestId;
   gridPending.value = true;
+  gridError.value = false;
   try {
     const params: Record<string, string> = {};
     if (search.value) params.search = search.value;
@@ -169,11 +178,15 @@ async function fetchArtists() {
     if (language.value) params.language = language.value;
     if (year.value) params.year = year.value;
     const data = await $fetch<any>('/api/music/artists', { params });
+    if (requestId !== artistsRequestId) return;
     artists.value = data.artists || [];
     facets.value = data.facets || { genres: [], languages: [], years: [] };
   } catch (e) {
+    if (requestId !== artistsRequestId) return;
     artists.value = [];
+    gridError.value = true;
   } finally {
+    if (requestId !== artistsRequestId) return;
     gridPending.value = false;
   }
 }
@@ -194,11 +207,11 @@ const detailError = ref(false);
 
 const expandedAlbums = reactive<Record<string, boolean>>({});
 const standaloneExpanded = ref(false);
-const trackGroups = reactive<Record<string, { tracks: any[]; total: number; loaded: boolean; loading: boolean }>>({});
+const trackGroups = reactive<Record<string, { tracks: any[]; total: number; loaded: boolean; loading: boolean; error: boolean }>>({});
 
 function ensureGroup(key: string) {
   if (!trackGroups[key]) {
-    trackGroups[key] = { tracks: [], total: 0, loaded: false, loading: false };
+    trackGroups[key] = { tracks: [], total: 0, loaded: false, loading: false, error: false };
   }
   return trackGroups[key];
 }
@@ -213,6 +226,9 @@ async function loadTracks(albumIdKey: string) {
     group.tracks.push(...(data.tracks || []));
     group.total = data.total || 0;
     group.loaded = true;
+    group.error = false;
+  } catch (e) {
+    group.error = true;
   } finally {
     group.loading = false;
   }
@@ -234,7 +250,10 @@ function toggleStandalone() {
   }
 }
 
+let detailRequestId = 0;
+
 async function fetchArtistDetail() {
+  const requestId = ++detailRequestId;
   detailPending.value = true;
   detailError.value = false;
   artist.value = null;
@@ -245,12 +264,15 @@ async function fetchArtistDetail() {
   standaloneExpanded.value = false;
   try {
     const data = await $fetch<any>(`/api/music/artists/${artistId.value}`);
+    if (requestId !== detailRequestId) return;
     artist.value = data.artist;
     albums.value = data.albums || [];
     standaloneTrackCount.value = data.standaloneTrackCount || 0;
   } catch (e) {
+    if (requestId !== detailRequestId) return;
     detailError.value = true;
   } finally {
+    if (requestId !== detailRequestId) return;
     detailPending.value = false;
   }
 }
