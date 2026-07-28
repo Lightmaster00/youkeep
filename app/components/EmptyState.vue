@@ -31,6 +31,13 @@
           <line x1="9" y1="14" x2="15" y2="14"></line>
         </svg>
 
+        <!-- Music / Music Note -->
+        <svg v-else-if="icon === 'music'" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="main-icon">
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+
         <!-- Videos / Default Play icon -->
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="main-icon">
           <polygon points="23 7 16 12 23 17 23 7"></polygon>
@@ -61,7 +68,7 @@
 defineProps<{
   title: string;
   description: string;
-  icon?: 'book' | 'channels' | 'shorts' | 'folder' | 'video';
+  icon?: 'book' | 'channels' | 'shorts' | 'folder' | 'video' | 'music';
   actionText?: string;
   actionRoute?: string;
 }>();
