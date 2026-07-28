@@ -6,8 +6,27 @@
         <NuxtLink to="/" class="logo">
           <span class="logo-you">You</span><span class="logo-keep">Keep</span>
         </NuxtLink>
+
+        <div class="space-switcher" :class="{ 'is-active': spaceMenuOpen }" @click.stop="toggleSpaceMenu">
+          <i class="space-switcher-icon" v-html="activeSpace.icon"></i>
+          <span class="space-switcher-label">{{ activeSpace.label }}</span>
+          <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+
+          <div v-if="spaceMenuOpen" class="dropdown-menu space-menu" @click.stop>
+            <div
+              v-for="space in spaces"
+              :key="space.id"
+              class="dropdown-item space-menu-item"
+              :class="{ active: space.id === activeSpace.id }"
+              @click="selectSpace(space.homeRoute)"
+            >
+              <i class="space-switcher-icon" v-html="space.icon"></i>
+              {{ space.label }}
+            </div>
+          </div>
+        </div>
       </div>
-      
+
       <div class="header-center">
         <form @submit.prevent="handleSearch" class="search-form">
           <input 
@@ -67,7 +86,7 @@
         <div class="sidebar-inner">
           <nav class="sidebar-nav">
             <NuxtLink
-              v-for="link in spaces[0].navLinks"
+              v-for="link in activeSpace.navLinks"
               v-show="!link.hideWhenMustChangePassword || !user?.mustChangePassword"
               :key="link.to"
               :to="link.to"
@@ -106,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { spaces } from '~/spaces';
@@ -114,9 +133,13 @@ import { spaces } from '~/spaces';
 const { user, isAdmin, logout } = useAuth();
 const { toasts, removeToast } = useToast();
 const dropdownOpen = ref(false);
+const spaceMenuOpen = ref(false);
 const searchQuery = ref('');
 const router = useRouter();
 const route = useRoute();
+const activeSpace = computed(() =>
+  route.path.startsWith('/music') ? spaces.find((s) => s.id === 'music')! : spaces.find((s) => s.id === 'video')!
+);
 
 // Fill search query on mount if present in URL
 onMounted(() => {
@@ -144,9 +167,19 @@ const toggleDropdown = () => {
   dropdownOpen.value = !dropdownOpen.value;
 };
 
+const toggleSpaceMenu = () => {
+  spaceMenuOpen.value = !spaceMenuOpen.value;
+};
+
+const selectSpace = (homeRoute: string) => {
+  spaceMenuOpen.value = false;
+  navigateTo(homeRoute);
+};
+
 // Close dropdown if clicked outside
 const closeDropdown = () => {
   dropdownOpen.value = false;
+  spaceMenuOpen.value = false;
 };
 onMounted(() => {
   window.addEventListener('click', closeDropdown);
@@ -251,6 +284,57 @@ onUnmounted(() => {
   margin-left: 4px;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+}
+
+.space-switcher {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 16px;
+  padding: 6px 14px 6px 10px;
+  border-radius: 40px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.space-switcher:hover,
+.space-switcher.is-active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15);
+}
+
+.space-switcher.is-active .dropdown-arrow {
+  transform: rotate(180deg);
+  color: var(--accent-primary-hover);
+}
+
+.space-switcher-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.space-menu {
+  top: 44px;
+  left: 0;
+  right: auto;
+  width: 200px;
+}
+
+.space-menu-item {
+  gap: 12px;
+}
+
+.space-menu-item.active {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
 }
 
 .search-form {
