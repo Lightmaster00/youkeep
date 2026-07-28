@@ -165,10 +165,12 @@ watch(() => route.query.q, (newVal) => {
 
 const toggleDropdown = () => {
   dropdownOpen.value = !dropdownOpen.value;
+  spaceMenuOpen.value = false;
 };
 
 const toggleSpaceMenu = () => {
   spaceMenuOpen.value = !spaceMenuOpen.value;
+  dropdownOpen.value = false;
 };
 
 const selectSpace = (homeRoute: string) => {
@@ -257,6 +259,11 @@ onUnmounted(() => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
 .logo {
   display: flex;
   align-items: center;
@@ -319,22 +326,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   color: var(--text-secondary);
-}
-
-.space-menu {
-  top: 44px;
-  left: 0;
-  right: auto;
-  width: 200px;
-}
-
-.space-menu-item {
-  gap: 12px;
-}
-
-.space-menu-item.active {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
 }
 
 .search-form {
@@ -495,6 +486,20 @@ onUnmounted(() => {
 .dropdown-item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary);
+}
+
+.space-menu {
+  top: 44px;
+  left: 0;
+  right: auto;
+  width: 200px;
+}
+
+.space-menu-item.active {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-left: 2px solid var(--accent-primary);
+  padding-left: 18px;
 }
 
 .logout-btn {
