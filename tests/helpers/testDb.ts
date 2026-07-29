@@ -179,12 +179,24 @@ export function grantChannelAccess(db: Database.Database, userId: string, channe
 
 // Minimal H3Event stand-in: covers exactly what getUserFromSession/getCookie/
 // deleteCookie touch (event.node.req.headers.cookie, event.node.res.*).
-export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string> }): any {
+export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string>; body?: any }): any {
+  const req: any = {
+    headers: { cookie: cookieHeader || '' }
+  };
+  if (opts && Object.prototype.hasOwnProperty.call(opts, 'body')) {
+    // H3's readBody(event) checks for a value already stored under this
+    // well-known symbol before attempting to read/parse a raw request
+    // stream — setting it directly lets tests supply a body without
+    // simulating an actual HTTP request stream. Symbol.for is a global
+    // registry lookup, so this matches h3's own internal ParsedBodySymbol
+    // even though it isn't exported from the package.
+    req[Symbol.for('h3ParsedBody')] = opts.body;
+  }
   return {
     path: opts?.path ?? '/',
     context: { params: opts?.params ?? {} },
     node: {
-      req: { headers: { cookie: cookieHeader || '' } },
+      req,
       res: {
         getHeader: () => undefined,
         setHeader: () => {}
