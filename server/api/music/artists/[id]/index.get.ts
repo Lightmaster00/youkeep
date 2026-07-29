@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { canAccessMusicArtist } from '../../../../utils/auth';
+import { ALBUM_COVER_URL_FALLBACK_SQL } from '../../../../utils/musicAlbumQueries';
 
 export default defineEventHandler(async (event) => {
   const artistId = event.context.params?.id;
@@ -38,16 +39,7 @@ export default defineEventHandler(async (event) => {
       al.release_year,
       COUNT(t.id) as track_count,
       al.cover_url as manual_cover_url,
-      COALESCE(
-        al.cover_url,
-        (
-          SELECT t2.local_thumbnail_path
-          FROM music_tracks t2
-          WHERE t2.album_id = al.id AND t2.download_status = 'completed'
-          ORDER BY t2.track_number ASC, t2.created_at ASC
-          LIMIT 1
-        )
-      ) as cover_url
+      ${ALBUM_COVER_URL_FALLBACK_SQL} as cover_url
     FROM music_albums al
     JOIN music_tracks t ON t.album_id = al.id AND t.download_status = 'completed'
     WHERE al.artist_id = ?

@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3';
 import { requireAdmin } from '../../../../utils/auth';
+import { ALBUM_COVER_URL_FALLBACK_SQL } from '../../../../utils/musicAlbumQueries';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -67,16 +68,7 @@ export default defineEventHandler(async (event) => {
       al.title,
       al.release_year,
       al.cover_url as manual_cover_url,
-      COALESCE(
-        al.cover_url,
-        (
-          SELECT t2.local_thumbnail_path
-          FROM music_tracks t2
-          WHERE t2.album_id = al.id AND t2.download_status = 'completed'
-          ORDER BY t2.track_number ASC, t2.created_at ASC
-          LIMIT 1
-        )
-      ) as cover_url
+      ${ALBUM_COVER_URL_FALLBACK_SQL} as cover_url
     FROM music_albums al
     WHERE al.id = ?
   `).get(albumId);

@@ -7,6 +7,7 @@ import {
   insertSession,
   insertMusicArtist,
   insertMusicAlbum,
+  insertMusicTrack,
   mockEvent,
   sessionCookie
 } from '../helpers/testDb';
@@ -99,11 +100,12 @@ describe('PATCH /api/admin/music/albums/[id]', () => {
   it('returns manual_cover_url alongside the effective cover_url after an unrelated edit', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', trackNumber: 1, localThumbnailPath: '/downloads-music/a1/t1.jpg' });
     const cookie = loginAs('admin1', 'admin');
 
     const result: any = await handler(eventFor('al1', { title: 'Renamed' }, cookie));
     expect(result.album.manual_cover_url).toBeNull();
-    expect(result.album.cover_url).toBeNull();
+    expect(result.album.cover_url).toBe('/downloads-music/a1/t1.jpg');
   });
 
   it('returns 400 when the body has no updatable fields', async () => {
