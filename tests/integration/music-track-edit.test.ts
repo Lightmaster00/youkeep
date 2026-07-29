@@ -68,6 +68,23 @@ describe('PATCH /api/admin/music/tracks/[id]', () => {
     expect(result.track.genre).toBeNull();
   });
 
+  it('clears the language field to NULL when submitted empty', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', language: 'en' });
+    const cookie = loginAs('admin1', 'admin');
+
+    const result: any = await handler(eventFor('t1', { language: '' }, cookie));
+    expect(result.track.language).toBeNull();
+  });
+
+  it('returns 400 for a null request body', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const cookie = loginAs('admin1', 'admin');
+
+    await expect(handler(eventFor('t1', null, cookie))).rejects.toMatchObject({ statusCode: 400 });
+  });
+
   it('rejects an empty title', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
