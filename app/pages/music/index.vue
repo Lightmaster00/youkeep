@@ -87,6 +87,9 @@
               <h3 class="album-title">{{ album.title }}</h3>
               <p class="album-meta">{{ album.release_year || 'Année inconnue' }} &bull; {{ album.track_count }} titre(s)</p>
             </div>
+            <button v-if="isAdmin" @click.stop="openAlbumEdit(album)" class="edit-btn" title="Modifier">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+            </button>
           </div>
           <div v-if="expandedAlbums[album.id]" class="album-tracks">
             <div v-for="track in trackGroups[album.id]?.tracks || []" :key="track.id" class="track-row">
@@ -95,6 +98,9 @@
               <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
+              <button v-if="isAdmin" @click="openTrackEdit(track, album.id)" class="edit-btn" title="Modifier">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+              </button>
             </div>
             <div v-if="trackGroups[album.id]?.loading" class="music-loading">Chargement...</div>
             <div v-if="trackGroups[album.id]?.error" class="music-error">
@@ -127,6 +133,9 @@
               <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
+              <button v-if="isAdmin" @click="openTrackEdit(track, 'none')" class="edit-btn" title="Modifier">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+              </button>
             </div>
             <div v-if="trackGroups['none']?.loading" class="music-loading">Chargement...</div>
             <div v-if="trackGroups['none']?.error" class="music-error">
@@ -145,6 +154,19 @@
         </div>
       </template>
     </div>
+
+    <MusicTrackEditModal
+      :show="!!editingTrack"
+      :track="editingTrack?.track ?? null"
+      @close="closeTrackEdit"
+      @saved="handleTrackSaved"
+    />
+    <MusicAlbumEditModal
+      :show="!!editingAlbum"
+      :album="editingAlbum"
+      @close="closeAlbumEdit"
+      @saved="handleAlbumSaved"
+    />
   </div>
 </template>
 
@@ -255,6 +277,41 @@ function toggleStandalone() {
     const group = ensureGroup('none');
     if (!group.loaded && !group.loading) loadTracks('none');
   }
+}
+
+const editingTrack = ref<{ track: any; groupKey: string } | null>(null);
+const editingAlbum = ref<any | null>(null);
+
+function openTrackEdit(track: any, groupKey: string) {
+  editingTrack.value = { track, groupKey };
+}
+
+function closeTrackEdit() {
+  editingTrack.value = null;
+}
+
+function handleTrackSaved(updated: any) {
+  if (!editingTrack.value) return;
+  const group = trackGroups[editingTrack.value.groupKey];
+  if (group) {
+    const existing = group.tracks.find((t: any) => t.id === updated.id);
+    if (existing) Object.assign(existing, updated);
+  }
+  closeTrackEdit();
+}
+
+function openAlbumEdit(album: any) {
+  editingAlbum.value = album;
+}
+
+function closeAlbumEdit() {
+  editingAlbum.value = null;
+}
+
+function handleAlbumSaved(updated: any) {
+  const existing = albums.value.find((a: any) => a.id === updated.id);
+  if (existing) Object.assign(existing, updated);
+  closeAlbumEdit();
 }
 
 let detailRequestId = 0;
@@ -524,5 +581,22 @@ const getVisBadgeClass = (vis: string): string => {
 
 .load-more-btn {
   margin-top: 12px;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.2s;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.edit-btn:hover {
+  color: var(--text-primary);
 }
 </style>
