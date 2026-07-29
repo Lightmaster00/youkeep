@@ -37,12 +37,15 @@ export default defineEventHandler(async (event) => {
       al.title,
       al.release_year,
       COUNT(t.id) as track_count,
-      (
-        SELECT t2.local_thumbnail_path
-        FROM music_tracks t2
-        WHERE t2.album_id = al.id AND t2.download_status = 'completed'
-        ORDER BY t2.track_number ASC, t2.created_at ASC
-        LIMIT 1
+      COALESCE(
+        al.cover_url,
+        (
+          SELECT t2.local_thumbnail_path
+          FROM music_tracks t2
+          WHERE t2.album_id = al.id AND t2.download_status = 'completed'
+          ORDER BY t2.track_number ASC, t2.created_at ASC
+          LIMIT 1
+        )
       ) as cover_url
     FROM music_albums al
     JOIN music_tracks t ON t.album_id = al.id AND t.download_status = 'completed'

@@ -99,6 +99,16 @@ describe('GET /api/music/artists/[id]', () => {
     expect(result.albums[0].cover_url).toBe('/downloads-music/a1/t1.jpg');
   });
 
+  it('prefers a manually-set cover_url over the computed thumbnail fallback', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
+    db.prepare('UPDATE music_albums SET cover_url = ? WHERE id = ?').run('https://example.com/manual-cover.jpg', 'al1');
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', trackNumber: 1, localThumbnailPath: '/downloads-music/a1/t1.jpg' });
+
+    const result: any = await handler(eventFor('a1'));
+    expect(result.albums[0].cover_url).toBe('https://example.com/manual-cover.jpg');
+  });
+
   it('is accessible to an admin even for an ultra_private artist', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
     const cookie = loginAs('admin1', 'admin');

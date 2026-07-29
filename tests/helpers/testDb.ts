@@ -92,6 +92,7 @@ export function createTestDb(): Database.Database {
       artist_id TEXT NOT NULL,
       title TEXT NOT NULL,
       release_year INTEGER,
+      cover_url TEXT,
       source TEXT NOT NULL DEFAULT 'youtube',
       created_at INTEGER NOT NULL,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
