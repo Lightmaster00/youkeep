@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'albumId is required (use "none" for tracks without an album).' });
   }
 
-  const limit = Math.max(1, parseInt(String(query.limit ?? '50'), 10) || 50);
+  const limit = Math.min(200, Math.max(1, parseInt(String(query.limit ?? '50'), 10) || 50));
   const offset = Math.max(0, parseInt(String(query.offset ?? '0'), 10) || 0);
 
   const isStandalone = albumIdParam === 'none';

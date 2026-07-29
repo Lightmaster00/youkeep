@@ -124,6 +124,17 @@ describe('GET /api/music/artists/[id]/tracks', () => {
     expect(result.total).toBe(60);
   });
 
+  it('caps limit at 200 even when a larger value is requested', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    for (let i = 1; i <= 250; i++) {
+      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1', albumId: null, trackNumber: i });
+    }
+
+    const result: any = await handler(eventFor('a1', '?albumId=none&limit=999999999'));
+    expect(result.tracks).toHaveLength(200);
+    expect(result.total).toBe(250);
+  });
+
   it('is accessible to an admin even for an ultra_private artist', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null });
