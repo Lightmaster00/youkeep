@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
       al.title,
       al.release_year,
       COUNT(t.id) as track_count,
+      al.cover_url as manual_cover_url,
       COALESCE(
         al.cover_url,
         (

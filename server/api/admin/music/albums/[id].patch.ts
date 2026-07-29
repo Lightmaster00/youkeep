@@ -61,7 +61,25 @@ export default defineEventHandler(async (event) => {
   params.push(albumId);
   db.prepare(`UPDATE music_albums SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
 
-  const updated = db.prepare('SELECT id, title, release_year, cover_url FROM music_albums WHERE id = ?').get(albumId);
+  const updated = db.prepare(`
+    SELECT
+      al.id,
+      al.title,
+      al.release_year,
+      al.cover_url as manual_cover_url,
+      COALESCE(
+        al.cover_url,
+        (
+          SELECT t2.local_thumbnail_path
+          FROM music_tracks t2
+          WHERE t2.album_id = al.id AND t2.download_status = 'completed'
+          ORDER BY t2.track_number ASC, t2.created_at ASC
+          LIMIT 1
+        )
+      ) as cover_url
+    FROM music_albums al
+    WHERE al.id = ?
+  `).get(albumId);
 
   return { album: updated };
 });

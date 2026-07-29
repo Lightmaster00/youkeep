@@ -27,7 +27,7 @@ import { useToast } from '~/composables/useToast';
 
 const props = defineProps<{
   show: boolean;
-  album: { id: string; title: string; release_year: number | null; cover_url: string | null } | null;
+  album: { id: string; title: string; release_year: number | null; cover_url: string | null; manual_cover_url: string | null } | null;
 }>();
 
 const emit = defineEmits<{
@@ -50,7 +50,7 @@ watch(
       form.value = {
         title: a.title || '',
         releaseYear: a.release_year ?? '',
-        coverUrl: a.cover_url || ''
+        coverUrl: a.manual_cover_url || ''
       };
     }
   },
