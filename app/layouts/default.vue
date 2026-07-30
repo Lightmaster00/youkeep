@@ -14,7 +14,7 @@
 
           <div v-if="spaceMenuOpen" class="dropdown-menu space-menu" @click.stop>
             <div
-              v-for="space in spaces"
+              v-for="space in visibleSpaces"
               :key="space.id"
               class="dropdown-item space-menu-item"
               :class="{ active: space.id === activeSpace.id }"
@@ -22,6 +22,7 @@
             >
               <i class="space-switcher-icon" v-html="space.icon"></i>
               {{ space.label }}
+              <span v-if="space.id === 'music' && !musicModuleEnabled" class="badge badge-failed" style="margin-left: auto;">Désactivé</span>
             </div>
           </div>
         </div>
@@ -145,6 +146,20 @@ const activeSpace = computed(() =>
   (route.path.startsWith('/music') ? spaces.find((s) => s.id === 'music') : spaces.find((s) => s.id === 'video')) ?? spaces[0]!
 );
 
+const musicModuleEnabled = ref(true);
+const visibleSpaces = computed(() =>
+  spaces.filter((s) => s.id !== 'music' || musicModuleEnabled.value || isAdmin.value)
+);
+
+async function fetchMusicModuleEnabled() {
+  try {
+    const data = await $fetch<{ enabled: boolean }>('/api/settings/music-module');
+    musicModuleEnabled.value = data.enabled;
+  } catch (e) {
+    musicModuleEnabled.value = true;
+  }
+}
+
 // Fill search query on mount if present in URL
 onMounted(() => {
   if (route.query.q) {
@@ -231,6 +246,7 @@ const handleLogout = async () => {
 onMounted(() => {
   fetchActiveDownloads();
   downloadCountInterval = setInterval(fetchActiveDownloads, 5000);
+  fetchMusicModuleEnabled();
 });
 
 onUnmounted(() => {

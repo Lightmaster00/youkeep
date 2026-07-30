@@ -532,6 +532,17 @@
 
         <!-- ================= MUSIC TAB ================= -->
         <div v-if="activeTab === 'music' && isAdmin" class="tab-pane">
+          <div class="downloads-header-panel glass-panel" style="margin-bottom: 16px;">
+            <div class="header-text">
+              <h2>Module Musique</h2>
+              <p>Active ou désactive tout l'espace Musique pour les utilisateurs non-admin (navigation, lecture, API). Les administrateurs gardent toujours accès.</p>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" v-model="musicModuleEnabled" @change="toggleMusicModule" :disabled="togglingMusicModule" />
+              <span>{{ musicModuleEnabled ? 'Activé' : 'Désactivé' }}</span>
+            </label>
+          </div>
+
           <div class="downloads-header-panel glass-panel">
             <div class="header-text">
               <h2>Music Ingestion</h2>
@@ -1158,6 +1169,32 @@ const isPaused = ref(false);
 const pausingOrResuming = ref(false);
 const maxConcurrentDownloads = ref(2);
 const savingConcurrency = ref(false);
+
+const musicModuleEnabled = ref(true);
+const togglingMusicModule = ref(false);
+
+async function fetchMusicModuleEnabled() {
+  try {
+    const data = await $fetch<{ enabled: boolean }>('/api/settings/music-module');
+    musicModuleEnabled.value = data.enabled;
+  } catch (e) {
+    // leave the default
+  }
+}
+
+async function toggleMusicModule() {
+  togglingMusicModule.value = true;
+  const desired = musicModuleEnabled.value;
+  try {
+    await $fetch('/api/admin/settings/music-module', { method: 'POST', body: { enabled: desired } });
+    toast.success(desired ? 'Module Musique activé.' : 'Module Musique désactivé.');
+  } catch (e: any) {
+    musicModuleEnabled.value = !desired;
+    toast.error(e?.data?.statusMessage || 'Erreur lors de la mise à jour du module Musique.');
+  } finally {
+    togglingMusicModule.value = false;
+  }
+}
 
 const musicQueue = ref<any[]>([]);
 const musicHistory = ref<any[]>([]);
@@ -1995,6 +2032,7 @@ onMounted(() => {
     runPolling();
     fetchMusicConcurrency();
     runMusicPolling();
+    fetchMusicModuleEnabled();
   }
 });
 

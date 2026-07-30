@@ -438,7 +438,17 @@ watch(artistId, (newId, oldId) => {
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const data = await $fetch<{ enabled: boolean }>('/api/settings/music-module');
+    if (!data.enabled && !isAdmin.value) {
+      router.push('/');
+      return;
+    }
+  } catch (e) {
+    // If the check itself fails, don't block access on a network error —
+    // the server-side middleware is the real enforcement point regardless.
+  }
   if (artistId.value) {
     fetchArtistDetail();
   } else {
