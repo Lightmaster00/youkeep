@@ -66,6 +66,16 @@ describe('GET /api/music/playlists/most-played', () => {
     const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
     expect(result.tracks).toEqual([]);
   });
+
+  it('includes an ultra_private artist for an admin', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const cookie = loginAs('admin1', 'admin');
+    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'admin1' });
+
+    const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
+    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
+  });
 });
 
 describe('GET /api/music/playlists/recently-added', () => {
@@ -92,6 +102,15 @@ describe('GET /api/music/playlists/recently-added', () => {
 
     const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added'));
     expect(result.tracks).toEqual([]);
+  });
+
+  it('includes a private artist for a logged-in non-admin user', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    const cookie = loginAs('u1');
+
+    const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added', cookie));
+    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
   });
 });
 
@@ -143,6 +162,14 @@ describe('GET /api/music/playlists/genre-mix', () => {
     insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock' });
 
     const result: any = await genreMixHandler(eventFor('/api/music/playlists/genre-mix?genre=Rock'));
+    expect(result.tracks).toEqual([]);
+  });
+
+  it('is not vulnerable to SQL injection via the genre parameter', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    insertMusicTrack(db, { id: 'secret', artistId: 'a1', genre: 'Rock' });
+
+    const result: any = await genreMixHandler(eventFor(`/api/music/playlists/genre-mix?genre=${encodeURIComponent("Rock' OR '1'='1")}`));
     expect(result.tracks).toEqual([]);
   });
 });

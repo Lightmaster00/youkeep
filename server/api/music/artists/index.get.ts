@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery } from 'h3';
 import { getUserFromSession } from '../../../utils/auth';
+import { musicVisibilityClause } from '../../../utils/musicVisibility';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
@@ -18,12 +19,9 @@ export default defineEventHandler(async (event) => {
   // from the filter-specific clauses.
   const visClauses: string[] = [];
   const visParams: any[] = [];
-  if (session && session.role === 'admin') {
-    // Admins see everything, no visibility clause.
-  } else if (session) {
-    visClauses.push(`a.visibility IN ('public', 'private')`);
-  } else {
-    visClauses.push(`a.visibility = 'public'`);
+  const visClause = musicVisibilityClause(session);
+  if (visClause) {
+    visClauses.push(visClause);
   }
 
   const listClauses = [...visClauses];

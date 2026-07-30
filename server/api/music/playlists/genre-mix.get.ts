@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { getUserFromSession } from '../../../utils/auth';
+import { musicVisibilityClause } from '../../../utils/musicVisibility';
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event);
@@ -11,12 +12,8 @@ export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
   const db = getDb();
 
-  let visClause = `AND a.visibility = 'public'`;
-  if (session && session.role === 'admin') {
-    visClause = '';
-  } else if (session) {
-    visClause = `AND a.visibility IN ('public', 'private')`;
-  }
+  const clause = musicVisibilityClause(session);
+  const visClause = clause ? `AND ${clause}` : '';
 
   const rows = db.prepare(`
     SELECT t.id, t.title, t.track_number, t.genre, t.language, t.duration,
