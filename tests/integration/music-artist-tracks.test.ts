@@ -57,6 +57,15 @@ describe('GET /api/music/artists/[id]/tracks', () => {
     expect(result.total).toBe(1);
   });
 
+  it('includes local_file_path and artist_name needed for playback', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Test Artist' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null, localFilePath: '/downloads-music/a1/t1.opus' });
+
+    const result: any = await handler(eventFor('a1', '?albumId=none'));
+    expect(result.tracks[0].local_file_path).toBe('/downloads-music/a1/t1.opus');
+    expect(result.tracks[0].artist_name).toBe('Test Artist');
+  });
+
   it("returns album-less tracks when albumId=none", async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });

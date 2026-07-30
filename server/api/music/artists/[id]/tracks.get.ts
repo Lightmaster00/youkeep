@@ -35,6 +35,7 @@ export default defineEventHandler(async (event) => {
 
   const isStandalone = albumIdParam === 'none';
   const albumClauseSql = isStandalone ? 'album_id IS NULL' : 'album_id = ?';
+  const albumClauseSqlAliased = isStandalone ? 't.album_id IS NULL' : 't.album_id = ?';
   const params: any[] = [artistId];
   if (!isStandalone) params.push(albumIdParam);
 
@@ -44,14 +45,21 @@ export default defineEventHandler(async (event) => {
     WHERE artist_id = ? AND ${albumClauseSql} AND download_status = 'completed'
   `).get(...params) as { cnt: number };
 
-  // "(track_number IS NULL) ASC" forces NULLs to the end regardless of the
+  // "(t.track_number IS NULL) ASC" forces NULLs to the end regardless of the
   // primary column's own sort direction — SQLite's default NULL-sorts-first
   // behavior would otherwise put untagged tracks before numbered ones.
+  //
+  // Joins music_artists to include local_file_path/artist_name: the audio
+  // player (sub-project 4) needs local_file_path to actually play a track
+  // and artist_name to display it in the mini-player — this endpoint
+  // predates the player and originally selected neither.
   const tracks = db.prepare(`
-    SELECT id, title, track_number, genre, language, duration, local_thumbnail_path
-    FROM music_tracks
-    WHERE artist_id = ? AND ${albumClauseSql} AND download_status = 'completed'
-    ORDER BY (track_number IS NULL) ASC, track_number ASC, title ASC
+    SELECT t.id, t.title, t.track_number, t.genre, t.language, t.duration,
+           t.local_file_path, t.local_thumbnail_path, t.artist_id, a.name as artist_name
+    FROM music_tracks t
+    JOIN music_artists a ON t.artist_id = a.id
+    WHERE t.artist_id = ? AND ${albumClauseSqlAliased} AND t.download_status = 'completed'
+    ORDER BY (t.track_number IS NULL) ASC, t.track_number ASC, t.title ASC
     LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
 
