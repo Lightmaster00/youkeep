@@ -1,16 +1,16 @@
 <template>
-  <div v-if="currentTrack" class="mini-player">
-    <audio
-      ref="audioElRef"
-      @timeupdate="onTimeUpdate"
-      @loadedmetadata="onLoadedMetadata"
-      @durationchange="onLoadedMetadata"
-      @ended="onEnded"
-      @play="isPlaying = true"
-      @pause="isPlaying = false"
-      @error="onAudioError"
-    ></audio>
+  <audio
+    ref="audioElRef"
+    @timeupdate="onTimeUpdate"
+    @loadedmetadata="onLoadedMetadata"
+    @durationchange="onLoadedMetadata"
+    @ended="onEnded"
+    @play="isPlaying = true"
+    @pause="isPlaying = false"
+    @error="onAudioError"
+  ></audio>
 
+  <div v-if="currentTrack" class="mini-player">
     <img :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
 
     <div class="mini-player-info">
@@ -55,13 +55,15 @@
         v-model.number="volume"
         @input="onVolumeChange"
         class="mini-player-volume"
+        title="Volume"
+        aria-label="Volume"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
 
@@ -103,6 +105,7 @@ function onAudioError() {
 function onProgressClick(e: MouseEvent) {
   if (!progressBarRef.value || duration.value <= 0) return;
   const rect = progressBarRef.value.getBoundingClientRect();
+  if (rect.width <= 0) return;
   const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
   seek(ratio * duration.value);
 }
@@ -112,9 +115,20 @@ function onVolumeChange() {
 }
 
 let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSaveTime = 0;
 function debouncedSave() {
   if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
-  saveDebounceTimer = setTimeout(() => saveToLocalStorage(), 1000);
+  saveDebounceTimer = setTimeout(() => {
+    saveToLocalStorage();
+    lastSaveTime = Date.now();
+  }, 1000);
+
+  const now = Date.now();
+  if (now - lastSaveTime >= 5000) {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveToLocalStorage();
+    lastSaveTime = now;
+  }
 }
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M9 18V5l12-2v13\'></path><circle cx=\'6\' cy=\'18\' r=\'3\'></circle><circle cx=\'18\' cy=\'16\' r=\'3\'></circle></svg>';
@@ -126,9 +140,12 @@ const formatDuration = (seconds: number | null): string => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+watch(audioElRef, (el) => {
+  audioEl.value = el;
+  if (el) el.volume = volume.value;
+}, { immediate: true });
+
 onMounted(async () => {
-  audioEl.value = audioElRef.value;
-  if (audioElRef.value) audioElRef.value.volume = volume.value;
   await restoreFromLocalStorage();
 });
 </script>
