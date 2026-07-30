@@ -243,6 +243,15 @@ export function getDb(): Database.Database {
       FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS music_play_history (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      played_at INTEGER NOT NULL,
+      FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
   `);
 
   // Run schema updates if columns are missing (database migration)
@@ -281,6 +290,7 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_personal_playlist_videos_playlist_id ON personal_playlist_videos(playlist_id);
+    CREATE INDEX IF NOT EXISTS idx_music_play_history_user_track ON music_play_history(user_id, track_id);
   `);
 
   // Setup FTS5 Virtual Table for Search (if not exists)

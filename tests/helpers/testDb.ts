@@ -108,10 +108,20 @@ export function createTestDb(): Database.Database {
       language TEXT,
       duration INTEGER,
       download_status TEXT DEFAULT 'completed',
+      local_file_path TEXT,
       local_thumbnail_path TEXT,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE,
       FOREIGN KEY (album_id) REFERENCES music_albums(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE music_play_history (
+      id TEXT PRIMARY KEY,
+      track_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      played_at INTEGER NOT NULL,
+      FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
   `);
 
@@ -268,12 +278,13 @@ export function insertMusicTrack(db: Database.Database, opts: {
   language?: string | null;
   duration?: number | null;
   downloadStatus?: string;
+  localFilePath?: string | null;
   localThumbnailPath?: string | null;
   createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_thumbnail_path, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.artistId,
@@ -284,7 +295,15 @@ export function insertMusicTrack(db: Database.Database, opts: {
     opts.language ?? null,
     opts.duration ?? null,
     opts.downloadStatus ?? 'completed',
+    opts.localFilePath ?? null,
     opts.localThumbnailPath ?? null,
     opts.createdAt ?? Date.now()
   );
+}
+
+export function insertMusicPlay(db: Database.Database, opts: { id: string; trackId: string; userId: string; playedAt?: number }) {
+  db.prepare(`
+    INSERT INTO music_play_history (id, track_id, user_id, played_at)
+    VALUES (?, ?, ?, ?)
+  `).run(opts.id, opts.trackId, opts.userId, opts.playedAt ?? Date.now());
 }
