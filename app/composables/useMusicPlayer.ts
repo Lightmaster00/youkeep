@@ -29,13 +29,15 @@ export function useMusicPlayer() {
     currentTrack.value = track;
     currentIndex.value = index;
     hasCountedThisPlay.value = false;
+    currentTime.value = 0;
+    duration.value = 0;
     if (audioEl.value) {
       audioEl.value.src = track.local_file_path;
       audioEl.value.currentTime = 0;
     }
   }
 
-  function generateShuffledOrder(fromIndex: number) {
+  function generateShuffledOrder(fromIndex?: number) {
     const indices = queue.value.map((_, i) => i).filter((i) => i !== fromIndex);
     for (let i = indices.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -43,19 +45,23 @@ export function useMusicPlayer() {
       indices[i] = indices[j]!;
       indices[j] = tmp;
     }
-    shuffledOrder.value = [fromIndex, ...indices];
+    shuffledOrder.value = fromIndex !== undefined ? [fromIndex, ...indices] : indices;
   }
 
   function play(track: PlayableTrack, tracks: PlayableTrack[]) {
     const idx = tracks.findIndex((t) => t.id === track.id);
-    queue.value = tracks;
-    loadTrack(track, idx === -1 ? 0 : idx);
+    if (idx === -1) {
+      queue.value = [track, ...tracks];
+      loadTrack(track, 0);
+    } else {
+      queue.value = tracks;
+      loadTrack(track, idx);
+    }
     if (shuffleOn.value) {
       generateShuffledOrder(currentIndex.value);
     }
     if (audioEl.value) {
-      audioEl.value.play();
-      isPlaying.value = true;
+      audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
   }
 
@@ -65,8 +71,7 @@ export function useMusicPlayer() {
       audioEl.value.pause();
       isPlaying.value = false;
     } else {
-      audioEl.value.play();
-      isPlaying.value = true;
+      audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
   }
 
@@ -98,8 +103,8 @@ export function useMusicPlayer() {
       const nextPos = posInShuffled + 1;
       if (nextPos < shuffledOrder.value.length) return shuffledOrder.value[nextPos]!;
       if (repeatMode.value === 'all') {
-        generateShuffledOrder(shuffledOrder.value[0]!);
-        return shuffledOrder.value[0]!;
+        generateShuffledOrder();
+        return shuffledOrder.value![0]!;
       }
       return null;
     }
@@ -118,30 +123,36 @@ export function useMusicPlayer() {
       return prevPos >= 0 ? shuffledOrder.value[prevPos]! : null;
     }
     const prev = currentIndex.value - 1;
-    return prev >= 0 ? prev : null;
+    if (prev >= 0) return prev;
+    if (repeatMode.value === 'all') return queue.value.length - 1;
+    return null;
   }
 
   function next() {
     const idx = nextIndex();
-    if (idx === null) return;
+    if (idx === null) {
+      isPlaying.value = false;
+      return;
+    }
     const track = queue.value[idx];
     if (!track) return;
     loadTrack(track, idx);
     if (audioEl.value) {
-      audioEl.value.play();
-      isPlaying.value = true;
+      audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
   }
 
   function prev() {
     const idx = prevIndex();
-    if (idx === null) return;
+    if (idx === null) {
+      isPlaying.value = false;
+      return;
+    }
     const track = queue.value[idx];
     if (!track) return;
     loadTrack(track, idx);
     if (audioEl.value) {
-      audioEl.value.play();
-      isPlaying.value = true;
+      audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
   }
 
@@ -210,11 +221,17 @@ export function useMusicPlayer() {
         el.src = track.local_file_path;
         const restoreTime = typeof saved.currentTime === 'number' ? saved.currentTime : 0;
         const setTime = () => {
+          cleanup();
+          if (currentTrack.value?.id !== track.id) return;
           el.currentTime = restoreTime;
           currentTime.value = restoreTime;
+        };
+        const cleanup = () => {
           el.removeEventListener('loadedmetadata', setTime);
+          el.removeEventListener('error', cleanup);
         };
         el.addEventListener('loadedmetadata', setTime);
+        el.addEventListener('error', cleanup);
       }
     } catch (e) {
       // Restore is best-effort — a failed fetch just leaves nothing playing.
