@@ -406,6 +406,12 @@ export function getDb(): Database.Database {
     console.log('Seeded setting music_max_concurrent_downloads: 2');
   }
 
+  const musicModuleEnabledCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_module_enabled'").get() as { count: number };
+  if (musicModuleEnabledCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_module_enabled', '1')").run();
+    console.log('Seeded setting music_module_enabled: 1');
+  }
+
   // Backfill size_bytes for completed videos if null
   try {
     const completedVideos = db.prepare("SELECT id, channel_id FROM videos WHERE download_status = 'completed' AND size_bytes IS NULL").all() as any[];

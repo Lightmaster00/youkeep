@@ -23,6 +23,11 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE channels (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -306,4 +311,8 @@ export function insertMusicPlay(db: Database.Database, opts: { id: string; track
     INSERT INTO music_play_history (id, track_id, user_id, played_at)
     VALUES (?, ?, ?, ?)
   `).run(opts.id, opts.trackId, opts.userId, opts.playedAt ?? Date.now());
+}
+
+export function insertSetting(db: Database.Database, opts: { key: string; value: string }) {
+  db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(opts.key, opts.value);
 }
