@@ -2,7 +2,7 @@ import { defineEventHandler, createError } from 'h3';
 import { getUserFromSession } from '../utils/auth';
 
 export default defineEventHandler(async (event) => {
-  const path = (event.path || '').split('?')[0];
+  const path = (event.path || '').split('?')[0] ?? '';
   const isMusicRoute = path === '/api/music' || path.startsWith('/api/music/') || path === '/downloads-music' || path.startsWith('/downloads-music/');
   if (!isMusicRoute) return;
 
