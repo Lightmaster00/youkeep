@@ -23,6 +23,23 @@
         </select>
       </div>
 
+      <div v-if="playlists.length > 0" class="playlists-row">
+        <div
+          v-for="playlist in playlists"
+          :key="playlist.key"
+          class="playlist-card"
+          @click="playPlaylist(playlist)"
+        >
+          <div class="playlist-card-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          </div>
+          <div class="playlist-card-info">
+            <h4 class="playlist-card-label">{{ playlist.label }}</h4>
+            <p class="playlist-card-count">{{ playlist.tracks.length }} titre(s)</p>
+          </div>
+        </div>
+      </div>
+
       <div v-if="gridPending" class="music-loading">Chargement...</div>
 
       <div v-else-if="gridError" class="music-error">Erreur lors du chargement des artistes.</div>
@@ -207,6 +224,50 @@ const gridError = ref(false);
 
 const hasActiveFilters = computed(() => !!(search.value || genre.value || language.value || year.value));
 
+// --- Automatic playlists ---
+const playlists = ref<Array<{ key: string; label: string; tracks: any[] }>>([]);
+
+async function fetchPlaylists() {
+  const results: Array<{ key: string; label: string; tracks: any[] }> = [];
+
+  try {
+    const mostPlayed = await $fetch<any>('/api/music/playlists/most-played');
+    if (mostPlayed.tracks?.length > 0) {
+      results.push({ key: 'most-played', label: 'Les plus écoutés', tracks: mostPlayed.tracks });
+    }
+  } catch (e) { /* silently skip this card on error */ }
+
+  try {
+    const recentlyAdded = await $fetch<any>('/api/music/playlists/recently-added');
+    if (recentlyAdded.tracks?.length > 0) {
+      results.push({ key: 'recently-added', label: 'Ajoutés récemment', tracks: recentlyAdded.tracks });
+    }
+  } catch (e) { /* silently skip this card on error */ }
+
+  try {
+    const rediscover = await $fetch<any>('/api/music/playlists/rediscover');
+    if (rediscover.tracks?.length > 0) {
+      results.push({ key: 'rediscover', label: 'À (re)découvrir', tracks: rediscover.tracks });
+    }
+  } catch (e) { /* silently skip this card on error */ }
+
+  for (const g of facets.value.genres) {
+    try {
+      const genreMix = await $fetch<any>('/api/music/playlists/genre-mix', { params: { genre: g } });
+      if (genreMix.tracks?.length > 0) {
+        results.push({ key: `genre-${g}`, label: `Mix ${g}`, tracks: genreMix.tracks });
+      }
+    } catch (e) { /* silently skip this card on error */ }
+  }
+
+  playlists.value = results;
+}
+
+function playPlaylist(playlist: { tracks: any[] }) {
+  if (playlist.tracks.length === 0) return;
+  playMusicTrack(playlist.tracks[0], playlist.tracks);
+}
+
 let artistsRequestId = 0;
 
 async function fetchArtists() {
@@ -223,6 +284,9 @@ async function fetchArtists() {
     if (requestId !== artistsRequestId) return;
     artists.value = data.artists || [];
     facets.value = data.facets || { genres: [], languages: [], years: [] };
+    if (!hasActiveFilters.value && playlists.value.length === 0) {
+      fetchPlaylists();
+    }
   } catch (e) {
     if (requestId !== artistsRequestId) return;
     artists.value = [];
@@ -442,6 +506,55 @@ const getVisBadgeClass = (vis: string): string => {
   width: auto;
   flex: 0 1 auto;
   min-width: 150px;
+}
+
+.playlists-row {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  margin-bottom: 24px;
+  padding-bottom: 4px;
+}
+
+.playlist-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: var(--border-radius-lg);
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: rgba(139, 92, 246, 0.08);
+  flex-shrink: 0;
+  min-width: 220px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.playlist-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.playlist-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.playlist-card-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.playlist-card-count {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .music-loading,
