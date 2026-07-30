@@ -27,4 +27,16 @@ describe('GET /api/settings/music-module', () => {
     const result: any = await getHandler(mockEvent(undefined, { path: '/api/settings/music-module' }));
     expect(result.enabled).toBe(false);
   });
+
+  it('returns enabled: true when database is unavailable (fail-open behavior)', async () => {
+    (globalThis as any).getDb = () => {
+      return {
+        prepare: () => {
+          throw new Error('Database is locked or unavailable');
+        }
+      };
+    };
+    const result: any = await getHandler(mockEvent(undefined, { path: '/api/settings/music-module' }));
+    expect(result.enabled).toBe(true);
+  });
 });
