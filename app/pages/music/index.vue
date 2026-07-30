@@ -92,13 +92,19 @@
             </button>
           </div>
           <div v-if="expandedAlbums[album.id]" class="album-tracks">
-            <div v-for="track in trackGroups[album.id]?.tracks || []" :key="track.id" class="track-row">
+            <div
+              v-for="track in trackGroups[album.id]?.tracks || []"
+              :key="track.id"
+              class="track-row"
+              :class="{ 'now-playing': currentTrack?.id === track.id }"
+              @click="playTrack(track, album.id)"
+            >
               <span class="track-number">{{ track.track_number || '–' }}</span>
               <span class="track-title">{{ track.title }}</span>
               <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-              <button v-if="isAdmin" @click="openTrackEdit(track, album.id)" class="edit-btn" title="Modifier">
+              <button v-if="isAdmin" @click.stop="openTrackEdit(track, album.id)" class="edit-btn" title="Modifier">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
               </button>
             </div>
@@ -127,13 +133,19 @@
             </div>
           </div>
           <div v-if="standaloneExpanded" class="album-tracks">
-            <div v-for="track in trackGroups['none']?.tracks || []" :key="track.id" class="track-row">
+            <div
+              v-for="track in trackGroups['none']?.tracks || []"
+              :key="track.id"
+              class="track-row"
+              :class="{ 'now-playing': currentTrack?.id === track.id }"
+              @click="playTrack(track, 'none')"
+            >
               <span class="track-number">{{ track.track_number || '–' }}</span>
               <span class="track-title">{{ track.title }}</span>
               <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-              <button v-if="isAdmin" @click="openTrackEdit(track, 'none')" class="edit-btn" title="Modifier">
+              <button v-if="isAdmin" @click.stop="openTrackEdit(track, 'none')" class="edit-btn" title="Modifier">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
               </button>
             </div>
@@ -174,8 +186,10 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
+import { useMusicPlayer } from '~/composables/useMusicPlayer';
 
 const { isAdmin } = useAuth();
+const { currentTrack, play: playMusicTrack } = useMusicPlayer();
 const route = useRoute();
 const router = useRouter();
 
@@ -277,6 +291,13 @@ function toggleStandalone() {
     const group = ensureGroup('none');
     if (!group.loaded && !group.loading) loadTracks('none');
   }
+}
+
+function playTrack(track: any, groupKey: string) {
+  if (!track.local_file_path) return;
+  const group = trackGroups[groupKey];
+  if (!group) return;
+  playMusicTrack(track, group.tracks);
 }
 
 const editingTrack = ref<{ track: any; groupKey: string } | null>(null);
@@ -557,6 +578,20 @@ const getVisBadgeClass = (vis: string): string => {
   padding: 8px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 14px;
+  cursor: pointer;
+}
+
+.track-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.track-row.now-playing {
+  color: var(--accent-primary);
+}
+
+.track-row.now-playing .track-number,
+.track-row.now-playing .track-duration {
+  color: var(--accent-primary);
 }
 
 .track-row:last-child {
