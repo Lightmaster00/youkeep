@@ -101,7 +101,7 @@
       </aside>
 
       <!-- Main Content Page slot -->
-      <main class="content-area">
+      <main class="content-area" :class="{ 'has-mini-player': !!currentTrack }">
         <slot />
       </main>
     </div>
@@ -121,6 +121,8 @@
         </div>
       </TransitionGroup>
     </div>
+
+    <MusicMiniPlayer />
   </div>
 </template>
 
@@ -128,10 +130,12 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
+import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { spaces } from '~/spaces';
 
 const { user, isAdmin, logout } = useAuth();
 const { toasts, removeToast } = useToast();
+const { currentTrack } = useMusicPlayer();
 const dropdownOpen = ref(false);
 const spaceMenuOpen = ref(false);
 const searchQuery = ref('');
@@ -615,6 +619,10 @@ onUnmounted(() => {
   background: var(--bg-base);
   display: flex;
   flex-direction: column;
+}
+
+.content-area.has-mini-player {
+  padding-bottom: 96px;
 }
 
 @media (max-width: 768px) {
