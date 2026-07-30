@@ -69,4 +69,16 @@ describe('musicModuleGate middleware', () => {
     const result = await handler(mockEvent(undefined, { path: '/api/admin/music/ingest' }));
     expect(result).toBeUndefined();
   });
+
+  it('passes through /api/music/* for a guest when the settings read throws (fail-open)', async () => {
+    (globalThis as any).getDb = () => {
+      return {
+        prepare: () => {
+          throw new Error('Database is locked or unavailable');
+        }
+      };
+    };
+    const result = await handler(mockEvent(undefined, { path: '/api/music/artists' }));
+    expect(result).toBeUndefined();
+  });
 });

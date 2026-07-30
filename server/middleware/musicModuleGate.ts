@@ -3,16 +3,25 @@ import { getUserFromSession } from '../utils/auth';
 
 export default defineEventHandler(async (event) => {
   const path = event.path || '';
-  const isMusicRoute = path.startsWith('/api/music/') || path.startsWith('/downloads-music/');
+  const isMusicRoute = path === '/api/music' || path.startsWith('/api/music/') || path === '/downloads-music' || path.startsWith('/downloads-music/');
   if (!isMusicRoute) return;
 
-  const db = getDb();
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'music_module_enabled'").get() as { value: string } | undefined;
-  const enabled = row?.value !== '0';
+  let enabled = true;
+  try {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'music_module_enabled'").get() as { value: string } | undefined;
+    enabled = row?.value !== '0';
+  } catch {
+    enabled = true;
+  }
   if (enabled) return;
 
-  const session = await getUserFromSession(event);
-  if (session?.role === 'admin') return;
+  try {
+    const session = await getUserFromSession(event);
+    if (session?.role === 'admin') return;
+  } catch {
+    return;
+  }
 
-  throw createError({ statusCode: 404, statusMessage: 'Not found.' });
+  throw createError({ statusCode: 404, statusMessage: `Cannot find any route matching ${path}.` });
 });

@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb();
-  db.prepare("UPDATE settings SET value = ? WHERE key = 'music_module_enabled'").run(body.enabled ? '1' : '0');
+  db.prepare("INSERT INTO settings (key, value) VALUES ('music_module_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(body.enabled ? '1' : '0');
 
   return { enabled: body.enabled };
 });

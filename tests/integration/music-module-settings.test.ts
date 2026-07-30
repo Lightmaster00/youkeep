@@ -82,4 +82,13 @@ describe('POST /api/admin/settings/music-module', () => {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'music_module_enabled'").get() as { value: string };
     expect(row.value).toBe('1');
   });
+
+  it('creates the music_module_enabled row when it does not exist yet', async () => {
+    const cookie = loginAs(db, 'admin1', 'admin');
+    const result: any = await postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-module', body: { enabled: false } }));
+    expect(result.enabled).toBe(false);
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'music_module_enabled'").get() as { value: string } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.value).toBe('0');
+  });
 });
