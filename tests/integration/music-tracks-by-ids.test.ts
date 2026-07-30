@@ -93,6 +93,6 @@ describe('POST /api/music/tracks/by-ids', () => {
     }
 
     const result: any = await handler(eventFor(ids));
-    expect(result.tracks.length).toBeLessThanOrEqual(200);
+    expect(result.tracks.map((t: any) => t.id)).toEqual(ids.slice(0, 200));
   });
 });

@@ -48,7 +48,7 @@ export default defineEventHandler(async (event) => {
     SELECT t.id, a.id as artist_id, a.name as artist_name
     FROM music_tracks t
     JOIN music_artists a ON t.artist_id = a.id
-    WHERE t.id = ?
+    WHERE t.id = ? AND t.download_status = 'completed'
   `).get(trackId) as { id: string; artist_id: string; artist_name: string } | undefined;
 
   if (!track) {

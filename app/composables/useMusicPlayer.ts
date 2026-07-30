@@ -120,7 +120,9 @@ export function useMusicPlayer() {
     if (shuffleOn.value && shuffledOrder.value) {
       const posInShuffled = shuffledOrder.value.indexOf(currentIndex.value);
       const prevPos = posInShuffled - 1;
-      return prevPos >= 0 ? shuffledOrder.value[prevPos]! : null;
+      if (prevPos >= 0) return shuffledOrder.value[prevPos]!;
+      if (repeatMode.value === 'all') return shuffledOrder.value[shuffledOrder.value.length - 1]!;
+      return null;
     }
     const prev = currentIndex.value - 1;
     if (prev >= 0) return prev;
@@ -131,6 +133,7 @@ export function useMusicPlayer() {
   function next() {
     const idx = nextIndex();
     if (idx === null) {
+      audioEl.value?.pause();
       isPlaying.value = false;
       return;
     }
@@ -145,6 +148,7 @@ export function useMusicPlayer() {
   function prev() {
     const idx = prevIndex();
     if (idx === null) {
+      audioEl.value?.pause();
       isPlaying.value = false;
       return;
     }
