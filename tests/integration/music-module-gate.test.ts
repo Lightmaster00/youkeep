@@ -81,4 +81,52 @@ describe('musicModuleGate middleware', () => {
     const result = await handler(mockEvent(undefined, { path: '/api/music/artists' }));
     expect(result).toBeUndefined();
   });
+
+  it('uses the same 404 message h3 uses for a genuinely unmatched route', async () => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    await expect(handler(mockEvent(undefined, { path: '/api/music/artists' }))).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Cannot find any route matching /api/music/artists.'
+    });
+  });
+
+  it('gates the bare /api/music path (no trailing slash) when disabled', async () => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    await expect(handler(mockEvent(undefined, { path: '/api/music' }))).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('gates the bare /downloads-music path (no trailing slash) when disabled', async () => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    await expect(handler(mockEvent(undefined, { path: '/downloads-music' }))).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('does not gate lookalike paths that merely share the prefix', async () => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    const result = await handler(mockEvent(undefined, { path: '/api/musicfoo' }));
+    expect(result).toBeUndefined();
+  });
+
+  it('strips the query string before matching, so a disabled module still blocks /api/music/artists?x=1', async () => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    await expect(handler(mockEvent(undefined, { path: '/api/music/artists?x=1' }))).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Cannot find any route matching /api/music/artists.'
+    });
+  });
+
+  it('fails open when getUserFromSession throws while the module is disabled', async () => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    const cookie = sessionCookie('broken-session-id');
+    (globalThis as any).getDb = () => db;
+    const originalPrepare = db.prepare.bind(db);
+    (db as any).prepare = (sql: string) => {
+      if (sql.includes('FROM sessions')) {
+        throw new Error('Session lookup failed');
+      }
+      return originalPrepare(sql);
+    };
+    const result = await handler(mockEvent(cookie, { path: '/api/music/artists' }));
+    expect(result).toBeUndefined();
+    (db as any).prepare = originalPrepare;
+  });
 });
