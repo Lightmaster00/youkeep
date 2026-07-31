@@ -280,6 +280,7 @@ export function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE music_tracks ADD COLUMN local_file_path TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE music_tracks ADD COLUMN local_thumbnail_path TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE music_tracks ADD COLUMN size_bytes INTEGER;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_tracks ADD COLUMN has_clip INTEGER DEFAULT 0;`); } catch (e) {}
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
   // and the FTS/share_token indexes above already cover the rest).
@@ -410,6 +411,12 @@ export function getDb(): Database.Database {
   if (musicModuleEnabledCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('music_module_enabled', '1')").run();
     console.log('Seeded setting music_module_enabled: 1');
+  }
+
+  const musicDownloadClipsCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_download_clips'").get() as { count: number };
+  if (musicDownloadClipsCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_download_clips', '0')").run();
+    console.log('Seeded setting music_download_clips: 0');
   }
 
   // Backfill size_bytes for completed videos if null

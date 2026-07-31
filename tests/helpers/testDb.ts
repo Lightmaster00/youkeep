@@ -115,6 +115,7 @@ export function createTestDb(): Database.Database {
       download_status TEXT DEFAULT 'completed',
       local_file_path TEXT,
       local_thumbnail_path TEXT,
+      has_clip INTEGER DEFAULT 0,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE,
       FOREIGN KEY (album_id) REFERENCES music_albums(id) ON DELETE SET NULL
@@ -285,11 +286,12 @@ export function insertMusicTrack(db: Database.Database, opts: {
   downloadStatus?: string;
   localFilePath?: string | null;
   localThumbnailPath?: string | null;
+  hasClip?: boolean;
   createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, has_clip, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.artistId,
@@ -302,6 +304,7 @@ export function insertMusicTrack(db: Database.Database, opts: {
     opts.downloadStatus ?? 'completed',
     opts.localFilePath ?? null,
     opts.localThumbnailPath ?? null,
+    opts.hasClip ? 1 : 0,
     opts.createdAt ?? Date.now()
   );
 }
