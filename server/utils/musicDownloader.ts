@@ -458,6 +458,58 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
   });
 }
 
+/**
+ * Manually back-fills a clip for a track that was already ingested audio-only.
+ * Unlike the automatic queue path, there is no audio-only fallback here — the
+ * track already has working audio, so a failed clip attempt just leaves it
+ * untouched. The pre-existing audio file (a different extension than the new
+ * .mp4, so yt-dlp cannot clobber it) is only deleted after the new clip file
+ * is confirmed on disk and the DB row is updated.
+ */
+export async function downloadTrackClip(trackId: string): Promise<void> {
+  const db = getDb();
+  const track = db.prepare('SELECT id, artist_id, local_file_path, has_clip FROM music_tracks WHERE id = ?').get(trackId) as
+    { id: string; artist_id: string; local_file_path: string | null; has_clip: number } | undefined;
+  if (!track) {
+    throw new Error('Track not found');
+  }
+  if (track.has_clip === 1) {
+    throw new Error('Track already has a clip');
+  }
+
+  const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'music_max_concurrent_downloads'").get() as { value: string } | undefined;
+  const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
+  while (!hasCapacityForMoreDownloads(getActiveMusicDownloadCount(), maxConcurrent)) {
+    await sleepOrWakeableMusic(1000);
+  }
+
+  incrementActiveMusicDownloadCount();
+  const previousFilePath = track.local_file_path;
+  try {
+    await downloadMusicTrackFile(trackId, track.artist_id, { wantClip: true });
+
+    if (previousFilePath) {
+      const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(track.artist_id) as { name: string } | undefined;
+      const folderName = sanitizeFolderName(artist?.name || track.artist_id);
+      const artistDir = path.join(getMusicDownloadsDir(), folderName);
+      const previousAudioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
+      for (const ext of previousAudioExtensions) {
+        const oldFile = path.join(artistDir, `${trackId}.${ext}`);
+        if (fs.existsSync(oldFile)) {
+          try { fs.unlinkSync(oldFile); } catch (e) {}
+        }
+      }
+    }
+    addLog(`Clip téléchargé avec succès pour la track ${trackId}.`);
+  } catch (err: any) {
+    addLog(`Échec du téléchargement du clip pour la track ${trackId} : ${err.message || err}`);
+    throw err;
+  } finally {
+    decrementActiveMusicDownloadCount();
+    wakeMusicWorker();
+  }
+}
+
 export async function startMusicQueueWorker() {
   if (getIsMusicProcessing()) {
     addLog('Worker musique déjà en cours d\'exécution. Réveil du worker...');
