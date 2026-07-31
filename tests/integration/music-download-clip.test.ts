@@ -85,4 +85,19 @@ describe('POST /api/admin/music/tracks/[id]/download-clip', () => {
     expect(result).toEqual({ success: true, queued: true });
     expect(spy).toHaveBeenCalledWith('t1');
   });
+
+  it('releases the in-flight reservation once downloadTrackClip settles, allowing a later request through', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: false });
+    const cookie = loginAs('admin1', 'admin');
+
+    vi.spyOn(musicDownloader, 'downloadTrackClip').mockResolvedValue(undefined);
+
+    await handler(eventFor('t1', cookie));
+    // Let the fire-and-forget promise chain (including its .finally cleanup) settle.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(musicDownloader.musicClipBackfillsInFlight.has('t1')).toBe(false);
+    await expect(handler(eventFor('t1', cookie))).resolves.toEqual({ success: true, queued: true });
+  });
 });

@@ -28,7 +28,11 @@ export default defineEventHandler(async (event) => {
 
   // Fire-and-forget: this is ingestion, not a synchronous action — the client
   // polls the track's has_clip field afterward rather than waiting on this request.
-  downloadTrackClip(trackId).catch(() => {});
+  // The reservation is released here (not solely relying on downloadTrackClip's own
+  // finally) so a throw in its pre-try prologue can never leak it permanently.
+  downloadTrackClip(trackId)
+    .catch(() => {})
+    .finally(() => musicClipBackfillsInFlight.delete(trackId));
 
   return { success: true, queued: true };
 });
