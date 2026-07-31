@@ -543,6 +543,17 @@
             </label>
           </div>
 
+          <div class="downloads-header-panel glass-panel" style="margin-bottom: 16px;">
+            <div class="header-text">
+              <h2>Clips vidéo</h2>
+              <p>Télécharge aussi la vidéo (clip officiel) pour chaque nouvelle piste ingérée, en plus de l'audio. Les pistes déjà téléchargées ne sont pas affectées automatiquement — utilise le bouton « Télécharger le clip » sur une piste existante pour la rattraper manuellement.</p>
+            </div>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" v-model="musicDownloadClipsEnabled" @change="toggleMusicDownloadClips" :disabled="togglingMusicDownloadClips" />
+              <span>{{ musicDownloadClipsEnabled ? 'Activé' : 'Désactivé' }}</span>
+            </label>
+          </div>
+
           <div class="downloads-header-panel glass-panel">
             <div class="header-text">
               <h2>Music Ingestion</h2>
@@ -1193,6 +1204,32 @@ async function toggleMusicModule() {
     toast.error(e?.data?.statusMessage || 'Erreur lors de la mise à jour du module Musique.');
   } finally {
     togglingMusicModule.value = false;
+  }
+}
+
+const musicDownloadClipsEnabled = ref(false);
+const togglingMusicDownloadClips = ref(false);
+
+async function fetchMusicDownloadClipsEnabled() {
+  try {
+    const data = await $fetch<{ enabled: boolean }>('/api/settings/music-clips');
+    musicDownloadClipsEnabled.value = data.enabled;
+  } catch (e) {
+    // leave the default
+  }
+}
+
+async function toggleMusicDownloadClips() {
+  togglingMusicDownloadClips.value = true;
+  const desired = musicDownloadClipsEnabled.value;
+  try {
+    await $fetch('/api/admin/settings/music-clips', { method: 'POST', body: { enabled: desired } });
+    toast.success(desired ? 'Téléchargement des clips activé.' : 'Téléchargement des clips désactivé.');
+  } catch (e: any) {
+    musicDownloadClipsEnabled.value = !desired;
+    toast.error(e?.data?.statusMessage || 'Erreur lors de la mise à jour du réglage des clips.');
+  } finally {
+    togglingMusicDownloadClips.value = false;
   }
 }
 
@@ -2033,6 +2070,7 @@ onMounted(() => {
     fetchMusicConcurrency();
     runMusicPolling();
     fetchMusicModuleEnabled();
+    fetchMusicDownloadClipsEnabled();
   }
 });
 

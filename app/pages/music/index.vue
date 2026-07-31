@@ -120,6 +120,22 @@
               <span class="track-title">{{ track.title }}</span>
               <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
+              <button
+                v-if="track.has_clip"
+                @click="toggleTrackClipMode($event, track)"
+                class="badge badge-clip"
+                title="Voir le clip"
+              >
+                🎬 Clip
+              </button>
+              <button
+                v-else-if="isAdmin"
+                @click.stop="downloadClip(track)"
+                :disabled="downloadingClipIds.has(track.id)"
+                class="btn btn-secondary load-more-btn"
+              >
+                {{ downloadingClipIds.has(track.id) ? 'Téléchargement…' : 'Télécharger le clip' }}
+              </button>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
               <button v-if="isAdmin" @click.stop="openTrackEdit(track, album.id)" class="edit-btn" title="Modifier">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
@@ -161,6 +177,22 @@
               <span class="track-title">{{ track.title }}</span>
               <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
+              <button
+                v-if="track.has_clip"
+                @click="toggleTrackClipMode($event, track)"
+                class="badge badge-clip"
+                title="Voir le clip"
+              >
+                🎬 Clip
+              </button>
+              <button
+                v-else-if="isAdmin"
+                @click.stop="downloadClip(track)"
+                :disabled="downloadingClipIds.has(track.id)"
+                class="btn btn-secondary load-more-btn"
+              >
+                {{ downloadingClipIds.has(track.id) ? 'Téléchargement…' : 'Télécharger le clip' }}
+              </button>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
               <button v-if="isAdmin" @click.stop="openTrackEdit(track, 'none')" class="edit-btn" title="Modifier">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
@@ -204,9 +236,11 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
+import { useToast } from '~/composables/useToast';
 
 const { isAdmin } = useAuth();
-const { currentTrack, play: playMusicTrack } = useMusicPlayer();
+const { currentTrack, clipMode, play: playMusicTrack, setClipMode } = useMusicPlayer();
+const toast = useToast();
 const route = useRoute();
 const router = useRouter();
 
@@ -362,6 +396,25 @@ function playTrack(track: any, groupKey: string) {
   const group = trackGroups[groupKey];
   if (!group) return;
   playMusicTrack(track, group.tracks);
+}
+
+const downloadingClipIds = ref<Set<string>>(new Set());
+
+async function downloadClip(track: any) {
+  if (downloadingClipIds.value.has(track.id)) return;
+  downloadingClipIds.value = new Set([...downloadingClipIds.value, track.id]);
+  try {
+    await $fetch(`/api/admin/music/tracks/${track.id}/download-clip`, { method: 'POST' });
+    toast.success('Téléchargement du clip lancé — la pastille apparaîtra une fois terminé.');
+  } catch (e: any) {
+    toast.error(e?.data?.statusMessage || 'Erreur lors du lancement du téléchargement du clip.');
+    downloadingClipIds.value = new Set([...downloadingClipIds.value].filter((id) => id !== track.id));
+  }
+}
+
+function toggleTrackClipMode(e: Event, track: any) {
+  e.stopPropagation();
+  setClipMode(!(clipMode.value && currentTrack.value?.id === track.id));
 }
 
 const editingTrack = ref<{ track: any; groupKey: string } | null>(null);
@@ -735,6 +788,17 @@ const getVisBadgeClass = (vis: string): string => {
 .track-duration {
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.badge-clip {
+  cursor: pointer;
+  border: none;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--accent-primary);
+}
+
+.badge-clip:hover {
+  background: rgba(139, 92, 246, 0.25);
 }
 
 .load-more-btn {
