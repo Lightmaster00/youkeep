@@ -50,6 +50,17 @@ describe('POST /api/music/tracks/by-ids', () => {
     expect(result.tracks[0].local_file_path).toBe('/downloads-music/a1/t2.m4a');
   });
 
+  it('includes has_clip on returned tracks', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', hasClip: false });
+
+    const result: any = await handler(eventFor(['t1', 't2']));
+    const byId = Object.fromEntries(result.tracks.map((t: any) => [t.id, t.has_clip]));
+    expect(byId['t1']).toBe(1);
+    expect(byId['t2']).toBe(0);
+  });
+
   it('silently drops ids that do not exist', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });

@@ -76,6 +76,16 @@ describe('GET /api/music/playlists/most-played', () => {
     const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
     expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
   });
+
+  it('includes has_clip', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
+    const cookie = loginAs('u1');
+    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1' });
+
+    const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
+    expect(result.tracks[0].has_clip).toBe(1);
+  });
 });
 
 describe('GET /api/music/playlists/recently-added', () => {
@@ -112,6 +122,14 @@ describe('GET /api/music/playlists/recently-added', () => {
     const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added', cookie));
     expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
   });
+
+  it('includes has_clip', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
+
+    const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added'));
+    expect(result.tracks[0].has_clip).toBe(1);
+  });
 });
 
 describe('GET /api/music/playlists/rediscover', () => {
@@ -140,6 +158,17 @@ describe('GET /api/music/playlists/rediscover', () => {
 
     const result: any = await rediscoverHandler(eventFor('/api/music/playlists/rediscover', cookie));
     expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
+  });
+
+  it('includes has_clip', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
+    const cookie = loginAs('u1');
+    const fortyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 40;
+    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1', playedAt: fortyDaysAgo });
+
+    const result: any = await rediscoverHandler(eventFor('/api/music/playlists/rediscover', cookie));
+    expect(result.tracks[0].has_clip).toBe(1);
   });
 });
 
@@ -171,5 +200,13 @@ describe('GET /api/music/playlists/genre-mix', () => {
 
     const result: any = await genreMixHandler(eventFor(`/api/music/playlists/genre-mix?genre=${encodeURIComponent("Rock' OR '1'='1")}`));
     expect(result.tracks).toEqual([]);
+  });
+
+  it('includes has_clip', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock', hasClip: true });
+
+    const result: any = await genreMixHandler(eventFor('/api/music/playlists/genre-mix?genre=Rock'));
+    expect(result.tracks[0].has_clip).toBe(1);
   });
 });

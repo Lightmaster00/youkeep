@@ -66,6 +66,17 @@ describe('GET /api/music/artists/[id]/tracks', () => {
     expect(result.tracks[0].artist_name).toBe('Test Artist');
   });
 
+  it('includes has_clip', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Test Artist' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null, hasClip: true });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: null, hasClip: false });
+
+    const result: any = await handler(eventFor('a1', '?albumId=none'));
+    const byId = Object.fromEntries(result.tracks.map((t: any) => [t.id, t.has_clip]));
+    expect(byId['t1']).toBe(1);
+    expect(byId['t2']).toBe(0);
+  });
+
   it("returns album-less tracks when albumId=none", async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
