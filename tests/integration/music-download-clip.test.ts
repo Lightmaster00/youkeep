@@ -10,6 +10,7 @@ beforeEach(() => {
   db = createTestDb();
   (globalThis as any).getDb = () => db;
   vi.restoreAllMocks();
+  musicDownloader.musicClipBackfillsInFlight.clear();
 });
 
 function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
@@ -56,6 +57,21 @@ describe('POST /api/admin/music/tracks/[id]/download-clip', () => {
     } finally {
       musicDownloader.activeMusicProcesses.delete('t1');
     }
+  });
+
+  it('returns 409 on a second concurrent request before the first has started spawning (closes the pre-spawn race window)', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: false });
+    const cookie = loginAs('admin1', 'admin');
+
+    const first = handler(eventFor('t1', cookie));
+    await expect(handler(eventFor('t1', cookie))).rejects.toMatchObject({ statusCode: 409 });
+
+    // Let the first request's fire-and-forget downloadTrackClip settle (it will
+    // fail fast in this test environment since yt-dlp isn't real) so it doesn't
+    // leak the reservation into a later test.
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 50));
   });
 
   it('returns 200 and queues the download without awaiting it, for an admin', async () => {

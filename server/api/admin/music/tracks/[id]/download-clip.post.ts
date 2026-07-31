@@ -1,6 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { requireAdmin } from '../../../../../utils/auth';
-import { downloadTrackClip, activeMusicProcesses } from '../../../../../utils/musicDownloader';
+import { downloadTrackClip, activeMusicProcesses, musicClipBackfillsInFlight } from '../../../../../utils/musicDownloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -21,6 +21,10 @@ export default defineEventHandler(async (event) => {
   if (activeMusicProcesses.has(trackId)) {
     throw createError({ statusCode: 409, statusMessage: 'A download is already in progress for this track.' });
   }
+  if (musicClipBackfillsInFlight.has(trackId)) {
+    throw createError({ statusCode: 409, statusMessage: 'A download is already in progress for this track.' });
+  }
+  musicClipBackfillsInFlight.add(trackId);
 
   // Fire-and-forget: this is ingestion, not a synchronous action — the client
   // polls the track's has_clip field afterward rather than waiting on this request.
