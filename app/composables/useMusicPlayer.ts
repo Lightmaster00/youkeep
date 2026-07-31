@@ -8,6 +8,7 @@ export interface PlayableTrack {
   duration?: number | null;
   local_file_path: string;
   local_thumbnail_path?: string | null;
+  has_clip?: number;
 }
 
 const STORAGE_KEY = 'music_player_state';
@@ -19,8 +20,9 @@ export function useMusicPlayer() {
   const isPlaying = useState<boolean>('music_player_is_playing', () => false);
   const currentTime = useState<number>('music_player_current_time', () => 0);
   const duration = useState<number>('music_player_duration', () => 0);
-  const audioEl = useState<HTMLAudioElement | null>('music_player_audio_el', () => null);
+  const audioEl = useState<HTMLMediaElement | null>('music_player_audio_el', () => null);
   const shuffleOn = useState<boolean>('music_player_shuffle', () => false);
+  const clipMode = useState<boolean>('music_player_clip_mode', () => false);
   const repeatMode = useState<'off' | 'all' | 'one'>('music_player_repeat', () => 'off');
   const shuffledOrder = useState<number[] | null>('music_player_shuffled_order', () => null);
   const hasCountedThisPlay = useState<boolean>('music_player_has_counted', () => false);
@@ -31,10 +33,18 @@ export function useMusicPlayer() {
     hasCountedThisPlay.value = false;
     currentTime.value = 0;
     duration.value = 0;
+    if (!track.has_clip) {
+      clipMode.value = false;
+    }
     if (audioEl.value) {
       audioEl.value.src = track.local_file_path;
       audioEl.value.currentTime = 0;
     }
+  }
+
+  function setClipMode(on: boolean) {
+    if (on && !currentTrack.value?.has_clip) return;
+    clipMode.value = on;
   }
 
   function generateShuffledOrder(fromIndex?: number) {
@@ -244,8 +254,8 @@ export function useMusicPlayer() {
 
   return {
     currentTrack, queue, currentIndex, isPlaying, currentTime, duration, audioEl,
-    shuffleOn, repeatMode,
-    play, togglePlay, seek, next, prev, toggleShuffle, cycleRepeat,
+    shuffleOn, repeatMode, clipMode,
+    play, togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
     recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
   };
 }

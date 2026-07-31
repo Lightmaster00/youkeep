@@ -1,6 +1,8 @@
 <template>
-  <audio
+  <video
     ref="audioElRef"
+    v-show="clipMode"
+    class="mini-player-video"
     @timeupdate="onTimeUpdate"
     @loadedmetadata="onLoadedMetadata"
     @durationchange="onLoadedMetadata"
@@ -8,15 +10,25 @@
     @play="isPlaying = true"
     @pause="isPlaying = false"
     @error="onAudioError"
-  ></audio>
+  ></video>
 
   <div v-if="currentTrack" class="mini-player">
-    <img :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
+    <img v-if="!clipMode" :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
 
     <div class="mini-player-info">
       <span class="mini-player-title">{{ currentTrack.title }}</span>
       <span class="mini-player-artist">{{ currentTrack.artist_name || '' }}</span>
     </div>
+
+    <button
+      v-if="currentTrack.has_clip"
+      @click="setClipMode(!clipMode)"
+      class="mini-player-btn mini-player-clip-toggle"
+      :class="{ active: clipMode }"
+      :title="clipMode ? 'Repasser en mode audio' : 'Voir le clip'"
+    >
+      🎬
+    </button>
 
     <div class="mini-player-controls">
       <button @click="prev" class="mini-player-btn" title="Précédent">
@@ -69,13 +81,13 @@ import { useToast } from '~/composables/useToast';
 
 const {
   currentTrack, isPlaying, currentTime, duration,
-  audioEl, shuffleOn, repeatMode,
-  togglePlay, seek, next, prev, toggleShuffle, cycleRepeat,
+  audioEl, shuffleOn, repeatMode, clipMode,
+  togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
   recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
 } = useMusicPlayer();
 
 const toast = useToast();
-const audioElRef = ref<HTMLAudioElement | null>(null);
+const audioElRef = ref<HTMLVideoElement | null>(null);
 const progressBarRef = ref<HTMLDivElement | null>(null);
 const volume = ref(1);
 
@@ -100,6 +112,7 @@ function onEnded() {
 function onAudioError() {
   toast.error('Erreur de lecture audio.');
   isPlaying.value = false;
+  setClipMode(false);
 }
 
 function onProgressClick(e: MouseEvent) {
@@ -173,6 +186,23 @@ onMounted(async () => {
   border-radius: var(--border-radius-md);
   object-fit: cover;
   flex-shrink: 0;
+}
+
+.mini-player-video {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--border-radius-md);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #000;
+}
+
+.mini-player-clip-toggle {
+  font-size: 16px;
+}
+
+.mini-player-clip-toggle.active {
+  color: var(--accent-primary);
 }
 
 .mini-player-info {
