@@ -68,7 +68,7 @@ export function getMusicDownloadsDir(): string {
   return localFallback;
 }
 
-export function cleanupPartialMusicFiles(trackId: string, artistId: string): void {
+export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts: { newerThan?: number } = {}): void {
   const db = getDb();
   const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
   const basePath = getMusicDownloadsDir();
@@ -85,10 +85,19 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string): voi
   }
 
   for (const entry of entries) {
-    if (entry.startsWith(prefix)) {
-      const fullPath = path.join(artistDir, entry);
-      try { fs.unlinkSync(fullPath); } catch (e) {}
+    if (!entry.startsWith(prefix)) continue;
+    const fullPath = path.join(artistDir, entry);
+    if (opts.newerThan !== undefined) {
+      // A file that predates this download attempt is a previously-completed
+      // file (e.g. the audio a manual clip backfill is trying to supplement),
+      // not a partial artifact of the attempt being aborted — leave it alone.
+      try {
+        if (fs.statSync(fullPath).mtimeMs < opts.newerThan) continue;
+      } catch (e) {
+        continue;
+      }
     }
+    try { fs.unlinkSync(fullPath); } catch (e) {}
   }
 }
 
@@ -271,6 +280,7 @@ export async function ingestMusicUrl(
  */
 function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantClip?: boolean } = {}): Promise<{ hasClip: boolean }> {
   const wantClip = opts.wantClip === true;
+  const attemptStartedAt = Date.now();
   return new Promise<{ hasClip: boolean }>(async (resolve, reject) => {
     try {
       const ytdlPath = await getYtdlPath();
@@ -326,7 +336,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
           addLog(`yt-dlp [${trackId}] timeout après ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
           try { child.kill('SIGKILL'); } catch (e) {}
           activeMusicProcesses.delete(trackId);
-          cleanupPartialMusicFiles(trackId, artistId);
+          cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
           settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
         }
       }, MUSIC_DOWNLOAD_TIMEOUT_MS);
