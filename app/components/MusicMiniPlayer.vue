@@ -3,6 +3,8 @@
     ref="audioElRef"
     v-show="clipMode"
     class="mini-player-video"
+    playsinline
+    webkit-playsinline
     @timeupdate="onTimeUpdate"
     @loadedmetadata="onLoadedMetadata"
     @durationchange="onLoadedMetadata"
@@ -26,6 +28,8 @@
       class="mini-player-btn mini-player-clip-toggle"
       :class="{ active: clipMode }"
       :title="clipMode ? 'Repasser en mode audio' : 'Voir le clip'"
+      :aria-label="clipMode ? 'Repasser en mode audio' : 'Voir le clip'"
+      :aria-pressed="clipMode"
     >
       🎬
     </button>
@@ -189,12 +193,15 @@ onMounted(async () => {
 }
 
 .mini-player-video {
+  position: fixed;
+  bottom: 12px;
+  left: 24px;
   width: 48px;
   height: 48px;
   border-radius: var(--border-radius-md);
   object-fit: cover;
-  flex-shrink: 0;
   background: #000;
+  z-index: 901;
 }
 
 .mini-player-clip-toggle {

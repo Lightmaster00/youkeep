@@ -223,6 +223,9 @@ export function useMusicPlayer() {
       queue.value = restoredQueue;
       currentIndex.value = idx === -1 ? 0 : idx;
       currentTrack.value = restoredQueue[currentIndex.value] ?? null;
+      if (!currentTrack.value?.has_clip) {
+        clipMode.value = false;
+      }
       shuffleOn.value = !!saved.shuffleOn;
       repeatMode.value = ['off', 'all', 'one'].includes(saved.repeatMode) ? saved.repeatMode : 'off';
       if (shuffleOn.value) generateShuffledOrder(currentIndex.value);
