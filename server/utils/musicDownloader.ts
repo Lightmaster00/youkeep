@@ -74,7 +74,7 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string): voi
   const basePath = getMusicDownloadsDir();
   const artistDir = path.join(basePath, sanitizeFolderName(artist?.name || artistId));
 
-  const audioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
+  const audioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav', 'mp4'];
   const thumbExtensions = ['jpg', 'jpeg', 'webp', 'png'];
   const filesToRemove = [
     ...audioExtensions.map(ext => path.join(artistDir, `${trackId}.${ext}`)),
@@ -268,8 +268,9 @@ export async function ingestMusicUrl(
  * Downloads a track's audio using the spawned yt-dlp process.
  * Mirrors downloadVideoFile in downloader.ts, adapted for audio-only extraction.
  */
-function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void> {
-  return new Promise<void>(async (resolve, reject) => {
+function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantClip?: boolean } = {}): Promise<{ hasClip: boolean }> {
+  const wantClip = opts.wantClip === true;
+  return new Promise<{ hasClip: boolean }>(async (resolve, reject) => {
     try {
       const ytdlPath = await getYtdlPath();
       const db = getDb();
@@ -291,15 +292,25 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
       const outputTemplate = path.join(artistDir, `${trackId}.%(ext)s`);
       const targetUrl = `https://www.youtube.com/watch?v=${trackId}`;
 
-      const args = [
-        '-x',
-        '-f', 'bestaudio/best',
-        '-o', outputTemplate,
-        '--write-thumbnail',
-        '--write-info-json',
-        '--no-playlist',
-        targetUrl
-      ];
+      const args = wantClip
+        ? [
+            '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            '--merge-output-format', 'mp4',
+            '-o', outputTemplate,
+            '--write-thumbnail',
+            '--write-info-json',
+            '--no-playlist',
+            targetUrl
+          ]
+        : [
+            '-x',
+            '-f', 'bestaudio/best',
+            '-o', outputTemplate,
+            '--write-thumbnail',
+            '--write-info-json',
+            '--no-playlist',
+            targetUrl
+          ];
 
       const env = buildSpawnEnv();
       addLog(`Lancement du téléchargement audio : ${ytdlPath} ${args.join(' ')}`);
@@ -360,10 +371,10 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
         if (settled) return;
 
         if (code === 0) {
-          const audioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
+          const scanExtensions = wantClip ? ['mp4'] : ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
           let audioFile: string | null = null;
           let localFilePath: string | null = null;
-          for (const ext of audioExtensions) {
+          for (const ext of scanExtensions) {
             const testPath = path.join(artistDir, `${trackId}.${ext}`);
             if (fs.existsSync(testPath)) {
               audioFile = testPath;
@@ -424,9 +435,9 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
           db.prepare(`
             UPDATE music_tracks
             SET local_file_path = ?, local_thumbnail_path = ?, album_id = COALESCE(?, album_id),
-                genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?
+                genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?, has_clip = ?
             WHERE id = ?
-          `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, trackId);
+          `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, wantClip ? 1 : 0, trackId);
 
           db.prepare(`
             INSERT INTO music_track_artists (track_id, artist_id, role)
@@ -434,7 +445,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string): Promise<void
             ON CONFLICT(track_id, artist_id) DO NOTHING
           `).run(trackId, artistId);
 
-          settle(() => resolve());
+          settle(() => resolve({ hasClip: wantClip }));
         } else {
           const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
           settle(() => reject(new Error(errorMsg)));
@@ -532,14 +543,27 @@ export async function startMusicQueueWorker() {
 async function runSingleMusicDownload(trackId: string, trackTitle: string, artistId: string): Promise<void> {
   const db = getDb();
   try {
-    await downloadMusicTrackFile(trackId, artistId);
+    const clipsSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_download_clips'").get() as { value: string } | undefined;
+    const wantClip = clipsSetting?.value === '1';
+
+    let result: { hasClip: boolean };
+    if (wantClip) {
+      try {
+        result = await downloadMusicTrackFile(trackId, artistId, { wantClip: true });
+      } catch (clipErr: any) {
+        addLog(`Échec du téléchargement du clip pour "${trackTitle}" (${trackId}), repli sur l'audio seul : ${clipErr.message || clipErr}`);
+        result = await downloadMusicTrackFile(trackId, artistId, { wantClip: false });
+      }
+    } else {
+      result = await downloadMusicTrackFile(trackId, artistId, { wantClip: false });
+    }
 
     db.prepare(`
       UPDATE music_tracks
       SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = null
       WHERE id = ?
     `).run(trackId);
-    addLog(`Téléchargement audio RÉUSSI : "${trackTitle}"`);
+    addLog(`Téléchargement ${result.hasClip ? 'du clip' : 'audio'} RÉUSSI : "${trackTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
     addLog(`ÉCHEC du téléchargement audio pour la track "${trackTitle}" (${trackId}) : ${errMsg}`);
