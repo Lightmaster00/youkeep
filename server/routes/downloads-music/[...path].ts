@@ -16,6 +16,7 @@ const AUDIO_CONTENT_TYPES: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
   '.wav': 'audio/wav',
+  '.mp4': 'video/mp4',
 };
 
 export default defineEventHandler(async (event) => {
