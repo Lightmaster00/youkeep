@@ -74,22 +74,22 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string): voi
   const basePath = getMusicDownloadsDir();
   const artistDir = path.join(basePath, sanitizeFolderName(artist?.name || artistId));
 
-  const audioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav', 'mp4'];
-  const thumbExtensions = ['jpg', 'jpeg', 'webp', 'png'];
-  const filesToRemove = [
-    ...audioExtensions.map(ext => path.join(artistDir, `${trackId}.${ext}`)),
-    ...audioExtensions.flatMap(ext => [
-      path.join(artistDir, `${trackId}.${ext}.part`),
-      path.join(artistDir, `${trackId}.${ext}.ytdl`),
-    ]),
-    ...thumbExtensions.map(ext => path.join(artistDir, `${trackId}.${ext}`)),
-  ];
+  if (!fs.existsSync(artistDir)) return;
 
-  filesToRemove.forEach(f => {
-    if (fs.existsSync(f)) {
-      try { fs.unlinkSync(f); } catch (e) {}
+  const prefix = `${trackId}.`;
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(artistDir);
+  } catch (e) {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry.startsWith(prefix)) {
+      const fullPath = path.join(artistDir, entry);
+      try { fs.unlinkSync(fullPath); } catch (e) {}
     }
-  });
+  }
 }
 
 /**
@@ -265,8 +265,9 @@ export async function ingestMusicUrl(
 }
 
 /**
- * Downloads a track's audio using the spawned yt-dlp process.
- * Mirrors downloadVideoFile in downloader.ts, adapted for audio-only extraction.
+ * Downloads a track's file using the spawned yt-dlp process. Depending on the
+ * `wantClip` option, this either does audio-only extraction or downloads a
+ * merged video+audio clip. Mirrors downloadVideoFile in downloader.ts.
  */
 function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantClip?: boolean } = {}): Promise<{ hasClip: boolean }> {
   const wantClip = opts.wantClip === true;
@@ -313,7 +314,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
           ];
 
       const env = buildSpawnEnv();
-      addLog(`Lancement du téléchargement audio : ${ytdlPath} ${args.join(' ')}`);
+      addLog(`Lancement du téléchargement ${wantClip ? 'du clip' : 'audio'} : ${ytdlPath} ${args.join(' ')}`);
       const child = spawn(ytdlPath, args, { env });
       activeMusicProcesses.set(trackId, child);
 
@@ -552,6 +553,14 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: true });
       } catch (clipErr: any) {
         addLog(`Échec du téléchargement du clip pour "${trackTitle}" (${trackId}), repli sur l'audio seul : ${clipErr.message || clipErr}`);
+        cleanupPartialMusicFiles(trackId, artistId);
+
+        const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
+        const currentTrackState = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
+        if (pausedSetting?.value === '1' || currentTrackState?.download_status !== 'downloading') {
+          throw clipErr;
+        }
+
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: false });
       }
     } else {
@@ -566,7 +575,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
     addLog(`Téléchargement ${result.hasClip ? 'du clip' : 'audio'} RÉUSSI : "${trackTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
-    addLog(`ÉCHEC du téléchargement audio pour la track "${trackTitle}" (${trackId}) : ${errMsg}`);
+    addLog(`ÉCHEC du téléchargement pour la track "${trackTitle}" (${trackId}) : ${errMsg}`);
 
     const currentTrack = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
     const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
