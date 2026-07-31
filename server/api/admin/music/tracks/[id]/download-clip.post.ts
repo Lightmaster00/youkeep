@@ -1,6 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { requireAdmin } from '../../../../../utils/auth';
-import { downloadTrackClip } from '../../../../../utils/musicDownloader';
+import { downloadTrackClip, activeMusicProcesses } from '../../../../../utils/musicDownloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -17,6 +17,9 @@ export default defineEventHandler(async (event) => {
   }
   if (track.has_clip === 1) {
     throw createError({ statusCode: 409, statusMessage: 'Track already has a clip.' });
+  }
+  if (activeMusicProcesses.has(trackId)) {
+    throw createError({ statusCode: 409, statusMessage: 'A download is already in progress for this track.' });
   }
 
   // Fire-and-forget: this is ingestion, not a synchronous action — the client

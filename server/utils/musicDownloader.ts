@@ -14,11 +14,13 @@ const G_MUSIC_PROCESSING = Symbol.for('YouKeep.isMusicProcessing');
 const G_MUSIC_SHOULD_RUN = Symbol.for('YouKeep.musicWorkerShouldRun');
 const G_MUSIC_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeMusicDownloadCount');
 const G_MUSIC_PROCESSES = Symbol.for('YouKeep.activeMusicProcesses');
+const G_MUSIC_DOWNLOAD_START_TIMES = Symbol.for('YouKeep.activeMusicDownloadStartTimes');
 
 if (!(G_MUSIC_PROCESSING in _g)) _g[G_MUSIC_PROCESSING] = false;
 if (!(G_MUSIC_SHOULD_RUN in _g)) _g[G_MUSIC_SHOULD_RUN] = false;
 if (!(G_MUSIC_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] = 0;
 if (!(G_MUSIC_PROCESSES in _g)) _g[G_MUSIC_PROCESSES] = new Map<string, any>();
+if (!(G_MUSIC_DOWNLOAD_START_TIMES in _g)) _g[G_MUSIC_DOWNLOAD_START_TIMES] = new Map<string, number>();
 
 function getIsMusicProcessing(): boolean { return _g[G_MUSIC_PROCESSING]; }
 function setIsMusicProcessing(val: boolean) { _g[G_MUSIC_PROCESSING] = val; }
@@ -56,6 +58,7 @@ export function wakeMusicWorker() {
 const MUSIC_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 export const activeMusicProcesses: Map<string, any> = _g[G_MUSIC_PROCESSES];
+export const activeMusicDownloadStartTimes: Map<string, number> = _g[G_MUSIC_DOWNLOAD_START_TIMES];
 
 export function getMusicDownloadsDir(): string {
   const defaultPath = '/downloads/music';
@@ -327,6 +330,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
       addLog(`Lancement du téléchargement ${wantClip ? 'du clip' : 'audio'} : ${ytdlPath} ${args.join(' ')}`);
       const child = spawn(ytdlPath, args, { env });
       activeMusicProcesses.set(trackId, child);
+      activeMusicDownloadStartTimes.set(trackId, attemptStartedAt);
 
       let settled = false;
       const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
@@ -336,6 +340,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
           addLog(`yt-dlp [${trackId}] timeout après ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
           try { child.kill('SIGKILL'); } catch (e) {}
           activeMusicProcesses.delete(trackId);
+          activeMusicDownloadStartTimes.delete(trackId);
           cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
           settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
         }
@@ -345,6 +350,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
         clearTimeout(watchdog);
         addLog(`yt-dlp [${trackId}] process error : ${err.message || err}`);
         activeMusicProcesses.delete(trackId);
+        activeMusicDownloadStartTimes.delete(trackId);
         settle(() => reject(err));
       });
 
@@ -379,6 +385,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
       child.on('close', (code) => {
         clearTimeout(watchdog);
         activeMusicProcesses.delete(trackId);
+        activeMusicDownloadStartTimes.delete(trackId);
         if (settled) return;
 
         if (code === 0) {
@@ -673,6 +680,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
  */
 export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'pending' = 'pending', keepProgressAndFiles = false): boolean {
   const child = activeMusicProcesses.get(trackId);
+  const startedAt = activeMusicDownloadStartTimes.get(trackId);
   const db = getDb();
 
   if (child) {
@@ -680,6 +688,7 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
       child.kill('SIGKILL');
     } catch (e) {}
     activeMusicProcesses.delete(trackId);
+    activeMusicDownloadStartTimes.delete(trackId);
   }
 
   if (keepProgressAndFiles) {
@@ -699,7 +708,7 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
   if (!keepProgressAndFiles) {
     const track = db.prepare('SELECT artist_id FROM music_tracks WHERE id = ?').get(trackId) as { artist_id: string } | undefined;
     if (track) {
-      cleanupPartialMusicFiles(trackId, track.artist_id);
+      cleanupPartialMusicFiles(trackId, track.artist_id, startedAt !== undefined ? { newerThan: startedAt } : {});
     }
   }
 

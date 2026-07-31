@@ -45,6 +45,19 @@ describe('POST /api/admin/music/tracks/[id]/download-clip', () => {
     await expect(handler(eventFor('t1', cookie))).rejects.toMatchObject({ statusCode: 409 });
   });
 
+  it('returns 409 when a download is already in progress for this track', async () => {
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: false });
+    const cookie = loginAs('admin1', 'admin');
+
+    musicDownloader.activeMusicProcesses.set('t1', {});
+    try {
+      await expect(handler(eventFor('t1', cookie))).rejects.toMatchObject({ statusCode: 409 });
+    } finally {
+      musicDownloader.activeMusicProcesses.delete('t1');
+    }
+  });
+
   it('returns 200 and queues the download without awaiting it, for an admin', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: false });
