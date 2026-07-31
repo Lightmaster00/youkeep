@@ -629,11 +629,13 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
     const wantClip = clipsSetting?.value === '1';
 
     let result: { hasClip: boolean };
+    let clipFallbackError: string | null = null;
     if (wantClip) {
       try {
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: true });
       } catch (clipErr: any) {
-        addLog(`Échec du téléchargement du clip pour "${trackTitle}" (${trackId}), repli sur l'audio seul : ${clipErr.message || clipErr}`);
+        clipFallbackError = clipErr.message || String(clipErr);
+        addLog(`Échec du téléchargement du clip pour "${trackTitle}" (${trackId}), repli sur l'audio seul : ${clipFallbackError}`);
 
         const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
         const currentTrackState = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
@@ -656,9 +658,9 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
 
     db.prepare(`
       UPDATE music_tracks
-      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = null
+      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?
       WHERE id = ?
-    `).run(trackId);
+    `).run(clipFallbackError ? `Clip indisponible, repli sur l'audio seul : ${clipFallbackError}` : null, trackId);
     addLog(`Téléchargement ${result.hasClip ? 'du clip' : 'audio'} RÉUSSI : "${trackTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
