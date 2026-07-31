@@ -15,7 +15,7 @@
   ></video>
 
   <div v-if="currentTrack" class="mini-player">
-    <img v-if="!clipMode" :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
+    <img :style="{ visibility: clipMode ? 'hidden' : 'visible' }" :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
 
     <div class="mini-player-info">
       <span class="mini-player-title">{{ currentTrack.title }}</span>
