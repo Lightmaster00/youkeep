@@ -553,14 +553,17 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: true });
       } catch (clipErr: any) {
         addLog(`Échec du téléchargement du clip pour "${trackTitle}" (${trackId}), repli sur l'audio seul : ${clipErr.message || clipErr}`);
-        cleanupPartialMusicFiles(trackId, artistId);
 
         const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
         const currentTrackState = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
         if (pausedSetting?.value === '1' || currentTrackState?.download_status !== 'downloading') {
+          // A pause deliberately preserves partial files for resume (see pause.post.ts's
+          // keepProgressAndFiles=true) — a cancel already cleans up via cancelMusicDownload.
+          // Only clean up here when we're actually about to retry below.
           throw clipErr;
         }
 
+        cleanupPartialMusicFiles(trackId, artistId);
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: false });
       }
     } else {
