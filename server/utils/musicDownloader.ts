@@ -505,6 +505,7 @@ export async function downloadTrackClip(trackId: string): Promise<void> {
 
   incrementActiveMusicDownloadCount();
   const previousFilePath = track.local_file_path;
+  const attemptStartedForCleanup = Date.now();
   try {
     await downloadMusicTrackFile(trackId, track.artist_id, { wantClip: true });
 
@@ -522,7 +523,14 @@ export async function downloadTrackClip(trackId: string): Promise<void> {
     }
     addLog(`Clip téléchargé avec succès pour la track ${trackId}.`);
   } catch (err: any) {
-    addLog(`Échec du téléchargement du clip pour la track ${trackId} : ${err.message || err}`);
+    const errMsg = err.message || String(err);
+    addLog(`Échec du téléchargement du clip pour la track ${trackId} : ${errMsg}`);
+    try {
+      db.prepare('UPDATE music_tracks SET last_error = ? WHERE id = ?').run(errMsg, trackId);
+    } catch (dbErr) {
+      // best-effort — don't let a failure to record the error mask the original error
+    }
+    cleanupPartialMusicFiles(trackId, track.artist_id, { newerThan: attemptStartedForCleanup });
     throw err;
   } finally {
     decrementActiveMusicDownloadCount();
@@ -636,6 +644,9 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
           throw clipErr;
         }
 
+        // No newerThan guard here (unlike other cleanup call sites in this file): this is the
+        // automatic ingestion queue path, which only ever downloads fresh tracks — there is no
+        // pre-existing file this attempt could clobber, so a start-time guard has nothing to protect.
         cleanupPartialMusicFiles(trackId, artistId);
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: false });
       }

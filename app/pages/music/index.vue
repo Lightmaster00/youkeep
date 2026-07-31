@@ -122,7 +122,7 @@
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
               <button
                 v-if="track.has_clip"
-                @click="toggleTrackClipMode($event, track)"
+                @click="toggleTrackClipMode($event, track, album.id)"
                 class="badge badge-clip"
                 title="Voir le clip"
               >
@@ -132,7 +132,7 @@
                 v-else-if="isAdmin"
                 @click.stop="downloadClip(track)"
                 :disabled="downloadingClipIds.has(track.id)"
-                class="btn btn-secondary load-more-btn"
+                class="btn btn-secondary clip-download-btn"
               >
                 {{ downloadingClipIds.has(track.id) ? 'Téléchargement…' : 'Télécharger le clip' }}
               </button>
@@ -179,7 +179,7 @@
               <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
               <button
                 v-if="track.has_clip"
-                @click="toggleTrackClipMode($event, track)"
+                @click="toggleTrackClipMode($event, track, 'none')"
                 class="badge badge-clip"
                 title="Voir le clip"
               >
@@ -189,7 +189,7 @@
                 v-else-if="isAdmin"
                 @click.stop="downloadClip(track)"
                 :disabled="downloadingClipIds.has(track.id)"
-                class="btn btn-secondary load-more-btn"
+                class="btn btn-secondary clip-download-btn"
               >
                 {{ downloadingClipIds.has(track.id) ? 'Téléchargement…' : 'Télécharger le clip' }}
               </button>
@@ -405,16 +405,22 @@ async function downloadClip(track: any) {
   downloadingClipIds.value = new Set([...downloadingClipIds.value, track.id]);
   try {
     await $fetch(`/api/admin/music/tracks/${track.id}/download-clip`, { method: 'POST' });
-    toast.success('Téléchargement du clip lancé — la pastille apparaîtra une fois terminé.');
+    toast.success('Téléchargement du clip lancé — rechargez la page dans quelques minutes pour voir la pastille.');
   } catch (e: any) {
     toast.error(e?.data?.statusMessage || 'Erreur lors du lancement du téléchargement du clip.');
+  } finally {
     downloadingClipIds.value = new Set([...downloadingClipIds.value].filter((id) => id !== track.id));
   }
 }
 
-function toggleTrackClipMode(e: Event, track: any) {
+function toggleTrackClipMode(e: Event, track: any, groupKey: string) {
   e.stopPropagation();
-  setClipMode(!(clipMode.value && currentTrack.value?.id === track.id));
+  if (currentTrack.value?.id !== track.id) {
+    playTrack(track, groupKey);
+    setClipMode(true);
+  } else {
+    setClipMode(!clipMode.value);
+  }
 }
 
 const editingTrack = ref<{ track: any; groupKey: string } | null>(null);
@@ -803,6 +809,12 @@ const getVisBadgeClass = (vis: string): string => {
 
 .load-more-btn {
   margin-top: 12px;
+}
+
+.clip-download-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .edit-btn {

@@ -1,7 +1,7 @@
 <template>
   <video
     ref="audioElRef"
-    v-show="clipMode"
+    :style="{ opacity: clipMode ? 1 : 0, pointerEvents: clipMode ? 'auto' : 'none' }"
     class="mini-player-video"
     playsinline
     webkit-playsinline
