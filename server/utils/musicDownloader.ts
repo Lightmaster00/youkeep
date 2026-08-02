@@ -787,9 +787,12 @@ export async function syncAllMusicArtists(): Promise<void> {
 
       const url = `https://www.youtube.com/channel/${artist.channel_id}`;
       try {
-        await ingestMusicUrl(url);
-      } catch (err) {
-        console.error(`Erreur lors de la resynchronisation de l'artiste ${artist.name} (${artist.id}):`, err);
+        const result = await ingestMusicUrl(url);
+        if (!result.success) {
+          addLog(`Échec de la resynchronisation de l'artiste ${artist.name} (${artist.id}) : ${result.message}`);
+        }
+      } catch (err: any) {
+        addLog(`Erreur lors de la resynchronisation de l'artiste ${artist.name} (${artist.id}) : ${err.message || err}`);
       }
     }
 
