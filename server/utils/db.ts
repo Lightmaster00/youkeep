@@ -373,6 +373,24 @@ export function getDb(): Database.Database {
     console.log('Seeded setting sync_cron_schedule: 0 3 * * *');
   }
 
+  const musicSyncAllCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_all_active'").get() as { count: number };
+  if (musicSyncAllCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_all_active', '0')").run();
+    console.log('Seeded setting music_sync_all_active: 0');
+  }
+
+  const musicCronEnabledCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_cron_enabled'").get() as { count: number };
+  if (musicCronEnabledCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_enabled', '0')").run();
+    console.log('Seeded setting music_sync_cron_enabled: 0');
+  }
+
+  const musicCronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_cron_schedule'").get() as { count: number };
+  if (musicCronScheduleCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_schedule', '30 3 * * *')").run();
+    console.log('Seeded setting music_sync_cron_schedule: 30 3 * * *');
+  }
+
   const defaultDirCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'default_downloads_dir'").get() as { count: number };
   if (defaultDirCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('default_downloads_dir', '')").run();
