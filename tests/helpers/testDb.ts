@@ -33,6 +33,7 @@ export function createTestDb(): Database.Database {
       title TEXT NOT NULL,
       visibility TEXT DEFAULT 'public',
       avatar_url TEXT,
+      custom_save_path TEXT,
       created_at INTEGER NOT NULL
     );
 

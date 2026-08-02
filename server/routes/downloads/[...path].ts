@@ -96,6 +96,27 @@ export default defineEventHandler(async (event) => {
   event.node.res.setHeader('Accept-Ranges', 'bytes');
   event.node.res.setHeader('Content-Type', contentType);
 
+  const isImmutableMedia = ext === '.mp4';
+  if (isImmutableMedia) {
+    event.node.res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  } else {
+    event.node.res.setHeader('Cache-Control', 'private, must-revalidate');
+    event.node.res.setHeader('Last-Modified', stat.mtime.toUTCString());
+
+    const ifModifiedSince = event.node.req.headers['if-modified-since'];
+    if (ifModifiedSince) {
+      const ifModifiedSinceDate = new Date(ifModifiedSince as string);
+      if (!isNaN(ifModifiedSinceDate.getTime())) {
+        const fileSeconds = Math.floor(stat.mtime.getTime() / 1000);
+        const ifModifiedSinceSeconds = Math.floor(ifModifiedSinceDate.getTime() / 1000);
+        if (fileSeconds <= ifModifiedSinceSeconds) {
+          event.node.res.statusCode = 304;
+          return null;
+        }
+      }
+    }
+  }
+
   if (range) {
     const parts = range.replace(/bytes=/, "").split("-");
     const start = parseInt(parts[0] || '0', 10);
