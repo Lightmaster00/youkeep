@@ -21,8 +21,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb();
-  db.prepare("REPLACE INTO settings (key, value) VALUES ('music_sync_cron_enabled', ?)").run(enabled ? '1' : '0');
-  db.prepare("REPLACE INTO settings (key, value) VALUES ('music_sync_cron_schedule', ?)").run(schedule || '30 3 * * *');
+  db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(enabled ? '1' : '0');
+  db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_schedule', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(schedule || '30 3 * * *');
 
   initMusicScheduler();
 
