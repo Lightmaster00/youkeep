@@ -587,6 +587,43 @@
                 </button>
               </div>
             </div>
+
+            <form @submit.prevent="handleSaveMusicSchedule" class="policy-form-block mt-3 pt-3 border-t">
+              <div class="form-group">
+                <label class="checkbox-container">
+                  <input type="checkbox" v-model="musicScheduleForm.enabled" />
+                  <span class="checkmark"></span>
+                  Enable background artist resync automation
+                </label>
+              </div>
+
+              <div v-if="musicScheduleForm.enabled" class="schedule-settings-row mt-2">
+                <div class="form-group flex-1">
+                  <label class="form-label" for="music-preset">Preset Interval</label>
+                  <select id="music-preset" v-model="musicScheduleForm.preset" @change="applyMusicPreset" class="form-select">
+                    <option value="hourly">Hourly (Every hour)</option>
+                    <option value="twelve_hours">Every 12 hours</option>
+                    <option value="daily">Daily (resync at 3:30 AM)</option>
+                    <option value="weekly">Weekly (Sunday at 3:30 AM)</option>
+                    <option value="custom">Custom Cron Expression</option>
+                  </select>
+                </div>
+
+                <div class="form-group flex-1" v-if="musicScheduleForm.preset === 'custom'">
+                  <label class="form-label" for="music-cron">Cron Expression</label>
+                  <input type="text" id="music-cron" v-model="musicScheduleForm.schedule" class="form-input" placeholder="*/30 * * * *" required />
+                </div>
+              </div>
+
+              <div class="form-actions mt-3">
+                <button type="submit" class="btn btn-secondary-dark" :disabled="savingMusicSchedule">
+                  {{ savingMusicSchedule ? 'Saving...' : 'Save Sync Trigger' }}
+                </button>
+              </div>
+            </form>
+            <div v-if="musicScheduleMessage" class="form-msg mt-3 success-msg">
+              {{ musicScheduleMessage }}
+            </div>
           </div>
 
           <div class="downloads-dashboard-layout">
@@ -1454,6 +1491,60 @@ const handleSaveMusicConcurrency = async () => {
   }
 };
 
+const savingMusicSchedule = ref(false);
+const musicScheduleMessage = ref('');
+
+const musicScheduleForm = reactive({
+  enabled: false,
+  preset: 'daily',
+  schedule: '30 3 * * *'
+});
+
+const musicPresets: Record<string, string> = {
+  hourly: '0 * * * *',
+  twelve_hours: '0 */12 * * *',
+  daily: '30 3 * * *',
+  weekly: '30 3 * * 0'
+};
+
+const applyMusicPreset = () => {
+  if (musicScheduleForm.preset !== 'custom') {
+    musicScheduleForm.schedule = musicPresets[musicScheduleForm.preset] || '30 3 * * *';
+  }
+};
+
+const fetchMusicSchedule = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/music/schedule');
+    musicScheduleForm.enabled = data.enabled;
+    musicScheduleForm.schedule = data.schedule || '30 3 * * *';
+
+    const foundPreset = Object.keys(musicPresets).find(k => musicPresets[k] === musicScheduleForm.schedule);
+    musicScheduleForm.preset = foundPreset || 'custom';
+  } catch (err) {
+    console.error('Failed to fetch music schedule:', err);
+  }
+};
+
+const handleSaveMusicSchedule = async () => {
+  savingMusicSchedule.value = true;
+  musicScheduleMessage.value = '';
+  try {
+    await $fetch('/api/admin/music/schedule', {
+      method: 'POST',
+      body: {
+        enabled: musicScheduleForm.enabled,
+        schedule: musicScheduleForm.schedule
+      }
+    });
+    musicScheduleMessage.value = 'Music synchronization frequency saved successfully.';
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Save failed.');
+  } finally {
+    savingMusicSchedule.value = false;
+  }
+};
+
 const handleAddMusicArtist = async () => {
   const url = musicArtistInput.value.trim();
   if (!url) return;
@@ -2071,6 +2162,7 @@ onMounted(() => {
     runMusicPolling();
     fetchMusicModuleEnabled();
     fetchMusicDownloadClipsEnabled();
+    fetchMusicSchedule();
   }
 });
 
