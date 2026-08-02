@@ -85,6 +85,22 @@ export default defineEventHandler(async (event) => {
 
   if (!isAudio) {
     event.node.res.setHeader('Content-Type', contentType);
+    event.node.res.setHeader('Cache-Control', 'private, must-revalidate');
+    event.node.res.setHeader('Last-Modified', stat.mtime.toUTCString());
+
+    const ifModifiedSince = event.node.req.headers['if-modified-since'];
+    if (ifModifiedSince) {
+      const ifModifiedSinceDate = new Date(ifModifiedSince as string);
+      if (!isNaN(ifModifiedSinceDate.getTime())) {
+        const fileSeconds = Math.floor(stat.mtime.getTime() / 1000);
+        const ifModifiedSinceSeconds = Math.floor(ifModifiedSinceDate.getTime() / 1000);
+        if (fileSeconds <= ifModifiedSinceSeconds) {
+          event.node.res.statusCode = 304;
+          return null;
+        }
+      }
+    }
+
     event.node.res.setHeader('Content-Length', stat.size);
     event.node.res.statusCode = 200;
     return fs.createReadStream(resolvedPath);
@@ -98,6 +114,7 @@ export default defineEventHandler(async (event) => {
 
   event.node.res.setHeader('Accept-Ranges', 'bytes');
   event.node.res.setHeader('Content-Type', contentType);
+  event.node.res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
 
   if (range) {
     const rangeParts = range.replace(/bytes=/, '').split('-');
