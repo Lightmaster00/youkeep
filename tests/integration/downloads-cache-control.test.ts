@@ -23,9 +23,23 @@ beforeEach(() => {
   fs.mkdirSync(channelDir, { recursive: true });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // fs.createReadStream() opens the underlying fd lazily on the next tick —
+  // if a test's returned stream is never consumed, that open can still be
+  // pending when this cleanup deletes the fixture file, producing a spurious
+  // unhandled ENOENT. Destroy any stream the test captured and yield one
+  // tick before removing the directory so any already-pending open settles
+  // (harmlessly, since nothing is listening) rather than firing later.
+  await new Promise((resolve) => setImmediate(resolve));
   fs.rmSync(channelDir, { recursive: true, force: true });
 });
+
+function closeIfStream(result: any) {
+  if (result && typeof result.destroy === 'function') {
+    result.on?.('error', () => {});
+    result.destroy();
+  }
+}
 
 function writeFile(videoId: string, ext: string, mtime?: Date) {
   const filePath = path.join(channelDir, `${videoId}.${ext}`);
@@ -44,7 +58,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     writeFile('v1', 'mp4');
     const event = eventFor('v1', 'mp4');
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     expect(event.node.res.headers['last-modified']).toBeUndefined();
@@ -55,7 +69,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     writeFile('v2', 'jpg');
     const event = eventFor('v2', 'jpg');
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.headers['cache-control']).toBe('private, must-revalidate');
     expect(event.node.res.headers['last-modified']).toBeDefined();
@@ -80,6 +94,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     const event = eventFor('v4', 'jpg', { 'if-modified-since': new Date('2025-01-01T00:00:00Z').toUTCString() });
 
     const result = await handler(event);
+    closeIfStream(result);
 
     expect(event.node.res.statusCode).toBe(200);
     expect(result).toBeTruthy();
@@ -110,7 +125,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     writeFile('v7', 'mp4');
     const event = eventFor('v7', 'mp4', { range: 'bytes=0-0' });
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.statusCode).toBe(206);
     expect(event.node.res.headers['content-range']).toBe('bytes 0-0/1');

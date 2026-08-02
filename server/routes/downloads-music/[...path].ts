@@ -96,6 +96,7 @@ export default defineEventHandler(async (event) => {
         const ifModifiedSinceSeconds = Math.floor(ifModifiedSinceDate.getTime() / 1000);
         if (fileSeconds <= ifModifiedSinceSeconds) {
           event.node.res.statusCode = 304;
+          event.node.res.removeHeader?.('Content-Type');
           return null;
         }
       }

@@ -23,9 +23,23 @@ beforeEach(() => {
   fs.mkdirSync(artistDir, { recursive: true });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // fs.createReadStream() opens the underlying fd lazily on the next tick —
+  // if a test's returned stream is never consumed, that open can still be
+  // pending when this cleanup deletes the fixture file, producing a spurious
+  // unhandled ENOENT. Destroy any stream the test captured and yield one
+  // tick before removing the directory so any already-pending open settles
+  // (harmlessly, since nothing is listening) rather than firing later.
+  await new Promise((resolve) => setImmediate(resolve));
   fs.rmSync(artistDir, { recursive: true, force: true });
 });
+
+function closeIfStream(result: any) {
+  if (result && typeof result.destroy === 'function') {
+    result.on?.('error', () => {});
+    result.destroy();
+  }
+}
 
 function writeFile(trackId: string, ext: string, mtime?: Date) {
   const filePath = path.join(artistDir, `${trackId}.${ext}`);
@@ -44,7 +58,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     writeFile('t1', 'opus');
     const event = eventFor('t1', 'opus');
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     expect(event.node.res.headers['last-modified']).toBeUndefined();
@@ -55,7 +69,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     writeFile('t2', 'mp4');
     const event = eventFor('t2', 'mp4');
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
   });
@@ -65,7 +79,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     writeFile('t3', 'jpg');
     const event = eventFor('t3', 'jpg');
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.headers['cache-control']).toBe('private, must-revalidate');
     expect(event.node.res.headers['last-modified']).toBeDefined();
@@ -90,6 +104,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     const event = eventFor('t5', 'jpg', { 'if-modified-since': new Date('2025-01-01T00:00:00Z').toUTCString() });
 
     const result = await handler(event);
+    closeIfStream(result);
 
     expect(event.node.res.statusCode).toBe(200);
     expect(result).toBeTruthy();
@@ -120,7 +135,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     writeFile('t8', 'opus');
     const event = eventFor('t8', 'opus', { range: 'bytes=0-0' });
 
-    await handler(event);
+    closeIfStream(await handler(event));
 
     expect(event.node.res.statusCode).toBe(206);
     expect(event.node.res.headers['content-range']).toBe('bytes 0-0/1');
