@@ -1,10 +1,11 @@
 import { defineNitroPlugin } from 'nitropack/dist/runtime/plugin';
 import { initScheduler, resetStaleDownloads, startQueueWorker, updateYtdl } from '../utils/downloader';
-import { resetStaleMusicDownloads, startMusicQueueWorker } from '../utils/musicDownloader';
+import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler } from '../utils/musicDownloader';
 
 export default defineNitroPlugin((nitroApp) => {
   console.log('YouKeep Scheduler Plugin: Initializing background cron jobs...');
   initScheduler();
+  initMusicScheduler();
 
   // Clean up interrupted downloads and start processing immediately on startup
   console.log('YouKeep Scheduler Plugin: Cleaning up stale downloads...');

@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Cron } from 'croner';
 import { getDb } from './db';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
@@ -16,6 +17,10 @@ const G_MUSIC_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeMusicDownloadCou
 const G_MUSIC_PROCESSES = Symbol.for('YouKeep.activeMusicProcesses');
 const G_MUSIC_DOWNLOAD_START_TIMES = Symbol.for('YouKeep.activeMusicDownloadStartTimes');
 const G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT = Symbol.for('YouKeep.musicClipBackfillsInFlight');
+// Deliberately a SEPARATE symbol from downloader.ts's G_CRON — the music and
+// video cron jobs must be independently startable/stoppable, never sharing
+// a handle (stopping one must never stop the other).
+const G_MUSIC_CRON = Symbol.for('YouKeep.activeMusicCronJob');
 
 if (!(G_MUSIC_PROCESSING in _g)) _g[G_MUSIC_PROCESSING] = false;
 if (!(G_MUSIC_SHOULD_RUN in _g)) _g[G_MUSIC_SHOULD_RUN] = false;
@@ -23,6 +28,10 @@ if (!(G_MUSIC_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] = 
 if (!(G_MUSIC_PROCESSES in _g)) _g[G_MUSIC_PROCESSES] = new Map<string, any>();
 if (!(G_MUSIC_DOWNLOAD_START_TIMES in _g)) _g[G_MUSIC_DOWNLOAD_START_TIMES] = new Map<string, number>();
 if (!(G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT in _g)) _g[G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT] = new Set<string>();
+if (!(G_MUSIC_CRON in _g)) _g[G_MUSIC_CRON] = null;
+
+function getActiveMusicCronJob(): Cron | null { return _g[G_MUSIC_CRON]; }
+function setActiveMusicCronJob(val: Cron | null) { _g[G_MUSIC_CRON] = val; }
 
 function getIsMusicProcessing(): boolean { return _g[G_MUSIC_PROCESSING]; }
 function setIsMusicProcessing(val: boolean) { _g[G_MUSIC_PROCESSING] = val; }
@@ -749,5 +758,87 @@ export function resetStaleMusicDownloads() {
     }
   } catch (err: any) {
     console.error('Failed to reset stale music downloads:', err);
+  }
+}
+
+/**
+ * Re-fetches every followed music artist's channel feed to discover new
+ * tracks, then starts the download queue for anything newly pending.
+ * Mirrors syncAllChannels in downloader.ts.
+ */
+export async function syncAllMusicArtists(): Promise<void> {
+  const db = getDb();
+
+  db.prepare("UPDATE settings SET value = '1' WHERE key = 'music_sync_all_active'").run();
+
+  try {
+    const artists = db.prepare("SELECT id, name, channel_id FROM music_artists WHERE channel_id IS NOT NULL").all() as { id: string; name: string; channel_id: string }[];
+    addLog(`Démarrage de la resynchronisation automatique de ${artists.length} artiste(s) musicaux...`);
+
+    for (const artist of artists) {
+      const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
+      if (pausedSetting?.value === '1') {
+        addLog('Resynchronisation automatique musicale interrompue : téléchargements en pause.');
+        break;
+      }
+
+      addLog(`Resynchronisation de l'artiste : ${artist.name} (${artist.id})`);
+      db.prepare("UPDATE music_artists SET sync_status = 'downloading' WHERE id = ?").run(artist.id);
+
+      const url = `https://www.youtube.com/channel/${artist.channel_id}`;
+      try {
+        await ingestMusicUrl(url);
+      } catch (err) {
+        console.error(`Erreur lors de la resynchronisation de l'artiste ${artist.name} (${artist.id}):`, err);
+      }
+    }
+
+    startMusicQueueWorker();
+    addLog('Resynchronisation automatique musicale terminée.');
+  } catch (err) {
+    console.error('Fatal error during syncAllMusicArtists:', err);
+  } finally {
+    db.prepare("UPDATE settings SET value = '0' WHERE key = 'music_sync_all_active'").run();
+  }
+}
+
+/**
+ * Registers (or re-registers, on settings change) the music resync cron
+ * job. Mirrors initScheduler in downloader.ts, using a separate settings
+ * namespace and active-job handle so it never interacts with the video
+ * cron.
+ */
+export function initMusicScheduler(): void {
+  const db = getDb();
+
+  const enabledSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_sync_cron_enabled'").get() as { value: string } | undefined;
+  const scheduleSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_sync_cron_schedule'").get() as { value: string } | undefined;
+
+  const enabled = enabledSetting ? enabledSetting.value === '1' : false;
+  const cronExpression = scheduleSetting?.value || '30 3 * * *';
+
+  if (getActiveMusicCronJob()) {
+    getActiveMusicCronJob()!.stop();
+    setActiveMusicCronJob(null);
+  }
+
+  if (enabled) {
+    console.log(`Scheduling music auto-sync cron job with expression: "${cronExpression}"`);
+    try {
+      const job = new Cron(cronExpression, async () => {
+        console.log('Automated music cron trigger: starting artist synchronization...');
+        const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_sync_all_active'").get() as { value: string } | undefined;
+        if (syncSetting?.value === '1') {
+          console.log('Automated music cron: sync all is already active. Skipping.');
+          return;
+        }
+        await syncAllMusicArtists();
+      });
+      setActiveMusicCronJob(job);
+    } catch (err) {
+      console.error(`Failed to register music cron expression "${cronExpression}":`, err);
+    }
+  } else {
+    console.log('Automated music sync cron job is disabled.');
   }
 }
