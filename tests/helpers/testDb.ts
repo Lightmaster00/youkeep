@@ -196,9 +196,9 @@ export function grantChannelAccess(db: Database.Database, userId: string, channe
 
 // Minimal H3Event stand-in: covers exactly what getUserFromSession/getCookie/
 // deleteCookie touch (event.node.req.headers.cookie, event.node.res.*).
-export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string>; body?: any }): any {
+export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string>; body?: any; headers?: Record<string, string> }): any {
   const req: any = {
-    headers: { cookie: cookieHeader || '' }
+    headers: { cookie: cookieHeader || '', ...(opts?.headers ?? {}) }
   };
   if (opts && Object.prototype.hasOwnProperty.call(opts, 'body')) {
     // H3's readBody(event) checks for a value already stored under this
@@ -209,14 +209,17 @@ export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?
     // even though it isn't exported from the package.
     req[Symbol.for('h3ParsedBody')] = opts.body;
   }
+  const resHeaders: Record<string, any> = {};
   return {
     path: opts?.path ?? '/',
     context: { params: opts?.params ?? {} },
     node: {
       req,
       res: {
-        getHeader: () => undefined,
-        setHeader: () => {}
+        statusCode: 200,
+        headers: resHeaders,
+        getHeader: (name: string) => resHeaders[name.toLowerCase()],
+        setHeader: (name: string, value: any) => { resHeaders[name.toLowerCase()] = value; }
       }
     }
   };
