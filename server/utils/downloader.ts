@@ -990,6 +990,46 @@ export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pendin
 }
 
 /**
+ * Ensures a channel row exists for the given id, creating it as a passive,
+ * paused reference (never actively followed) if it doesn't. Used both by
+ * single-video ingestion and playlist ingestion, whenever a video's real
+ * uploader channel isn't already known to YouKeep.
+ */
+function ensureChannelExists(db: any, channelId: string, channelTitle: string): void {
+  const channelCheck = db.prepare('SELECT 1 FROM channels WHERE id = ?').get(channelId);
+  if (channelCheck) return;
+
+  db.prepare(`
+    INSERT INTO channels (id, title, description, avatar_url, banner_url, sync_status, created_at)
+    VALUES (?, ?, ?, ?, ?, 'paused', ?)
+    ON CONFLICT(id) DO NOTHING
+  `).run(channelId, channelTitle, '', null, null, Date.now());
+
+  // Asynchronously fetch full channel details (avatar, banner, description) in background
+  // without inserting other videos. Retried a few times since this is a single fire-and-forget
+  // request that can otherwise leave the channel with no avatar forever if it hits a transient
+  // yt-dlp/network error.
+  const retryDelaysMs = [1000, 5000, 15000];
+  const fetchChannelDetails = (attempt: number) => {
+    setTimeout(async () => {
+      try {
+        addLog(`Récupération des détails de la nouvelle chaîne "${channelTitle}" (${channelId}), tentative ${attempt + 1}/${retryDelaysMs.length}...`);
+        await ingestUrl(`https://www.youtube.com/channel/${channelId}`, { channelMetadataOnly: true });
+      } catch (err: any) {
+        const nextAttempt = attempt + 1;
+        if (nextAttempt < retryDelaysMs.length) {
+          addLog(`Échec de la récupération des détails de la chaîne "${channelTitle}" (${channelId}) : ${err.message || err}. Nouvel essai...`);
+          fetchChannelDetails(nextAttempt);
+        } else {
+          addLog(`Échec définitif de la récupération des détails (avatar, bannière) de la chaîne "${channelTitle}" (${channelId}) après ${retryDelaysMs.length} tentatives : ${err.message || err}`);
+        }
+      }
+    }, retryDelaysMs[attempt]);
+  };
+  fetchChannelDetails(0);
+}
+
+/**
  * Metadata Ingestion
  * Fetches playlist/video/channel JSON from yt-dlp and writes it to DB.
  */
@@ -1306,40 +1346,8 @@ export async function ingestUrl(
   const videoId = data.id;
   const channelId = data.channel_id || 'unknown-channel';
   const channelTitle = data.channel || 'Unknown Channel';
-  const avatarUrl = null;
 
-  // Ensure channel exists (defaulting single video channels to paused as well, so admins can trigger)
-  const channelCheck = db.prepare('SELECT 1 FROM channels WHERE id = ?').get(channelId);
-  if (!channelCheck) {
-    db.prepare(`
-      INSERT INTO channels (id, title, description, avatar_url, banner_url, sync_status, created_at)
-      VALUES (?, ?, ?, ?, ?, 'paused', ?)
-      ON CONFLICT(id) DO NOTHING
-    `).run(channelId, channelTitle, '', avatarUrl, null, Date.now());
-
-    // Asynchronously fetch full channel details (avatar, banner, description) in background
-    // without inserting other videos. Retried a few times since this is a single fire-and-forget
-    // request that can otherwise leave the channel with no avatar forever if it hits a transient
-    // yt-dlp/network error.
-    const retryDelaysMs = [1000, 5000, 15000];
-    const fetchChannelDetails = (attempt: number) => {
-      setTimeout(async () => {
-        try {
-          addLog(`Récupération des détails de la nouvelle chaîne "${channelTitle}" (${channelId}), tentative ${attempt + 1}/${retryDelaysMs.length}...`);
-          await ingestUrl(`https://www.youtube.com/channel/${channelId}`, { channelMetadataOnly: true });
-        } catch (err: any) {
-          const nextAttempt = attempt + 1;
-          if (nextAttempt < retryDelaysMs.length) {
-            addLog(`Échec de la récupération des détails de la chaîne "${channelTitle}" (${channelId}) : ${err.message || err}. Nouvel essai...`);
-            fetchChannelDetails(nextAttempt);
-          } else {
-            addLog(`Échec définitif de la récupération des détails (avatar, bannière) de la chaîne "${channelTitle}" (${channelId}) après ${retryDelaysMs.length} tentatives : ${err.message || err}`);
-          }
-        }
-      }, retryDelaysMs[attempt]);
-    };
-    fetchChannelDetails(0);
-  }
+  ensureChannelExists(db, channelId, channelTitle);
 
   // Insert or update video
   const isShortFlag = (
