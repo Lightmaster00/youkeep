@@ -1145,9 +1145,9 @@ export async function ingestUrl(
   // confirmed against real YouTube playlist responses — so no extra per-video
   // yt-dlp call is needed for correct attribution.
   const playlistPattern = /[?&]list=/;
-  if (playlistPattern.test(url) && !channelPattern.test(url.trim())) {
+  if (playlistPattern.test(url) && Array.isArray(data.entries) && !channelPattern.test(url.trim())) {
     const playlistTitle = data.title || 'Untitled Playlist';
-    const entries = Array.isArray(data.entries) ? data.entries : [];
+    const entries = data.entries;
 
     const upsertPlaylistVideo = db.prepare(`
       INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_manually_queued, is_short, created_at)
@@ -1167,12 +1167,15 @@ export async function ingestUrl(
       const entryChannelTitle = entry.channel || entry.uploader || 'Unknown Channel';
       ensureChannelExists(db, entryChannelId, entryChannelTitle);
 
-      const isShortFlag = (entry.webpage_url && entry.webpage_url.includes('/shorts/')) ? 1 : 0;
-      // Flat-playlist entries carry `timestamp` (unix epoch seconds), not the
-      // `upload_date` (YYYYMMDD string) field full single-video/channel dumps
-      // have — convert so this stays comparable with every other upload_date
-      // value already stored (e.g. the channel date_after filter elsewhere
-      // in this file does a plain string comparison against this format).
+      const entryUrl = entry.webpage_url || entry.url || '';
+      const isShortFlag = entryUrl.includes('/shorts/') ? 1 : 0;
+      // Flat-playlist entries carry `timestamp` (unix epoch seconds) rather than
+      // the `upload_date` (YYYYMMDD string) field full single-video/channel dumps
+      // have — convert when present so this stays comparable with every other
+      // upload_date value already stored (e.g. the channel date_after filter
+      // elsewhere in this file does a plain string comparison against this
+      // format). In practice flat-playlist entries typically don't carry
+      // `timestamp` either, so this commonly yields null — best-effort only.
       const uploadDate = entry.timestamp
         ? new Date(entry.timestamp * 1000).toISOString().slice(0, 10).replace(/-/g, '')
         : null;
