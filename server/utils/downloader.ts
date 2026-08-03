@@ -1157,6 +1157,7 @@ export async function ingestUrl(
         is_manually_queued = CASE WHEN download_status != 'completed' THEN 1 ELSE is_manually_queued END,
         is_short = excluded.is_short
     `);
+    const checkVideoStatus = db.prepare('SELECT download_status FROM videos WHERE id = ?');
 
     let videosQueued = 0;
     for (const entry of entries) {
@@ -1176,7 +1177,9 @@ export async function ingestUrl(
         ? new Date(entry.timestamp * 1000).toISOString().slice(0, 10).replace(/-/g, '')
         : null;
 
-      const res = upsertPlaylistVideo.run(
+      const priorStatus = checkVideoStatus.get(entry.id) as { download_status: string } | undefined;
+
+      upsertPlaylistVideo.run(
         entry.id,
         entry.title || `Video ${entry.id}`,
         entry.description || '',
@@ -1187,7 +1190,8 @@ export async function ingestUrl(
         isShortFlag,
         Date.now()
       );
-      if (res.changes > 0) videosQueued++;
+
+      if (!priorStatus || priorStatus.download_status !== 'completed') videosQueued++;
     }
 
     // Trigger queue processing unconditionally, same as single-video ingestion —
