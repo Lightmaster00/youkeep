@@ -1136,6 +1136,71 @@ export async function ingestUrl(
 
   let videosAdded = 0;
 
+  // Playlist detection — must run BEFORE Case A below, which would otherwise
+  // wrongly treat a genuine playlist's yt-dlp response (also shaped as
+  // {_type: 'playlist', entries: [...]}) as if it were a channel, attributing
+  // every video in it to a fake "channel" keyed by the playlist's own id.
+  // Each flat-playlist entry already carries its own real channel_id/channel
+  // (the video's true uploader), independent of who created the playlist —
+  // confirmed against real YouTube playlist responses — so no extra per-video
+  // yt-dlp call is needed for correct attribution.
+  const playlistPattern = /[?&]list=/;
+  if (playlistPattern.test(url) && !channelPattern.test(url.trim())) {
+    const playlistTitle = data.title || 'Untitled Playlist';
+    const entries = Array.isArray(data.entries) ? data.entries : [];
+
+    const upsertPlaylistVideo = db.prepare(`
+      INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_manually_queued, is_short, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        download_status = CASE WHEN download_status != 'completed' THEN 'pending' ELSE download_status END,
+        is_manually_queued = CASE WHEN download_status != 'completed' THEN 1 ELSE is_manually_queued END,
+        is_short = excluded.is_short
+    `);
+
+    let videosQueued = 0;
+    for (const entry of entries) {
+      if (!entry || !entry.id) continue;
+
+      const entryChannelId = entry.channel_id || entry.uploader_id || 'unknown-channel';
+      const entryChannelTitle = entry.channel || entry.uploader || 'Unknown Channel';
+      ensureChannelExists(db, entryChannelId, entryChannelTitle);
+
+      const isShortFlag = (entry.webpage_url && entry.webpage_url.includes('/shorts/')) ? 1 : 0;
+      // Flat-playlist entries carry `timestamp` (unix epoch seconds), not the
+      // `upload_date` (YYYYMMDD string) field full single-video/channel dumps
+      // have — convert so this stays comparable with every other upload_date
+      // value already stored (e.g. the channel date_after filter elsewhere
+      // in this file does a plain string comparison against this format).
+      const uploadDate = entry.timestamp
+        ? new Date(entry.timestamp * 1000).toISOString().slice(0, 10).replace(/-/g, '')
+        : null;
+
+      const res = upsertPlaylistVideo.run(
+        entry.id,
+        entry.title || `Video ${entry.id}`,
+        entry.description || '',
+        entryChannelId,
+        uploadDate,
+        entry.duration || null,
+        entry.view_count || null,
+        isShortFlag,
+        Date.now()
+      );
+      if (res.changes > 0) videosQueued++;
+    }
+
+    // Trigger queue processing unconditionally, same as single-video ingestion —
+    // this is a deliberate, manual, one-time import, not a passive subscription.
+    startQueueWorker();
+
+    return {
+      success: true,
+      message: `Playlist "${playlistTitle}" imported. ${videosQueued} video(s) added to the download queue.`,
+      count: videosQueued
+    };
+  }
+
   // Case A: It's a playlist or channel (contains _type: "playlist" or entries array)
   if (data._type === 'playlist' || Array.isArray(data.entries)) {
     const channelId = data.channel_id || data.id || 'unknown-channel';
