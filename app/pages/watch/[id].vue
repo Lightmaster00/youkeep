@@ -50,8 +50,11 @@
         </div>
 
         <!-- Video Header Info -->
-        <h1 class="video-title">{{ video.title }}</h1>
-        
+        <div class="title-row">
+          <h1 class="video-title">{{ video.title }}</h1>
+          <span v-if="video.was_live === 1" class="replay-pill">REPLAY</span>
+        </div>
+
 
         
         <!-- Channel Row -->
@@ -855,11 +858,29 @@ function toggleMiniPlayerPlayback() {
    PAGE LAYOUT
    ============================================ */
 
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
 .video-title {
   font-size: 20px;
   font-weight: 700;
-  margin-top: 20px;
   line-height: 1.4;
+}
+
+.replay-pill {
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 
