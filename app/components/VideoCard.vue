@@ -29,6 +29,7 @@
       <div v-if="isPreviewActive" class="preview-progress">
         <div class="preview-progress-fill" :style="{ width: previewProgressPercent + '%' }"></div>
       </div>
+      <span v-if="video.was_live === 1" class="replay-badge">REPLAY</span>
       <span class="duration-badge">{{ formattedDuration }}</span>
       <VideoDropdownMenu :video="video" @hidden="$emit('hidden', video.id)" />
       <slot name="thumbnail-overlay" />
@@ -78,6 +79,7 @@ const props = withDefaults(defineProps<{
     upload_date: string | null;
     local_thumbnail_path?: string;
     local_video_path?: string;
+    was_live?: number;
   };
   showChannelInfo?: boolean;
   clickable?: boolean;
@@ -309,6 +311,20 @@ const formattedUploadDate = computed(() => {
   position: absolute;
   bottom: 8px;
   right: 8px;
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  z-index: 2;
+}
+
+.replay-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
   background: rgba(0, 0, 0, 0.85);
   color: white;
   padding: 2px 6px;
