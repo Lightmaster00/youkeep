@@ -49,6 +49,7 @@ export function createTestDb(): Database.Database {
       duration INTEGER,
       view_count INTEGER DEFAULT 0,
       is_short INTEGER DEFAULT 0,
+      was_live INTEGER DEFAULT 0,
       local_video_path TEXT,
       local_thumbnail_path TEXT,
       created_at INTEGER NOT NULL,

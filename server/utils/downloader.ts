@@ -853,7 +853,8 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
         let views = null;
         let uploadDate = null;
         let likeCount = null;
-        
+        let wasLive = 0;
+
         if (fs.existsSync(infoJsonFile)) {
           try {
             const infoData = JSON.parse(fs.readFileSync(infoJsonFile, 'utf8'));
@@ -861,7 +862,8 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
             views = infoData.view_count || null;
             uploadDate = infoData.upload_date || null;
             likeCount = infoData.like_count || null;
-            
+            wasLive = infoData.live_status === 'was_live' ? 1 : 0;
+
             // Ingest comments
             if (infoData.comments && Array.isArray(infoData.comments)) {
               const insertComment = db.prepare(`
@@ -925,7 +927,8 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
               view_count = COALESCE(?, view_count),
               upload_date = COALESCE(?, upload_date),
               like_count = COALESCE(?, like_count),
-              size_bytes = ?
+              size_bytes = ?,
+              was_live = ?
           WHERE id = ?
         `).run(
           videoUrlPath,
@@ -935,6 +938,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
           uploadDate,
           likeCount,
           fileSize,
+          wasLive,
           videoId
         );
         settle(() => resolve());
