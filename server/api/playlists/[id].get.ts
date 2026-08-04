@@ -41,6 +41,7 @@ export default defineEventHandler(async (event) => {
         v.download_status,
         v.download_progress,
         v.local_thumbnail_path,
+        v.was_live,
         pv.position
       FROM playlist_videos pv
       JOIN videos v ON pv.video_id = v.id

@@ -161,6 +161,7 @@ export default defineEventHandler(async (event) => {
       v.visibility,
       v.share_token,
       v.is_short,
+      v.was_live,
       v.created_at,
       c.title as channel_title,
       c.avatar_url as channel_avatar

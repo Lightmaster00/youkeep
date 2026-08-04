@@ -12,6 +12,7 @@ interface FeedVideo {
   created_at?: number; // present on pool-sourced videos (recent/popular/subscriptions), absent on suggestion-sourced ones — not read by any consumer, so this is safe
   local_video_path: string | null;
   local_thumbnail_path: string | null;
+  was_live?: number;
   channel_id: string;
   channel_title: string;
   channel_avatar: string | null;
@@ -40,7 +41,7 @@ function getHiddenFilter(session: UserSession | null): { sql: string; params: an
 
 const FEED_VIDEO_COLUMNS = `
   v.id, v.title, v.duration, v.view_count, v.upload_date, v.created_at,
-  v.local_video_path, v.local_thumbnail_path, v.channel_id,
+  v.local_video_path, v.local_thumbnail_path, v.was_live, v.channel_id,
   c.title as channel_title, c.avatar_url as channel_avatar
 `;
 

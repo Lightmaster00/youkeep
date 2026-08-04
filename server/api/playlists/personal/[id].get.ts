@@ -50,6 +50,7 @@ export default defineEventHandler(async (event) => {
       v.download_progress,
       v.local_thumbnail_path,
       v.local_video_path,
+      v.was_live,
       c.title as channel_title,
       pv.position
     FROM personal_playlist_videos pv
