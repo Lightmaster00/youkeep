@@ -9,6 +9,7 @@ export interface RecommendedVideo {
   local_video_path: string | null;
   local_thumbnail_path: string | null;
   is_short: number;
+  was_live?: number;
   channel_id: string;
   upload_date: string | null;
   channel_title: string;
@@ -51,7 +52,7 @@ export function getRecommendedVideos(
   // 3. Get a bounded pool of completed videos with channel info to score.
   const isShortClause = opts.type === 'short' ? 'AND v.is_short = 1' : opts.type === 'video' ? 'AND v.is_short = 0' : '';
   const candidates = db.prepare(`
-    SELECT v.id, v.title, v.description, v.duration, v.view_count, v.local_video_path, v.local_thumbnail_path, v.is_short, v.channel_id, v.upload_date,
+    SELECT v.id, v.title, v.description, v.duration, v.view_count, v.local_video_path, v.local_thumbnail_path, v.is_short, v.was_live, v.channel_id, v.upload_date,
            c.title as channel_title, c.avatar_url as channel_avatar
     FROM videos v
     JOIN channels c ON v.channel_id = c.id
