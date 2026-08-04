@@ -515,3 +515,254 @@ Report what you observed, with a screenshot if your environment supports capturi
 git add app/pages/watch/[id].vue
 git commit -m "feat: show REPLAY pill on finished-livestream video detail page"
 ```
+
+---
+
+### Task 4 (supplemental, added after Task 2 review): forward `was_live` from list endpoints
+
+**Why this task exists:** Task 2's reviewer discovered that `app/components/VideoCard.vue` (used by `subscriptions.vue`, `index.vue`, `channels.vue`, `playlists/index.vue`) is fed by endpoints that use explicit SQL column lists, none of which currently select `was_live` — so the REPLAY badge from Task 2 is correctly implemented but unreachable end-to-end. This was not caught during planning because the plan assumed (incorrectly, per the spec's own claim that "the existing Add Channel field already routes through this same function") that video rows were forwarded wholesale; they are not, for list views. The single-video endpoint (`server/api/videos/[id].get.ts:21`, `SELECT v.*, ...`) already forwards every column including `was_live`, so **Task 3 (detail page) is unaffected and needs no changes.**
+
+**Files:**
+- Modify: `server/api/videos/index.get.ts:147-166`
+- Modify: `server/api/home/feed.get.ts:41-44`
+- Modify: `server/api/playlists/personal/[id].get.ts:42-53`
+- Modify: `server/api/playlists/[id].get.ts:35-44`
+
+**Interfaces:**
+- Consumes: `videos.was_live` column from Task 1.
+- Produces: nothing new consumed by later tasks — this is the last task in the plan.
+
+- [ ] **Step 1: `server/api/videos/index.get.ts`**
+
+Current column list (lines 147-166):
+
+```ts
+  const listQuery = `
+    SELECT 
+      v.id, 
+      v.title, 
+      v.description, 
+      v.channel_id, 
+      v.upload_date, 
+      v.duration, 
+      v.view_count, 
+      v.local_video_path, 
+      v.local_thumbnail_path, 
+      v.download_status, 
+      v.download_progress,
+      v.download_speed,
+      v.download_eta,
+      v.visibility,
+      v.share_token,
+      v.is_short,
+      v.created_at,
+      c.title as channel_title,
+      c.avatar_url as channel_avatar
+    FROM videos v
+    JOIN channels c ON v.channel_id = c.id
+    ${whereSql}
+    ${orderBySql}
+    LIMIT ? OFFSET ?
+  `;
+```
+
+Add `v.was_live` next to `v.is_short`:
+
+```ts
+  const listQuery = `
+    SELECT 
+      v.id, 
+      v.title, 
+      v.description, 
+      v.channel_id, 
+      v.upload_date, 
+      v.duration, 
+      v.view_count, 
+      v.local_video_path, 
+      v.local_thumbnail_path, 
+      v.download_status, 
+      v.download_progress,
+      v.download_speed,
+      v.download_eta,
+      v.visibility,
+      v.share_token,
+      v.is_short,
+      v.was_live,
+      v.created_at,
+      c.title as channel_title,
+      c.avatar_url as channel_avatar
+    FROM videos v
+    JOIN channels c ON v.channel_id = c.id
+    ${whereSql}
+    ${orderBySql}
+    LIMIT ? OFFSET ?
+  `;
+```
+
+- [ ] **Step 2: `server/api/home/feed.get.ts`**
+
+Current shared column fragment and its `FeedVideo` interface (lines 6-17, 41-44):
+
+```ts
+interface FeedVideo {
+  id: string;
+  title: string;
+  duration: number | null;
+  view_count: number | null;
+  upload_date: string | null;
+  created_at?: number; // present on pool-sourced videos (recent/popular/subscriptions), absent on suggestion-sourced ones — not read by any consumer, so this is safe
+  local_video_path: string | null;
+  local_thumbnail_path: string | null;
+  channel_id: string;
+  channel_title: string;
+  channel_avatar: string | null;
+}
+```
+
+```ts
+const FEED_VIDEO_COLUMNS = `
+  v.id, v.title, v.duration, v.view_count, v.upload_date, v.created_at,
+  v.local_video_path, v.local_thumbnail_path, v.channel_id,
+  c.title as channel_title, c.avatar_url as channel_avatar
+`;
+```
+
+Add `was_live` to both:
+
+```ts
+interface FeedVideo {
+  id: string;
+  title: string;
+  duration: number | null;
+  view_count: number | null;
+  upload_date: string | null;
+  created_at?: number; // present on pool-sourced videos (recent/popular/subscriptions), absent on suggestion-sourced ones — not read by any consumer, so this is safe
+  local_video_path: string | null;
+  local_thumbnail_path: string | null;
+  was_live?: number;
+  channel_id: string;
+  channel_title: string;
+  channel_avatar: string | null;
+}
+```
+
+```ts
+const FEED_VIDEO_COLUMNS = `
+  v.id, v.title, v.duration, v.view_count, v.upload_date, v.created_at,
+  v.local_video_path, v.local_thumbnail_path, v.was_live, v.channel_id,
+  c.title as channel_title, c.avatar_url as channel_avatar
+`;
+```
+
+- [ ] **Step 3: `server/api/playlists/personal/[id].get.ts`**
+
+Current column list (lines 42-53):
+
+```ts
+  const videos = db.prepare(`
+    SELECT
+      v.id,
+      v.title,
+      v.description,
+      v.duration,
+      v.view_count,
+      v.download_status,
+      v.download_progress,
+      v.local_thumbnail_path,
+      v.local_video_path,
+      c.title as channel_title,
+      pv.position
+    FROM personal_playlist_videos pv
+    JOIN videos v ON pv.video_id = v.id
+    JOIN channels c ON v.channel_id = c.id
+    WHERE pv.playlist_id = ?
+    ORDER BY pv.position ASC
+  `).all(id) as { id: string }[];
+```
+
+Add `v.was_live`:
+
+```ts
+  const videos = db.prepare(`
+    SELECT
+      v.id,
+      v.title,
+      v.description,
+      v.duration,
+      v.view_count,
+      v.download_status,
+      v.download_progress,
+      v.local_thumbnail_path,
+      v.local_video_path,
+      v.was_live,
+      c.title as channel_title,
+      pv.position
+    FROM personal_playlist_videos pv
+    JOIN videos v ON pv.video_id = v.id
+    JOIN channels c ON v.channel_id = c.id
+    WHERE pv.playlist_id = ?
+    ORDER BY pv.position ASC
+  `).all(id) as { id: string }[];
+```
+
+- [ ] **Step 4: `server/api/playlists/[id].get.ts`**
+
+Current column list (lines 35-44):
+
+```ts
+      SELECT
+        v.id,
+        v.title,
+        v.description,
+        v.duration,
+        v.view_count,
+        v.download_status,
+        v.download_progress,
+        v.local_thumbnail_path,
+        pv.position
+      FROM playlist_videos pv
+      JOIN videos v ON pv.video_id = v.id
+      WHERE pv.playlist_id = ?
+```
+
+Add `v.was_live`:
+
+```ts
+      SELECT
+        v.id,
+        v.title,
+        v.description,
+        v.duration,
+        v.view_count,
+        v.download_status,
+        v.download_progress,
+        v.local_thumbnail_path,
+        v.was_live,
+        pv.position
+      FROM playlist_videos pv
+      JOIN videos v ON pv.video_id = v.id
+      WHERE pv.playlist_id = ?
+```
+
+- [ ] **Step 5: Run the test suite**
+
+Run: `npm test -- --run`
+Expected: same pass count as prior tasks, exit code 0. These are additive `SELECT` columns; no existing test asserts an exact column list, but confirm nothing broke.
+
+- [ ] **Step 6: Manual verification**
+
+Using the `was_live = 1` test video from Task 1's manual verification:
+
+1. Start the dev server (`npm run dev`) and visit the home page (`/`) — confirm the REPLAY badge now renders on that video's card if it appears in a feed pool (recent/popular/subscriptions).
+2. Visit that video's channel page (`channels.vue`, which hits `/api/videos?channelId=...`) — confirm the REPLAY badge renders there too.
+3. Add the test video to a personal playlist (via the UI or `POST /api/playlists/personal/:id/videos`) and view that playlist (`playlists/index.vue`) — confirm the badge renders.
+4. Confirm a `was_live = 0` video shows no badge in all three views.
+
+Report what you observed.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add server/api/videos/index.get.ts server/api/home/feed.get.ts server/api/playlists/personal/[id].get.ts server/api/playlists/[id].get.ts
+git commit -m "fix: forward was_live column from video list endpoints to the frontend"
+```
