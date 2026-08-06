@@ -15,13 +15,18 @@ export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
   const db = getDb();
 
-  const seed = db.prepare(`SELECT artist_id, genre FROM music_tracks WHERE id = ?`).get(trackId) as { artist_id: string; genre: string | null } | undefined;
+  const clause = musicVisibilityClause(session);
+  const visClause = clause ? `AND ${clause}` : '';
+
+  const seed = db.prepare(`
+    SELECT t.artist_id, t.genre
+    FROM music_tracks t
+    JOIN music_artists a ON t.artist_id = a.id
+    WHERE t.id = ? ${visClause}
+  `).get(trackId) as { artist_id: string; genre: string | null } | undefined;
   if (!seed) {
     throw createError({ statusCode: 404, statusMessage: 'Track not found.' });
   }
-
-  const clause = musicVisibilityClause(session);
-  const visClause = clause ? `AND ${clause}` : '';
 
   const sameArtistLimit = seed.genre ? RADIO_SAME_ARTIST_MAX : RADIO_TOTAL;
   const allSameArtistRows = db.prepare(`
@@ -48,7 +53,8 @@ export default defineEventHandler(async (event) => {
       JOIN music_artists a ON t.artist_id = a.id
       WHERE t.download_status = 'completed' AND t.genre = ? AND t.id NOT IN (${placeholders}) ${visClause}
       ORDER BY RANDOM()
-    `).all(seed.genre, ...excludeIds) as any[];
+      LIMIT ?
+    `).all(seed.genre, ...excludeIds, remaining) as any[];
 
     const sameGenreRows = allSameGenreRows.slice(0, remaining);
     combined = [...sameArtistRows, ...sameGenreRows];

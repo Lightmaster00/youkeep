@@ -89,7 +89,7 @@ import { useToast } from '~/composables/useToast';
 const {
   currentTrack, isPlaying, currentTime, duration,
   audioEl, shuffleOn, repeatMode, clipMode,
-  togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode, play,
+  togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode, replaceQueueKeepingCurrent,
   recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
 } = useMusicPlayer();
 
@@ -145,7 +145,7 @@ async function startRadio() {
     if (requestId !== radioRequestId) return;
     if (currentTrack.value?.id !== seedTrackId) return;
     if (data.tracks?.length > 0) {
-      play(currentTrack.value, data.tracks);
+      replaceQueueKeepingCurrent(currentTrack.value, data.tracks);
     }
   } catch (e) {
     // Fail silently and leave the current queue untouched — consistent with

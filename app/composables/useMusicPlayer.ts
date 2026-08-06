@@ -75,6 +75,21 @@ export function useMusicPlayer() {
     }
   }
 
+  function replaceQueueKeepingCurrent(track: PlayableTrack, tracks: PlayableTrack[]) {
+    const idx = tracks.findIndex((t) => t.id === track.id);
+    if (idx === -1) {
+      queue.value = [track, ...tracks];
+      currentIndex.value = 0;
+    } else {
+      queue.value = tracks;
+      currentIndex.value = idx;
+    }
+    currentTrack.value = track;
+    if (shuffleOn.value) {
+      generateShuffledOrder(currentIndex.value);
+    }
+  }
+
   function togglePlay() {
     if (!audioEl.value || !currentTrack.value) return;
     if (isPlaying.value) {
@@ -258,7 +273,7 @@ export function useMusicPlayer() {
   return {
     currentTrack, queue, currentIndex, isPlaying, currentTime, duration, audioEl,
     shuffleOn, repeatMode, clipMode,
-    play, togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
+    play, replaceQueueKeepingCurrent, togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
     recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
   };
 }
