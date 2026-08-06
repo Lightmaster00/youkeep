@@ -306,9 +306,13 @@ function playPlaylist(playlist: { tracks: any[] }) {
   playMusicTrack(playlist.tracks[0], playlist.tracks);
 }
 
+let artistMixRequestId = 0;
+
 async function playArtistMix() {
   if (!artistId.value) return;
+  const requestId = ++artistMixRequestId;
   const data = await $fetch<any>('/api/music/playlists/artist-mix', { params: { artistId: artistId.value } });
+  if (requestId !== artistMixRequestId) return;
   if (data.tracks?.length > 0) {
     playMusicTrack(data.tracks[0], data.tracks);
   }
