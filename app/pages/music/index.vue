@@ -87,6 +87,10 @@
               <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(artist.visibility)">{{ formatVisibility(artist.visibility) }}</span>
             </div>
             <p v-if="artist.description" class="artist-detail-desc">{{ artist.description }}</p>
+            <button @click="playArtistMix" class="btn btn-secondary artist-mix-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Lecture aléatoire
+            </button>
           </div>
         </div>
 
@@ -300,6 +304,14 @@ async function fetchPlaylists() {
 function playPlaylist(playlist: { tracks: any[] }) {
   if (playlist.tracks.length === 0) return;
   playMusicTrack(playlist.tracks[0], playlist.tracks);
+}
+
+async function playArtistMix() {
+  if (!artistId.value) return;
+  const data = await $fetch<any>('/api/music/playlists/artist-mix', { params: { artistId: artistId.value } });
+  if (data.tracks?.length > 0) {
+    playMusicTrack(data.tracks[0], data.tracks);
+  }
 }
 
 let artistsRequestId = 0;
@@ -705,6 +717,10 @@ const getVisBadgeClass = (vis: string): string => {
 .artist-detail-desc {
   color: var(--text-secondary);
   margin-top: 4px;
+}
+
+.artist-mix-btn {
+  margin-top: 10px;
 }
 
 .album-group {
