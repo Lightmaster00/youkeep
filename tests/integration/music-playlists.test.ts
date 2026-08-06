@@ -5,6 +5,7 @@ import recentlyAddedHandler from '../../server/api/music/playlists/recently-adde
 import rediscoverHandler from '../../server/api/music/playlists/rediscover.get';
 import genreMixHandler from '../../server/api/music/playlists/genre-mix.get';
 import artistMixHandler from '../../server/api/music/playlists/artist-mix.get';
+import radioHandler from '../../server/api/music/playlists/radio.get';
 import {
   createTestDb,
   insertUser,
@@ -258,5 +259,81 @@ describe('GET /api/music/playlists/artist-mix', () => {
 
     const result: any = await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1'));
     expect(result.tracks[0].has_clip).toBe(1);
+  });
+});
+
+describe('GET /api/music/playlists/radio', () => {
+  it('returns 400 when trackId is missing', async () => {
+    await expect(radioHandler(eventFor('/api/music/playlists/radio'))).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('returns 404 when trackId does not exist', async () => {
+    await expect(radioHandler(eventFor('/api/music/playlists/radio?trackId=nope'))).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('excludes the seed track from the result', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', genre: 'Rock' });
+
+    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
+    expect(result.tracks.map((t: any) => t.id)).not.toContain('seed');
+  });
+
+  it('caps same-artist tracks at RADIO_SAME_ARTIST_MAX (8) when the seed has a genre, filling the rest from the same genre', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicArtist(db, { id: 'a2', visibility: 'public' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    for (let i = 0; i < 10; i++) {
+      insertMusicTrack(db, { id: `same-artist-${i}`, artistId: 'a1', genre: 'Rock' });
+    }
+    for (let i = 0; i < 10; i++) {
+      insertMusicTrack(db, { id: `same-genre-${i}`, artistId: 'a2', genre: 'Rock' });
+    }
+
+    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
+    const sameArtistCount = result.tracks.filter((t: any) => t.artist_id === 'a1').length;
+    expect(sameArtistCount).toBeLessThanOrEqual(8);
+    expect(result.tracks.length).toBe(18); // 10 same-artist candidates capped at 8, plus 10 same-genre candidates (only 18 total exist)
+  });
+
+  it('excludes tracks with a different genre when the seed has a genre', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicArtist(db, { id: 'a2', visibility: 'public' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    insertMusicTrack(db, { id: 'other-genre', artistId: 'a2', genre: 'Electro' });
+
+    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
+    expect(result.tracks.map((t: any) => t.id)).not.toContain('other-genre');
+  });
+
+  it('falls back to same-artist-only when the seed has no genre', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicArtist(db, { id: 'a2', visibility: 'public' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: null });
+    insertMusicTrack(db, { id: 'same-artist', artistId: 'a1', genre: null });
+    insertMusicTrack(db, { id: 'other-artist', artistId: 'a2', genre: null });
+
+    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
+    expect(result.tracks.map((t: any) => t.id)).toEqual(['same-artist']);
+  });
+
+  it('excludes a private artist\'s tracks for a guest', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicArtist(db, { id: 'a2', visibility: 'private' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    insertMusicTrack(db, { id: 'hidden', artistId: 'a2', genre: 'Rock' });
+
+    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
+    expect(result.tracks.map((t: any) => t.id)).not.toContain('hidden');
+  });
+
+  it('includes has_clip', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', genre: 'Rock', hasClip: true });
+
+    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
+    expect(result.tracks.find((t: any) => t.id === 't2').has_clip).toBe(1);
   });
 });
