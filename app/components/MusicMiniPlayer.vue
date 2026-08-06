@@ -63,6 +63,9 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
         <span v-if="repeatMode === 'one'" class="repeat-one-badge">1</span>
       </button>
+      <button @click="startRadio" class="mini-player-btn" title="Démarrer une radio">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path></svg>
+      </button>
       <input
         type="range"
         min="0"
@@ -86,7 +89,7 @@ import { useToast } from '~/composables/useToast';
 const {
   currentTrack, isPlaying, currentTime, duration,
   audioEl, shuffleOn, repeatMode, clipMode,
-  togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
+  togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode, play,
   recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
 } = useMusicPlayer();
 
@@ -129,6 +132,24 @@ function onProgressClick(e: MouseEvent) {
 
 function onVolumeChange() {
   if (audioElRef.value) audioElRef.value.volume = volume.value;
+}
+
+let radioRequestId = 0;
+
+async function startRadio() {
+  if (!currentTrack.value) return;
+  const requestId = ++radioRequestId;
+  try {
+    const data = await $fetch<any>('/api/music/playlists/radio', { params: { trackId: currentTrack.value.id } });
+    if (requestId !== radioRequestId) return;
+    if (data.tracks?.length > 0) {
+      play(currentTrack.value, data.tracks);
+    }
+  } catch (e) {
+    // Fail silently and leave the current queue untouched — consistent with
+    // how music/index.vue's fetchPlaylists() treats each automatic-playlist
+    // fetch as independently best-effort.
+  }
 }
 
 let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
