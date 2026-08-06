@@ -139,9 +139,11 @@ let radioRequestId = 0;
 async function startRadio() {
   if (!currentTrack.value) return;
   const requestId = ++radioRequestId;
+  const seedTrackId = currentTrack.value.id;
   try {
-    const data = await $fetch<any>('/api/music/playlists/radio', { params: { trackId: currentTrack.value.id } });
+    const data = await $fetch<any>('/api/music/playlists/radio', { params: { trackId: seedTrackId } });
     if (requestId !== radioRequestId) return;
+    if (currentTrack.value?.id !== seedTrackId) return;
     if (data.tracks?.length > 0) {
       play(currentTrack.value, data.tracks);
     }
