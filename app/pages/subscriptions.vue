@@ -81,6 +81,7 @@ const hasMore = ref(true);
 const loadMoreTrigger = ref<HTMLElement | null>(null);
 
 let observer: IntersectionObserver | null = null;
+let fetchRequestId = 0;
 
 // Fetch channels
 const fetchChannels = async () => {
@@ -94,6 +95,8 @@ const fetchChannels = async () => {
 
 // Fetch videos
 const fetchVideos = async (isLoadMore = false) => {
+  const requestId = ++fetchRequestId;
+
   if (isLoadMore) {
     loadingMore.value = true;
   } else {
@@ -114,20 +117,25 @@ const fetchVideos = async (isLoadMore = false) => {
       }
     });
 
+    if (requestId !== fetchRequestId) return;
+
     if (isLoadMore) {
       videos.value.push(...res.videos);
     } else {
       videos.value = res.videos;
     }
-    
+
     if (page.value >= res.pagination.totalPages) {
       hasMore.value = false;
     }
   } catch (err) {
+    if (requestId !== fetchRequestId) return;
     console.error(err);
   } finally {
-    pending.value = false;
-    loadingMore.value = false;
+    if (requestId === fetchRequestId) {
+      pending.value = false;
+      loadingMore.value = false;
+    }
   }
 };
 
