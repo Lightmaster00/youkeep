@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { parseChaptersFromInfoData, buildSponsorBlockArgs } from './chapters';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace } from './concurrency';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -284,6 +284,11 @@ export async function startQueueWorker() {
         const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
         if (!hasCapacityForMoreDownloads(getActiveDownloadCount(), maxConcurrent)) {
           await sleepOrWakeable(1000);
+          continue;
+        }
+
+        if (!(await hasEnoughDiskSpace(getDownloadsDir()))) {
+          await sleepOrWakeable(5000);
           continue;
         }
 
