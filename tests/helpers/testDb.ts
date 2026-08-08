@@ -95,6 +95,7 @@ export function createTestDb(): Database.Database {
       description TEXT,
       avatar_url TEXT,
       banner_url TEXT,
+      sync_status TEXT DEFAULT 'paused',
       visibility TEXT DEFAULT 'public',
       created_at INTEGER NOT NULL
     );
