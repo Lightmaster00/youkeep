@@ -643,6 +643,7 @@ export async function startMusicQueueWorker() {
  */
 async function runSingleMusicDownload(trackId: string, trackTitle: string, artistId: string): Promise<void> {
   const db = getDb();
+  const MAX_RETRY_COUNT = 3;
   try {
     const clipsSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_download_clips'").get() as { value: string } | undefined;
     const wantClip = clipsSetting?.value === '1';
@@ -677,7 +678,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
 
     db.prepare(`
       UPDATE music_tracks
-      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?
+      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?, retry_count = 0
       WHERE id = ?
     `).run(clipFallbackError ? `Clip indisponible, repli sur l'audio seul : ${clipFallbackError}` : null, trackId);
     addLog(`Téléchargement ${result.hasClip ? 'du clip' : 'audio'} RÉUSSI : "${trackTitle}"`);
@@ -685,23 +686,34 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
     const errMsg = err.message || String(err);
     addLog(`ÉCHEC du téléchargement pour la track "${trackTitle}" (${trackId}) : ${errMsg}`);
 
-    const currentTrack = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
+    const currentTrack = db.prepare('SELECT download_status, retry_count FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string; retry_count: number | null } | undefined;
     const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
     const isPausedGlobal = pausedSetting?.value === '1';
 
     if (isPausedGlobal || currentTrack?.download_status === 'pending') {
       addLog(`Téléchargement de la track "${trackTitle}" (${trackId}) interrompu ou mis en pause intentionnellement.`);
+      // Deliberate interruption, not a genuine failure — retry_count is untouched.
       db.prepare(`
         UPDATE music_tracks
         SET download_status = 'pending', download_speed = null, download_eta = null
         WHERE id = ?
       `).run(trackId);
     } else {
-      db.prepare(`
-        UPDATE music_tracks
-        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?
-        WHERE id = ?
-      `).run(errMsg, Date.now(), trackId);
+      const nextRetryCount = (currentTrack?.retry_count ?? 0) + 1;
+      if (nextRetryCount >= MAX_RETRY_COUNT) {
+        db.prepare(`
+          UPDATE music_tracks
+          SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
+          WHERE id = ?
+        `).run(errMsg, nextRetryCount, trackId);
+        addLog(`Track "${trackTitle}" (${trackId}) marquée comme définitivement échouée après ${nextRetryCount} tentatives.`);
+      } else {
+        db.prepare(`
+          UPDATE music_tracks
+          SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?, retry_count = ?
+          WHERE id = ?
+        `).run(errMsg, Date.now(), nextRetryCount, trackId);
+      }
     }
     await new Promise(resolve => setTimeout(resolve, 2000));
   } finally {
