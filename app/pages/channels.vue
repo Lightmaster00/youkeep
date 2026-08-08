@@ -49,13 +49,21 @@
               <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               <span>{{ subscribed ? 'Subscribed' : "Subscribe" }}</span>
             </button>
-            <button 
+            <button
               v-if="isAdmin"
-              @click="showDrawer = true" 
+              @click="showDrawer = true"
               class="btn btn-secondary settings-trigger-btn"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l-.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.5 1z"></path></svg>
               <span>Tracking options</span>
+            </button>
+            <button
+              v-if="isAdmin"
+              @click="handleToggleSyncStatus"
+              class="btn btn-secondary"
+              :disabled="togglingSyncStatus"
+            >
+              <span>{{ channel.sync_status === 'downloading' ? 'Pause Sync' : 'Resume Sync' }}</span>
             </button>
 
           </div>
@@ -1103,6 +1111,24 @@ const handleToggleSubscription = async () => {
     toast.success(subscribed.value ? 'Subscription saved.' : 'Subscription removed.');
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Action failed.');
+  }
+};
+
+const togglingSyncStatus = ref(false);
+
+const handleToggleSyncStatus = async () => {
+  if (!channelId.value || !channel.value) return;
+  togglingSyncStatus.value = true;
+  const isPaused = channel.value.sync_status !== 'downloading';
+  const endpoint = isPaused ? 'sync' : 'pause';
+  try {
+    await $fetch(`/api/admin/channels/${channelId.value}/${endpoint}`, { method: 'POST' });
+    toast.success(isPaused ? 'Sync resumed.' : 'Sync paused.');
+    await refreshSingleChannel();
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Action failed.');
+  } finally {
+    togglingSyncStatus.value = false;
   }
 };
 
