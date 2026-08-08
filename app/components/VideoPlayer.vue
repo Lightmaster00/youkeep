@@ -631,6 +631,8 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('fullscreenchange', onFullscreenChange);
   document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('mousemove', scrubTo);
+  document.removeEventListener('mouseup', stopScrubbing);
   if (process.client) {
     document.removeEventListener('visibilitychange', handleVisibilityChange);
   }
