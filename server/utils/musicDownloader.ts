@@ -363,6 +363,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
         addLog(`yt-dlp [${trackId}] process error : ${err.message || err}`);
         activeMusicProcesses.delete(trackId);
         activeMusicDownloadStartTimes.delete(trackId);
+        cleanupPartialMusicFiles(trackId, artistId);
         settle(() => reject(err));
       });
 
@@ -462,22 +463,31 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
 
           const fileSize = audioFile && fs.existsSync(audioFile) ? fs.statSync(audioFile).size : null;
 
-          db.prepare(`
-            UPDATE music_tracks
-            SET local_file_path = ?, local_thumbnail_path = ?, album_id = COALESCE(?, album_id),
-                genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?, has_clip = ?
-            WHERE id = ?
-          `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, wantClip ? 1 : 0, trackId);
+          try {
+            db.prepare(`
+              UPDATE music_tracks
+              SET local_file_path = ?, local_thumbnail_path = ?, album_id = COALESCE(?, album_id),
+                  genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?, has_clip = ?
+              WHERE id = ?
+            `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, wantClip ? 1 : 0, trackId);
 
-          db.prepare(`
-            INSERT INTO music_track_artists (track_id, artist_id, role)
-            VALUES (?, ?, 'primary')
-            ON CONFLICT(track_id, artist_id) DO NOTHING
-          `).run(trackId, artistId);
+            db.prepare(`
+              INSERT INTO music_track_artists (track_id, artist_id, role)
+              VALUES (?, ?, 'primary')
+              ON CONFLICT(track_id, artist_id) DO NOTHING
+            `).run(trackId, artistId);
 
-          settle(() => resolve({ hasClip: wantClip }));
+            settle(() => resolve({ hasClip: wantClip }));
+          } catch (dbErr: any) {
+            // The audio/thumbnail files downloaded successfully, but the DB write that
+            // records them failed. Treat this identically to an ordinary yt-dlp failure —
+            // same rejection, no file cleanup here (the download itself was fine) — so the
+            // promise always settles instead of hanging forever.
+            settle(() => reject(dbErr));
+          }
         } else {
           const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
+          cleanupPartialMusicFiles(trackId, artistId);
           settle(() => reject(new Error(errorMsg)));
         }
       });
