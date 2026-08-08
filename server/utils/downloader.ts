@@ -729,6 +729,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
       clearTimeout(watchdog);
       addLog(`yt-dlp [${videoId}] process error : ${err.message || err}`);
       activeProcesses.delete(videoId);
+      cleanupPartialFiles(videoId, channelId);
       settle(() => reject(err));
     });
 
@@ -919,31 +920,41 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
         
         const fileSize = videoUrlPath && fs.existsSync(videoFile) ? fs.statSync(videoFile).size : null;
 
-        db.prepare(`
-          UPDATE videos 
-          SET local_video_path = ?, 
-              local_thumbnail_path = ?,
-              description = COALESCE(?, description),
-              view_count = COALESCE(?, view_count),
-              upload_date = COALESCE(?, upload_date),
-              like_count = COALESCE(?, like_count),
-              size_bytes = ?,
-              was_live = ?
-          WHERE id = ?
-        `).run(
-          videoUrlPath,
-          thumbnailUrlPath,
-          desc,
-          views,
-          uploadDate,
-          likeCount,
-          fileSize,
-          wasLive,
-          videoId
-        );
-        settle(() => resolve());
+        try {
+          db.prepare(`
+            UPDATE videos
+            SET local_video_path = ?,
+                local_thumbnail_path = ?,
+                description = COALESCE(?, description),
+                view_count = COALESCE(?, view_count),
+                upload_date = COALESCE(?, upload_date),
+                like_count = COALESCE(?, like_count),
+                size_bytes = ?,
+                was_live = ?
+            WHERE id = ?
+          `).run(
+            videoUrlPath,
+            thumbnailUrlPath,
+            desc,
+            views,
+            uploadDate,
+            likeCount,
+            fileSize,
+            wasLive,
+            videoId
+          );
+          settle(() => resolve());
+        } catch (dbErr: any) {
+          // The video/thumbnail files downloaded successfully, but the DB write that
+          // records them failed (e.g. a transient SQLITE_BUSY from a concurrent
+          // progress-update write). Treat this identically to an ordinary yt-dlp
+          // failure — same rejection, same cleanup — so the promise always settles
+          // instead of hanging forever, and the caller's retry logic can pick it up.
+          settle(() => reject(dbErr));
+        }
       } else {
         const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
+        cleanupPartialFiles(videoId, channelId);
         settle(() => reject(new Error(errorMsg)));
       }
     });
