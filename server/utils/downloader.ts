@@ -963,8 +963,9 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
           // The video/thumbnail files downloaded successfully, but the DB write that
           // records them failed (e.g. a transient SQLITE_BUSY from a concurrent
           // progress-update write). Treat this identically to an ordinary yt-dlp
-          // failure — same rejection, same cleanup — so the promise always settles
-          // instead of hanging forever, and the caller's retry logic can pick it up.
+          // failure — same rejection, no file cleanup here (the download itself was fine) —
+          // so the promise always settles instead of hanging forever, and the caller's
+          // retry logic can pick it up.
           settle(() => reject(dbErr));
         }
       } else {

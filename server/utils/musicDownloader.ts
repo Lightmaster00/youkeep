@@ -363,7 +363,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
         addLog(`yt-dlp [${trackId}] process error : ${err.message || err}`);
         activeMusicProcesses.delete(trackId);
         activeMusicDownloadStartTimes.delete(trackId);
-        cleanupPartialMusicFiles(trackId, artistId);
+        cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
         settle(() => reject(err));
       });
 
@@ -487,7 +487,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
           }
         } else {
           const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
-          cleanupPartialMusicFiles(trackId, artistId);
+          cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
           settle(() => reject(new Error(errorMsg)));
         }
       });
