@@ -1454,12 +1454,14 @@ export async function ingestUrl(
 
   // Insert or update video
   const isShortFlag = (
-    url.includes('/shorts/') || 
-    (data.webpage_url && data.webpage_url.includes('/shorts/')) || 
+    url.includes('/shorts/') ||
+    (data.webpage_url && data.webpage_url.includes('/shorts/')) ||
     (data.original_url && data.original_url.includes('/shorts/'))
   ) ? 1 : 0;
 
-  const res = db.prepare(`
+  const priorStatus = db.prepare('SELECT download_status FROM videos WHERE id = ?').get(videoId) as { download_status: string } | undefined;
+
+  db.prepare(`
     INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_manually_queued, is_short, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
@@ -1481,15 +1483,12 @@ export async function ingestUrl(
   // Trigger queue processing unconditionally since this is a manual ingest
   startQueueWorker();
 
-  if (res.changes > 0) {
+  if (!priorStatus) {
     return { success: true, message: `Video "${data.title}" has been added to the download queue.`, count: 1 };
+  } else if (priorStatus.download_status === 'completed') {
+    return { success: true, message: `Video "${data.title}" is already present in the archive.`, count: 0 };
   } else {
-    const videoStatus = db.prepare('SELECT download_status FROM videos WHERE id = ?').get(videoId) as { download_status: string } | undefined;
-    if (videoStatus?.download_status === 'completed') {
-      return { success: true, message: `Video "${data.title}" is already present in the archive.`, count: 0 };
-    } else {
-      return { success: true, message: `Video "${data.title}" has been re-added to the download queue.`, count: 1 };
-    }
+    return { success: true, message: `Video "${data.title}" has been re-added to the download queue.`, count: 1 };
   }
 }
 
