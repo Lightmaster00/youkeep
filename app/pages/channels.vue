@@ -937,6 +937,10 @@ onUnmounted(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId);
   }
+  if (syncPlaylistsRefreshTimer) {
+    clearTimeout(syncPlaylistsRefreshTimer);
+    syncPlaylistsRefreshTimer = null;
+  }
 });
 
 const clearSelection = () => {
@@ -1180,6 +1184,8 @@ async function handleTriggerManualSync() {
   }
 };
 
+let syncPlaylistsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
 async function handleSyncPlaylists() {
   if (!channelId.value) return;
   syncingPlaylists.value = true;
@@ -1189,7 +1195,10 @@ async function handleSyncPlaylists() {
     });
     toast.success(res.message || 'Playlist sync started.');
     // The sync runs in the background on the server; give it a moment before refreshing.
-    setTimeout(() => refreshPlaylists(), 5000);
+    syncPlaylistsRefreshTimer = setTimeout(() => {
+      syncPlaylistsRefreshTimer = null;
+      refreshPlaylists();
+    }, 5000);
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Failed to start playlist sync.');
   } finally {
