@@ -6,7 +6,7 @@ import { Cron } from 'croner';
 import { getDb } from './db';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace } from './concurrency';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -584,6 +584,11 @@ export async function startMusicQueueWorker() {
         const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
         if (!hasCapacityForMoreDownloads(getActiveMusicDownloadCount(), maxConcurrent)) {
           await sleepOrWakeableMusic(1000);
+          continue;
+        }
+
+        if (!(await hasEnoughDiskSpace(getMusicDownloadsDir()))) {
+          await sleepOrWakeableMusic(5000);
           continue;
         }
 
