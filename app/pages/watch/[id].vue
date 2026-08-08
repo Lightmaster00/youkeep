@@ -487,6 +487,8 @@ const playNextVideo = () => {
   }
 };
 
+let autoNextTimer: ReturnType<typeof setTimeout> | null = null;
+
 const handleVideoEnded = () => {
   if (playlistId.value && playlistVideos.value.length > 0) {
     const currentIndex = playlistVideos.value.findIndex((v: any) => v.id === videoId.value);
@@ -494,7 +496,8 @@ const handleVideoEnded = () => {
       const nextVideo = playlistVideos.value[currentIndex + 1];
       if (nextVideo.download_status === 'completed') {
         toast.info(`Lecture de la vidéo suivante : ${nextVideo.title}`);
-        setTimeout(() => {
+        autoNextTimer = setTimeout(() => {
+          autoNextTimer = null;
           navigateTo(`/watch/${nextVideo.id}?playlistId=${playlistId.value}`);
         }, 1500);
       }
@@ -515,10 +518,18 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick);
+  if (autoNextTimer) {
+    clearTimeout(autoNextTimer);
+    autoNextTimer = null;
+  }
 });
 
 // Collapse the description when navigating to a different video
 watch(videoId, () => {
+  if (autoNextTimer) {
+    clearTimeout(autoNextTimer);
+    autoNextTimer = null;
+  }
   descriptionExpanded.value = false;
 });
 
