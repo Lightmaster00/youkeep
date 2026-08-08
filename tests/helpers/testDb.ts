@@ -50,6 +50,7 @@ export function createTestDb(): Database.Database {
       view_count INTEGER DEFAULT 0,
       is_short INTEGER DEFAULT 0,
       was_live INTEGER DEFAULT 0,
+      retry_count INTEGER DEFAULT 0,
       local_video_path TEXT,
       local_thumbnail_path TEXT,
       created_at INTEGER NOT NULL,
@@ -118,6 +119,7 @@ export function createTestDb(): Database.Database {
       local_file_path TEXT,
       local_thumbnail_path TEXT,
       has_clip INTEGER DEFAULT 0,
+      retry_count INTEGER DEFAULT 0,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE,
       FOREIGN KEY (album_id) REFERENCES music_albums(id) ON DELETE SET NULL
