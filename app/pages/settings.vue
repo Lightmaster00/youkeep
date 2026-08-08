@@ -586,6 +586,11 @@
                   {{ savingMusicConcurrency ? 'Saving...' : 'Save' }}
                 </button>
               </div>
+
+              <button v-if="musicFailedCount > 0" @click="handleRetryAllMusicFailed" class="btn btn-secondary-dark" :disabled="retryingMusicFailed">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                <span>Retry {{ musicFailedCount }} Failed</span>
+              </button>
             </div>
 
             <form @submit.prevent="handleSaveMusicSchedule" class="policy-form-block mt-3 pt-3 border-t">
@@ -1275,6 +1280,7 @@ const musicHistory = ref<any[]>([]);
 const musicArtists = ref<any[]>([]);
 const musicIsPaused = ref(false);
 const musicFailedCount = ref(0);
+const retryingMusicFailed = ref(false);
 const pausingOrResumingMusic = ref(false);
 const maxConcurrentMusicDownloads = ref(2);
 const savingMusicConcurrency = ref(false);
@@ -1621,6 +1627,19 @@ const handleRetryAllFailed = async () => {
     toast.error(err.data?.statusMessage || 'Retry failed.');
   } finally {
     retryingFailed.value = false;
+  }
+};
+
+const handleRetryAllMusicFailed = async () => {
+  retryingMusicFailed.value = true;
+  try {
+    await $fetch('/api/admin/music/retry-failed', { method: 'POST' });
+    fetchMusicQueue();
+    toast.success('Failed downloads retried.');
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Retry failed.');
+  } finally {
+    retryingMusicFailed.value = false;
   }
 };
 
