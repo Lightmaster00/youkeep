@@ -807,20 +807,20 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.form-msg {
+.settings-form-msg {
   padding: 10px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
 }
 
-.success-msg {
+.settings-success-msg {
   background: rgba(34, 197, 94, 0.1);
   border: 1px solid rgba(34, 197, 94, 0.2);
   color: #4ade80;
 }
 
-.error-msg {
+.settings-error-msg {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
   color: #f87171;
@@ -884,26 +884,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
-}
-
-.profile-meta-info {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.profile-meta-info h3 {
-  font-size: 20px;
-}
-
-.password-change-form {
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  padding-top: 20px;
-}
-
-.password-change-form h4 {
-  font-size: 14px;
-  margin-bottom: 12px;
 }
 
 .ml-2 { margin-left: 8px; }

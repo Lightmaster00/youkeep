@@ -84,7 +84,7 @@
             </button>
           </form>
 
-          <div v-if="ingestMessage" class="form-msg mt-3" :class="ingestSuccess ? 'success-msg' : 'error-msg'">
+          <div v-if="ingestMessage" class="settings-form-msg mt-3" :class="ingestSuccess ? 'settings-success-msg' : 'settings-error-msg'">
             {{ ingestMessage }}
           </div>
 
@@ -148,7 +148,7 @@
                   </button>
                 </div>
               </div>
-              <div v-if="saveDirMessage" class="form-msg mt-2" :class="saveDirSuccess ? 'success-msg' : 'error-msg'">
+              <div v-if="saveDirMessage" class="settings-form-msg mt-2" :class="saveDirSuccess ? 'settings-success-msg' : 'settings-error-msg'">
                 {{ saveDirMessage }}
               </div>
             </form>
@@ -187,7 +187,7 @@
                 </button>
               </div>
             </form>
-            <div v-if="scheduleMessage" class="form-msg mt-3 success-msg">
+            <div v-if="scheduleMessage" class="settings-form-msg mt-3 settings-success-msg">
               {{ scheduleMessage }}
             </div>
           </div>
@@ -220,7 +220,7 @@
               </button>
             </div>
           </form>
-          <div v-if="sponsorBlockMessage" class="form-msg mt-3" :class="sponsorBlockSuccess ? 'success-msg' : 'error-msg'">
+          <div v-if="sponsorBlockMessage" class="settings-form-msg mt-3" :class="sponsorBlockSuccess ? 'settings-success-msg' : 'settings-error-msg'">
             {{ sponsorBlockMessage }}
           </div>
         </div>

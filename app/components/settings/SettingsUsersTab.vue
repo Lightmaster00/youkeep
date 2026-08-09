@@ -101,7 +101,7 @@
               </div>
             </div>
 
-            <div v-if="userFormMessage" class="form-msg mt-3" :class="userFormSuccess ? 'success-msg' : 'error-msg'">
+            <div v-if="userFormMessage" class="settings-form-msg mt-3" :class="userFormSuccess ? 'settings-success-msg' : 'settings-error-msg'">
               {{ userFormMessage }}
             </div>
 

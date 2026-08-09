@@ -94,7 +94,7 @@
           </button>
         </div>
       </form>
-      <div v-if="musicScheduleMessage" class="form-msg mt-3 success-msg">
+      <div v-if="musicScheduleMessage" class="settings-form-msg mt-3 settings-success-msg">
         {{ musicScheduleMessage }}
       </div>
     </div>
@@ -144,7 +144,7 @@
             </label>
           </div>
 
-          <div v-if="musicIngestMessage" class="form-msg mt-3" :class="musicIngestSuccess ? 'success-msg' : 'error-msg'">
+          <div v-if="musicIngestMessage" class="settings-form-msg mt-3" :class="musicIngestSuccess ? 'settings-success-msg' : 'settings-error-msg'">
             {{ musicIngestMessage }}
           </div>
         </div>
