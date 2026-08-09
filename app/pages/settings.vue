@@ -720,6 +720,14 @@
                     >
                       {{ syncingArtistId === artist.id ? 'Syncing...' : 'Sync' }}
                     </button>
+                    <button
+                      v-if="artist.sync_status === 'downloading'"
+                      @click="handlePauseMusicArtist(artist.id)"
+                      class="btn btn-secondary btn-xs"
+                      :disabled="pausingArtistId === artist.id"
+                    >
+                      {{ pausingArtistId === artist.id ? 'Pausing...' : 'Pause' }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1291,6 +1299,7 @@ const addingMusicArtist = ref(false);
 const musicIngestMessage = ref('');
 const musicIngestSuccess = ref(false);
 const syncingArtistId = ref<string | null>(null);
+const pausingArtistId = ref<string | null>(null);
 
 const musicActiveDownloadCount = computed(() => {
   return musicQueue.value.filter(t => t.download_status === 'downloading').length;
@@ -1590,6 +1599,19 @@ const handleSyncMusicArtist = async (artistId: string) => {
     toast.error(err.data?.statusMessage || 'Failed to sync artist.');
   } finally {
     syncingArtistId.value = null;
+  }
+};
+
+const handlePauseMusicArtist = async (artistId: string) => {
+  pausingArtistId.value = artistId;
+  try {
+    await $fetch(`/api/admin/music/artists/${artistId}/pause`, { method: 'POST' });
+    toast.success('Artist sync paused.');
+    fetchMusicQueue();
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to pause artist.');
+  } finally {
+    pausingArtistId.value = null;
   }
 };
 
