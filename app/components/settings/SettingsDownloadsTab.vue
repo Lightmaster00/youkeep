@@ -72,7 +72,7 @@
                 type="text"
                 v-model="channelSearchInput"
                 placeholder="Channel name (e.g. Marques Brownlee, Veritasium...)"
-                class="form-input search-input"
+                class="form-input settings-search-input"
                 required
                 :disabled="searching || ingesting"
               />

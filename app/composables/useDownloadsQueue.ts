@@ -1,3 +1,6 @@
+let lastFrameTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+let animationFrameId: any = null;
+
 export function useDownloadsQueue() {
   const queue = useState<any[]>('settings_downloads_queue', () => []);
   const failedCount = useState<number>('settings_downloads_failed_count', () => 0);
@@ -10,9 +13,6 @@ export function useDownloadsQueue() {
   const activeDownloadCount = computed(() => {
     return queue.value.filter((v: any) => v.download_status === 'downloading').length;
   });
-
-  let lastFrameTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  let animationFrameId: any = null;
 
   const updateSmoothProgress = (now: number) => {
     const dt = now - lastFrameTime;

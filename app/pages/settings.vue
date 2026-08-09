@@ -886,21 +886,6 @@ onUnmounted(() => {
   gap: 20px;
 }
 
-.profile-avatar-large {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 800;
-  font-family: var(--font-title);
-  box-shadow: 0 4px 16px var(--accent-primary-glow);
-}
-
 .profile-meta-info {
   display: flex;
   flex-direction: column;
@@ -1179,7 +1164,7 @@ onUnmounted(() => {
   font-family: var(--font-title);
 }
 
-.text-accent {
+.settings-text-accent {
   color: var(--accent-secondary) !important;
 }
 
@@ -1494,7 +1479,7 @@ onUnmounted(() => {
   flex: 1;
 }
 
-.search-input {
+.settings-search-input {
   padding-left: 40px !important;
 }
 

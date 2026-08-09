@@ -119,7 +119,7 @@
                 type="text"
                 v-model="musicArtistInput"
                 placeholder="YouTube channel URL or @handle"
-                class="form-input search-input"
+                class="form-input settings-search-input"
                 required
                 :disabled="addingMusicArtist"
               />

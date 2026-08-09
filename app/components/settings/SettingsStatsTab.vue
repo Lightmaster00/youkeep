@@ -22,7 +22,7 @@
         </div>
         <div class="quick-stat-divider"></div>
         <div class="quick-stat-item">
-          <span class="stat-number" :class="{ 'text-accent': (stats?.totalQueue || 0) > 0 }">{{ stats?.totalQueue || 0 }}</span>
+          <span class="stat-number" :class="{ 'settings-text-accent': (stats?.totalQueue || 0) > 0 }">{{ stats?.totalQueue || 0 }}</span>
           <span class="stat-label">Queue Tasks</span>
         </div>
       </div>
