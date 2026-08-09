@@ -1125,6 +1125,7 @@ const handleToggleSyncStatus = async () => {
     await $fetch(`/api/admin/channels/${channelId.value}/${endpoint}`, { method: 'POST' });
     toast.success(isPaused ? 'Sync resumed.' : 'Sync paused.');
     await refreshSingleChannel();
+    refreshChannels();
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Action failed.');
   } finally {
