@@ -895,10 +895,6 @@ onUnmounted(() => {
 .settings-container .text-danger { color: #f87171; }
 .settings-container .text-muted { color: var(--text-muted); }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .settings-container .spin-anim {
   animation: spin 1.2s linear infinite;
 }

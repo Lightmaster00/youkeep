@@ -57,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { useChannelDetail } from '~/composables/useChannelDetail';
 import ChannelDirectoryView from '~/components/channels/ChannelDirectoryView.vue';
 import ChannelDetailHeader from '~/components/channels/ChannelDetailHeader.vue';
@@ -538,10 +538,6 @@ onUnmounted(() => {
   border-top-color: white;
   animation: spin 0.8s linear infinite;
   display: inline-block;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 /* Barres de tri / filtrage / batch actions */

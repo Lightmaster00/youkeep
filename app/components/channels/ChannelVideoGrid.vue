@@ -107,9 +107,6 @@ const { channelId, channelVideos, videosData, videosPending, refreshVideos, refr
 const { refreshChannels } = await useChannelsList();
 const { videoSearchQuery, sortBy } = useChannelVideoFilters();
 
-// No UI control ever sets this away from 'all' — preserved as inert internal state to
-// keep filteredVideos' filtering logic byte-for-byte identical to the original page.
-const filterStatus = ref('all');
 const isInitialLoad = ref(true);
 
 watch(channelId, () => {
@@ -140,18 +137,7 @@ const filteredVideos = computed(() => {
     vids = vids.filter(v => v.title && v.title.toLowerCase().includes(query));
   }
 
-  // 2. Filter by status
-  if (filterStatus.value !== 'all') {
-    if (filterStatus.value === 'completed') {
-      vids = vids.filter(v => v.download_status === 'completed');
-    } else if (filterStatus.value === 'downloading_pending') {
-      vids = vids.filter(v => v.download_status === 'pending' || v.download_status === 'downloading');
-    } else if (filterStatus.value === 'failed') {
-      vids = vids.filter(v => v.download_status === 'failed');
-    }
-  }
-
-  // 3. Sort
+  // 2. Sort
   vids.sort((a, b) => {
     if (sortBy.value === 'date_desc') {
       return (b.upload_date || '').localeCompare(a.upload_date || '');
