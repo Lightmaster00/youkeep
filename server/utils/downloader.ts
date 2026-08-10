@@ -1065,6 +1065,11 @@ function ensureChannelExists(db: any, channelId: string, channelTitle: string): 
   fetchChannelDetails(0);
 }
 
+// A single ordinary-playlist import processes entries synchronously in one
+// request/response cycle (no batching) — cap it so a pathologically large
+// playlist can't stall the request indefinitely.
+const MAX_PLAYLIST_IMPORT_SIZE = 500;
+
 /**
  * Metadata Ingestion
  * Fetches playlist/video/channel JSON from yt-dlp and writes it to DB.
@@ -1183,7 +1188,8 @@ export async function ingestUrl(
   const playlistPattern = /[?&]list=/;
   if (playlistPattern.test(url) && Array.isArray(data.entries) && !channelPattern.test(url.trim())) {
     const playlistTitle = data.title || 'Untitled Playlist';
-    const entries = data.entries;
+    const totalEntries = data.entries.length;
+    const entries = data.entries.slice(0, MAX_PLAYLIST_IMPORT_SIZE);
 
     const upsertPlaylistVideo = db.prepare(`
       INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_manually_queued, is_short, created_at)
@@ -1204,7 +1210,7 @@ export async function ingestUrl(
       ensureChannelExists(db, entryChannelId, entryChannelTitle);
 
       const entryUrl = entry.webpage_url || entry.url || '';
-      const isShortFlag = entryUrl.includes('/shorts/') ? 1 : 0;
+      const isShortFlag = (entryUrl.includes('/shorts/') || (typeof entry.duration === 'number' && entry.duration > 0 && entry.duration <= 60)) ? 1 : 0;
       // Flat-playlist entries carry `timestamp` (unix epoch seconds) rather than
       // the `upload_date` (YYYYMMDD string) field full single-video/channel dumps
       // have — convert when present so this stays comparable with every other
@@ -1237,9 +1243,13 @@ export async function ingestUrl(
     // this is a deliberate, manual, one-time import, not a passive subscription.
     startQueueWorker();
 
+    const truncationNote = totalEntries > MAX_PLAYLIST_IMPORT_SIZE
+      ? ` Playlist has ${totalEntries} entries — only the first ${MAX_PLAYLIST_IMPORT_SIZE} were processed.`
+      : '';
+
     return {
       success: true,
-      message: `Playlist "${playlistTitle}" imported. ${videosQueued} video(s) added to the download queue.`,
+      message: `Playlist "${playlistTitle}" imported. ${videosQueued} video(s) added to the download queue.${truncationNote}`,
       count: videosQueued
     };
   }
