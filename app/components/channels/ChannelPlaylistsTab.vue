@@ -116,7 +116,7 @@ const { data: playlistsData, pending: playlistsPending, refresh: refreshPlaylist
 }));
 const channelPlaylists = computed(() => {
   if (!channelId.value) return [];
-  return playlistsData.value || [];
+  return playlistsData.value?.playlists || [];
 });
 
 const selectedPlaylistId = ref('');
