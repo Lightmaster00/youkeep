@@ -4,11 +4,11 @@ export default defineNuxtPlugin(() => {
       const method = (options.method || 'GET').toString().toUpperCase();
       if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return;
 
-      const token = useCookie('csrf_token').value;
-      if (!token) return;
+      const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+      if (!match) return;
 
       options.headers = new Headers(options.headers);
-      options.headers.set('x-csrf-token', token as string);
+      options.headers.set('x-csrf-token', decodeURIComponent(match[1]));
     }
   });
 

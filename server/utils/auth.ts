@@ -9,9 +9,18 @@ export interface UserSession {
   mustChangePassword: boolean;
 }
 
-const SESSION_COOKIE_NAME = 'youkeep_session';
-const CSRF_COOKIE_NAME = 'csrf_token';
-const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
+export const SESSION_COOKIE_NAME = 'youkeep_session';
+export const CSRF_COOKIE_NAME = 'csrf_token';
+export const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+// Regenerated on every process start — invalidates in-flight CSRF tokens on
+// restart/deploy, but server/middleware/csrf.ts self-heals this transparently
+// on the user's next GET request, so it is never user-visible.
+const CSRF_SECRET = crypto.randomBytes(32);
+
+export function computeCsrfToken(sessionId: string): string {
+  return crypto.createHmac('sha256', CSRF_SECRET).update(sessionId).digest('hex');
+}
 
 export function hashPassword(password: string): string {
   const salt = bcrypt.genSaltSync(10);
@@ -45,8 +54,7 @@ export async function createSession(userId: string, event: H3Event): Promise<str
   // Set a second, JS-readable CSRF token cookie (double-submit pattern) —
   // NOT httpOnly, since the client plugin (app/plugins/csrf.client.ts) must
   // be able to read it and echo it back as a header on mutating requests.
-  const csrfToken = crypto.randomUUID();
-  setCookie(event, CSRF_COOKIE_NAME, csrfToken, {
+  setCookie(event, CSRF_COOKIE_NAME, computeCsrfToken(sessionId), {
     httpOnly: false,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
