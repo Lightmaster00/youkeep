@@ -208,9 +208,10 @@ export function grantChannelAccess(db: Database.Database, userId: string, channe
 }
 
 // Minimal H3Event stand-in: covers exactly what getUserFromSession/getCookie/
-// deleteCookie touch (event.node.req.headers.cookie, event.node.res.*).
-export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string>; body?: any; headers?: Record<string, string> }): any {
+// setCookie/deleteCookie touch (event.node.req.headers.cookie, event.node.res.*).
+export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?: Record<string, string>; body?: any; headers?: Record<string, string>; method?: string }): any {
   const req: any = {
+    method: opts?.method ?? 'GET',
     headers: { cookie: cookieHeader || '', ...(opts?.headers ?? {}) }
   };
   if (opts && Object.prototype.hasOwnProperty.call(opts, 'body')) {
@@ -224,6 +225,7 @@ export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?
   }
   const resHeaders: Record<string, any> = {};
   return {
+    method: opts?.method ?? 'GET',
     path: opts?.path ?? '/',
     context: { params: opts?.params ?? {} },
     node: {
@@ -232,7 +234,22 @@ export function mockEvent(cookieHeader?: string, opts?: { path?: string; params?
         statusCode: 200,
         headers: resHeaders,
         getHeader: (name: string) => resHeaders[name.toLowerCase()],
-        setHeader: (name: string, value: any) => { resHeaders[name.toLowerCase()] = value; }
+        setHeader: (name: string, value: any) => { resHeaders[name.toLowerCase()] = value; },
+        // h3's setCookie() calls these on every SECOND (and later) cookie set
+        // in the same request/response cycle — createSession() now sets two
+        // cookies (session + csrf_token), so both must be supported here.
+        removeHeader: (name: string) => { delete resHeaders[name.toLowerCase()]; },
+        appendHeader: (name: string, value: any) => {
+          const key = name.toLowerCase();
+          const existing = resHeaders[key];
+          if (existing === undefined) {
+            resHeaders[key] = value;
+          } else if (Array.isArray(existing)) {
+            existing.push(value);
+          } else {
+            resHeaders[key] = [existing, value];
+          }
+        }
       }
     }
   };

@@ -66,6 +66,7 @@ describe('POST /api/dev/login', () => {
     const setCookieHeader = event.node.res.getHeader('set-cookie');
     expect(setCookieHeader).toBeDefined();
     expect(String(setCookieHeader)).toContain('youkeep_session=');
+    expect(String(setCookieHeader)).toContain('csrf_token=');
   });
 
   it('reuses the same fixture user on a second call instead of creating a duplicate', async () => {

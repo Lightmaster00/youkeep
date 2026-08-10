@@ -10,6 +10,7 @@ export interface UserSession {
 }
 
 const SESSION_COOKIE_NAME = 'youkeep_session';
+const CSRF_COOKIE_NAME = 'csrf_token';
 const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 export function hashPassword(password: string): string {
@@ -41,6 +42,18 @@ export async function createSession(userId: string, event: H3Event): Promise<str
     path: '/'
   });
 
+  // Set a second, JS-readable CSRF token cookie (double-submit pattern) —
+  // NOT httpOnly, since the client plugin (app/plugins/csrf.client.ts) must
+  // be able to read it and echo it back as a header on mutating requests.
+  const csrfToken = crypto.randomUUID();
+  setCookie(event, CSRF_COOKIE_NAME, csrfToken, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: SESSION_DURATION / 1000,
+    path: '/'
+  });
+
   return sessionId;
 }
 
@@ -50,6 +63,7 @@ export async function destroySession(event: H3Event): Promise<void> {
     const db = getDb();
     db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
     deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
+    deleteCookie(event, CSRF_COOKIE_NAME, { path: '/' });
   }
 }
 
