@@ -8,7 +8,7 @@ export default defineNuxtPlugin(() => {
       if (!match) return;
 
       options.headers = new Headers(options.headers);
-      options.headers.set('x-csrf-token', decodeURIComponent(match[1]));
+      options.headers.set('x-csrf-token', decodeURIComponent(match[1] ?? ''));
     }
   });
 
