@@ -89,7 +89,7 @@ defineEmits<{ 'open-drawer': [] }>();
 const { isAdmin } = useAuth();
 const toast = useToast();
 
-const { channelId, channel, singleChannelData, channelVideos, refreshSingleChannel } = await useChannelDetail();
+const { channelId, channel, singleChannelData, channelVideos, refreshSingleChannel, refreshVideos } = await useChannelDetail();
 const { refreshChannels } = await useChannelsList();
 
 const subscribed = ref(false);
@@ -146,6 +146,7 @@ async function handleTriggerManualSync() {
     });
     toast.success(res.message || 'Channel update completed.');
     refreshSingleChannel();
+    refreshVideos();
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Failed to search videos.');
   } finally {
