@@ -1,4 +1,13 @@
 export async function useChannelDetail() {
+  // Capture the Nuxt app instance before the first `await`. Vue's <script setup>
+  // compiler only auto-restores the component instance context around `await`
+  // expressions written directly in the calling component's own script setup —
+  // it cannot see into this nested async function. Without capturing it here,
+  // the second `useFetch` call below would run after the first `await` with no
+  // Nuxt instance in scope and throw "composable called outside of a plugin,
+  // Nuxt hook, ... or Vue setup function" (same reasoning as
+  // app/composables/useAdminChannels.ts's second useFetch call).
+  const nuxtApp = useNuxtApp();
   const route = useRoute();
   const channelId = ref(route.query.channelId ? String(route.query.channelId) : '');
 
@@ -17,14 +26,6 @@ export async function useChannelDetail() {
     return singleChannelData.value?.channel || null;
   });
 
-  // The second useFetch call needs runWithContext: Vue's <script setup> compiler only
-  // auto-restores the component instance context around await expressions written
-  // directly in the calling component's own script setup — it cannot see into this
-  // nested async function. Without runWithContext, this call would run after the
-  // first await above with no Nuxt instance in scope and throw "composable called
-  // outside of a plugin, Nuxt hook, ... or Vue setup function" (same reasoning as
-  // app/composables/useAdminChannels.ts's second useFetch call).
-  const nuxtApp = useNuxtApp();
   const { data: videosData, pending: videosPending, refresh: refreshVideos } = await nuxtApp.runWithContext(() =>
     useFetch<any>(computed(() => {
       return channelId.value ? `/api/videos?channelId=${channelId.value}&status=all&limit=200` : '/api/videos?limit=1';
