@@ -24,9 +24,10 @@ export default defineEventHandler(async (event) => {
         fs.mkdirSync(trimmed, { recursive: true });
       }
     } catch (err: any) {
+      console.error('[admin/downloader/default-dir]', err);
       throw createError({
         statusCode: 400,
-        statusMessage: `Impossible de créer ou d'accéder au dossier : ${err.message}`
+        statusMessage: 'Unable to create or access the folder. Check the server logs for details.'
       });
     }
   }

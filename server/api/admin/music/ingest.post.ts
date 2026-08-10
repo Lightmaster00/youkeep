@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
 
     return result;
   } catch (err: any) {
-    throw createError({ statusCode: 500, statusMessage: err.message || 'An error occurred during music ingestion.' });
+    console.error('[admin/music/ingest]', err);
+    throw createError({ statusCode: 500, statusMessage: 'An error occurred during music ingestion. Check the server logs for details.' });
   }
 });

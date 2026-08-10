@@ -57,9 +57,10 @@ export default defineEventHandler(async (event) => {
 
     return { channels };
   } catch (err: any) {
+    console.error('[admin/downloader/search-channels]', err);
     throw createError({
       statusCode: 500,
-      statusMessage: err.message || 'Failed to search YouTube channels.'
+      statusMessage: 'Failed to search YouTube channels. Check the server logs for details.'
     });
   }
 });

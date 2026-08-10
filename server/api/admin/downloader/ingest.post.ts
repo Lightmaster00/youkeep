@@ -47,9 +47,10 @@ export default defineEventHandler(async (event) => {
 
     return result;
   } catch (err: any) {
+    console.error('[admin/downloader/ingest]', err);
     throw createError({
       statusCode: 500,
-      statusMessage: err.message || 'An error occurred during ingestion.'
+      statusMessage: 'An error occurred during ingestion. Check the server logs for details.'
     });
   }
 });
