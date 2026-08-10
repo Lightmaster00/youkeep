@@ -203,5 +203,5 @@ const getBadgeClass = (status: string): string => {
   }
 };
 
-defineExpose({ channelPlaylists });
+defineExpose({ channelPlaylists, closePlaylist });
 </script>
