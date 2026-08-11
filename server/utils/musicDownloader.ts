@@ -580,6 +580,15 @@ export async function startMusicQueueWorker() {
           continue;
         }
 
+        // Check disk space first — it's the only await in this sequence, so running it
+        // before the capacity checks below ensures nothing yields the event loop between
+        // those checks passing and the counter increment, closing the cross-pipeline race
+        // window on the combined cap.
+        if (!(await hasEnoughDiskSpace(getMusicDownloadsDir()))) {
+          await sleepOrWakeableMusic(5000);
+          continue;
+        }
+
         const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'music_max_concurrent_downloads'").get() as { value: string } | undefined;
         const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
         if (!hasCapacityForMoreDownloads(getActiveMusicDownloadCount(), maxConcurrent)) {
@@ -591,11 +600,6 @@ export async function startMusicQueueWorker() {
         // pipeline's own per-pipeline cap above, not a replacement for it.
         if (!hasCapacityForCombinedDownloads(getActiveMusicDownloadCount() + getActiveDownloadCount(), COMBINED_MAX_CONCURRENT_DOWNLOADS)) {
           await sleepOrWakeableMusic(1000);
-          continue;
-        }
-
-        if (!(await hasEnoughDiskSpace(getMusicDownloadsDir()))) {
-          await sleepOrWakeableMusic(5000);
           continue;
         }
 
