@@ -37,7 +37,7 @@ function getIsMusicProcessing(): boolean { return _g[G_MUSIC_PROCESSING]; }
 function setIsMusicProcessing(val: boolean) { _g[G_MUSIC_PROCESSING] = val; }
 function getMusicWorkerShouldRun(): boolean { return _g[G_MUSIC_SHOULD_RUN]; }
 function setMusicWorkerShouldRun(val: boolean) { _g[G_MUSIC_SHOULD_RUN] = val; }
-function getActiveMusicDownloadCount(): number { return _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT]; }
+export function getActiveMusicDownloadCount(): number { return _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT]; }
 function incrementActiveMusicDownloadCount() { _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT]++; }
 function decrementActiveMusicDownloadCount() { _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] = Math.max(0, _g[G_MUSIC_ACTIVE_DOWNLOAD_COUNT] - 1); }
 

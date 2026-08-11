@@ -6,7 +6,8 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { parseChaptersFromInfoData, buildSponsorBlockArgs } from './chapters';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { getActiveMusicDownloadCount } from './musicDownloader';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -89,7 +90,7 @@ function setWorkerShouldRun(val: boolean) { _g[G_SHOULD_RUN] = val; }
 
 export const activeProcesses: Map<string, any> = _g[G_PROCESSES];
 
-function getActiveDownloadCount(): number { return _g[G_ACTIVE_DOWNLOAD_COUNT]; }
+export function getActiveDownloadCount(): number { return _g[G_ACTIVE_DOWNLOAD_COUNT]; }
 function incrementActiveDownloadCount() { _g[G_ACTIVE_DOWNLOAD_COUNT]++; }
 function decrementActiveDownloadCount() { _g[G_ACTIVE_DOWNLOAD_COUNT] = Math.max(0, _g[G_ACTIVE_DOWNLOAD_COUNT] - 1); }
 
@@ -287,6 +288,13 @@ export async function startQueueWorker() {
           continue;
         }
 
+        // Combined ceiling across both pipelines — an additional guard on top of this
+        // pipeline's own per-pipeline cap above, not a replacement for it.
+        if (!hasCapacityForCombinedDownloads(getActiveDownloadCount() + getActiveMusicDownloadCount(), COMBINED_MAX_CONCURRENT_DOWNLOADS)) {
+          await sleepOrWakeable(1000);
+          continue;
+        }
+
         if (!(await hasEnoughDiskSpace(getDownloadsDir()))) {
           await sleepOrWakeable(5000);
           continue;
@@ -430,19 +438,7 @@ export function stopQueueWorker() {
  * Resets any stale downloads stuck in 'downloading' status back to 'pending'
  */
 export function resetStaleDownloads() {
-  try {
-    const db = getDb();
-    const result = db.prepare(`
-      UPDATE videos 
-      SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null
-      WHERE download_status = 'downloading'
-    `).run();
-    if (result.changes > 0) {
-      addLog(`Réinitialisation de ${result.changes} téléchargements interrompus.`);
-    }
-  } catch (err: any) {
-    console.error('Failed to reset stale downloads:', err);
-  }
+  resetStaleDownloadsForTable(getDb(), 'videos', 'téléchargements interrompus', 'downloads', addLog);
 }
 
 /**
@@ -1513,27 +1509,23 @@ export async function ingestUrl(
  */
 export async function syncAllChannels(): Promise<void> {
   const db = getDb();
-  
-  // Set sync_all_active setting to '1'
-  db.prepare("UPDATE settings SET value = '1' WHERE key = 'sync_all_active'").run();
 
-  try {
-    // 1. Set all channels' sync_status to 'downloading'
-    db.prepare("UPDATE channels SET sync_status = 'downloading'").run();
-
-    // 2. Fetch all channels
-    const channels = db.prepare("SELECT id, title FROM channels").all() as { id: string; title: string }[];
-    console.log(`Starting metadata update for all ${channels.length} channels...`);
-
-    // 3. Re-ingest each channel's feed in sequence
-    for (const ch of channels) {
-      // Check if global download is paused
-      const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
-      if (pausedSetting?.value === '1') {
-        console.log('Global sync-all task aborted: downloader is paused.');
-        break;
-      }
-
+  await runSyncAllEntities<{ id: string; title: string }>({
+    db,
+    activeFlagSettingKey: 'sync_all_active',
+    pausedSettingKey: 'downloader_paused',
+    fetchEntities: () => {
+      // Video-only pre-loop step: mark every channel as actively downloading before
+      // listing them. This runs inside runSyncAllEntities's try block (via this
+      // closure), same as it did in the original inline function, so it's still
+      // covered by the outer fatal-error catch and still runs after the
+      // 'sync_all_active' flag is set to '1'. syncAllMusicArtists has no equivalent
+      // blanket update — it sets each artist's sync_status individually inside
+      // processEntity instead (see Task 5).
+      db.prepare("UPDATE channels SET sync_status = 'downloading'").run();
+      return db.prepare("SELECT id, title FROM channels").all() as { id: string; title: string }[];
+    },
+    processEntity: async (ch) => {
       console.log(`Updating channel: ${ch.title} (${ch.id})`);
       const url = `https://www.youtube.com/channel/${ch.id}`;
       try {
@@ -1541,20 +1533,14 @@ export async function syncAllChannels(): Promise<void> {
       } catch (err) {
         console.error(`Error updating channel ${ch.title} (${ch.id}):`, err);
       }
-    }
-    
-    // 4. Refresh metadata (views, likes, comments) for recently completed videos
-    await refreshCompletedVideosMetadata();
-    
-    // 5. Trigger queue worker to download all new pending videos
-    startQueueWorker();
-    console.log('Update of all channels completed successfully.');
-  } catch (err) {
-    console.error('Fatal error during syncAllChannels:', err);
-  } finally {
-    // Set sync_all_active setting to '0'
-    db.prepare("UPDATE settings SET value = '0' WHERE key = 'sync_all_active'").run();
-  }
+    },
+    onStart: (count) => console.log(`Starting metadata update for all ${count} channels...`),
+    onPaused: () => console.log('Global sync-all task aborted: downloader is paused.'),
+    onComplete: () => console.log('Update of all channels completed successfully.'),
+    onFatalError: (err) => console.error('Fatal error during syncAllChannels:', err),
+    afterLoop: refreshCompletedVideosMetadata,
+    startWorker: startQueueWorker,
+  });
 }
 
 /**
