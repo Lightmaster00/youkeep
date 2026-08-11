@@ -32,3 +32,9 @@ export async function hasEnoughDiskSpace(dirPath: string): Promise<boolean> {
     return true;
   }
 }
+
+export const COMBINED_MAX_CONCURRENT_DOWNLOADS = 3;
+
+export function hasCapacityForCombinedDownloads(totalActiveCount: number, maxCombined: number): boolean {
+  return totalActiveCount < maxCombined;
+}
