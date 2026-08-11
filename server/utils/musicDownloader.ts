@@ -4,9 +4,9 @@ import path from 'path';
 import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
-import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
+import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable, getActiveDownloadCount } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -587,6 +587,13 @@ export async function startMusicQueueWorker() {
           continue;
         }
 
+        // Combined ceiling across both pipelines — an additional guard on top of this
+        // pipeline's own per-pipeline cap above, not a replacement for it.
+        if (!hasCapacityForCombinedDownloads(getActiveMusicDownloadCount() + getActiveDownloadCount(), COMBINED_MAX_CONCURRENT_DOWNLOADS)) {
+          await sleepOrWakeableMusic(1000);
+          continue;
+        }
+
         if (!(await hasEnoughDiskSpace(getMusicDownloadsDir()))) {
           await sleepOrWakeableMusic(5000);
           continue;
@@ -773,19 +780,7 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
  * Mirrors resetStaleDownloads in downloader.ts.
  */
 export function resetStaleMusicDownloads() {
-  try {
-    const db = getDb();
-    const result = db.prepare(`
-      UPDATE music_tracks
-      SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null
-      WHERE download_status = 'downloading'
-    `).run();
-    if (result.changes > 0) {
-      addLog(`Réinitialisation de ${result.changes} téléchargements musicaux interrompus.`);
-    }
-  } catch (err: any) {
-    console.error('Failed to reset stale music downloads:', err);
-  }
+  resetStaleDownloadsForTable(getDb(), 'music_tracks', 'téléchargements musicaux interrompus', 'music downloads', addLog);
 }
 
 /**
@@ -796,20 +791,16 @@ export function resetStaleMusicDownloads() {
 export async function syncAllMusicArtists(): Promise<void> {
   const db = getDb();
 
-  db.prepare("UPDATE settings SET value = '1' WHERE key = 'music_sync_all_active'").run();
-
-  try {
-    const artists = db.prepare("SELECT id, name, channel_id FROM music_artists WHERE channel_id IS NOT NULL").all() as { id: string; name: string; channel_id: string }[];
-    addLog(`Démarrage de la resynchronisation automatique de ${artists.length} artiste(s) musicaux...`);
-
-    for (const artist of artists) {
-      const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
-      if (pausedSetting?.value === '1') {
-        addLog('Resynchronisation automatique musicale interrompue : téléchargements en pause.');
-        break;
-      }
-
+  await runSyncAllEntities<{ id: string; name: string; channel_id: string }>({
+    db,
+    activeFlagSettingKey: 'music_sync_all_active',
+    pausedSettingKey: 'music_downloader_paused',
+    fetchEntities: () => db.prepare("SELECT id, name, channel_id FROM music_artists WHERE channel_id IS NOT NULL").all() as { id: string; name: string; channel_id: string }[],
+    processEntity: async (artist) => {
       addLog(`Resynchronisation de l'artiste : ${artist.name} (${artist.id})`);
+      // Per-artist sync_status write, done here inside processEntity rather than as a
+      // single blanket pre-loop UPDATE (contrast with syncAllChannels in downloader.ts,
+      // Task 4) — this matches the original inline loop body exactly.
       db.prepare("UPDATE music_artists SET sync_status = 'downloading' WHERE id = ?").run(artist.id);
 
       const url = `https://www.youtube.com/channel/${artist.channel_id}`;
@@ -821,15 +812,15 @@ export async function syncAllMusicArtists(): Promise<void> {
       } catch (err: any) {
         addLog(`Erreur lors de la resynchronisation de l'artiste ${artist.name} (${artist.id}) : ${err.message || err}`);
       }
-    }
-
-    startMusicQueueWorker();
-    addLog('Resynchronisation automatique musicale terminée.');
-  } catch (err) {
-    console.error('Fatal error during syncAllMusicArtists:', err);
-  } finally {
-    db.prepare("UPDATE settings SET value = '0' WHERE key = 'music_sync_all_active'").run();
-  }
+    },
+    onStart: (count) => addLog(`Démarrage de la resynchronisation automatique de ${count} artiste(s) musicaux...`),
+    onPaused: () => addLog('Resynchronisation automatique musicale interrompue : téléchargements en pause.'),
+    onComplete: () => addLog('Resynchronisation automatique musicale terminée.'),
+    onFatalError: (err) => console.error('Fatal error during syncAllMusicArtists:', err),
+    // No afterLoop — syncAllMusicArtists has no equivalent of video's
+    // refreshCompletedVideosMetadata() post-loop hook (Global Constraints: don't add one).
+    startWorker: startMusicQueueWorker,
+  });
 }
 
 /**
