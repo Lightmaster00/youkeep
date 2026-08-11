@@ -60,3 +60,58 @@ export function resetStaleDownloadsForTable(
     console.error(`Failed to reset stale ${errorContext}:`, err);
   }
 }
+
+export interface SyncAllEntitiesConfig<T> {
+  db: Database.Database;
+  activeFlagSettingKey: string;
+  pausedSettingKey: string;
+  fetchEntities: () => T[];
+  processEntity: (entity: T) => Promise<void>;
+  onStart: (count: number) => void;
+  onPaused: () => void;
+  onComplete: () => void;
+  onFatalError: (err: any) => void;
+  afterLoop?: () => Promise<void>;
+  startWorker: () => void;
+}
+
+export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): Promise<void> {
+  const {
+    db,
+    activeFlagSettingKey,
+    pausedSettingKey,
+    fetchEntities,
+    processEntity,
+    onStart,
+    onPaused,
+    onComplete,
+    onFatalError,
+    afterLoop,
+    startWorker,
+  } = config;
+
+  db.prepare(`UPDATE settings SET value = '1' WHERE key = ?`).run(activeFlagSettingKey);
+
+  try {
+    const entities = fetchEntities();
+    onStart(entities.length);
+
+    for (const entity of entities) {
+      const pausedSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get(pausedSettingKey) as { value: string } | undefined;
+      if (pausedSetting?.value === '1') {
+        onPaused();
+        break;
+      }
+      await processEntity(entity);
+    }
+
+    if (afterLoop) await afterLoop();
+
+    startWorker();
+    onComplete();
+  } catch (err) {
+    onFatalError(err);
+  } finally {
+    db.prepare(`UPDATE settings SET value = '0' WHERE key = ?`).run(activeFlagSettingKey);
+  }
+}
