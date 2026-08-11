@@ -9,7 +9,15 @@ import {
   MIN_FREE_DISK_SPACE_BYTES,
   COMBINED_MAX_CONCURRENT_DOWNLOADS,
   hasCapacityForCombinedDownloads,
+  resetStaleDownloadsForTable,
 } from '../../server/utils/concurrency';
+import {
+  createTestDb,
+  insertChannel,
+  insertVideo,
+  insertMusicArtist,
+  insertMusicTrack,
+} from '../helpers/testDb';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -123,5 +131,73 @@ describe('hasCapacityForCombinedDownloads', () => {
 
   it('exports the combined cap constant as 3', () => {
     expect(COMBINED_MAX_CONCURRENT_DOWNLOADS).toBe(3);
+  });
+});
+
+describe('resetStaleDownloadsForTable', () => {
+  it('resets downloading videos to pending and clears progress/speed/eta', () => {
+    const db = createTestDb();
+    insertChannel(db, { id: 'c1' });
+    insertVideo(db, { id: 'v1', channelId: 'c1', downloadStatus: 'downloading' });
+    db.prepare("UPDATE videos SET download_progress = 42, download_speed = '1MB/s', download_eta = '00:10' WHERE id = 'v1'").run();
+
+    const log = vi.fn();
+    resetStaleDownloadsForTable(db, 'videos', 'téléchargements interrompus', 'downloads', log);
+
+    const row = db.prepare('SELECT download_status, download_progress, download_speed, download_eta FROM videos WHERE id = ?').get('v1') as any;
+    expect(row.download_status).toBe('pending');
+    expect(row.download_progress).toBe(0);
+    expect(row.download_speed).toBeNull();
+    expect(row.download_eta).toBeNull();
+    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements interrompus.');
+  });
+
+  it('resets downloading music tracks to pending using the music_tracks table', () => {
+    const db = createTestDb();
+    insertMusicArtist(db, { id: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'downloading' });
+
+    const log = vi.fn();
+    resetStaleDownloadsForTable(db, 'music_tracks', 'téléchargements musicaux interrompus', 'music downloads', log);
+
+    const row = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get('t1') as any;
+    expect(row.download_status).toBe('pending');
+    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements musicaux interrompus.');
+  });
+
+  it('does not call log when no rows were changed', () => {
+    const db = createTestDb();
+    insertChannel(db, { id: 'c1' });
+    insertVideo(db, { id: 'v1', channelId: 'c1', downloadStatus: 'completed' });
+
+    const log = vi.fn();
+    resetStaleDownloadsForTable(db, 'videos', 'téléchargements interrompus', 'downloads', log);
+
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it('leaves unrelated rows (not in downloading status) untouched', () => {
+    const db = createTestDb();
+    insertChannel(db, { id: 'c1' });
+    insertVideo(db, { id: 'v1', channelId: 'c1', downloadStatus: 'downloading' });
+    insertVideo(db, { id: 'v2', channelId: 'c1', downloadStatus: 'completed' });
+    insertVideo(db, { id: 'v3', channelId: 'c1', downloadStatus: 'failed' });
+
+    const log = vi.fn();
+    resetStaleDownloadsForTable(db, 'videos', 'téléchargements interrompus', 'downloads', log);
+
+    expect((db.prepare('SELECT download_status FROM videos WHERE id = ?').get('v2') as any).download_status).toBe('completed');
+    expect((db.prepare('SELECT download_status FROM videos WHERE id = ?').get('v3') as any).download_status).toBe('failed');
+    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements interrompus.');
+  });
+
+  it('catches a query failure, logs to console.error, and does not throw or call log', () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const brokenDb = { prepare: () => { throw new Error('boom'); } } as any;
+    const log = vi.fn();
+
+    expect(() => resetStaleDownloadsForTable(brokenDb, 'videos', 'téléchargements interrompus', 'downloads', log)).not.toThrow();
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to reset stale downloads:', expect.any(Error));
+    expect(log).not.toHaveBeenCalled();
   });
 });
