@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Readable, Transform } from 'stream';
+import { pipeline } from 'stream/promises';
 import Parser from 'rss-parser';
 import { Cron } from 'croner';
 import { getDb } from './db';
@@ -406,46 +408,52 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
       let lastDbWrite = 0;
       fileStream = fs.createWriteStream(outputPath);
 
-      for await (const chunk of response.body as any) {
-        fileStream.write(chunk);
-        receivedBytes += chunk.length;
-        const now = Date.now();
-        // Throttled — matches the ~yt-dlp-progress-line cadence, not on every chunk.
-        if (now - lastDbWrite > 500) {
-          const elapsedSec = (now - attemptStartedAt) / 1000;
-          const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
-          const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
-          if (totalBytes > 0) {
-            const progress = Math.round((receivedBytes / totalBytes) * 100);
-            const remainingBytes = totalBytes - receivedBytes;
-            const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
-            db.prepare(`
-              UPDATE podcast_episodes
-              SET download_progress = ?, download_speed = ?, download_eta = ?
-              WHERE id = ?
-            `).run(progress, speed, eta, episodeId);
-          } else {
-            // Content-Length wasn't sent (e.g. chunked transfer encoding), so
-            // there's no total to compute a percentage or ETA against.
-            // podcast_episodes has no bytes-downloaded column to fall back on,
-            // so per this codebase's convention of not fabricating a fake
-            // percentage, we still surface *some* liveness signal (speed) and
-            // leave download_progress/download_eta untouched rather than lying.
-            db.prepare(`
-              UPDATE podcast_episodes
-              SET download_speed = ?
-              WHERE id = ?
-            `).run(speed, episodeId);
+      // Passes bytes through unchanged while doing the throttled progress-DB-write
+      // side effect. Using stream.promises.pipeline (instead of a manual
+      // for-await + fileStream.write loop) gives us backpressure for free —
+      // pipeline() pauses the readable when the writable's internal buffer is
+      // full instead of buffering the whole remainder of the episode in memory —
+      // and it also attaches the error handling we need: a write-stream error
+      // (ENOSPC/EACCES/EIO) now rejects the pipeline promise into the catch
+      // block below instead of throwing uncaught and killing the process.
+      const progressTransform = new Transform({
+        transform(chunk, _encoding, callback) {
+          receivedBytes += chunk.length;
+          const now = Date.now();
+          // Throttled — matches the ~yt-dlp-progress-line cadence, not on every chunk.
+          if (now - lastDbWrite > 500) {
+            const elapsedSec = (now - attemptStartedAt) / 1000;
+            const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
+            const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
+            if (totalBytes > 0) {
+              const progress = Math.round((receivedBytes / totalBytes) * 100);
+              const remainingBytes = totalBytes - receivedBytes;
+              const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
+              db.prepare(`
+                UPDATE podcast_episodes
+                SET download_progress = ?, download_speed = ?, download_eta = ?
+                WHERE id = ?
+              `).run(progress, speed, eta, episodeId);
+            } else {
+              // Content-Length wasn't sent (e.g. chunked transfer encoding), so
+              // there's no total to compute a percentage or ETA against.
+              // podcast_episodes has no bytes-downloaded column to fall back on,
+              // so per this codebase's convention of not fabricating a fake
+              // percentage, we still surface *some* liveness signal (speed) and
+              // leave download_progress/download_eta untouched rather than lying.
+              db.prepare(`
+                UPDATE podcast_episodes
+                SET download_speed = ?
+                WHERE id = ?
+              `).run(speed, episodeId);
+            }
+            lastDbWrite = now;
           }
-          lastDbWrite = now;
-        }
-      }
-
-      await new Promise<void>((res, rej) => {
-        fileStream!.end((err?: Error | null) => {
-          if (err) rej(err); else res();
-        });
+          callback(null, chunk);
+        },
       });
+
+      await pipeline(Readable.fromWeb(response.body as any), progressTransform, fileStream);
 
       clearTimeout(watchdog);
       activePodcastAbortControllers.delete(episodeId);

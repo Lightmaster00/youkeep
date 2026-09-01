@@ -73,6 +73,11 @@ describe('isValidMaxConcurrentValue', () => {
     expect(isValidMaxConcurrentValue(-1)).toBe(false);
   });
 
+  it('rejects values above the upper bound of 10', () => {
+    expect(isValidMaxConcurrentValue(11)).toBe(false);
+    expect(isValidMaxConcurrentValue(100)).toBe(false);
+  });
+
   it('rejects non-integers and non-numbers', () => {
     expect(isValidMaxConcurrentValue(1.5)).toBe(false);
     expect(isValidMaxConcurrentValue('3')).toBe(false);

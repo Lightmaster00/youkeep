@@ -15,7 +15,7 @@ export function hasCapacityForMoreDownloads(activeCount: number, maxConcurrent: 
 }
 
 export function isValidMaxConcurrentValue(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10;
 }
 
 export const MIN_FREE_DISK_SPACE_BYTES = 500 * 1024 * 1024; // 500 MB
