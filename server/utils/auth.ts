@@ -276,3 +276,57 @@ export async function canAccessMusicArtist(artistId: string, event: any): Promis
   // user_channel_access exists for music artists yet.
   return false;
 }
+
+export async function canAccessPodcastShow(showId: string, event: any): Promise<boolean> {
+  const db = getDb();
+
+  const show = db.prepare('SELECT visibility FROM podcast_shows WHERE id = ?').get(showId) as { visibility: string } | undefined;
+
+  if (!show) return false;
+
+  const user = await getUserFromSession(event);
+
+  const visMap: Record<string, number> = { 'public': 0, 'private': 1, 'ultra_private': 2 };
+  // Fail closed, same reasoning as canAccessMusicArtist: podcast_shows.visibility
+  // has no CHECK constraint and only the ingest endpoint validates it, so an
+  // unrecognized value must never be treated as public.
+  const level = visMap[show.visibility] ?? 2;
+
+  if (level === 0) return true; // Public: everyone
+  if (!user) return false;      // Guest: no access to restricted content
+  if (user.role === 'admin') return true; // Admin sees everything
+  if (level === 1) return true; // Private: any logged-in member
+
+  // Ultra Private: admin-only for podcasts — no equivalent of
+  // user_channel_access exists for podcast shows.
+  return false;
+}
+
+export async function canAccessPodcastEpisode(episodeId: string, event: any): Promise<boolean> {
+  const db = getDb();
+
+  const episode = db.prepare(`
+    SELECT s.visibility as show_visibility
+    FROM podcast_episodes e
+    JOIN podcast_shows s ON e.show_id = s.id
+    WHERE e.id = ?
+  `).get(episodeId) as { show_visibility: string } | undefined;
+
+  if (!episode) return false;
+
+  const user = await getUserFromSession(event);
+
+  const visMap: Record<string, number> = { 'public': 0, 'private': 1, 'ultra_private': 2 };
+  // Fail closed on an unrecognized visibility value — same reasoning as
+  // canAccessMusicTrack. podcast_episodes has no visibility column of its
+  // own, so the parent show's value is the only tier that applies.
+  const level = visMap[episode.show_visibility] ?? 2;
+
+  if (level === 0) return true; // Public: everyone
+  if (!user) return false;      // Guest: no access to restricted content
+  if (user.role === 'admin') return true; // Admin sees everything
+  if (level === 1) return true; // Private: any logged-in member
+
+  // Ultra Private: admin-only for podcasts.
+  return false;
+}
