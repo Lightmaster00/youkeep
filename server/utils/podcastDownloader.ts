@@ -677,3 +677,87 @@ export function cancelPodcastDownload(episodeId: string, targetStatus: 'failed' 
 
   return true;
 }
+
+/**
+ * Resets any stale podcast downloads stuck in 'downloading' status back to
+ * 'pending'. Mirrors resetStaleMusicDownloads/resetStaleDownloads.
+ */
+export function resetStalePodcastDownloads() {
+  resetStaleDownloadsForTable(getDb(), 'podcast_episodes', 'téléchargements de podcasts interrompus', 'podcast downloads', addLog);
+}
+
+/**
+ * Re-fetches every followed podcast show's RSS feed to discover new
+ * episodes, then starts the download queue for anything newly pending.
+ * Mirrors syncAllMusicArtists/syncAllChannels.
+ */
+export async function syncAllPodcastShows(): Promise<void> {
+  const db = getDb();
+
+  await runSyncAllEntities<{ id: string; title: string; feed_url: string }>({
+    db,
+    activeFlagSettingKey: 'podcast_sync_all_active',
+    pausedSettingKey: 'podcast_downloader_paused',
+    fetchEntities: () => db.prepare('SELECT id, title, feed_url FROM podcast_shows').all() as { id: string; title: string; feed_url: string }[],
+    processEntity: async (show) => {
+      addLog(`Resynchronisation du podcast : ${show.title} (${show.id})`);
+      db.prepare("UPDATE podcast_shows SET sync_status = 'downloading' WHERE id = ?").run(show.id);
+
+      try {
+        const result = await ingestPodcastFeed(show.feed_url);
+        if (!result.success) {
+          addLog(`Échec de la resynchronisation du podcast ${show.title} (${show.id}) : ${result.message}`);
+        }
+      } catch (err: any) {
+        addLog(`Erreur lors de la resynchronisation du podcast ${show.title} (${show.id}) : ${err.message || err}`);
+      }
+    },
+    onStart: (count) => addLog(`Démarrage de la resynchronisation automatique de ${count} podcast(s)...`),
+    onPaused: () => addLog('Resynchronisation automatique des podcasts interrompue : téléchargements en pause.'),
+    onComplete: () => addLog('Resynchronisation automatique des podcasts terminée.'),
+    onFatalError: (err) => console.error('Fatal error during syncAllPodcastShows:', err),
+    // No afterLoop — podcasts have no metadata-refresh post-loop hook equivalent.
+    startWorker: startPodcastQueueWorker,
+  });
+}
+
+/**
+ * Registers (or re-registers, on settings change) the podcast resync cron
+ * job. Mirrors initMusicScheduler/initScheduler, using a separate settings
+ * namespace and active-job handle so it never interacts with the video or
+ * music cron.
+ */
+export function initPodcastScheduler(): void {
+  const db = getDb();
+
+  const enabledSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_sync_cron_enabled'").get() as { value: string } | undefined;
+  const scheduleSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_sync_cron_schedule'").get() as { value: string } | undefined;
+
+  const enabled = enabledSetting ? enabledSetting.value === '1' : false;
+  const cronExpression = scheduleSetting?.value || '0 4 * * *';
+
+  if (getActivePodcastCronJob()) {
+    getActivePodcastCronJob()!.stop();
+    setActivePodcastCronJob(null);
+  }
+
+  if (enabled) {
+    console.log(`Scheduling podcast auto-sync cron job with expression: "${cronExpression}"`);
+    try {
+      const job = new Cron(cronExpression, async () => {
+        console.log('Automated podcast cron trigger: starting show synchronization...');
+        const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_sync_all_active'").get() as { value: string } | undefined;
+        if (syncSetting?.value === '1') {
+          console.log('Automated podcast cron: sync all is already active. Skipping.');
+          return;
+        }
+        await syncAllPodcastShows();
+      });
+      setActivePodcastCronJob(job);
+    } catch (err) {
+      console.error(`Failed to register podcast cron expression "${cronExpression}":`, err);
+    }
+  } else {
+    console.log('Automated podcast sync cron job is disabled.');
+  }
+}

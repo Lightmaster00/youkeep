@@ -17,6 +17,8 @@ import {
   insertVideo,
   insertMusicArtist,
   insertMusicTrack,
+  insertPodcastShow,
+  insertPodcastEpisode,
 } from '../helpers/testDb';
 
 afterEach(() => {
@@ -163,6 +165,19 @@ describe('resetStaleDownloadsForTable', () => {
     const row = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get('t1') as any;
     expect(row.download_status).toBe('pending');
     expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements musicaux interrompus.');
+  });
+
+  it('resets downloading podcast episodes to pending using the podcast_episodes table', () => {
+    const db = createTestDb();
+    insertPodcastShow(db, { id: 'sh1' });
+    insertPodcastEpisode(db, { id: 'e1', showId: 'sh1', downloadStatus: 'downloading' });
+
+    const log = vi.fn();
+    resetStaleDownloadsForTable(db, 'podcast_episodes', 'téléchargements de podcasts interrompus', 'podcast downloads', log);
+
+    const row = db.prepare('SELECT download_status FROM podcast_episodes WHERE id = ?').get('e1') as any;
+    expect(row.download_status).toBe('pending');
+    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements de podcasts interrompus.');
   });
 
   it('does not call log when no rows were changed', () => {

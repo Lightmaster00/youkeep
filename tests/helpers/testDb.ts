@@ -142,6 +142,32 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE podcast_shows (
+      id TEXT PRIMARY KEY,
+      feed_url TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      sync_status TEXT DEFAULT 'paused',
+      visibility TEXT DEFAULT 'public',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE podcast_episodes (
+      id TEXT PRIMARY KEY,
+      show_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      audio_url TEXT NOT NULL,
+      local_file_path TEXT,
+      duration INTEGER,
+      download_status TEXT DEFAULT 'pending',
+      download_progress INTEGER DEFAULT 0,
+      download_speed TEXT,
+      download_eta TEXT,
+      retry_count INTEGER DEFAULT 0,
+      last_error TEXT,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
+    );
   `);
 
   return db;
@@ -347,6 +373,49 @@ export function insertMusicPlay(db: Database.Database, opts: { id: string; track
     INSERT INTO music_play_history (id, track_id, user_id, played_at)
     VALUES (?, ?, ?, ?)
   `).run(opts.id, opts.trackId, opts.userId, opts.playedAt ?? Date.now());
+}
+
+export function insertPodcastShow(db: Database.Database, opts: {
+  id: string;
+  feedUrl?: string;
+  title?: string;
+  syncStatus?: string;
+  visibility?: string;
+}) {
+  db.prepare(`
+    INSERT INTO podcast_shows (id, feed_url, title, sync_status, visibility, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    opts.id,
+    opts.feedUrl ?? `https://example.com/feeds/${opts.id}.xml`,
+    opts.title ?? `Show ${opts.id}`,
+    opts.syncStatus ?? 'paused',
+    opts.visibility ?? 'public',
+    Date.now()
+  );
+}
+
+export function insertPodcastEpisode(db: Database.Database, opts: {
+  id: string;
+  showId: string;
+  title?: string;
+  audioUrl?: string;
+  downloadStatus?: string;
+  localFilePath?: string | null;
+  createdAt?: number;
+}) {
+  db.prepare(`
+    INSERT INTO podcast_episodes (id, show_id, title, audio_url, download_status, local_file_path, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    opts.id,
+    opts.showId,
+    opts.title ?? `Episode ${opts.id}`,
+    opts.audioUrl ?? `https://example.com/audio/${opts.id}.mp3`,
+    opts.downloadStatus ?? 'completed',
+    opts.localFilePath ?? null,
+    opts.createdAt ?? Date.now()
+  );
 }
 
 export function insertSetting(db: Database.Database, opts: { key: string; value: string }) {

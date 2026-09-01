@@ -42,7 +42,7 @@ export function hasCapacityForCombinedDownloads(totalActiveCount: number, maxCom
 
 export function resetStaleDownloadsForTable(
   db: Database.Database,
-  table: 'videos' | 'music_tracks',
+  table: 'videos' | 'music_tracks' | 'podcast_episodes',
   resetLogLabel: string,
   errorContext: string,
   log: (msg: string) => void
