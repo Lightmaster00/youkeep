@@ -481,3 +481,199 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
     }
   });
 }
+
+/**
+ * Background loop that processes the podcast download queue. Persistent:
+ * polls every few seconds instead of exiting when empty. Mirrors
+ * startMusicQueueWorker exactly, with one deliberate omission: no
+ * hasCapacityForCombinedDownloads check against COMBINED_MAX_CONCURRENT_DOWNLOADS.
+ * Podcasts run their own independent per-pipeline cap only — extending the
+ * video+music combined cap to a third pipeline is a separate decision this
+ * plan does not make (see Global Constraints).
+ */
+export async function startPodcastQueueWorker() {
+  if (getIsPodcastProcessing()) {
+    addLog('Worker podcast déjà en cours d\'exécution. Réveil du worker...');
+    wakePodcastWorker();
+    return;
+  }
+  setIsPodcastProcessing(true);
+  setPodcastWorkerShouldRun(true);
+  addLog('Démarrage du worker de podcasts (mode persistant)...');
+
+  try {
+    const db = getDb();
+    let consecutiveSystemErrors = 0;
+
+    while (getPodcastWorkerShouldRun()) {
+      try {
+        const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_downloader_paused'").get() as { value: string } | undefined;
+        if (pausedSetting?.value === '1') {
+          await sleepOrWakeablePodcast(5000);
+          continue;
+        }
+
+        // Check disk space first — it's the only await in this sequence, so
+        // running it before the capacity check below ensures nothing yields
+        // the event loop between that check passing and the counter increment.
+        if (!(await hasEnoughDiskSpace(getPodcastDownloadsDir()))) {
+          await sleepOrWakeablePodcast(5000);
+          continue;
+        }
+
+        const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_max_concurrent_downloads'").get() as { value: string } | undefined;
+        const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
+        if (!hasCapacityForMoreDownloads(getActivePodcastDownloadCount(), maxConcurrent)) {
+          await sleepOrWakeablePodcast(1000);
+          continue;
+        }
+
+        const episode = db.prepare(`
+          SELECT e.id, e.title, e.show_id
+          FROM podcast_episodes e
+          JOIN podcast_shows s ON e.show_id = s.id
+          WHERE e.download_status = 'pending' AND s.sync_status = 'downloading'
+          ORDER BY
+            CASE WHEN e.download_progress > 0 THEN 0 ELSE 1 END,
+            e.created_at ASC
+          LIMIT 1
+        `).get() as { id: string; title: string; show_id: string } | undefined;
+
+        if (!episode) {
+          await sleepOrWakeablePodcast(3000);
+          continue;
+        }
+
+        consecutiveSystemErrors = 0;
+        addLog(`Lancement du téléchargement d'épisode : "${episode.title}" (ID: ${episode.id})`);
+
+        db.prepare(`
+          UPDATE podcast_episodes
+          SET download_status = 'downloading',
+              download_progress = COALESCE(download_progress, 0),
+              download_speed = '0KB/s',
+              download_eta = '--:--',
+              last_error = null
+          WHERE id = ?
+        `).run(episode.id);
+
+        incrementActivePodcastDownloadCount();
+        runSinglePodcastDownload(episode.id, episode.title, episode.show_id);
+      } catch (loopErr: any) {
+        consecutiveSystemErrors++;
+        addLog(`Erreur système dans la boucle du worker podcast (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
+        if (consecutiveSystemErrors >= 5) {
+          addLog('Trop d\'erreurs système consécutives. Arrêt du worker podcast.');
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+  } catch (err: any) {
+    addLog(`Erreur générale fatale du worker podcast : ${err.message || err}`);
+  } finally {
+    setIsPodcastProcessing(false);
+    setPodcastWorkerShouldRun(false);
+    addLog('Worker de podcasts arrêté.');
+  }
+}
+
+/**
+ * Runs a single episode download to completion and updates its DB status
+ * accordingly. Not awaited by the orchestrator loop above — mirrors
+ * runSingleMusicDownload, minus the clip-fallback branch (podcasts have no
+ * clip concept).
+ */
+async function runSinglePodcastDownload(episodeId: string, episodeTitle: string, showId: string): Promise<void> {
+  const db = getDb();
+  const MAX_RETRY_COUNT = 3;
+  try {
+    await downloadEpisodeFile(episodeId, showId);
+
+    db.prepare(`
+      UPDATE podcast_episodes
+      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = null, retry_count = 0
+      WHERE id = ?
+    `).run(episodeId);
+    addLog(`Téléchargement RÉUSSI : "${episodeTitle}"`);
+  } catch (err: any) {
+    const errMsg = err.message || String(err);
+    addLog(`ÉCHEC du téléchargement pour l'épisode "${episodeTitle}" (${episodeId}) : ${errMsg}`);
+
+    const currentEpisode = db.prepare('SELECT download_status, retry_count FROM podcast_episodes WHERE id = ?').get(episodeId) as { download_status: string; retry_count: number | null } | undefined;
+    const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_downloader_paused'").get() as { value: string } | undefined;
+    const isPausedGlobal = pausedSetting?.value === '1';
+
+    if (isPausedGlobal || currentEpisode?.download_status === 'pending') {
+      addLog(`Téléchargement de l'épisode "${episodeTitle}" (${episodeId}) interrompu ou mis en pause intentionnellement.`);
+      // Deliberate interruption, not a genuine failure — retry_count is untouched.
+      db.prepare(`
+        UPDATE podcast_episodes
+        SET download_status = 'pending', download_speed = null, download_eta = null
+        WHERE id = ?
+      `).run(episodeId);
+    } else {
+      const nextRetryCount = (currentEpisode?.retry_count ?? 0) + 1;
+      if (nextRetryCount >= MAX_RETRY_COUNT) {
+        db.prepare(`
+          UPDATE podcast_episodes
+          SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
+          WHERE id = ?
+        `).run(errMsg, nextRetryCount, episodeId);
+        addLog(`Épisode "${episodeTitle}" (${episodeId}) marqué comme définitivement échoué après ${nextRetryCount} tentatives.`);
+      } else {
+        db.prepare(`
+          UPDATE podcast_episodes
+          SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?, retry_count = ?
+          WHERE id = ?
+        `).run(errMsg, Date.now(), nextRetryCount, episodeId);
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } finally {
+    decrementActivePodcastDownloadCount();
+    wakePodcastWorker();
+  }
+}
+
+/**
+ * Aborts an active podcast episode download and deletes temporary files.
+ * Mirrors cancelMusicDownload, substituting AbortController.abort() for
+ * child.kill('SIGKILL').
+ */
+export function cancelPodcastDownload(episodeId: string, targetStatus: 'failed' | 'pending' = 'pending', keepProgressAndFiles = false): boolean {
+  const controller = activePodcastAbortControllers.get(episodeId);
+  const startedAt = activePodcastDownloadStartTimes.get(episodeId);
+  const db = getDb();
+
+  if (controller) {
+    try {
+      controller.abort();
+    } catch (e) {}
+    activePodcastAbortControllers.delete(episodeId);
+    activePodcastDownloadStartTimes.delete(episodeId);
+  }
+
+  if (keepProgressAndFiles) {
+    db.prepare(`
+      UPDATE podcast_episodes
+      SET download_status = ?, download_speed = null, download_eta = null
+      WHERE id = ?
+    `).run(targetStatus, episodeId);
+  } else {
+    db.prepare(`
+      UPDATE podcast_episodes
+      SET download_status = ?, download_progress = 0, download_speed = null, download_eta = null
+      WHERE id = ?
+    `).run(targetStatus, episodeId);
+  }
+
+  if (!keepProgressAndFiles) {
+    const episode = db.prepare('SELECT show_id FROM podcast_episodes WHERE id = ?').get(episodeId) as { show_id: string } | undefined;
+    if (episode) {
+      cleanupPartialPodcastFiles(episodeId, episode.show_id, startedAt !== undefined ? { newerThan: startedAt } : {});
+    }
+  }
+
+  return true;
+}
