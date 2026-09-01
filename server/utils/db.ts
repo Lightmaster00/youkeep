@@ -320,6 +320,7 @@ export function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE music_tracks ADD COLUMN has_clip INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE music_tracks ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE podcast_episodes ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) {}
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
   // and the FTS/share_token indexes above already cover the rest).
@@ -435,6 +436,24 @@ export function getDb(): Database.Database {
     console.log('Seeded setting music_sync_cron_schedule: 30 3 * * *');
   }
 
+  const podcastSyncAllCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_all_active'").get() as { count: number };
+  if (podcastSyncAllCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_all_active', '0')").run();
+    console.log('Seeded setting podcast_sync_all_active: 0');
+  }
+
+  const podcastCronEnabledCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_cron_enabled'").get() as { count: number };
+  if (podcastCronEnabledCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_cron_enabled', '0')").run();
+    console.log('Seeded setting podcast_sync_cron_enabled: 0');
+  }
+
+  const podcastCronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_cron_schedule'").get() as { count: number };
+  if (podcastCronScheduleCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_cron_schedule', '0 4 * * *')").run();
+    console.log('Seeded setting podcast_sync_cron_schedule: 0 4 * * *');
+  }
+
   const defaultDirCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'default_downloads_dir'").get() as { count: number };
   if (defaultDirCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('default_downloads_dir', '')").run();
@@ -467,6 +486,18 @@ export function getDb(): Database.Database {
   if (musicMaxConcurrentCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('music_max_concurrent_downloads', '2')").run();
     console.log('Seeded setting music_max_concurrent_downloads: 2');
+  }
+
+  const podcastPausedCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_downloader_paused'").get() as { count: number };
+  if (podcastPausedCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_downloader_paused', '0')").run();
+    console.log('Seeded setting podcast_downloader_paused: 0');
+  }
+
+  const podcastMaxConcurrentCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_max_concurrent_downloads'").get() as { count: number };
+  if (podcastMaxConcurrentCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_max_concurrent_downloads', '2')").run();
+    console.log('Seeded setting podcast_max_concurrent_downloads: 2');
   }
 
   const musicModuleEnabledCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_module_enabled'").get() as { count: number };
