@@ -142,9 +142,11 @@ const spaceMenuOpen = ref(false);
 const searchQuery = ref('');
 const router = useRouter();
 const route = useRoute();
-const activeSpace = computed(() =>
-  (route.path.startsWith('/music') ? spaces.find((s) => s.id === 'music') : spaces.find((s) => s.id === 'video')) ?? spaces[0]!
-);
+const activeSpace = computed(() => {
+  if (route.path.startsWith('/music')) return spaces.find((s) => s.id === 'music') ?? spaces[0]!;
+  if (route.path.startsWith('/podcasts')) return spaces.find((s) => s.id === 'podcasts') ?? spaces[0]!;
+  return spaces.find((s) => s.id === 'video') ?? spaces[0]!;
+});
 
 const musicModuleEnabled = ref(true);
 const visibleSpaces = computed(() =>
