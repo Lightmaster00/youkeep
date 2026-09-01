@@ -252,6 +252,42 @@ export function getDb(): Database.Database {
       FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS podcast_shows (
+      id TEXT PRIMARY KEY,
+      feed_url TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      author TEXT,
+      cover_url TEXT,
+      language TEXT,
+      sync_status TEXT DEFAULT 'paused',
+      visibility TEXT DEFAULT 'public',
+      last_checked_at INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS podcast_episodes (
+      id TEXT PRIMARY KEY,
+      show_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      audio_url TEXT NOT NULL,
+      local_file_path TEXT,
+      local_thumbnail_path TEXT,
+      duration INTEGER,
+      episode_number INTEGER,
+      season_number INTEGER,
+      pub_date TEXT,
+      download_status TEXT DEFAULT 'pending',
+      download_progress INTEGER DEFAULT 0,
+      download_speed TEXT,
+      download_eta TEXT,
+      last_error TEXT,
+      share_token TEXT UNIQUE,
+      created_at INTEGER NOT NULL,
+      FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
+    );
   `);
 
   // Run schema updates if columns are missing (database migration)
@@ -299,6 +335,7 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_music_tracks_album_id ON music_tracks(album_id);
     CREATE INDEX IF NOT EXISTS idx_comments_video_id ON comments(video_id);
     CREATE INDEX IF NOT EXISTS idx_video_chapters_video_id ON video_chapters(video_id);
+    CREATE INDEX IF NOT EXISTS idx_podcast_episodes_show_id ON podcast_episodes(show_id);
   `);
 
   // Setup FTS5 Virtual Table for Search (if not exists)
