@@ -281,3 +281,179 @@ export async function ingestPodcastFeed(
     count: episodesAdded
   };
 }
+
+// Maps common podcast enclosure content-types to a file extension. Falls back
+// to sniffing the URL's own extension, then to 'mp3', in downloadEpisodeFile.
+function extensionFromContentType(contentType: string | null): string | null {
+  if (!contentType) return null;
+  const type = contentType.split(';')[0]!.trim().toLowerCase();
+  const map: Record<string, string> = {
+    'audio/mpeg': 'mp3',
+    'audio/mp3': 'mp3',
+    'audio/mp4': 'm4a',
+    'audio/x-m4a': 'm4a',
+    'audio/aac': 'aac',
+    'audio/ogg': 'ogg',
+    'audio/opus': 'opus',
+    'audio/wav': 'wav',
+    'audio/x-wav': 'wav',
+    'audio/flac': 'flac',
+    'audio/webm': 'weba',
+  };
+  return map[type] || null;
+}
+
+function extensionFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\.([a-zA-Z0-9]{2,5})$/);
+    return match ? match[1]!.toLowerCase() : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Local duplicates of downloader.ts's private formatBytesToSpeed/
+// formatSecondsToETA (neither is exported there) — same cheap-duplication
+// reasoning as PODCAST_DOWNLOAD_TIMEOUT_MS above, adapted to the
+// byte-count-based progress this pipeline computes (yt-dlp's stdout already
+// gives a formatted speed/ETA string; a raw fetch() stream does not).
+function formatBytesPerSec(bytesPerSec: number): string {
+  if (!Number.isFinite(bytesPerSec) || bytesPerSec <= 0) return '0KB/s';
+  if (bytesPerSec >= 1024 * 1024 * 1024) return (bytesPerSec / (1024 * 1024 * 1024)).toFixed(1) + ' GB/s';
+  if (bytesPerSec >= 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
+  if (bytesPerSec >= 1024) return (bytesPerSec / 1024).toFixed(0) + ' KB/s';
+  return bytesPerSec.toFixed(0) + ' B/s';
+}
+
+function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '--:--';
+  if (seconds > 3600) {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Downloads an episode's enclosure audio file over plain HTTP, replacing
+ * downloadMusicTrackFile's yt-dlp spawn (there is no yt-dlp involvement in
+ * RSS ingestion at all). Progress is computed from received/total byte
+ * counts (Content-Length) instead of parsed from yt-dlp stdout, and
+ * cancellation/timeout goes through AbortController.abort() instead of
+ * child.kill('SIGKILL'). NOTE: podcast_episodes has no size_bytes column
+ * (unlike videos/music_tracks) — this deliberately does not write a file
+ * size anywhere; only local_file_path is recorded on success.
+ */
+function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
+  const attemptStartedAt = Date.now();
+  return new Promise<void>(async (resolve, reject) => {
+    const db = getDb();
+    let settled = false;
+    const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
+
+    const controller = new AbortController();
+    activePodcastAbortControllers.set(episodeId, controller);
+    activePodcastDownloadStartTimes.set(episodeId, attemptStartedAt);
+
+    const watchdog = setTimeout(() => {
+      if (!settled) {
+        addLog(`Téléchargement podcast [${episodeId}] timeout après ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
+        try { controller.abort(); } catch (e) {}
+        activePodcastAbortControllers.delete(episodeId);
+        activePodcastDownloadStartTimes.delete(episodeId);
+        cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
+        settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
+      }
+    }, PODCAST_DOWNLOAD_TIMEOUT_MS);
+
+    try {
+      const episode = db.prepare('SELECT audio_url FROM podcast_episodes WHERE id = ?').get(episodeId) as { audio_url: string } | undefined;
+      if (!episode || !episode.audio_url) {
+        throw new Error("L'épisode n'a pas d'audio_url à télécharger.");
+      }
+
+      const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
+      const folderName = sanitizeFolderName(show?.title || showId);
+      const baseDir = getPodcastDownloadsDir();
+      const showDir = path.join(baseDir, folderName);
+      if (!fs.existsSync(showDir)) {
+        fs.mkdirSync(showDir, { recursive: true });
+      }
+
+      addLog(`Lancement du téléchargement de l'épisode ${episodeId} : ${episode.audio_url}`);
+      const response = await fetch(episode.audio_url, { signal: controller.signal });
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const ext = extensionFromContentType(response.headers.get('content-type')) || extensionFromUrl(episode.audio_url) || 'mp3';
+      const outputPath = path.join(showDir, `${episodeId}.${ext}`);
+      const localFilePath = `/downloads-podcasts/${folderName}/${episodeId}.${ext}`;
+
+      const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
+      let receivedBytes = 0;
+      let lastDbWrite = 0;
+      const fileStream = fs.createWriteStream(outputPath);
+
+      for await (const chunk of response.body as any) {
+        fileStream.write(chunk);
+        receivedBytes += chunk.length;
+        const now = Date.now();
+        // Throttled — matches the ~yt-dlp-progress-line cadence, not on every chunk.
+        if (now - lastDbWrite > 500 && totalBytes > 0) {
+          const progress = Math.round((receivedBytes / totalBytes) * 100);
+          const elapsedSec = (now - attemptStartedAt) / 1000;
+          const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
+          const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
+          const remainingBytes = totalBytes - receivedBytes;
+          const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
+          db.prepare(`
+            UPDATE podcast_episodes
+            SET download_progress = ?, download_speed = ?, download_eta = ?
+            WHERE id = ?
+          `).run(progress, speed, eta, episodeId);
+          lastDbWrite = now;
+        }
+      }
+
+      await new Promise<void>((res, rej) => {
+        fileStream.end((err?: Error | null) => {
+          if (err) rej(err); else res();
+        });
+      });
+
+      clearTimeout(watchdog);
+      activePodcastAbortControllers.delete(episodeId);
+      activePodcastDownloadStartTimes.delete(episodeId);
+
+      try {
+        db.prepare(`
+          UPDATE podcast_episodes
+          SET local_file_path = ?
+          WHERE id = ?
+        `).run(localFilePath, episodeId);
+        settle(() => resolve());
+      } catch (dbErr: any) {
+        // The file downloaded successfully, but the DB write that records it
+        // failed. Treat this identically to an ordinary download failure —
+        // same rejection, no file cleanup here (the download itself was
+        // fine) — so the promise always settles instead of hanging forever.
+        settle(() => reject(dbErr));
+      }
+    } catch (err: any) {
+      clearTimeout(watchdog);
+      activePodcastAbortControllers.delete(episodeId);
+      activePodcastDownloadStartTimes.delete(episodeId);
+      if (!settled) {
+        addLog(`Échec du téléchargement de l'épisode ${episodeId} : ${err.message || err}`);
+        cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
+      }
+      settle(() => reject(err));
+    }
+  });
+}
