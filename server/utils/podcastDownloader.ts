@@ -422,31 +422,42 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
           const now = Date.now();
           // Throttled — matches the ~yt-dlp-progress-line cadence, not on every chunk.
           if (now - lastDbWrite > 500) {
-            const elapsedSec = (now - attemptStartedAt) / 1000;
-            const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
-            const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
-            if (totalBytes > 0) {
-              const progress = Math.round((receivedBytes / totalBytes) * 100);
-              const remainingBytes = totalBytes - receivedBytes;
-              const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
-              db.prepare(`
-                UPDATE podcast_episodes
-                SET download_progress = ?, download_speed = ?, download_eta = ?
-                WHERE id = ?
-              `).run(progress, speed, eta, episodeId);
-            } else {
-              // Content-Length wasn't sent (e.g. chunked transfer encoding), so
-              // there's no total to compute a percentage or ETA against.
-              // podcast_episodes has no bytes-downloaded column to fall back on,
-              // so per this codebase's convention of not fabricating a fake
-              // percentage, we still surface *some* liveness signal (speed) and
-              // leave download_progress/download_eta untouched rather than lying.
-              db.prepare(`
-                UPDATE podcast_episodes
-                SET download_speed = ?
-                WHERE id = ?
-              `).run(speed, episodeId);
-            }
+            // A thrown error here (SQLITE_BUSY, disk I/O error, DB closed
+            // during shutdown/HMR) does NOT propagate into pipeline()'s
+            // rejection the way a stream-level error would — Transform's
+            // _transform errors are only routed through the callback, not
+            // via synchronous throw. Left unguarded, this becomes an
+            // unhandled rejection that crashes the process, exactly the
+            // failure mode the pipeline() refactor was meant to eliminate.
+            // Progress tracking is cosmetic, so swallow and let the download
+            // continue via the unconditional callback(null, chunk) below.
+            try {
+              const elapsedSec = (now - attemptStartedAt) / 1000;
+              const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
+              const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
+              if (totalBytes > 0) {
+                const progress = Math.round((receivedBytes / totalBytes) * 100);
+                const remainingBytes = totalBytes - receivedBytes;
+                const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
+                db.prepare(`
+                  UPDATE podcast_episodes
+                  SET download_progress = ?, download_speed = ?, download_eta = ?
+                  WHERE id = ?
+                `).run(progress, speed, eta, episodeId);
+              } else {
+                // Content-Length wasn't sent (e.g. chunked transfer encoding), so
+                // there's no total to compute a percentage or ETA against.
+                // podcast_episodes has no bytes-downloaded column to fall back on,
+                // so per this codebase's convention of not fabricating a fake
+                // percentage, we still surface *some* liveness signal (speed) and
+                // leave download_progress/download_eta untouched rather than lying.
+                db.prepare(`
+                  UPDATE podcast_episodes
+                  SET download_speed = ?
+                  WHERE id = ?
+                `).run(speed, episodeId);
+              }
+            } catch (e) {}
             lastDbWrite = now;
           }
           callback(null, chunk);
