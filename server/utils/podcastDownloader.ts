@@ -359,6 +359,12 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
     const controller = new AbortController();
     activePodcastAbortControllers.set(episodeId, controller);
     activePodcastDownloadStartTimes.set(episodeId, attemptStartedAt);
+    // Hoisted out of the try block so the catch block below can still reach
+    // it to close the fd on every error/abort/timeout path — a write stream
+    // opened but never destroyed leaks a file descriptor, and
+    // cleanupPartialPodcastFiles() would then be unlinking the file out from
+    // under a still-open handle.
+    let fileStream: fs.WriteStream | undefined;
 
     const watchdog = setTimeout(() => {
       if (!settled) {
@@ -398,31 +404,45 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
       const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
       let receivedBytes = 0;
       let lastDbWrite = 0;
-      const fileStream = fs.createWriteStream(outputPath);
+      fileStream = fs.createWriteStream(outputPath);
 
       for await (const chunk of response.body as any) {
         fileStream.write(chunk);
         receivedBytes += chunk.length;
         const now = Date.now();
         // Throttled — matches the ~yt-dlp-progress-line cadence, not on every chunk.
-        if (now - lastDbWrite > 500 && totalBytes > 0) {
-          const progress = Math.round((receivedBytes / totalBytes) * 100);
+        if (now - lastDbWrite > 500) {
           const elapsedSec = (now - attemptStartedAt) / 1000;
           const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
           const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
-          const remainingBytes = totalBytes - receivedBytes;
-          const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
-          db.prepare(`
-            UPDATE podcast_episodes
-            SET download_progress = ?, download_speed = ?, download_eta = ?
-            WHERE id = ?
-          `).run(progress, speed, eta, episodeId);
+          if (totalBytes > 0) {
+            const progress = Math.round((receivedBytes / totalBytes) * 100);
+            const remainingBytes = totalBytes - receivedBytes;
+            const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
+            db.prepare(`
+              UPDATE podcast_episodes
+              SET download_progress = ?, download_speed = ?, download_eta = ?
+              WHERE id = ?
+            `).run(progress, speed, eta, episodeId);
+          } else {
+            // Content-Length wasn't sent (e.g. chunked transfer encoding), so
+            // there's no total to compute a percentage or ETA against.
+            // podcast_episodes has no bytes-downloaded column to fall back on,
+            // so per this codebase's convention of not fabricating a fake
+            // percentage, we still surface *some* liveness signal (speed) and
+            // leave download_progress/download_eta untouched rather than lying.
+            db.prepare(`
+              UPDATE podcast_episodes
+              SET download_speed = ?
+              WHERE id = ?
+            `).run(speed, episodeId);
+          }
           lastDbWrite = now;
         }
       }
 
       await new Promise<void>((res, rej) => {
-        fileStream.end((err?: Error | null) => {
+        fileStream!.end((err?: Error | null) => {
           if (err) rej(err); else res();
         });
       });
@@ -434,7 +454,7 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
       try {
         db.prepare(`
           UPDATE podcast_episodes
-          SET local_file_path = ?
+          SET local_file_path = ?${totalBytes > 0 ? ', download_progress = 100' : ''}
           WHERE id = ?
         `).run(localFilePath, episodeId);
         settle(() => resolve());
@@ -449,6 +469,10 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
       clearTimeout(watchdog);
       activePodcastAbortControllers.delete(episodeId);
       activePodcastDownloadStartTimes.delete(episodeId);
+      // Release the fd before cleanup unlinks the partial file — otherwise
+      // this path (network failure, watchdog abort, future external cancel)
+      // leaves the write stream's file descriptor open indefinitely.
+      fileStream?.destroy();
       if (!settled) {
         addLog(`Échec du téléchargement de l'épisode ${episodeId} : ${err.message || err}`);
         cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
