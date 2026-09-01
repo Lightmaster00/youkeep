@@ -114,3 +114,170 @@ export function cleanupPartialPodcastFiles(episodeId: string, showId: string, op
     try { fs.unlinkSync(fullPath); } catch (e) {}
   }
 }
+
+/**
+ * Parses an itunes:duration value, which RSS feeds represent inconsistently:
+ * HH:MM:SS, MM:SS, or a bare integer number of seconds. Returns null for
+ * anything that doesn't match one of those three shapes (missing, empty,
+ * non-numeric, wrong segment count).
+ */
+export function parseItunesDuration(raw: string | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = String(raw).trim();
+  if (trimmed.length === 0) return null;
+
+  if (/^\d+$/.test(trimmed)) {
+    return parseInt(trimmed, 10);
+  }
+
+  const parts = trimmed.split(':');
+  if (parts.length < 2 || parts.length > 3 || parts.some(p => !/^\d+$/.test(p))) {
+    return null;
+  }
+  const nums = parts.map(p => parseInt(p, 10));
+  if (nums.length === 3) {
+    return nums[0]! * 3600 + nums[1]! * 60 + nums[2]!;
+  }
+  return nums[0]! * 60 + nums[1]!;
+}
+
+/**
+ * Derives a stable episode primary key from the feed URL and the item's
+ * GUID (or, when no GUID is present, its enclosure URL — the caller passes
+ * whichever it has). Hashing the feed URL together with the raw guid means
+ * two different feeds that happen to reuse the same raw guid value never
+ * collide, since feedUrl is part of the hash input. sha256 hex digest is
+ * always a valid SQLite TEXT primary key with no character-set concerns.
+ */
+export function hashPodcastEpisodeId(feedUrl: string, guidOrUrl: string): string {
+  return crypto.createHash('sha256').update(`${feedUrl}::${guidOrUrl}`).digest('hex');
+}
+
+/**
+ * Metadata ingestion for podcasts. Fetches and parses an RSS feed and
+ * writes it to the podcast_shows/podcast_episodes tables. Mirrors
+ * ingestMusicUrl in musicDownloader.ts, adapted for RSS: podcast_shows.id
+ * is a generated id (not the feed URL itself), so show lookup/upsert is
+ * always by feed_url. There is no channel/single-item split like YouTube
+ * ingestion — a feed always describes exactly one show plus its episode list.
+ */
+export async function ingestPodcastFeed(
+  feedUrl: string,
+  options: {
+    sync_status?: string;
+    visibility?: string;
+  } = {}
+): Promise<{ success: boolean; message: string; count: number }> {
+  const db = getDb();
+  const trimmedFeedUrl = feedUrl.trim();
+
+  const parser = new Parser({
+    customFields: {
+      feed: [['itunes:author', 'itunesAuthor'], ['itunes:image', 'itunesImage']],
+      item: [
+        ['itunes:episode', 'itunesEpisode'],
+        ['itunes:season', 'itunesSeason'],
+        ['itunes:duration', 'itunesDuration']
+      ]
+    }
+  });
+
+  let feed: any;
+  try {
+    feed = await parser.parseURL(trimmedFeedUrl);
+  } catch (err: any) {
+    return { success: false, message: `Failed to fetch/parse RSS feed: ${err.message || err}`, count: 0 };
+  }
+
+  const showTitle = feed.title || 'Untitled Podcast';
+  const showDescription = feed.description || null;
+  const showAuthor = feed.itunesAuthor || feed.author || null;
+  const showCoverUrl = feed.itunesImage?.href || feed.image?.url || null;
+  const showLanguage = feed.language || null;
+
+  const existingShow = db.prepare('SELECT id FROM podcast_shows WHERE feed_url = ?').get(trimmedFeedUrl) as { id: string } | undefined;
+  const showId = existingShow?.id || crypto.randomUUID();
+  const initialSyncStatus = options.sync_status || 'paused';
+  const initialVisibility = options.visibility || 'public';
+
+  if (existingShow) {
+    db.prepare(`
+      UPDATE podcast_shows
+      SET title = ?, description = ?, author = ?, cover_url = COALESCE(?, cover_url), language = ?,
+          sync_status = COALESCE(?, sync_status), visibility = COALESCE(?, visibility), last_checked_at = ?
+      WHERE id = ?
+    `).run(showTitle, showDescription, showAuthor, showCoverUrl, showLanguage, options.sync_status ?? null, options.visibility ?? null, Date.now(), showId);
+  } else {
+    db.prepare(`
+      INSERT INTO podcast_shows (id, feed_url, title, description, author, cover_url, language, sync_status, visibility, last_checked_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(showId, trimmedFeedUrl, showTitle, showDescription, showAuthor, showCoverUrl, showLanguage, initialSyncStatus, initialVisibility, Date.now(), Date.now());
+  }
+
+  const items: any[] = Array.isArray(feed.items) ? feed.items : [];
+  const upsertEpisode = db.prepare(`
+    INSERT INTO podcast_episodes (id, show_id, title, description, audio_url, duration, episode_number, season_number, pub_date, download_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      audio_url = excluded.audio_url,
+      duration = COALESCE(excluded.duration, duration),
+      episode_number = COALESCE(excluded.episode_number, episode_number),
+      season_number = COALESCE(excluded.season_number, season_number),
+      pub_date = COALESCE(excluded.pub_date, pub_date)
+  `);
+  const checkExists = db.prepare('SELECT 1 FROM podcast_episodes WHERE id = ?');
+
+  let episodesAdded = 0;
+  let skippedNoEnclosure = 0;
+  for (const item of items) {
+    // Episodes with no enclosure URL are a normal, common feed shape (show
+    // notes, trailers) — skip silently, don't insert a broken row.
+    const audioUrl: string | undefined = item.enclosure?.url;
+    if (!audioUrl) {
+      skippedNoEnclosure++;
+      continue;
+    }
+
+    const rawGuid = item.guid || audioUrl;
+    const episodeId = hashPodcastEpisodeId(trimmedFeedUrl, rawGuid);
+    const exists = checkExists.get(episodeId);
+
+    const parsedEpisodeNumber = item.itunesEpisode ? parseInt(item.itunesEpisode, 10) : null;
+    const parsedSeasonNumber = item.itunesSeason ? parseInt(item.itunesSeason, 10) : null;
+    const episodeNumber = Number.isFinite(parsedEpisodeNumber) ? parsedEpisodeNumber : null;
+    const seasonNumber = Number.isFinite(parsedSeasonNumber) ? parsedSeasonNumber : null;
+    const duration = parseItunesDuration(item.itunesDuration);
+
+    upsertEpisode.run(
+      episodeId,
+      showId,
+      item.title || `Episode ${episodeId}`,
+      item.contentSnippet || item.content || null,
+      audioUrl,
+      duration,
+      episodeNumber,
+      seasonNumber,
+      item.pubDate || null,
+      Date.now()
+    );
+
+    if (!exists) episodesAdded++;
+  }
+
+  if (skippedNoEnclosure > 0) {
+    addLog(`Ingestion du flux "${showTitle}" : ${skippedNoEnclosure} élément(s) sans enclosure audio ignoré(s).`);
+  }
+
+  const showState = db.prepare('SELECT sync_status FROM podcast_shows WHERE id = ?').get(showId) as { sync_status: string } | undefined;
+  if (showState?.sync_status === 'downloading') {
+    startPodcastQueueWorker();
+  }
+
+  return {
+    success: true,
+    message: `Podcast "${showTitle}" ingested. ${episodesAdded} new episode(s) added.`,
+    count: episodesAdded
+  };
+}
