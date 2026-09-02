@@ -63,7 +63,7 @@
         </div>
 
         <EmptyState
-          v-if="episodes.length === 0 && !episodesLoading"
+          v-if="episodes.length === 0 && !episodesLoading && !episodesError"
           icon="music"
           title="Aucun épisode"
           description="Aucun épisode pour ce podcast pour l'instant."

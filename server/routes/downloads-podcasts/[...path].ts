@@ -12,10 +12,16 @@ const IMAGE_CONTENT_TYPES: Record<string, string> = {
 const AUDIO_CONTENT_TYPES: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.m4a': 'audio/mp4',
+  '.m4b': 'audio/mp4',
   '.ogg': 'audio/ogg',
+  '.oga': 'audio/ogg',
   '.wav': 'audio/wav',
   '.opus': 'audio/opus',
   '.webm': 'audio/webm',
+  '.weba': 'audio/webm',
+  '.aac': 'audio/aac',
+  '.flac': 'audio/flac',
+  '.mp4': 'video/mp4',
 };
 
 export default defineEventHandler(async (event) => {
