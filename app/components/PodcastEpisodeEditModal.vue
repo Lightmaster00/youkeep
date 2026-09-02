@@ -3,7 +3,7 @@
     <form @submit.prevent="handleSubmit">
       <div class="form-group">
         <label for="episode-edit-title">Titre *</label>
-        <input id="episode-edit-title" v-model="form.title" type="text" required class="form-input" />
+        <input id="episode-edit-title" v-model="form.title" type="text" class="form-input" />
       </div>
       <div class="form-group" style="margin-top: 16px;">
         <label for="episode-edit-number">N° d'épisode</label>
