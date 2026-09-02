@@ -89,7 +89,7 @@
           <div v-if="episodesLoading" class="podcast-loading">Chargement...</div>
           <div v-if="episodesError" class="podcast-error">
             Erreur lors du chargement des épisodes.
-            <button @click="loadEpisodes" class="btn btn-secondary load-more-btn">Réessayer</button>
+            <button @click="loadEpisodes" :disabled="episodesLoading" class="btn btn-secondary load-more-btn">Réessayer</button>
           </div>
           <button
             v-if="episodes.length < episodesTotal"
