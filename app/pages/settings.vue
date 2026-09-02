@@ -40,6 +40,17 @@
         <button
           v-if="isAdmin && !currentUser?.mustChangePassword"
           class="tab-btn"
+          :class="{ active: activeTab === 'podcasts' }"
+          @click="activeTab = 'podcasts'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          <span>Podcasts</span>
+          <span v-if="podcastActiveDownloadCount > 0" class="tab-badge">{{ podcastActiveDownloadCount }}</span>
+        </button>
+
+        <button
+          v-if="isAdmin && !currentUser?.mustChangePassword"
+          class="tab-btn"
           :class="{ active: activeTab === 'users' }"
           @click="activeTab = 'users'"
         >
@@ -64,6 +75,7 @@
         <SettingsStatsTab v-if="activeTab === 'stats' && isAdmin" />
         <SettingsDownloadsTab v-if="activeTab === 'downloads' && isAdmin" />
         <SettingsMusicTab v-if="activeTab === 'music' && isAdmin" />
+        <SettingsPodcastsTab v-if="activeTab === 'podcasts' && isAdmin" />
         <SettingsSystemTab v-if="activeTab === 'system' && isAdmin" />
         <SettingsUsersTab v-if="activeTab === 'users' && isAdmin" />
       </div>
@@ -76,11 +88,12 @@ import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import { useMusicQueue } from '~/composables/useMusicQueue';
+import { usePodcastQueue } from '~/composables/usePodcastQueue';
 
 const { user: currentUser, isAdmin } = useAuth();
 const route = useRoute();
 
-const allowedTabs = ['stats', 'downloads', 'users', 'system'];
+const allowedTabs = ['stats', 'downloads', 'podcasts', 'users', 'system'];
 const queryTab = route.query.tab ? String(route.query.tab) : '';
 const initialTab = allowedTabs.includes(queryTab) ? queryTab : 'stats';
 if (!isAdmin.value) {
@@ -97,6 +110,7 @@ watch(() => route.query.tab, (newTab) => {
 
 const { activeDownloadCount, fetchQueue, fetchDiagnostics, stopSmoothProgressLoop } = useDownloadsQueue();
 const { musicQueue, musicActiveDownloadCount, fetchMusicQueue } = useMusicQueue();
+const { podcastQueue, podcastActiveDownloadCount, fetchPodcastQueue } = usePodcastQueue();
 
 // Dynamic polling for queue and progress
 let pollingTimeout: any = null;
@@ -127,16 +141,31 @@ const runMusicPolling = async () => {
   musicPollingTimeout = setTimeout(runMusicPolling, nextPollDelay);
 };
 
+let podcastPollingTimeout: any = null;
+
+const runPodcastPolling = async () => {
+  if (!isAdmin.value || activeTab.value !== 'podcasts') {
+    podcastPollingTimeout = setTimeout(runPodcastPolling, 3000);
+    return;
+  }
+  await fetchPodcastQueue();
+  const hasActivePodcastDownload = podcastQueue.value.some(e => e.download_status === 'downloading');
+  const nextPollDelay = hasActivePodcastDownload ? 500 : 3000;
+  podcastPollingTimeout = setTimeout(runPodcastPolling, nextPollDelay);
+};
+
 onMounted(() => {
   if (isAdmin.value) {
     runPolling();
     runMusicPolling();
+    runPodcastPolling();
   }
 });
 
 onUnmounted(() => {
   if (pollingTimeout) clearTimeout(pollingTimeout);
   if (musicPollingTimeout) clearTimeout(musicPollingTimeout);
+  if (podcastPollingTimeout) clearTimeout(podcastPollingTimeout);
   stopSmoothProgressLoop();
 });
 </script>
