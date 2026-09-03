@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { usePodcastPlayer, formatPodcastTime, PLAYBACK_RATES } from '~/composables/usePodcastPlayer';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
@@ -164,8 +164,26 @@ watch(audioElRef, (el) => {
   audioEl.value = el;
 }, { immediate: true });
 
+// The 1s debounce timer in debouncedSave() keeps getting reset by frequent
+// timeupdate events during continuous playback, so in practice only the
+// "every 5s" immediate-save branch fires. Flush on unload to close the gap
+// left between two 5s ticks if the tab is closed/refreshed or navigated
+// away from. beforeunload covers real tab-close/refresh; onBeforeUnmount
+// covers in-app navigation away from a page that unmounts this component
+// (defensive — this component is mounted once in the root layout, so it
+// likely never unmounts during normal in-app navigation).
+function flushSaveOnUnload() {
+  saveToLocalStorage();
+}
+
 onMounted(() => {
   restoreFromLocalStorage();
+  window.addEventListener('beforeunload', flushSaveOnUnload);
+});
+
+onBeforeUnmount(() => {
+  flushSaveOnUnload();
+  window.removeEventListener('beforeunload', flushSaveOnUnload);
 });
 </script>
 
