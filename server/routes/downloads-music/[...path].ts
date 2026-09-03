@@ -119,10 +119,27 @@ export default defineEventHandler(async (event) => {
 
   if (range) {
     const rangeParts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(rangeParts[0] || '0', 10);
-    const end = rangeParts[1] ? parseInt(rangeParts[1], 10) : fileSize - 1;
+    let start: number;
+    let end: number;
 
-    if (start >= fileSize || end >= fileSize) {
+    if (rangeParts[0] === '') {
+      // Suffix range, e.g. "bytes=-500" — last N bytes of the file.
+      const suffixLength = parseInt(rangeParts[1] || '', 10);
+      start = Number.isFinite(suffixLength) && suffixLength >= 0
+        ? Math.max(0, fileSize - suffixLength)
+        : NaN;
+      end = fileSize - 1;
+    } else {
+      start = parseInt(rangeParts[0], 10);
+      end = rangeParts[1] ? parseInt(rangeParts[1], 10) : fileSize - 1;
+    }
+
+    const isValidRange =
+      Number.isFinite(start) && Number.isFinite(end) &&
+      Number.isInteger(start) && Number.isInteger(end) &&
+      start >= 0 && end >= start;
+
+    if (!isValidRange || start >= fileSize || end >= fileSize) {
       event.node.res.statusCode = 416;
       event.node.res.setHeader('Content-Range', `bytes */${fileSize}`);
       return 'Requested range not satisfiable';
