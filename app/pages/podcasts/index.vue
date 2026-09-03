@@ -80,6 +80,15 @@
                 <span>{{ formatDuration(ep.duration) }}</span>
               </p>
             </div>
+            <button
+              v-if="ep.download_status === 'completed' && ep.local_file_path"
+              @click.stop="playEpisode(ep)"
+              class="episode-play-btn"
+              title="Lire l'épisode"
+              aria-label="Lire l'épisode"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </button>
             <span class="badge" :class="getStatusBadgeClass(ep.download_status)">{{ formatStatus(ep.download_status) }}</span>
             <button v-if="isAdmin" @click.stop="openEpisodeEdit(ep)" class="edit-btn" title="Modifier">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
@@ -116,8 +125,10 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
+import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 
 const { isAdmin } = useAuth();
+const { play: playPodcastEpisode } = usePodcastPlayer();
 const route = useRoute();
 const router = useRouter();
 
@@ -230,6 +241,20 @@ function handleEpisodeSaved(updated: any) {
   const existing = episodes.value.find((e: any) => e.id === updated.id);
   if (existing) Object.assign(existing, updated);
   closeEpisodeEdit();
+}
+
+// The episodes endpoint carries no cover art, so the show-level cover and
+// title are passed through for the mini-player to display.
+function playEpisode(ep: any) {
+  if (!ep.local_file_path) return;
+  playPodcastEpisode({
+    id: ep.id,
+    title: ep.title,
+    show_title: show.value?.title,
+    show_cover_url: show.value?.cover_url ?? null,
+    duration: ep.duration ?? null,
+    local_file_path: ep.local_file_path,
+  });
 }
 
 watch(showId, (newId, oldId) => {
@@ -475,5 +500,26 @@ const getVisBadgeClass = (vis: string): string => {
 
 .edit-btn:hover {
   color: var(--text-primary);
+}
+
+.episode-play-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
+}
+
+.episode-play-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
 }
 </style>
