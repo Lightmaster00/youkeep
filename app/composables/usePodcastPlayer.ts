@@ -37,6 +37,22 @@ export function clampSeekTime(seconds: number, durationSeconds: number): number 
   return Math.min(lower, durationSeconds);
 }
 
+// Pure. A held position within toleranceSeconds of the known duration is
+// treated as "the episode finished", so replaying it restarts from 0 instead
+// of seeking to (near) the very end. durationSeconds <= 0 means unknown
+// duration, in which case nothing is considered finished (mirrors
+// clampSeekTime's "unknown duration" convention).
+export function isFinishedPosition(
+  positionSeconds: number,
+  durationSeconds: number,
+  toleranceSeconds = 2
+): boolean {
+  if (!Number.isFinite(positionSeconds) || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return false;
+  }
+  return positionSeconds >= durationSeconds - toleranceSeconds;
+}
+
 function isValidStoredEpisode(value: any): value is PlayableEpisode {
   return (
     !!value &&
@@ -62,7 +78,15 @@ export function usePodcastPlayer() {
     return duration.value || currentEpisode.value?.duration || 0;
   }
 
-  function loadEpisode(episode: PlayableEpisode, startAt: number) {
+  // isRestore marks a load triggered by restoreFromLocalStorage() (i.e. one
+  // the user never asked for) rather than a real play() action. It arms an
+  // error listener that treats a load failure as "the restored episode is
+  // stale" and clears the saved state, so a since-deleted file doesn't keep
+  // producing an unsolicited error toast on every future page load. A live
+  // playback error (network blip mid-listen, handled by
+  // PodcastMiniPlayer.vue's own @error listener) never goes through this
+  // path and never wipes localStorage.
+  function loadEpisode(episode: PlayableEpisode, startAt: number, isRestore = false) {
     currentEpisode.value = episode;
     currentTime.value = startAt;
     duration.value = 0;
@@ -72,6 +96,27 @@ export function usePodcastPlayer() {
 
     el.src = episode.local_file_path;
     el.playbackRate = playbackRate.value;
+
+    if (isRestore) {
+      const onRestoreError = () => {
+        el.removeEventListener('loadedmetadata', onRestoreSuccess);
+        el.removeEventListener('error', onRestoreError);
+        // Only clear state if this failure still belongs to the episode we
+        // restored (a later real play() call may have already replaced it).
+        if (currentEpisode.value?.id !== episode.id) return;
+        if (typeof window !== 'undefined') window.localStorage.removeItem(STORAGE_KEY);
+        currentEpisode.value = null;
+        currentTime.value = 0;
+        duration.value = 0;
+        isPlaying.value = false;
+      };
+      const onRestoreSuccess = () => {
+        el.removeEventListener('loadedmetadata', onRestoreSuccess);
+        el.removeEventListener('error', onRestoreError);
+      };
+      el.addEventListener('error', onRestoreError);
+      el.addEventListener('loadedmetadata', onRestoreSuccess);
+    }
 
     if (startAt <= 0) {
       el.currentTime = 0;
@@ -97,9 +142,15 @@ export function usePodcastPlayer() {
 
   function play(episode: PlayableEpisode) {
     // Replaying the episode already loaded picks up where it left off (that
-    // is what makes the restored "resume" state resume); any other episode
-    // starts from the beginning.
-    const resumeAt = currentEpisode.value?.id === episode.id ? currentTime.value : 0;
+    // is what makes the restored "resume" state resume) — UNLESS that held
+    // position is at (or within a couple seconds of) the episode's end, in
+    // which case it already finished and should restart from 0 instead of
+    // seeking straight back to the end. Any other episode starts from the
+    // beginning.
+    const resumeAt =
+      currentEpisode.value?.id === episode.id && !isFinishedPosition(currentTime.value, effectiveDuration())
+        ? currentTime.value
+        : 0;
     loadEpisode(episode, resumeAt);
     const el = audioEl.value;
     if (el) {
@@ -179,7 +230,7 @@ export function usePodcastPlayer() {
       typeof saved.currentTime === 'number' && Number.isFinite(saved.currentTime) && saved.currentTime > 0
         ? saved.currentTime
         : 0;
-    loadEpisode(saved.episode, restoreTime);
+    loadEpisode(saved.episode, restoreTime, true);
   }
 
   return {

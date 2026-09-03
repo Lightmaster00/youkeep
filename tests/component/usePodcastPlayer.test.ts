@@ -5,6 +5,7 @@ import {
   usePodcastPlayer,
   formatPodcastTime,
   clampSeekTime,
+  isFinishedPosition,
   PLAYBACK_RATES,
   SKIP_BACK_SECONDS,
   SKIP_FORWARD_SECONDS,
@@ -133,6 +134,40 @@ describe('clampSeekTime', () => {
   });
 });
 
+describe('isFinishedPosition', () => {
+  it('is false for a position well before the end', () => {
+    expect(isFinishedPosition(500, 3600)).toBe(false);
+  });
+
+  it('is true for a position exactly at the duration', () => {
+    expect(isFinishedPosition(3600, 3600)).toBe(true);
+  });
+
+  it('is true for a position within the default 2s tolerance of the end', () => {
+    expect(isFinishedPosition(3599, 3600)).toBe(true);
+    expect(isFinishedPosition(3598.5, 3600)).toBe(true);
+  });
+
+  it('is false just outside the tolerance', () => {
+    expect(isFinishedPosition(3597.9, 3600)).toBe(false);
+  });
+
+  it('respects a custom tolerance', () => {
+    expect(isFinishedPosition(3590, 3600, 15)).toBe(true);
+    expect(isFinishedPosition(3580, 3600, 15)).toBe(false);
+  });
+
+  it('is false when duration is unknown (<= 0)', () => {
+    expect(isFinishedPosition(9999, 0)).toBe(false);
+    expect(isFinishedPosition(9999, -1)).toBe(false);
+  });
+
+  it('is false for non-finite input', () => {
+    expect(isFinishedPosition(NaN, 3600)).toBe(false);
+    expect(isFinishedPosition(100, NaN)).toBe(false);
+  });
+});
+
 describe('usePodcastPlayer', () => {
   let player: ReturnType<typeof usePodcastPlayer>;
 
@@ -195,6 +230,34 @@ describe('usePodcastPlayer', () => {
       player.playbackRate.value = 1.5;
       player.play(episode('e1'));
       expect(el.playbackRate).toBe(1.5);
+    });
+
+    it('restarts from 0 when replaying an episode that already finished', () => {
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      const ep = episode('e1', { duration: 3600 });
+      player.currentEpisode.value = ep;
+      player.duration.value = 3600;
+      // onEnded() persists a position at ~duration when an episode finishes.
+      player.currentTime.value = 3600;
+
+      player.play(ep);
+      expect(el.currentTime).toBe(0);
+      expect(player.currentTime.value).toBe(0);
+    });
+
+    it('still resumes mid-episode when the held position is well before the end', () => {
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      const ep = episode('e1', { duration: 3600 });
+      player.currentEpisode.value = ep;
+      player.duration.value = 3600;
+      player.currentTime.value = 1200;
+
+      player.play(ep);
+      el.fire('loadedmetadata');
+      expect(el.currentTime).toBe(1200);
+      expect(player.currentTime.value).toBe(1200);
     });
 
     it('sets isPlaying false when the browser rejects play()', async () => {
@@ -347,6 +410,42 @@ describe('usePodcastPlayer', () => {
       player.playbackRate.value = 1.5;
       player.restoreFromLocalStorage();
       expect(player.playbackRate.value).toBe(1);
+    });
+
+    it('clears the stale entry and resets state when the restored episode fails to load', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ episode: episode('e1'), currentTime: 300, playbackRate: 1 })
+      );
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      player.restoreFromLocalStorage();
+      expect(player.currentEpisode.value?.id).toBe('e1');
+
+      // Simulate the deleted-file 404 firing before any user interaction.
+      el.fire('error');
+
+      expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(player.currentEpisode.value).toBeNull();
+      expect(player.currentTime.value).toBe(0);
+      expect(player.duration.value).toBe(0);
+      expect(player.isPlaying.value).toBe(false);
+    });
+
+    it('does NOT touch localStorage on a live playback error after the user pressed play', () => {
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      const ep = episode('e1');
+      player.play(ep);
+      player.saveToLocalStorage();
+      expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull();
+
+      // A transient network error mid-listen must not wipe the saved resume
+      // position for an episode that otherwise works fine.
+      el.fire('error');
+
+      expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull();
+      expect(player.currentEpisode.value?.id).toBe('e1');
     });
   });
 
