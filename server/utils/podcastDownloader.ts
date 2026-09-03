@@ -156,6 +156,43 @@ export function hashPodcastEpisodeId(feedUrl: string, guidOrUrl: string): string
 }
 
 /**
+ * Converts a raw (possibly HTML-bearing) RSS description into clean plain
+ * text. Many real-world feeds embed inline HTML in <description> (e.g. NPR's
+ * Planet Money feed uses <em>, <br>, and <a href="...">) — Vue's text
+ * interpolation escapes that HTML rather than rendering it, so it must be
+ * stripped to plain text at ingest time instead of rendered as HTML
+ * (RSS feed content is untrusted external input; v-html on it would be an
+ * XSS risk). This is presentational cleanup of our own ingested data, not a
+ * security boundary against untrusted rendering — a simple regex-based tag
+ * strip is fine here.
+ */
+export function stripHtmlToPlainText(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (raw.trim().length === 0) return null;
+
+  let text = raw
+    // Block-ish/line-break tags become a space so words on either side of a
+    // removed tag don't glue together (e.g. "...lives<br><br><em> Support...").
+    .replace(/<\s*(br|p|div|li|\/p|\/div|\/li)[^>]*>/gi, ' ')
+    // Strip all remaining tags outright.
+    .replace(/<[^>]+>/g, '');
+
+  // Decode common entities feeds frequently (and sometimes doubly) encode.
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'");
+
+  // Collapse whitespace left behind by removed tags/entities.
+  text = text.replace(/\s+/g, ' ').trim();
+
+  return text.length > 0 ? text : null;
+}
+
+/**
  * Metadata ingestion for podcasts. Fetches and parses an RSS feed and
  * writes it to the podcast_shows/podcast_episodes tables. Mirrors
  * ingestMusicUrl in musicDownloader.ts, adapted for RSS: podcast_shows.id
@@ -192,7 +229,7 @@ export async function ingestPodcastFeed(
   }
 
   const showTitle = feed.title || 'Untitled Podcast';
-  const showDescription = feed.description || null;
+  const showDescription = stripHtmlToPlainText(feed.description);
   const showAuthor = feed.itunesAuthor || feed.author || null;
   const showCoverUrl = feed.itunesImage?.href || feed.image?.url || null;
   const showLanguage = feed.language || null;
@@ -256,7 +293,7 @@ export async function ingestPodcastFeed(
       episodeId,
       showId,
       item.title || `Episode ${episodeId}`,
-      item.contentSnippet || item.content || null,
+      stripHtmlToPlainText(item.contentSnippet || item.content),
       audioUrl,
       duration,
       episodeNumber,
