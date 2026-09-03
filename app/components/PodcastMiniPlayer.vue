@@ -304,7 +304,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  min-width: 100px;
 }
 
 .podcast-mini-player-time {
@@ -316,6 +316,7 @@ onBeforeUnmount(() => {
 
 .podcast-mini-player-progress-bar {
   flex: 1;
+  min-width: 24px;
   height: 4px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
@@ -352,9 +353,12 @@ onBeforeUnmount(() => {
 
 /* Below ~640px the bar's flex children (cover + fixed-width info column +
    skip/play/skip controls + progress row + rate select) no longer fit the
-   viewport, and since the progress row had no min-width it could get
-   squeezed to 0px, making the seek bar unusable. Shrink the non-essential
-   parts and hide the rate select so play/pause and seek always stay usable. */
+   viewport. The progress row's/bar's min-width (which keeps the seek bar
+   from being squeezed to 0px) is now set unconditionally above, since the
+   real point at which fixed-width siblings stop fitting is well above
+   640px (up to ~795px depending on state) — this block just shrinks the
+   non-essential parts and hides the rate select at narrow widths so
+   play/pause and seek always stay usable and comfortable. */
 @media (max-width: 640px) {
   .podcast-mini-player {
     padding: 0 8px;
@@ -386,17 +390,12 @@ onBeforeUnmount(() => {
   }
 
   .podcast-mini-player-progress-row {
-    min-width: 100px;
     gap: 6px;
   }
 
   .podcast-mini-player-time {
     width: 26px;
     font-size: 10px;
-  }
-
-  .podcast-mini-player-progress-bar {
-    min-width: 24px;
   }
 
   .podcast-mini-player-extra-controls {
