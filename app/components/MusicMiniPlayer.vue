@@ -201,6 +201,12 @@ watch(audioElRef, (el) => {
 }, { immediate: true });
 
 onMounted(async () => {
+  // audioElRef is populated synchronously by Vue during mount, but the
+  // `watch(audioElRef, ...)` callback above only runs on the next reactivity
+  // flush (a microtask) — after this onMounted callback. Assign audioEl
+  // directly here first so restoreFromLocalStorage()'s loadTrack() call
+  // sees a real element instead of null and actually sets `el.src`.
+  audioEl.value = audioElRef.value;
   await restoreFromLocalStorage();
 });
 </script>
