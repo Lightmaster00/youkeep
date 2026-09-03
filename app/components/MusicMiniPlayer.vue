@@ -370,16 +370,18 @@ onMounted(async () => {
   width: 80px;
 }
 
-/* Same structural issue as PodcastMiniPlayer.vue: below ~640px the bar's
+/* Same structural issue as PodcastMiniPlayer.vue: below ~800px the bar's
    flex children (cover + fixed-width info column + clip toggle + prev/play/
    next controls + progress row + shuffle/repeat/radio/volume) no longer fit.
    The progress row's/bar's min-width (which keeps the seek bar from being
    squeezed to 0px) is now set unconditionally above, since the real point
    at which fixed-width siblings stop fitting is well above 640px (up to
-   ~795px depending on state) — this block just shrinks the non-essential
-   parts and hides the secondary controls at narrow widths so play/pause
-   and seek always stay usable and comfortable. */
-@media (max-width: 640px) {
+   ~795px depending on state, e.g. with a clip loaded) — this block just
+   shrinks the non-essential parts and hides the secondary controls (which
+   would otherwise overflow off-screen and become unreachable, since this
+   bar is position: fixed) at narrow widths so play/pause and seek always
+   stay usable and comfortable. */
+@media (max-width: 800px) {
   .mini-player {
     padding: 0 8px;
     gap: 6px;

@@ -394,7 +394,7 @@ onBeforeUnmount(() => {
   }
 
   .podcast-mini-player-time {
-    width: 26px;
+    width: 34px;
     font-size: 10px;
   }
 
