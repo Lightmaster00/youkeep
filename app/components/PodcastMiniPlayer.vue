@@ -349,4 +349,58 @@ onBeforeUnmount(() => {
 .podcast-mini-player-rate:hover {
   color: var(--text-primary);
 }
+
+/* Below ~640px the bar's flex children (cover + fixed-width info column +
+   skip/play/skip controls + progress row + rate select) no longer fit the
+   viewport, and since the progress row had no min-width it could get
+   squeezed to 0px, making the seek bar unusable. Shrink the non-essential
+   parts and hide the rate select so play/pause and seek always stay usable. */
+@media (max-width: 640px) {
+  .podcast-mini-player {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .podcast-mini-player-cover {
+    width: 36px;
+    height: 36px;
+  }
+
+  .podcast-mini-player-info {
+    width: auto;
+    min-width: 0;
+    max-width: 70px;
+  }
+
+  .podcast-mini-player-controls {
+    gap: 4px;
+  }
+
+  .podcast-mini-player-btn {
+    padding: 4px;
+  }
+
+  .podcast-mini-player-play-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .podcast-mini-player-progress-row {
+    min-width: 100px;
+    gap: 6px;
+  }
+
+  .podcast-mini-player-time {
+    width: 26px;
+    font-size: 10px;
+  }
+
+  .podcast-mini-player-progress-bar {
+    min-width: 24px;
+  }
+
+  .podcast-mini-player-extra-controls {
+    display: none;
+  }
+}
 </style>
