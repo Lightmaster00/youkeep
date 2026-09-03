@@ -9,7 +9,7 @@
     @loadedmetadata="onLoadedMetadata"
     @durationchange="onLoadedMetadata"
     @ended="onEnded"
-    @play="isPlaying = true"
+    @play="onPlay"
     @pause="isPlaying = false"
     @error="onAudioError"
   ></video>
@@ -85,6 +85,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
+import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 
 const {
   currentTrack, isPlaying, currentTime, duration,
@@ -94,6 +95,20 @@ const {
 } = useMusicPlayer();
 
 const toast = useToast();
+
+// Podcast playback is a separate <audio> element in PodcastMiniPlayer.vue;
+// never let both stream at once. PodcastMiniPlayer.vue holds the mirror-image
+// guard for the other direction.
+const { audioEl: podcastAudioEl, isPlaying: podcastIsPlaying } = usePodcastPlayer();
+
+function onPlay() {
+  isPlaying.value = true;
+  if (podcastAudioEl.value && !podcastAudioEl.value.paused) {
+    podcastAudioEl.value.pause();
+    podcastIsPlaying.value = false;
+  }
+}
+
 const audioElRef = ref<HTMLVideoElement | null>(null);
 const progressBarRef = ref<HTMLDivElement | null>(null);
 const volume = ref(1);
