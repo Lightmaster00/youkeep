@@ -156,13 +156,58 @@ describe('useActiveMiniPlayer', () => {
     // localStorage) or Safari private-browsing / a full quota
     // (QuotaExceededError on setItem): both throw synchronously rather than
     // silently no-oping.
-    afterEach(() => {
-      vi.restoreAllMocks();
+    //
+    // NOTE: vi.spyOn(Storage.prototype, ...) does NOT reliably intercept
+    // calls made through window.localStorage in this project's happy-dom
+    // environment, because window.localStorage is a Proxy rather than a
+    // plain Storage.prototype instance. Spying getItem never takes effect at
+    // all; spying setItem only works before window.localStorage.setItem has
+    // been accessed elsewhere in the file (it already has been, by the
+    // describe blocks above). So instead of spying, each test below swaps
+    // window.localStorage itself for a thin wrapper object that delegates to
+    // the real storage except where the test wants a call to throw, then
+    // restores the real object in afterEach. vi.restoreAllMocks() does not
+    // undo this kind of instance swap, so the restoration is done manually
+    // to guarantee no leakage into other tests.
+    let realLocalStorage: Storage;
+
+    beforeEach(() => {
+      realLocalStorage = window.localStorage;
     });
 
+    afterEach(() => {
+      Object.defineProperty(window, 'localStorage', {
+        value: realLocalStorage,
+        configurable: true,
+        writable: true
+      });
+    });
+
+    function installFakeStorage(overrides: Partial<Storage>) {
+      const fake: Storage = {
+        getItem: (key: string) => realLocalStorage.getItem(key),
+        setItem: (key: string, value: string) => realLocalStorage.setItem(key, value),
+        removeItem: (key: string) => realLocalStorage.removeItem(key),
+        clear: () => realLocalStorage.clear(),
+        key: (index: number) => realLocalStorage.key(index),
+        get length() {
+          return realLocalStorage.length;
+        },
+        ...overrides
+      } as Storage;
+
+      Object.defineProperty(window, 'localStorage', {
+        value: fake,
+        configurable: true,
+        writable: true
+      });
+    }
+
     it('setActive() still updates in-memory state when localStorage.setItem throws', () => {
-      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new DOMException('quota exceeded', 'QuotaExceededError');
+      installFakeStorage({
+        setItem: () => {
+          throw new DOMException('quota exceeded', 'QuotaExceededError');
+        }
       });
 
       expect(() => active.setActive('podcast')).not.toThrow();
@@ -170,8 +215,10 @@ describe('useActiveMiniPlayer', () => {
     });
 
     it('restoreActiveType() falls through to null when every localStorage read throws', () => {
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-        throw new DOMException('access denied', 'SecurityError');
+      installFakeStorage({
+        getItem: () => {
+          throw new DOMException('access denied', 'SecurityError');
+        }
       });
 
       expect(() => active.restoreActiveType()).not.toThrow();
@@ -182,10 +229,11 @@ describe('useActiveMiniPlayer', () => {
       window.localStorage.setItem(MUSIC_KEY, JSON.stringify({ lastPlayedAt: 1000 }));
       window.localStorage.setItem(PODCAST_KEY, JSON.stringify({ lastPlayedAt: 2000 }));
 
-      const realGetItem = Storage.prototype.getItem;
-      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
-        if (key === ACTIVE_KEY) throw new DOMException('access denied', 'SecurityError');
-        return realGetItem.call(this, key);
+      installFakeStorage({
+        getItem: (key: string) => {
+          if (key === ACTIVE_KEY) throw new DOMException('access denied', 'SecurityError');
+          return realLocalStorage.getItem(key);
+        }
       });
 
       expect(() => active.restoreActiveType()).not.toThrow();
