@@ -136,7 +136,11 @@ onUnmounted(() => {
 
 .channels-page .channel-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(295px, 1fr));
+  /* min(295px, 100%) instead of a bare 295px: minmax()'s minimum is a hard
+     floor, so on a content box narrower than 295px (any viewport under ~430px)
+     the single column was wider than its container and pushed a horizontal
+     scrollbar onto .content-area. No-op at every width where 295px fits. */
+  grid-template-columns: repeat(auto-fill, minmax(min(295px, 100%), 1fr));
   gap: 24px;
 }
 
@@ -571,6 +575,12 @@ onUnmounted(() => {
   border-radius: 40px;
   height: 36px;
   width: 260px;
+  /* 260px + .filter-sort-bar's 32px padding needs a 292px content box, which a
+     viewport under ~427px does not have. max-width caps it; min-width: 0
+     defeats the flex item's automatic minimum size, which was otherwise
+     floored by the text input's intrinsic width and blocked the shrink. */
+  max-width: 100%;
+  min-width: 0;
 }
 
 .channels-page .search-box svg {
@@ -583,6 +593,9 @@ onUnmounted(() => {
   color: var(--text-primary);
   font-size: 13px;
   width: 100%;
+  /* Without this, the input's intrinsic size sets .search-box's min-content
+     width and the max-width above can never actually take effect. */
+  min-width: 0;
 }
 
 .channels-page .filter-input:focus {
