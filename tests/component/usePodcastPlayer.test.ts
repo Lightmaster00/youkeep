@@ -11,6 +11,7 @@ import {
   SKIP_FORWARD_SECONDS,
   type PlayableEpisode
 } from '../../app/composables/usePodcastPlayer';
+import { useActiveMiniPlayer } from '../../app/composables/useActiveMiniPlayer';
 
 // usePodcastPlayer() is built on Nuxt's useState(), which is a singleton keyed
 // by string and SHARED across every it() block in this file (@nuxt/test-utils
@@ -20,6 +21,7 @@ import {
 // tests/component/useMusicPlayer.test.ts.
 
 const STORAGE_KEY = 'podcast_player_state';
+const ACTIVE_KEY = 'active_mini_player_type';
 
 function episode(id: string, extra: Partial<PlayableEpisode> = {}): PlayableEpisode {
   return {
@@ -180,6 +182,8 @@ describe('usePodcastPlayer', () => {
     player.playbackRate.value = 1;
     player.audioEl.value = null;
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(ACTIVE_KEY);
+    player.lastPlayedAt.value = 0;
   });
 
   describe('play()', () => {
@@ -467,6 +471,57 @@ describe('usePodcastPlayer', () => {
       player.togglePlay();
       expect(el.play).not.toHaveBeenCalled();
       expect(el.pause).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('activation and lastPlayedAt', () => {
+    it('marks podcast active and stamps lastPlayedAt when play() is called', () => {
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      const before = Date.now();
+      player.play(episode('e1'));
+      expect(useActiveMiniPlayer().activeType.value).toBe('podcast');
+      expect(player.lastPlayedAt.value).toBeGreaterThanOrEqual(before);
+    });
+
+    it('persists lastPlayedAt into the saved payload', () => {
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      player.play(episode('e1'));
+      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+      expect(saved.lastPlayedAt).toBe(player.lastPlayedAt.value);
+      expect(saved.episode.id).toBe('e1');
+      expect(saved.playbackRate).toBe(player.playbackRate.value);
+    });
+
+    it('restores a stored lastPlayedAt so a later save does not lose it', () => {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ episode: episode('e1'), currentTime: 10, playbackRate: 1, lastPlayedAt: 4242 })
+      );
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      player.restoreFromLocalStorage();
+      expect(player.lastPlayedAt.value).toBe(4242);
+
+      player.saveToLocalStorage();
+      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+      expect(saved.lastPlayedAt).toBe(4242);
+    });
+
+    it('re-stamps lastPlayedAt when togglePlay() resumes, but not when it pauses', () => {
+      const el = fakeAudio();
+      player.audioEl.value = el as unknown as HTMLMediaElement;
+      player.currentEpisode.value = episode('e1');
+
+      player.isPlaying.value = true;
+      player.lastPlayedAt.value = 1;
+      player.togglePlay();
+      expect(player.lastPlayedAt.value).toBe(1);
+
+      player.isPlaying.value = false;
+      player.togglePlay();
+      expect(player.lastPlayedAt.value).toBeGreaterThan(1);
     });
   });
 });

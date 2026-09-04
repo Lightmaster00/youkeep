@@ -1,3 +1,5 @@
+import { useActiveMiniPlayer } from './useActiveMiniPlayer';
+
 export interface PlayableTrack {
   id: string;
   title: string;
@@ -26,6 +28,7 @@ export function useMusicPlayer() {
   const repeatMode = useState<'off' | 'all' | 'one'>('music_player_repeat', () => 'off');
   const shuffledOrder = useState<number[] | null>('music_player_shuffled_order', () => null);
   const hasCountedThisPlay = useState<boolean>('music_player_has_counted', () => false);
+  const lastPlayedAt = useState<number>('music_player_last_played_at', () => 0);
 
   function loadTrack(track: PlayableTrack, index: number) {
     currentTrack.value = track;
@@ -59,6 +62,13 @@ export function useMusicPlayer() {
   }
 
   function play(track: PlayableTrack, tracks: PlayableTrack[]) {
+    // Activation happens here and nowhere else: pressing play on a track is
+    // the one gesture that means "the music bar is the bar I want to see".
+    // togglePlay() deliberately does not activate, since it only ever
+    // operates on the bar that is already visible.
+    useActiveMiniPlayer().setActive('music');
+    lastPlayedAt.value = Date.now();
+
     const idx = tracks.findIndex((t) => t.id === track.id);
     if (idx === -1) {
       queue.value = [track, ...tracks];
@@ -73,6 +83,10 @@ export function useMusicPlayer() {
     if (audioEl.value) {
       audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
+    // Flush immediately rather than waiting for the component's debounced
+    // timeupdate save, so restoreActiveType()'s tie-break has a stamp to read
+    // even if the tab is closed seconds after playback starts.
+    saveToLocalStorage();
   }
 
   function replaceQueueKeepingCurrent(track: PlayableTrack, tracks: PlayableTrack[]) {
@@ -96,6 +110,7 @@ export function useMusicPlayer() {
       audioEl.value.pause();
       isPlaying.value = false;
     } else {
+      lastPlayedAt.value = Date.now();
       audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
   }
@@ -205,6 +220,7 @@ export function useMusicPlayer() {
       currentTime: currentTime.value,
       shuffleOn: shuffleOn.value,
       repeatMode: repeatMode.value,
+      lastPlayedAt: lastPlayedAt.value,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
@@ -246,6 +262,9 @@ export function useMusicPlayer() {
       if (shuffleOn.value) generateShuffledOrder(currentIndex.value);
       hasCountedThisPlay.value = false;
       isPlaying.value = false;
+      lastPlayedAt.value = typeof saved.lastPlayedAt === 'number' && Number.isFinite(saved.lastPlayedAt)
+        ? saved.lastPlayedAt
+        : 0;
 
       if (audioEl.value && currentTrack.value) {
         const el = audioEl.value;
@@ -271,7 +290,7 @@ export function useMusicPlayer() {
   }
 
   return {
-    currentTrack, queue, currentIndex, isPlaying, currentTime, duration, audioEl,
+    currentTrack, queue, currentIndex, isPlaying, currentTime, duration, audioEl, lastPlayedAt,
     shuffleOn, repeatMode, clipMode,
     play, replaceQueueKeepingCurrent, togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
     recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,

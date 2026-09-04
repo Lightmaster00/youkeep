@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { defineComponent, h } from 'vue';
 import { useMusicPlayer, type PlayableTrack } from '../../app/composables/useMusicPlayer';
+import { useActiveMiniPlayer } from '../../app/composables/useActiveMiniPlayer';
 
 // useMusicPlayer() is built on Nuxt's useState(), which is a singleton keyed
 // by string ("music_player_queue", "music_player_current_index", etc.) and
@@ -50,6 +51,9 @@ describe('useMusicPlayer', () => {
     player.audioEl.value = null;
     player.shuffleOn.value = false;
     player.repeatMode.value = 'off';
+    player.lastPlayedAt.value = 0;
+    window.localStorage.removeItem('music_player_state');
+    window.localStorage.removeItem('active_mini_player_type');
   });
 
   describe('play()', () => {
@@ -213,6 +217,54 @@ describe('useMusicPlayer', () => {
       expect(player.queue.value.map((t) => t.id)).toEqual(['2', '1']);
       expect(player.currentIndex.value).toBe(0);
       expect(player.currentTrack.value?.id).toBe('2');
+    });
+  });
+
+  describe('activation and lastPlayedAt', () => {
+    // This file does not import `vi` and has no shared audio fake (its only
+    // existing one, at line 189, is a bare `{ src, currentTime }` literal).
+    // togglePlay() bails out unless audioEl has real play()/pause() methods,
+    // so this block builds a minimal plain-object element of its own rather
+    // than adding a vitest import the rest of the file does not need.
+    function fakeEl() {
+      return {
+        src: '',
+        currentTime: 0,
+        volume: 1,
+        play: () => Promise.resolve(),
+        pause: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {}
+      } as unknown as HTMLMediaElement;
+    }
+
+    it('marks music active and stamps lastPlayedAt when play() is called', () => {
+      const before = Date.now();
+      player.play(track('1'), [track('1'), track('2')]);
+      expect(useActiveMiniPlayer().activeType.value).toBe('music');
+      expect(player.lastPlayedAt.value).toBeGreaterThanOrEqual(before);
+    });
+
+    it('persists lastPlayedAt into the saved payload', () => {
+      player.play(track('1'), [track('1')]);
+      const saved = JSON.parse(window.localStorage.getItem('music_player_state')!);
+      expect(saved.lastPlayedAt).toBe(player.lastPlayedAt.value);
+      expect(saved.trackId).toBe('1');
+      expect(saved.queueTrackIds).toEqual(['1']);
+    });
+
+    it('re-stamps lastPlayedAt when togglePlay() resumes, but not when it pauses', () => {
+      player.audioEl.value = fakeEl();
+      player.currentTrack.value = track('1');
+
+      player.isPlaying.value = true;
+      player.lastPlayedAt.value = 1;
+      player.togglePlay();
+      expect(player.lastPlayedAt.value).toBe(1);
+
+      player.isPlaying.value = false;
+      player.togglePlay();
+      expect(player.lastPlayedAt.value).toBeGreaterThan(1);
     });
   });
 });

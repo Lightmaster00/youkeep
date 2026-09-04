@@ -1,3 +1,5 @@
+import { useActiveMiniPlayer } from './useActiveMiniPlayer';
+
 export interface PlayableEpisode {
   id: string;
   title: string;
@@ -71,6 +73,7 @@ export function usePodcastPlayer() {
   const duration = useState<number>('podcast_player_duration', () => 0);
   const playbackRate = useState<number>('podcast_player_rate', () => 1);
   const audioEl = useState<HTMLMediaElement | null>('podcast_player_audio_el', () => null);
+  const lastPlayedAt = useState<number>('podcast_player_last_played_at', () => 0);
 
   // Effective duration: the element's reported duration once metadata has
   // loaded, otherwise the RSS-provided duration from podcast_episodes.
@@ -141,6 +144,11 @@ export function usePodcastPlayer() {
   }
 
   function play(episode: PlayableEpisode) {
+    // Activation happens here and nowhere else — see the matching comment in
+    // useMusicPlayer.ts's play().
+    useActiveMiniPlayer().setActive('podcast');
+    lastPlayedAt.value = Date.now();
+
     // Replaying the episode already loaded picks up where it left off (that
     // is what makes the restored "resume" state resume) — UNLESS that held
     // position is at (or within a couple seconds of) the episode's end, in
@@ -156,6 +164,8 @@ export function usePodcastPlayer() {
     if (el) {
       el.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
+    // Flush immediately — same reason as useMusicPlayer.ts's play().
+    saveToLocalStorage();
   }
 
   function togglePlay() {
@@ -164,6 +174,7 @@ export function usePodcastPlayer() {
       audioEl.value.pause();
       isPlaying.value = false;
     } else {
+      lastPlayedAt.value = Date.now();
       audioEl.value.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
   }
@@ -196,6 +207,7 @@ export function usePodcastPlayer() {
       episode: currentEpisode.value,
       currentTime: currentTime.value,
       playbackRate: playbackRate.value,
+      lastPlayedAt: lastPlayedAt.value,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
@@ -225,6 +237,9 @@ export function usePodcastPlayer() {
       ? saved.playbackRate
       : 1;
     isPlaying.value = false;
+    lastPlayedAt.value = typeof saved.lastPlayedAt === 'number' && Number.isFinite(saved.lastPlayedAt)
+      ? saved.lastPlayedAt
+      : 0;
 
     const restoreTime =
       typeof saved.currentTime === 'number' && Number.isFinite(saved.currentTime) && saved.currentTime > 0
@@ -234,7 +249,7 @@ export function usePodcastPlayer() {
   }
 
   return {
-    currentEpisode, isPlaying, currentTime, duration, playbackRate, audioEl,
+    currentEpisode, isPlaying, currentTime, duration, playbackRate, audioEl, lastPlayedAt,
     play, togglePlay, seek, skipBack, skipForward, setPlaybackRate,
     saveToLocalStorage, restoreFromLocalStorage,
   };
