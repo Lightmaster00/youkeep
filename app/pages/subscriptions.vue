@@ -295,7 +295,11 @@ const onVideoHidden = (id: string) => {
 
 .video-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  /* Same fix as .channels-page .channel-grid: minmax()'s 280px minimum is a
+     hard floor, so any content box under 280px (viewport under ~415px) made
+     the single column wider than its container. This page has no media
+     queries at all, so nothing else covered it. */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 24px;
 }
 
