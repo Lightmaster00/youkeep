@@ -1,5 +1,5 @@
 <template>
-  <div class="shorts-page-container">
+  <div class="shorts-page-container" :class="{ 'has-mini-player': !!currentTrack || !!currentEpisode }">
     <!-- Loading State -->
     <div v-if="pending && videos.length === 0" class="loading-state">
       <div class="spinner"></div>
@@ -166,6 +166,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useToast } from '~/composables/useToast';
+import { useMusicPlayer } from '~/composables/useMusicPlayer';
+import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 
 interface Video {
   id: string;
@@ -184,6 +186,10 @@ interface Video {
 }
 
 const toast = useToast();
+// Mirrors app/layouts/default.vue:105 + 142-143 — same shared useState refs,
+// so this page's height and the layout's padding can never disagree.
+const { currentTrack } = useMusicPlayer();
+const { currentEpisode } = usePodcastPlayer();
 const videos = ref<Video[]>([]);
 const pending = ref(true);
 const loadingMore = ref(false);
@@ -547,9 +553,20 @@ const handleAvatarError = (event: Event) => {
   display: flex;
   justify-content: center;
   align-items: center;
+  /* .content-area is the viewport minus the header; its own padding is 24px on
+     every side (app/layouts/default.vue:640-648), so the usable height is
+     100vh - header - 24 - 24. When a mini-player bar is on screen the layout
+     raises padding-bottom to 96px (72px bar + 24px gap,
+     app/layouts/default.vue:650-652), so the pair becomes 24 + 96 = 120.
+     Without the second rule the feed renders 72px too tall and the active
+     short's bottom info + seek bar hide behind the bar. */
   height: calc(100vh - var(--header-height) - 48px);
   padding: 0;
   overflow: hidden;
+}
+
+.shorts-page-container.has-mini-player {
+  height: calc(100vh - var(--header-height) - 120px);
 }
 
 /* loading */
