@@ -12,7 +12,7 @@
     @error="onAudioError"
   ></audio>
 
-  <div v-if="currentEpisode" class="podcast-mini-player" :class="{ 'is-stacked': !!currentTrack }">
+  <div v-if="showBar" class="podcast-mini-player">
     <img :src="currentEpisode.show_cover_url || fallbackCover" @error="handleCoverError" class="podcast-mini-player-cover" alt="" />
 
     <div class="podcast-mini-player-info">
@@ -62,6 +62,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { usePodcastPlayer, formatPodcastTime, PLAYBACK_RATES } from '~/composables/usePodcastPlayer';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
+import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 
 const {
   currentEpisode, isPlaying, currentTime, duration, playbackRate, audioEl,
@@ -69,10 +70,15 @@ const {
   saveToLocalStorage, restoreFromLocalStorage,
 } = usePodcastPlayer();
 
-// Read-only here: used to offset this bar above the music bar when both are
-// loaded, and to stop music when podcast playback starts (Task 3 adds the
-// mirror-image guard on the music side).
+// Read-only here: currentTrack drives the single-visible-bar rule, and the
+// music element/flag are used to stop music when podcast playback starts.
 const { currentTrack, audioEl: musicAudioEl, isPlaying: musicIsPlaying } = useMusicPlayer();
+
+// Mirror of MusicMiniPlayer.vue's rule: the podcast bar shows when it has an
+// episode loaded AND either podcast is the most recently activated type, or
+// the music player has nothing loaded to compete with.
+const { activeType } = useActiveMiniPlayer();
+const showBar = computed(() => !!currentEpisode.value && (activeType.value === 'podcast' || !currentTrack.value));
 
 const toast = useToast();
 const audioElRef = ref<HTMLAudioElement | null>(null);
@@ -212,12 +218,6 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 900;
-}
-
-/* When a music track is also loaded, sit above the music bar instead of
-   overlapping it. */
-.podcast-mini-player.is-stacked {
-  bottom: 72px;
 }
 
 .podcast-mini-player-cover {

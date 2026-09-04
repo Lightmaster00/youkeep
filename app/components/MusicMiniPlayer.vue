@@ -1,7 +1,7 @@
 <template>
   <video
     ref="audioElRef"
-    :style="{ opacity: clipMode ? 1 : 0, pointerEvents: clipMode ? 'auto' : 'none' }"
+    :style="{ opacity: clipMode && showBar ? 1 : 0, pointerEvents: clipMode && showBar ? 'auto' : 'none' }"
     class="mini-player-video"
     playsinline
     webkit-playsinline
@@ -14,7 +14,7 @@
     @error="onAudioError"
   ></video>
 
-  <div v-if="currentTrack" class="mini-player">
+  <div v-if="showBar" class="mini-player">
     <img :style="{ visibility: clipMode ? 'hidden' : 'visible' }" :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
 
     <div class="mini-player-info">
@@ -86,6 +86,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
+import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 
 const {
   currentTrack, isPlaying, currentTime, duration,
@@ -98,8 +99,17 @@ const toast = useToast();
 
 // Podcast playback is a separate <audio> element in PodcastMiniPlayer.vue;
 // never let both stream at once. PodcastMiniPlayer.vue holds the mirror-image
-// guard for the other direction.
-const { audioEl: podcastAudioEl, isPlaying: podcastIsPlaying } = usePodcastPlayer();
+// guard for the other direction. currentEpisode is read here for the
+// single-visible-bar rule, not for playback.
+const { audioEl: podcastAudioEl, isPlaying: podcastIsPlaying, currentEpisode } = usePodcastPlayer();
+
+// Exactly one mini-player bar is ever on screen. The music bar shows when it
+// has a track loaded AND either music is the most recently activated type, or
+// the podcast player has nothing loaded to compete with. Both media elements
+// stay mounted regardless, so the hidden side stays loaded and paused, ready
+// to resume the moment the user presses play on it from its own page.
+const { activeType } = useActiveMiniPlayer();
+const showBar = computed(() => !!currentTrack.value && (activeType.value === 'music' || !currentEpisode.value));
 
 function onPlay() {
   isPlaying.value = true;

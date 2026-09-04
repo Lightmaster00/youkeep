@@ -102,13 +102,7 @@
       </aside>
 
       <!-- Main Content Page slot -->
-      <main
-        class="content-area"
-        :class="{
-          'has-mini-player': !!currentTrack || !!currentEpisode,
-          'has-two-mini-players': !!currentTrack && !!currentEpisode
-        }"
-      >
+      <main class="content-area" :class="{ 'has-mini-player': !!currentTrack || !!currentEpisode }">
         <slot />
       </main>
     </div>
@@ -140,12 +134,14 @@ import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
+import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { spaces } from '~/spaces';
 
 const { user, isAdmin, logout } = useAuth();
 const { toasts, removeToast } = useToast();
 const { currentTrack } = useMusicPlayer();
 const { currentEpisode } = usePodcastPlayer();
+const { restoreActiveType } = useActiveMiniPlayer();
 const dropdownOpen = ref(false);
 const spaceMenuOpen = ref(false);
 const searchQuery = ref('');
@@ -177,6 +173,9 @@ onMounted(() => {
     searchQuery.value = String(route.query.q);
   }
   checkPasswordEnforcement();
+  // Runs after both mini-players' own onMounted restores (Vue mounts children
+  // before parents), so by now each player has kicked off its own restore.
+  restoreActiveType();
 });
 
 const checkPasswordEnforcement = () => {
@@ -650,10 +649,6 @@ onUnmounted(() => {
 
 .content-area.has-mini-player {
   padding-bottom: 96px;
-}
-
-.content-area.has-two-mini-players {
-  padding-bottom: 168px;
 }
 
 @media (max-width: 768px) {
