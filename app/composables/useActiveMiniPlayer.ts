@@ -46,7 +46,13 @@ export function useActiveMiniPlayer() {
   function setActive(type: ActiveMiniPlayerType) {
     activeType.value = type;
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEY, type);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, type);
+      } catch {
+        // Storage can throw (e.g. Safari private browsing quota, or a
+        // "block all cookies" SecurityError). In-memory state above is
+        // already correct; only cross-reload persistence is lost.
+      }
     }
   }
 
@@ -58,15 +64,39 @@ export function useActiveMiniPlayer() {
   function restoreActiveType() {
     if (typeof window === 'undefined') return;
 
-    const stored = window.localStorage.getItem(STORAGE_KEY);
+    // Each localStorage call is independently guarded: a failure on one
+    // (e.g. a SecurityError reading the active-type key) must not prevent
+    // the function from still trying the next fallback rung.
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(STORAGE_KEY);
+    } catch {
+      stored = null;
+    }
     if (stored === 'music' || stored === 'podcast') {
       activeType.value = stored;
       return;
     }
-    if (stored !== null) window.localStorage.removeItem(STORAGE_KEY);
+    if (stored !== null) {
+      try {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // Non-critical cleanup; ignore.
+      }
+    }
 
-    const musicRaw = window.localStorage.getItem(MUSIC_STORAGE_KEY);
-    const podcastRaw = window.localStorage.getItem(PODCAST_STORAGE_KEY);
+    let musicRaw: string | null = null;
+    try {
+      musicRaw = window.localStorage.getItem(MUSIC_STORAGE_KEY);
+    } catch {
+      musicRaw = null;
+    }
+    let podcastRaw: string | null = null;
+    try {
+      podcastRaw = window.localStorage.getItem(PODCAST_STORAGE_KEY);
+    } catch {
+      podcastRaw = null;
+    }
 
     const byStamp = pickActiveFromLastPlayedAt(readLastPlayedAt(musicRaw), readLastPlayedAt(podcastRaw));
     if (byStamp) {

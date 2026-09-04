@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { defineComponent, h } from 'vue';
 import {
@@ -147,6 +147,48 @@ describe('useActiveMiniPlayer', () => {
     it('falls back to the only persisted session when it is a legacy podcast one', () => {
       window.localStorage.setItem(PODCAST_KEY, JSON.stringify({ currentTime: 7 }));
       active.restoreActiveType();
+      expect(active.activeType.value).toBe('podcast');
+    });
+  });
+
+  describe('storage failures', () => {
+    // Simulates Chrome's "block all cookies" (SecurityError touching
+    // localStorage) or Safari private-browsing / a full quota
+    // (QuotaExceededError on setItem): both throw synchronously rather than
+    // silently no-oping.
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('setActive() still updates in-memory state when localStorage.setItem throws', () => {
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('quota exceeded', 'QuotaExceededError');
+      });
+
+      expect(() => active.setActive('podcast')).not.toThrow();
+      expect(active.activeType.value).toBe('podcast');
+    });
+
+    it('restoreActiveType() falls through to null when every localStorage read throws', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new DOMException('access denied', 'SecurityError');
+      });
+
+      expect(() => active.restoreActiveType()).not.toThrow();
+      expect(active.activeType.value).toBeNull();
+    });
+
+    it('restoreActiveType() still reaches the lastPlayedAt rung when only the active key read throws', () => {
+      window.localStorage.setItem(MUSIC_KEY, JSON.stringify({ lastPlayedAt: 1000 }));
+      window.localStorage.setItem(PODCAST_KEY, JSON.stringify({ lastPlayedAt: 2000 }));
+
+      const realGetItem = Storage.prototype.getItem;
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (this: Storage, key: string) {
+        if (key === ACTIVE_KEY) throw new DOMException('access denied', 'SecurityError');
+        return realGetItem.call(this, key);
+      });
+
+      expect(() => active.restoreActiveType()).not.toThrow();
       expect(active.activeType.value).toBe('podcast');
     });
   });
