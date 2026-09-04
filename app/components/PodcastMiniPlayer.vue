@@ -21,7 +21,7 @@
     </div>
 
     <div class="podcast-mini-player-controls">
-      <button @click="skipBack" class="podcast-mini-player-btn" title="Reculer de 15 secondes" aria-label="Reculer de 15 secondes">
+      <button @click="skipBack" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Reculer de 15 secondes" aria-label="Reculer de 15 secondes">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         <span class="podcast-mini-player-skip-label">15</span>
       </button>
@@ -29,7 +29,7 @@
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button @click="skipForward" class="podcast-mini-player-btn" title="Avancer de 30 secondes" aria-label="Avancer de 30 secondes">
+      <button @click="skipForward" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Avancer de 30 secondes" aria-label="Avancer de 30 secondes">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path></svg>
         <span class="podcast-mini-player-skip-label">30</span>
       </button>
@@ -351,18 +351,20 @@ onBeforeUnmount(() => {
   color: var(--text-primary);
 }
 
-/* Below ~640px the bar's flex children (cover + fixed-width info column +
-   skip/play/skip controls + progress row + rate select) no longer fit the
-   viewport. The progress row's/bar's min-width (which keeps the seek bar
-   from being squeezed to 0px) is now set unconditionally above, since the
-   real point at which fixed-width siblings stop fitting is well above
-   640px (up to ~795px depending on state) — this block just shrinks the
-   non-essential parts and hides the rate select at narrow widths so
-   play/pause and seek always stay usable and comfortable. */
-@media (max-width: 640px) {
+/* Three breakpoints, sized against a single-bar width budget (only one
+   mini-player is ever laid out now, so nothing reserves space for the other).
+   Desktop (no query): fixed siblings total 552px, so the bar stops fitting
+   below ~696px — 900px fires well before that.
+   Medium (<= 900px): fixed siblings total 324px, leaving a 61px seek bar even
+   at 481px, the narrowest width this block has to cover.
+   Compact (<= 480px): skip +-15/30s and the speed selector are hidden
+   outright, not shrunk; cover art, a single truncated title line, play/pause
+   and the seek bar always stay. Fixed siblings total 180px, leaving a 52px
+   seek bar at a 320px viewport. */
+@media (max-width: 900px) {
   .podcast-mini-player {
-    padding: 0 8px;
-    gap: 6px;
+    padding: 0 10px;
+    gap: 8px;
   }
 
   .podcast-mini-player-cover {
@@ -371,9 +373,7 @@ onBeforeUnmount(() => {
   }
 
   .podcast-mini-player-info {
-    width: auto;
-    min-width: 0;
-    max-width: 70px;
+    width: 96px;
   }
 
   .podcast-mini-player-controls {
@@ -385,8 +385,8 @@ onBeforeUnmount(() => {
   }
 
   .podcast-mini-player-play-btn {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
   }
 
   .podcast-mini-player-progress-row {
@@ -394,12 +394,50 @@ onBeforeUnmount(() => {
   }
 
   .podcast-mini-player-time {
-    width: 34px;
+    width: 42px;
     font-size: 10px;
+  }
+
+  .podcast-mini-player-rate {
+    font-size: 11px;
+    padding: 3px 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .podcast-mini-player {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .podcast-mini-player-cover {
+    width: 32px;
+    height: 32px;
+  }
+
+  .podcast-mini-player-info {
+    width: 84px;
+  }
+
+  /* Single truncated line: the show name is the one that goes. */
+  .podcast-mini-player-show {
+    display: none;
+  }
+
+  .podcast-mini-player-skip-btn {
+    display: none;
   }
 
   .podcast-mini-player-extra-controls {
     display: none;
+  }
+
+  .podcast-mini-player-progress-row {
+    gap: 4px;
+  }
+
+  .podcast-mini-player-time {
+    width: 40px;
   }
 }
 </style>

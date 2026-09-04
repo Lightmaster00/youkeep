@@ -380,21 +380,23 @@ onMounted(async () => {
   width: 80px;
 }
 
-/* Same structural issue as PodcastMiniPlayer.vue: below ~800px the bar's
-   flex children (cover + fixed-width info column + clip toggle + prev/play/
-   next controls + progress row + shuffle/repeat/radio/volume) no longer fit.
-   The progress row's/bar's min-width (which keeps the seek bar from being
-   squeezed to 0px) is now set unconditionally above, since the real point
-   at which fixed-width siblings stop fitting is well above 640px (up to
-   ~795px depending on state, e.g. with a clip loaded) — this block just
-   shrinks the non-essential parts and hides the secondary controls (which
-   would otherwise overflow off-screen and become unreachable, since this
-   bar is position: fixed) at narrow widths so play/pause and seek always
-   stay usable and comfortable. */
-@media (max-width: 800px) {
+/* Three breakpoints, sized against a single-bar width budget (only one
+   mini-player is ever laid out now).
+   Desktop (no query): fixed siblings total 680px with a clip loaded, so the
+   bar stops fitting below ~792px — 900px fires ~108px before that, which is
+   why raising the old 800px threshold is safe.
+   Medium (<= 900px): the volume slider and the clip toggle must go here, not
+   at 480px — keeping the slider costs 86px and would overflow the bar by
+   ~59px at 481px. Without them, fixed siblings total 358px and the seek bar
+   still measures 51px at 481px.
+   Compact (<= 480px): shuffle/repeat/radio are hidden outright too (volume is
+   already gone), leaving cover art, a single truncated title line,
+   prev/play/next and the seek bar. Fixed siblings total 228px, leaving a 28px
+   seek bar at a 320px viewport. */
+@media (max-width: 900px) {
   .mini-player {
-    padding: 0 8px;
-    gap: 6px;
+    padding: 0 10px;
+    gap: 8px;
   }
 
   .mini-player-cover {
@@ -402,10 +404,16 @@ onMounted(async () => {
     height: 36px;
   }
 
+  /* Keep the clip video square aligned with the cover art it replaces. */
+  .mini-player-video {
+    left: 10px;
+    bottom: 18px;
+    width: 36px;
+    height: 36px;
+  }
+
   .mini-player-info {
-    width: auto;
-    min-width: 0;
-    max-width: 70px;
+    width: 96px;
   }
 
   .mini-player-clip-toggle {
@@ -421,8 +429,8 @@ onMounted(async () => {
   }
 
   .mini-player-play-btn {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
   }
 
   .mini-player-progress-row {
@@ -430,12 +438,56 @@ onMounted(async () => {
   }
 
   .mini-player-time {
-    width: 26px;
+    width: 30px;
     font-size: 10px;
   }
 
   .mini-player-extra-controls {
+    gap: 6px;
+  }
+
+  .mini-player-volume {
     display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .mini-player {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .mini-player-cover {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mini-player-video {
+    left: 8px;
+    bottom: 20px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .mini-player-info {
+    width: 72px;
+  }
+
+  /* Single truncated line: the artist name is the one that goes. */
+  .mini-player-artist {
+    display: none;
+  }
+
+  .mini-player-extra-controls {
+    display: none;
+  }
+
+  .mini-player-progress-row {
+    gap: 4px;
+  }
+
+  .mini-player-time {
+    width: 28px;
   }
 }
 </style>
