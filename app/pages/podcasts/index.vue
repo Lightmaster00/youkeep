@@ -353,7 +353,10 @@ const getVisBadgeClass = (vis: string): string => {
 
 .podcast-search-input {
   flex: 1;
-  min-width: 200px;
+  /* Same fix as music/index.vue's .music-search-input: the 200px floor
+     exceeded the filters bar's content box at a 320px viewport even though
+     the input already sits alone on its wrapped line. */
+  min-width: 0;
 }
 
 .podcast-loading,
@@ -365,7 +368,10 @@ const getVisBadgeClass = (vis: string): string => {
 
 .show-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* Same fix as music/index.vue's .artist-grid: minmax()'s 220px minimum is
+     a hard floor, overflowing any content box under ~350px. No-op at every
+     width where 220px fits. */
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -419,6 +425,18 @@ const getVisBadgeClass = (vis: string): string => {
   margin-bottom: 32px;
 }
 
+/* Same fix as music/index.vue's .artist-detail-header, mirroring
+   channels.vue's existing .channel-profile-header stacking. Below 480px
+   the 140px cover + 20px gap leave too little width for the info column
+   (title, author, description) to hold real content without overflowing. */
+@media (max-width: 480px) {
+  .show-detail-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+}
+
 .show-detail-cover {
   width: 140px;
   height: 140px;
@@ -458,6 +476,13 @@ const getVisBadgeClass = (vis: string): string => {
   padding: 12px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 14px;
+  /* .episode-main already has min-width: 0 (line 467-470), but the play
+     button, the status badge, and (for an admin) the edit button are all
+     effectively fixed-size and their combined width can still exceed the
+     row's content box at a 320px viewport. overflow-x: auto makes any
+     excess reachable by scrolling the row instead of leaving it clipped
+     by an ancestor's overflow: hidden. */
+  overflow-x: auto;
 }
 
 .episode-row:last-child {
