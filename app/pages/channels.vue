@@ -449,6 +449,20 @@ onUnmounted(() => {
   }
 }
 
+/* Playlists tab uses auto-fill card sizing instead of the main videos tab's
+   fixed 3/2/1-column layout, so it needs its own track rule rather than
+   sharing .channels-page .video-grid's. min(260px, 100%) instead of a bare
+   260px: minmax()'s minimum is a hard floor, so on a content box narrower
+   than 260px (any viewport under ~415px) the single column was wider than
+   its container and pushed a horizontal scrollbar onto .content-area. This
+   was previously an inline style on the element, which is why the .video-grid
+   breakpoints above never reached it. The combined selector's higher
+   specificity intentionally overrides those breakpoints too, since this grid
+   uses its own auto-fill sizing at every width instead of fixed columns. */
+.channels-page .video-grid.playlists-video-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+}
+
 .channels-page .video-card.premium-card {
   display: flex;
   flex-direction: column;

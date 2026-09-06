@@ -24,7 +24,7 @@
         icon="folder"
       />
 
-      <div v-else class="video-grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));">
+      <div v-else class="video-grid playlists-video-grid">
         <div
           v-for="playlist in channelPlaylists"
           :key="playlist.id"
