@@ -589,7 +589,12 @@ const getVisBadgeClass = (vis: string): string => {
 
 .music-search-input {
   flex: 1;
-  min-width: 200px;
+  /* min-width: 200px was a hard floor that exceeded the filters bar's own
+     content box (192px) at a 320px viewport, even though the input already
+     sits alone on its wrapped line. flex: 1 already sizes it sensibly at
+     every wider width — dropping the floor lets it shrink the last few
+     pixels instead of overflowing. */
+  min-width: 0;
 }
 
 .music-filters-bar select.form-input {
@@ -656,7 +661,11 @@ const getVisBadgeClass = (vis: string): string => {
 
 .artist-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* min(220px, 100%) instead of a bare 220px: minmax()'s minimum is a hard
+     floor, so on a content box narrower than 220px (any viewport under
+     ~350px) the single column was wider than its container. No-op at every
+     width where 220px fits (measured clean at 375px and up). */
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
   gap: 20px;
 }
 
@@ -708,6 +717,21 @@ const getVisBadgeClass = (vis: string): string => {
   gap: 20px;
   align-items: center;
   margin-bottom: 32px;
+}
+
+/* Mirrors channels.vue's .channel-profile-header stacking (same avatar+info
+   header shape, already shipped and proven). Below 480px the 96px avatar +
+   20px gap leave too little width for the info column to hold real content
+   (a bio with an unbroken URL/email, or the "Lecture aléatoire" button) —
+   no single child-level fix (word-break, button wrapping) closes the gap
+   for every kind of content, but stacking the header removes the
+   side-by-side width constraint entirely. */
+@media (max-width: 480px) {
+  .artist-detail-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
 }
 
 .artist-detail-avatar {
@@ -786,6 +810,13 @@ const getVisBadgeClass = (vis: string): string => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 14px;
   cursor: pointer;
+  /* .album-group (the ancestor card) has overflow: hidden, so without this
+     a row whose fixed-size children (track number, duration, edit button,
+     and — for an admin viewing a track with no clip yet — the wide
+     "Télécharger le clip" button) exceed the available width gets its
+     trailing controls silently clipped and unreachable. overflow-x: auto
+     makes them reachable by scrolling the row instead. */
+  overflow-x: auto;
 }
 
 .track-row:hover {
@@ -814,6 +845,15 @@ const getVisBadgeClass = (vis: string): string => {
 
 .track-title {
   flex: 1;
+  /* Without min-width: 0 the title's automatic minimum size floors at its
+     longest unbreakable word, which combined with the row's other
+     flex-shrink: 0 children can still exceed the content box. Truncating
+     with ellipsis instead of the current multi-line wrap also keeps the
+     row a single, predictable height. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .track-duration {
