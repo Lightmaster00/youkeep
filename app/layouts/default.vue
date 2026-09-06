@@ -292,6 +292,20 @@ onUnmounted(() => {
 .header-left {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+}
+
+.header-center {
+  display: flex;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .logo {
@@ -366,6 +380,7 @@ onUnmounted(() => {
 
 .search-input {
   flex: 1;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-right: none;
@@ -409,6 +424,8 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.05);
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  max-width: 100%;
+  min-width: 0;
 }
 
 .user-menu:hover, .user-menu.is-active {
@@ -421,6 +438,7 @@ onUnmounted(() => {
 .avatar-circle {
   width: 34px;
   height: 34px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
   color: white;
@@ -445,9 +463,14 @@ onUnmounted(() => {
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-primary);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .dropdown-arrow {
+  flex-shrink: 0;
   color: var(--text-secondary);
   transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), color 0.3s ease;
 }
@@ -676,6 +699,21 @@ onUnmounted(() => {
   }
   .search-form {
     width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 12px;
+  }
+  .username {
+    display: none;
+  }
+}
+
+@media (max-width: 340px) {
+  .header-center {
+    display: none;
   }
 }
 
