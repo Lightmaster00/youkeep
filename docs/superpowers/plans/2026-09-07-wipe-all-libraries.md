@@ -85,14 +85,16 @@ export function deleteMusicArtist(artistId: string): { success: true } | { succe
 
   // 3. Delete the artist's media folder recursively. Music has no
   // custom_save_path equivalent (unlike channels), so this is always
-  // relative to getMusicDownloadsDir().
+  // relative to getMusicDownloadsDir(). A removal failure here is logged but
+  // does NOT make this function report failure — the DB row (the real
+  // "this content is gone" signal) is already deleted at this point,
+  // matching channels/[id].delete.ts's established convention.
   const artistDir = path.join(getMusicDownloadsDir(), sanitizeFolderName(artist.name || artistId));
   if (fs.existsSync(artistDir)) {
     try {
       fs.rmSync(artistDir, { recursive: true, force: true });
     } catch (err: any) {
       console.error(`Failed to delete artist directory ${artistDir}:`, err);
-      return { success: false, error: `Row deleted, but failed to remove directory: ${err.message || err}` };
     }
   }
 
@@ -186,14 +188,18 @@ export function deletePodcastShow(showId: string): { success: true } | { success
 
   // 3. Delete the show's media folder recursively. Podcasts have no
   // custom_save_path equivalent, so this is always relative to
-  // getPodcastDownloadsDir().
+  // getPodcastDownloadsDir(). A removal failure here is logged but does NOT
+  // make this function report failure — the DB row (the real "this content
+  // is gone" signal) is already deleted at this point, matching the
+  // established convention in channels/[id].delete.ts (confirmed during
+  // Task 1's review: reporting failure here would misleadingly tell the
+  // wipe-all report that already-deleted content needs retrying).
   const showDir = path.join(getPodcastDownloadsDir(), sanitizeFolderName(show.title || showId));
   if (fs.existsSync(showDir)) {
     try {
       fs.rmSync(showDir, { recursive: true, force: true });
     } catch (err: any) {
       console.error(`Failed to delete show directory ${showDir}:`, err);
-      return { success: false, error: `Row deleted, but failed to remove directory: ${err.message || err}` };
     }
   }
 
