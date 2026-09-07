@@ -1272,12 +1272,21 @@ code.tech-value {
   flex-shrink: 0;
 }
 
-/* Below 360px the 168px thumbnail leaves the adjacent .rec-info title/channel
-   column at exactly 0px width (confirmed live: 31px card overflow at 320px,
-   0px at 361px+ with no fix needed there). Shrinking the thumbnail, not
-   removing it, keeps the recommendation cards recognizable while giving the
-   text column real room. */
-@media (max-width: 360px) {
+/* The 72px nav rail + 24px content-area padding on each side means content
+   width lags viewport width by ~120px, so this tier is keyed on viewport
+   width (max-width: 480px) rather than the narrower point where .content-area
+   itself first overflows (360px) — that narrower value left a non-monotonic
+   gap between 361-480px where the un-shrunk 168px thumbnail squeezed
+   .rec-info down to as little as 35px and clipped titles by up to 54px
+   (confirmed live: no page-level overflow there, since .rec-info's own
+   min-width: 0 and .rec-title's overflow: hidden absorb the squeeze
+   silently — but a real, visible readability regression). Shrinking the
+   thumbnail, not removing it, keeps the recommendation cards recognizable
+   while giving the text column real room. Confirmed live: .rec-info goes
+   from 49px (title clipped 19px) to 117px (title clipped 0) at 375px with
+   this tier active, and the 168px thumbnail is confirmed to already fit
+   cleanly at 481px (title clip 0), so 480px is a safe boundary. */
+@media (max-width: 480px) {
   .rec-thumbnail-wrapper {
     width: 100px;
   }
@@ -1326,6 +1335,10 @@ code.tech-value {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* Without this, a single word wider than the column (a long unbroken
+     title) is silently cut mid-character rather than wrapped, since
+     line-clamp alone doesn't force a break. */
+  overflow-wrap: anywhere;
 }
 
 .rec-channel {
