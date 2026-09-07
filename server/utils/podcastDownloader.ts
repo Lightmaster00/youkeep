@@ -117,6 +117,46 @@ export function cleanupPartialPodcastFiles(episodeId: string, showId: string, op
   }
 }
 
+export function deletePodcastShow(showId: string): { success: true } | { success: false; error: string } {
+  const db = getDb();
+
+  const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
+  if (!show) {
+    return { success: false, error: 'Show not found.' };
+  }
+
+  // 1. Find all episodes for this show and kill any active downloads.
+  const episodes = db.prepare('SELECT id FROM podcast_episodes WHERE show_id = ?').all(showId) as { id: string }[];
+  for (const e of episodes) {
+    cancelPodcastDownload(e.id);
+  }
+
+  // 2. Delete the show row (cascades to podcast_episodes via ON DELETE CASCADE).
+  const res = db.prepare('DELETE FROM podcast_shows WHERE id = ?').run(showId);
+  if (res.changes === 0) {
+    return { success: false, error: 'Show not found.' };
+  }
+
+  // 3. Delete the show's media folder recursively. Podcasts have no
+  // custom_save_path equivalent, so this is always relative to
+  // getPodcastDownloadsDir(). A removal failure here is logged but does NOT
+  // make this function report failure — the DB row (the real "this content
+  // is gone" signal) is already deleted at this point, matching the
+  // established convention in channels/[id].delete.ts (confirmed during
+  // Task 1's review: reporting failure here would misleadingly tell the
+  // wipe-all report that already-deleted content needs retrying).
+  const showDir = path.join(getPodcastDownloadsDir(), sanitizeFolderName(show.title || showId));
+  if (fs.existsSync(showDir)) {
+    try {
+      fs.rmSync(showDir, { recursive: true, force: true });
+    } catch (err: any) {
+      console.error(`Failed to delete show directory ${showDir}:`, err);
+    }
+  }
+
+  return { success: true };
+}
+
 /**
  * Parses an itunes:duration value, which RSS feeds represent inconsistently:
  * HH:MM:SS, MM:SS, or a bare integer number of seconds. Returns null for
