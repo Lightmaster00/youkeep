@@ -1910,6 +1910,11 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   margin-top: 6px;
+  /* The two .role-card children (each flex: 1, "Standard User" and
+     "Administrator") needed ~204px combined at a 320px viewport, where the
+     row's own available width was 142px. flex-wrap lets each card fall to
+     its own full-width row instead of overflowing. */
+  flex-wrap: wrap;
 }
 
 .settings-container .role-card {
@@ -2052,6 +2057,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* Without this, the column's automatic minimum size is floored by its
+     content (a real username like "dev-fixture-admin" has no breakable
+     characters), which overflowed the ~104px header row at a 320px
+     viewport even before considering the badge below. */
+  min-width: 0;
 }
 
 .settings-container .user-headline-col h4 {
@@ -2059,6 +2069,21 @@ onUnmounted(() => {
   font-weight: 700;
   color: white;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Scoped to .user-headline-col specifically — the global .badge class
+   (main.css:310) is used elsewhere in the app and must not be changed.
+   "Administrator" is one unbreakable word with the same shape as the h4
+   username above: min-width: 0 lets it shrink, the rest truncates it. */
+.settings-container .user-headline-col .badge {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
 }
 
 
@@ -2112,7 +2137,10 @@ onUnmounted(() => {
 /* Redesigned grid results for fluid layout */
 .settings-container .users-list-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* Same fix as .search-results-grid in Task 1: minmax()'s 300px minimum
+     overflowed any content box under ~430px (measured 158px overflow at
+     320px with 2 real user accounts). */
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 16px;
 }
 
