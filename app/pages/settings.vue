@@ -1149,11 +1149,14 @@ onUnmounted(() => {
 .settings-container .banner-quick-stats {
   display: flex;
   align-items: center;
-  gap: 28px;
+  flex-wrap: wrap;
+  gap: 16px 28px;
   background: rgba(255, 255, 255, 0.02);
   padding: 14px 24px;
   border-radius: var(--border-radius-md);
   border: 1px solid rgba(255, 255, 255, 0.04);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .settings-container .quick-stat-item {
@@ -1185,6 +1188,12 @@ onUnmounted(() => {
   width: 1px;
   height: 32px;
   background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 480px) {
+  .settings-container .quick-stat-divider {
+    display: none;
+  }
 }
 
 .settings-container .metric-card-header {
