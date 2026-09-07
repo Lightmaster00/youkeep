@@ -148,6 +148,8 @@ export function deleteMusicArtist(artistId: string): { success: true } | { succe
     } catch (err: any) {
       console.error(`Failed to delete artist directory ${artistDir}:`, err);
     }
+  } else {
+    console.warn(`Wipe: artist directory not found, skipping fs removal: ${artistDir} (artist "${artist.name}", ${tracks.length} track(s))`);
   }
 
   return { success: true };

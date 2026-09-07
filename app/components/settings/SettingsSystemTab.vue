@@ -105,13 +105,31 @@
           </div>
         </div>
 
-        <div v-if="!wipePreview" class="mt-3">
+        <div v-if="wipeInProgress" class="mt-3 danger-zone-progress">
+          <p v-if="wipeCurrent">
+            Deleting: {{ wipeCurrent.type }} "{{ wipeCurrent.name }}" ({{ wipeCurrent.index }}/{{ wipeCurrent.total }})
+          </p>
+          <p v-else>Starting...</p>
+        </div>
+
+        <div v-else-if="wipeReport" class="mt-3 danger-zone-report">
+          <p class="settings-success-msg">{{ wipeReport.succeeded.length }} item(s) deleted successfully.</p>
+          <div v-if="wipeReport.failed.length > 0" class="settings-error-msg mt-2">
+            <p>{{ wipeReport.failed.length }} item(s) failed:</p>
+            <ul>
+              <li v-for="f in wipeReport.failed" :key="f.id">{{ f.type }} "{{ f.name }}": {{ f.error }}</li>
+            </ul>
+          </div>
+          <button @click="resetDangerZone" class="btn btn-secondary-dark mt-3">Done</button>
+        </div>
+
+        <div v-else-if="!wipePreview" class="mt-3">
           <button @click="loadWipePreview" class="btn btn-secondary-dark" :disabled="loadingWipePreview">
             {{ loadingWipePreview ? 'Loading...' : 'Show what will be deleted' }}
           </button>
         </div>
 
-        <div v-else-if="!wipeInProgress && !wipeReport" class="mt-3 danger-zone-preview">
+        <div v-else class="mt-3 danger-zone-preview">
           <p class="danger-zone-summary">
             This will permanently delete
             <strong>{{ wipePreview.channelCount }}</strong> channel(s) ({{ wipePreview.videoCount }} video(s)),
@@ -134,23 +152,6 @@
           >
             {{ startingWipe ? 'Starting...' : 'Wipe everything' }}
           </button>
-        </div>
-
-        <div v-else-if="wipeInProgress" class="mt-3 danger-zone-progress">
-          <p v-if="wipeCurrent">
-            Deleting: {{ wipeCurrent.type }} "{{ wipeCurrent.name }}" ({{ wipeCurrent.index }}/{{ wipeCurrent.total }})
-          </p>
-          <p v-else>Starting...</p>
-        </div>
-
-        <div v-else-if="wipeReport" class="mt-3 danger-zone-report">
-          <p class="settings-success-msg">{{ wipeReport.succeeded.length }} item(s) deleted successfully.</p>
-          <div v-if="wipeReport.failed.length > 0" class="settings-error-msg mt-2">
-            <p>{{ wipeReport.failed.length }} item(s) failed:</p>
-            <ul>
-              <li v-for="f in wipeReport.failed" :key="f.id">{{ f.type }} "{{ f.name }}": {{ f.error }}</li>
-            </ul>
-          </div>
         </div>
       </div>
     </div>
@@ -269,7 +270,6 @@ async function pollWipeStatus() {
     wipeCurrent.value = status.current;
     if (!status.inProgress && status.report) {
       wipeReport.value = status.report;
-      wipePreview.value = null;
       return;
     }
   } catch (e) {
@@ -283,6 +283,11 @@ async function pollWipeStatus() {
 onUnmounted(() => {
   if (wipePollTimeout) clearTimeout(wipePollTimeout);
 });
+
+function resetDangerZone() {
+  wipeReport.value = null;
+  wipePreview.value = null;
+}
 
 function formatBytes(bytes: number): string {
   if (!bytes) return '0 B';

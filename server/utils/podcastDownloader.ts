@@ -152,6 +152,8 @@ export function deletePodcastShow(showId: string): { success: true } | { success
     } catch (err: any) {
       console.error(`Failed to delete show directory ${showDir}:`, err);
     }
+  } else {
+    console.warn(`Wipe: show directory not found, skipping fs removal: ${showDir} (show "${show.title}", ${episodes.length} episode(s))`);
   }
 
   return { success: true };

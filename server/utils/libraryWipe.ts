@@ -116,6 +116,7 @@ export function startLibraryWipe(): { started: true } | { started: false; error:
     console.error('Library wipe crashed unexpectedly:', err);
     _g[G_WIPE_IN_PROGRESS] = false;
     _g[G_WIPE_PROGRESS] = null;
+    _g[G_WIPE_REPORT] = { succeeded: [], failed: [{ type: 'channel', id: 'unknown', name: 'Library wipe', error: `Wipe crashed: ${err?.message || String(err)}` }] };
   });
 
   return { started: true };
@@ -204,6 +205,8 @@ function deleteChannelForWipe(channelId: string, title: string): WipeOutcome {
       } catch (fsErr: any) {
         console.error(`Failed to delete channel directory ${channelDir}:`, fsErr);
       }
+    } else {
+      console.warn(`Wipe: channel directory not found, skipping fs removal: ${channelDir} (channel "${channel?.title}", ${videos.length} video(s), custom_save_path=${channel?.custom_save_path ?? 'none'})`);
     }
 
     return { type: 'channel', id: channelId, name: title };
