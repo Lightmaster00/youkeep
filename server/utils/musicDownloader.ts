@@ -147,7 +147,6 @@ export function deleteMusicArtist(artistId: string): { success: true } | { succe
       fs.rmSync(artistDir, { recursive: true, force: true });
     } catch (err: any) {
       console.error(`Failed to delete artist directory ${artistDir}:`, err);
-      return { success: false, error: `Row deleted, but failed to remove directory: ${err.message || err}` };
     }
   }
 
