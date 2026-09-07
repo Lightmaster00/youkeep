@@ -516,11 +516,23 @@ function deleteChannelForWipe(channelId: string, title: string): WipeOutcome {
       : getDownloadsDir();
     const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || channelId));
     if (fs.existsSync(channelDir)) {
-      fs.rmSync(channelDir, { recursive: true, force: true });
+      // Own try/catch, deliberately not re-thrown into the outer catch below:
+      // the DB row is already deleted at this point (the real "this content
+      // is gone" signal), so a directory-removal failure is logged but must
+      // not turn this into a reported failure — matches the fix Task 1's
+      // review required for deleteMusicArtist, and the convention
+      // deletePodcastShow already followed correctly from the start.
+      try {
+        fs.rmSync(channelDir, { recursive: true, force: true });
+      } catch (fsErr: any) {
+        console.error(`Failed to delete channel directory ${channelDir}:`, fsErr);
+      }
     }
 
     return { type: 'channel', id: channelId, name: title };
   } catch (err: any) {
+    // This outer catch is for genuine failures BEFORE the DB row is
+    // deleted (e.g. a query error) — a real failure, correctly reported.
     return { type: 'channel', id: channelId, name: title, error: err.message || String(err) };
   }
 }
