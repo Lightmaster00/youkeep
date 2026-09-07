@@ -116,6 +116,44 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts
   }
 }
 
+export function deleteMusicArtist(artistId: string): { success: true } | { success: false; error: string } {
+  const db = getDb();
+
+  const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
+  if (!artist) {
+    return { success: false, error: 'Artist not found.' };
+  }
+
+  // 1. Find all tracks for this artist and kill any active downloads —
+  // mirrors channels.delete.ts's identical loop for videos.
+  const tracks = db.prepare('SELECT id FROM music_tracks WHERE artist_id = ?').all(artistId) as { id: string }[];
+  for (const t of tracks) {
+    cancelMusicDownload(t.id);
+  }
+
+  // 2. Delete the artist row (cascades to music_albums, music_tracks,
+  // music_track_artists, music_play_history via ON DELETE CASCADE).
+  const res = db.prepare('DELETE FROM music_artists WHERE id = ?').run(artistId);
+  if (res.changes === 0) {
+    return { success: false, error: 'Artist not found.' };
+  }
+
+  // 3. Delete the artist's media folder recursively. Music has no
+  // custom_save_path equivalent (unlike channels), so this is always
+  // relative to getMusicDownloadsDir().
+  const artistDir = path.join(getMusicDownloadsDir(), sanitizeFolderName(artist.name || artistId));
+  if (fs.existsSync(artistDir)) {
+    try {
+      fs.rmSync(artistDir, { recursive: true, force: true });
+    } catch (err: any) {
+      console.error(`Failed to delete artist directory ${artistDir}:`, err);
+      return { success: false, error: `Row deleted, but failed to remove directory: ${err.message || err}` };
+    }
+  }
+
+  return { success: true };
+}
+
 /**
  * Metadata Ingestion for music.
  * Fetches channel/video JSON from yt-dlp and writes it to the music_* tables.
