@@ -373,6 +373,35 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
+.settings-container .danger-zone-panel {
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.settings-container .danger-zone-summary {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.settings-container .danger-zone-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 12px;
+}
+
+.settings-container .danger-zone-hint code {
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-primary);
+}
+
+.settings-container .danger-zone-report ul {
+  margin-top: 8px;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
 .settings-container .ingest-form {
   display: flex;
   gap: 12px;

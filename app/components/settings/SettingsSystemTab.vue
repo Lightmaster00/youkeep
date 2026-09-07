@@ -93,12 +93,72 @@
           </div>
         </div>
       </div>
+
+      <div class="config-section glass-panel danger-zone-panel">
+        <div class="section-title-row">
+          <div class="icon-orb bg-pink">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div>
+            <h3>Danger Zone</h3>
+            <p class="section-desc">Permanently delete every video, music track, and podcast episode — files and database records — across the whole archive. This cannot be undone.</p>
+          </div>
+        </div>
+
+        <div v-if="!wipePreview" class="mt-3">
+          <button @click="loadWipePreview" class="btn btn-secondary-dark" :disabled="loadingWipePreview">
+            {{ loadingWipePreview ? 'Loading...' : 'Show what will be deleted' }}
+          </button>
+        </div>
+
+        <div v-else-if="!wipeInProgress && !wipeReport" class="mt-3 danger-zone-preview">
+          <p class="danger-zone-summary">
+            This will permanently delete
+            <strong>{{ wipePreview.channelCount }}</strong> channel(s) ({{ wipePreview.videoCount }} video(s)),
+            <strong>{{ wipePreview.artistCount }}</strong> artist(s) ({{ wipePreview.trackCount }} track(s)), and
+            <strong>{{ wipePreview.showCount }}</strong> show(s) ({{ wipePreview.episodeCount }} episode(s)) —
+            an estimated <strong>{{ formatBytes(wipePreview.estimatedBytes) }}</strong> of files.
+          </p>
+          <p class="danger-zone-hint">Type <code>SUPPRIMER</code> below to enable the button.</p>
+          <input
+            v-model="wipeConfirmText"
+            type="text"
+            class="form-input mt-2"
+            placeholder="SUPPRIMER"
+            :disabled="startingWipe"
+          />
+          <button
+            @click="handleStartWipe"
+            class="btn btn-danger mt-3"
+            :disabled="wipeConfirmText !== 'SUPPRIMER' || startingWipe"
+          >
+            {{ startingWipe ? 'Starting...' : 'Wipe everything' }}
+          </button>
+        </div>
+
+        <div v-else-if="wipeInProgress" class="mt-3 danger-zone-progress">
+          <p v-if="wipeCurrent">
+            Deleting: {{ wipeCurrent.type }} "{{ wipeCurrent.name }}" ({{ wipeCurrent.index }}/{{ wipeCurrent.total }})
+          </p>
+          <p v-else>Starting...</p>
+        </div>
+
+        <div v-else-if="wipeReport" class="mt-3 danger-zone-report">
+          <p class="settings-success-msg">{{ wipeReport.succeeded.length }} item(s) deleted successfully.</p>
+          <div v-if="wipeReport.failed.length > 0" class="settings-error-msg mt-2">
+            <p>{{ wipeReport.failed.length }} item(s) failed:</p>
+            <ul>
+              <li v-for="f in wipeReport.failed" :key="f.id">{{ f.type }} "{{ f.name }}": {{ f.error }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 
@@ -161,4 +221,78 @@ const handleUpdateYtdl = async () => {
     updatingYtdl.value = false;
   }
 };
+
+const wipePreview = ref<{
+  channelCount: number; videoCount: number;
+  artistCount: number; trackCount: number;
+  showCount: number; episodeCount: number;
+  estimatedBytes: number;
+} | null>(null);
+const loadingWipePreview = ref(false);
+const wipeConfirmText = ref('');
+const startingWipe = ref(false);
+const wipeInProgress = ref(false);
+const wipeCurrent = ref<{ type: string; name: string; index: number; total: number } | null>(null);
+const wipeReport = ref<{ succeeded: any[]; failed: any[] } | null>(null);
+let wipePollTimeout: any = null;
+
+async function loadWipePreview() {
+  loadingWipePreview.value = true;
+  try {
+    wipePreview.value = await $fetch('/api/admin/system/wipe-preview');
+  } catch (e: any) {
+    toast.error(e?.data?.statusMessage || 'Failed to load the wipe preview.');
+  } finally {
+    loadingWipePreview.value = false;
+  }
+}
+
+async function handleStartWipe() {
+  if (wipeConfirmText.value !== 'SUPPRIMER') return;
+  startingWipe.value = true;
+  try {
+    await $fetch('/api/admin/system/wipe-all', { method: 'POST' });
+    wipeInProgress.value = true;
+    wipeConfirmText.value = '';
+    pollWipeStatus();
+  } catch (e: any) {
+    toast.error(e?.data?.statusMessage || 'Failed to start the wipe.');
+  } finally {
+    startingWipe.value = false;
+  }
+}
+
+async function pollWipeStatus() {
+  try {
+    const status = await $fetch<{ inProgress: boolean; current: any; report: any }>('/api/admin/system/wipe-status');
+    wipeInProgress.value = status.inProgress;
+    wipeCurrent.value = status.current;
+    if (!status.inProgress && status.report) {
+      wipeReport.value = status.report;
+      wipePreview.value = null;
+      return;
+    }
+  } catch (e) {
+    // Keep polling even on a transient fetch error — matches this app's
+    // existing queue-polling resilience (runPolling in settings.vue never
+    // stops on a single failed fetch either).
+  }
+  wipePollTimeout = setTimeout(pollWipeStatus, 1000);
+}
+
+onUnmounted(() => {
+  if (wipePollTimeout) clearTimeout(wipePollTimeout);
+});
+
+function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`;
+}
 </script>
