@@ -115,6 +115,7 @@ export function startLibraryWipe(): { started: true } | { started: false; error:
   runLibraryWipeInternal().catch((err) => {
     console.error('Library wipe crashed unexpectedly:', err);
     _g[G_WIPE_IN_PROGRESS] = false;
+    _g[G_WIPE_PROGRESS] = null;
   });
 
   return { started: true };
@@ -135,6 +136,14 @@ async function runLibraryWipeInternal(): Promise<void> {
     index += 1;
     _g[G_WIPE_PROGRESS] = { type: 'channel', name: c.title, index, total };
     outcomes.push(deleteChannelForWipe(c.id, c.title));
+    // Every delete call above is fully synchronous (better-sqlite3 and
+    // fs.rmSync are both sync APIs) — without this yield, this whole "async"
+    // function would run to completion on the first tick with no actual
+    // await, blocking the entire Node event loop for the full wipe duration
+    // and making startLibraryWipe()'s "returns immediately" and the
+    // frontend's progress polling both unreachable. Yielding once per item
+    // is enough granularity for a 1s poll to observe real progress.
+    await new Promise((r) => setImmediate(r));
   }
 
   for (const a of artists) {
@@ -142,6 +151,7 @@ async function runLibraryWipeInternal(): Promise<void> {
     _g[G_WIPE_PROGRESS] = { type: 'artist', name: a.name, index, total };
     const result = deleteMusicArtist(a.id);
     outcomes.push({ type: 'artist', id: a.id, name: a.name, error: result.success ? undefined : result.error });
+    await new Promise((r) => setImmediate(r));
   }
 
   for (const s of shows) {
@@ -149,6 +159,7 @@ async function runLibraryWipeInternal(): Promise<void> {
     _g[G_WIPE_PROGRESS] = { type: 'show', name: s.title, index, total };
     const result = deletePodcastShow(s.id);
     outcomes.push({ type: 'show', id: s.id, name: s.title, error: result.success ? undefined : result.error });
+    await new Promise((r) => setImmediate(r));
   }
 
   _g[G_WIPE_REPORT] = buildWipeReport(outcomes);
