@@ -609,6 +609,13 @@ export async function startPodcastQueueWorker() {
           continue;
         }
 
+        // A library wipe is deleting shows/episodes right now — don't start
+        // any new download while that's happening.
+        if (isWipeInProgress()) {
+          await sleepOrWakeablePodcast(5000);
+          continue;
+        }
+
         // Check disk space first — it's the only await in this sequence, so
         // running it before the capacity check below ensures nothing yields
         // the event loop between that check passing and the counter increment.

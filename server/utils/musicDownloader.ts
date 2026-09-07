@@ -617,6 +617,13 @@ export async function startMusicQueueWorker() {
           continue;
         }
 
+        // A library wipe is deleting artists/tracks right now — don't start
+        // any new download while that's happening.
+        if (isWipeInProgress()) {
+          await sleepOrWakeableMusic(5000);
+          continue;
+        }
+
         // Check disk space first — it's the only await in this sequence, so running it
         // before the capacity checks below ensures nothing yields the event loop between
         // those checks passing and the counter increment, closing the cross-pipeline race
