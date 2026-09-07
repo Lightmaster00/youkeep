@@ -964,6 +964,7 @@ function toggleMiniPlayerPlayback() {
 
 .description-meta {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   font-weight: 600;
   font-size: 14px;
