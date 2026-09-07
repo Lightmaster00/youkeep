@@ -35,9 +35,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // 4. Delete the channel's media folder recursively
-  const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0
-    ? channel.custom_save_path
-    : getDownloadsDir();
+  const basePath = resolveChannelBaseDir(channel?.custom_save_path);
   const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || channelId));
   if (fs.existsSync(channelDir)) {
     try {

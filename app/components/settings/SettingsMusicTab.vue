@@ -46,6 +46,7 @@
             id="max-concurrent-music-downloads"
             type="number"
             min="1"
+            max="10"
             v-model.number="maxConcurrentMusicDownloads"
             class="form-input"
             style="width: 64px;"

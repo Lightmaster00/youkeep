@@ -24,25 +24,19 @@ export function parseChaptersFromInfoData(infoData: any): ParsedChapter[] {
   });
 }
 
+// --sponsorblock-mark only writes chapter markers/metadata and needs no
+// re-encoding, so it can run without ffmpeg. --sponsorblock-remove actually
+// cuts segments out of the video, which does require ffmpeg.
+export function buildSponsorBlockMarkArgs(settings: Record<string, string>): string[] {
+  const markCategories = SPONSORBLOCK_CATEGORIES.filter((category) => (settings[category] || 'ignore') === 'mark');
+  return markCategories.length > 0 ? ['--sponsorblock-mark', markCategories.join(',')] : [];
+}
+
+export function buildSponsorBlockRemoveArgs(settings: Record<string, string>): string[] {
+  const removeCategories = SPONSORBLOCK_CATEGORIES.filter((category) => (settings[category] || 'ignore') === 'remove');
+  return removeCategories.length > 0 ? ['--sponsorblock-remove', removeCategories.join(',')] : [];
+}
+
 export function buildSponsorBlockArgs(settings: Record<string, string>): string[] {
-  const markCategories: string[] = [];
-  const removeCategories: string[] = [];
-
-  for (const category of SPONSORBLOCK_CATEGORIES) {
-    const action = settings[category] || 'ignore';
-    if (action === 'mark') {
-      markCategories.push(category);
-    } else if (action === 'remove') {
-      removeCategories.push(category);
-    }
-  }
-
-  const args: string[] = [];
-  if (markCategories.length > 0) {
-    args.push('--sponsorblock-mark', markCategories.join(','));
-  }
-  if (removeCategories.length > 0) {
-    args.push('--sponsorblock-remove', removeCategories.join(','));
-  }
-  return args;
+  return [...buildSponsorBlockMarkArgs(settings), ...buildSponsorBlockRemoveArgs(settings)];
 }

@@ -5,7 +5,7 @@ import https from 'https';
 import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
-import { parseChaptersFromInfoData, buildSponsorBlockArgs } from './chapters';
+import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { getActiveMusicDownloadCount } from './musicDownloader';
 
@@ -30,9 +30,7 @@ export function buildSpawnEnv(): NodeJS.ProcessEnv {
 export function cleanupPartialFiles(videoId: string, channelId: string): void {
   const db = getDb();
   const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
-  const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0 && isDirWritable(channel.custom_save_path)
-    ? channel.custom_save_path
-    : getDownloadsDir();
+  const basePath = resolveChannelBaseDir(channel?.custom_save_path);
   const channelDir = path.join(basePath, sanitizeFolderName(channel?.title || channelId));
   const mp4File = path.join(channelDir, `${videoId}.mp4`);
   const jpgFile = path.join(channelDir, `${videoId}.jpg`);
@@ -138,6 +136,17 @@ export function isDirWritable(dirPath: string): boolean {
   } catch (err) {
     return false;
   }
+}
+
+// Resolves the base directory a channel's files actually live under: its
+// custom_save_path if set AND currently writable, otherwise the default
+// downloads dir. Used at both download time and delete time so a channel
+// whose custom path has become unwritable (files silently redirected to the
+// default dir) is deleted from the same place its files were written to.
+export function resolveChannelBaseDir(customSavePath: string | null | undefined): string {
+  return customSavePath && customSavePath.trim().length > 0 && isDirWritable(customSavePath)
+    ? customSavePath
+    : getDownloadsDir();
 }
 
 export function getDownloadsDir(): string {
@@ -677,12 +686,11 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     for (const row of sponsorBlockSettingRows) {
       sponsorBlockSettings[row.key.replace('sponsorblock_', '')] = row.value;
     }
-    const sponsorBlockArgs = buildSponsorBlockArgs(sponsorBlockSettings);
+    const sponsorBlockMarkArgs = buildSponsorBlockMarkArgs(sponsorBlockSettings);
+    const sponsorBlockRemoveArgs = buildSponsorBlockRemoveArgs(sponsorBlockSettings);
 
     const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
-    const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0 && isDirWritable(channel.custom_save_path)
-      ? channel.custom_save_path
-      : getDownloadsDir();
+    const basePath = resolveChannelBaseDir(channel?.custom_save_path);
     const channelDir = path.join(basePath, sanitizeFolderName(channel?.title || channelId));
 
     const outputTemplate = path.join(channelDir, `${videoId}.%(ext)s`);
@@ -709,12 +717,13 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
       '--write-auto-subs',
       '--sub-format', 'vtt',
       '--sub-langs', 'fr,en,es',
+      ...sponsorBlockMarkArgs,
     ];
 
     if (ffmpegAvailable) {
       args.push('--convert-thumbnails', 'jpg');
       args.push('--merge-output-format', 'mp4');
-      args.push(...sponsorBlockArgs);
+      args.push(...sponsorBlockRemoveArgs);
     }
 
     args.push(

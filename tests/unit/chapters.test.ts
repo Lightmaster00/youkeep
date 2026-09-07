@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseChaptersFromInfoData, buildSponsorBlockArgs, SPONSORBLOCK_CATEGORIES } from '../../server/utils/chapters';
+import { parseChaptersFromInfoData, buildSponsorBlockArgs, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs, SPONSORBLOCK_CATEGORIES } from '../../server/utils/chapters';
 
 describe('parseChaptersFromInfoData', () => {
   it('returns an empty array when infoData has no chapters', () => {
@@ -66,5 +66,29 @@ describe('buildSponsorBlockArgs', () => {
     // even when the settings object's own key order is reversed.
     const result = buildSponsorBlockArgs({ outro: 'mark', intro: 'mark' });
     expect(result).toEqual(['--sponsorblock-mark', 'intro,outro']);
+  });
+});
+
+describe('buildSponsorBlockMarkArgs', () => {
+  it('returns only the --sponsorblock-mark flag, ignoring remove categories', () => {
+    const result = buildSponsorBlockMarkArgs({ sponsor: 'mark', filler: 'remove' });
+    expect(result).toEqual(['--sponsorblock-mark', 'sponsor']);
+  });
+
+  it('returns an empty array when no category is set to mark', () => {
+    expect(buildSponsorBlockMarkArgs({ sponsor: 'remove' })).toEqual([]);
+    expect(buildSponsorBlockMarkArgs({})).toEqual([]);
+  });
+});
+
+describe('buildSponsorBlockRemoveArgs', () => {
+  it('returns only the --sponsorblock-remove flag, ignoring mark categories', () => {
+    const result = buildSponsorBlockRemoveArgs({ sponsor: 'mark', filler: 'remove' });
+    expect(result).toEqual(['--sponsorblock-remove', 'filler']);
+  });
+
+  it('returns an empty array when no category is set to remove', () => {
+    expect(buildSponsorBlockRemoveArgs({ sponsor: 'mark' })).toEqual([]);
+    expect(buildSponsorBlockRemoveArgs({})).toEqual([]);
   });
 });

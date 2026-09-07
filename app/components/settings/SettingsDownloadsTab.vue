@@ -26,6 +26,7 @@
             id="max-concurrent-downloads"
             type="number"
             min="1"
+            max="10"
             v-model.number="maxConcurrentDownloads"
             class="form-input"
             style="width: 64px;"

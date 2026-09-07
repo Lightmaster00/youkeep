@@ -24,6 +24,7 @@
             id="max-concurrent-podcast-downloads"
             type="number"
             min="1"
+            max="10"
             v-model.number="maxConcurrentPodcastDownloads"
             class="form-input"
             style="width: 64px;"

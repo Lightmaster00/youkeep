@@ -2,6 +2,7 @@ import fs from 'fs';
 import Database from 'better-sqlite3';
 
 export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 2;
+export const MAX_CONCURRENT_DOWNLOADS_CEILING = 10;
 
 export function parseMaxConcurrentDownloads(raw: string | undefined | null): number {
   if (raw === undefined || raw === null || raw === '') return DEFAULT_MAX_CONCURRENT_DOWNLOADS;
@@ -15,7 +16,7 @@ export function hasCapacityForMoreDownloads(activeCount: number, maxConcurrent: 
 }
 
 export function isValidMaxConcurrentValue(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_CONCURRENT_DOWNLOADS_CEILING;
 }
 
 export const MIN_FREE_DISK_SPACE_BYTES = 500 * 1024 * 1024; // 500 MB
