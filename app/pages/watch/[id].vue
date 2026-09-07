@@ -1054,7 +1054,10 @@ function toggleMiniPlayerPlayback() {
 
 .tech-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  /* min(240px, 100%) instead of a bare 240px: minmax()'s minimum is a hard
+     floor. Confirmed live: 82px overflow at 320px before this fix, 0px
+     after, no-op at wider widths where 240px already fits. */
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 16px;
 }
 
@@ -1211,6 +1214,12 @@ code.tech-value {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Without this, this column's content floors the width of .watch-content's
+     grid track, inflating .watch-container and .content-area past the
+     viewport at narrow widths — confirmed live: content-area overflow went
+     from 95px to 0px at a 320px viewport once this was added. .player-column,
+     this column's sibling, already has this rule. */
+  min-width: 0;
 }
 
 .sidebar-title {
@@ -1261,6 +1270,17 @@ code.tech-value {
   overflow: hidden;
   background: #000;
   flex-shrink: 0;
+}
+
+/* Below 360px the 168px thumbnail leaves the adjacent .rec-info title/channel
+   column at exactly 0px width (confirmed live: 31px card overflow at 320px,
+   0px at 361px+ with no fix needed there). Shrinking the thumbnail, not
+   removing it, keeps the recommendation cards recognizable while giving the
+   text column real room. */
+@media (max-width: 360px) {
+  .rec-thumbnail-wrapper {
+    width: 100px;
+  }
 }
 
 .rec-thumbnail-wrapper::after {

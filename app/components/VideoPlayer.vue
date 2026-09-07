@@ -1064,6 +1064,26 @@ defineExpose({ videoEl: videoPlayer });
   }
 }
 
+/* A third, narrower tier: even with volume/theater/skip-btn already hidden
+   by the two tiers above, Play + time-display + Speed + Fullscreen still
+   overflow by 43px at a 320px viewport once .watch-container's true width
+   is measured correctly (see the .sidebar-column fix in watch/[id].vue,
+   which was masking this during the original audit). Hiding the speed
+   selector and tightening the row's gap closes the remaining gap —
+   confirmed live: 43px overflow at 320px before, 0px after; natural
+   resolution point (without any tier) is between 360-375px, so 380px is a
+   safe, round boundary. */
+@media (max-width: 380px) {
+  .speed-control {
+    display: none;
+  }
+
+  .controls-left,
+  .controls-right {
+    gap: 4px;
+  }
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
