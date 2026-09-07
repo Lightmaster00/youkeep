@@ -95,7 +95,7 @@
           <!-- Playlist Prev Video -->
           <button
             v-if="hasPrevVideo"
-            class="ctrl-btn"
+            class="ctrl-btn skip-btn"
             @click="emit('prev')"
             title="Previous Video"
           >
@@ -105,7 +105,7 @@
           <!-- Playlist Next Video -->
           <button
             v-if="hasNextVideo"
-            class="ctrl-btn"
+            class="ctrl-btn skip-btn"
             @click="emit('next')"
             title="Next Video"
           >
@@ -113,12 +113,12 @@
           </button>
 
           <!-- Skip Backward 10s -->
-          <button class="ctrl-btn" @click="skip(-10)" title="Rewind 10s (←)">
+          <button class="ctrl-btn skip-btn" @click="skip(-10)" title="Rewind 10s (←)">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path><text x="12" y="16" font-size="7" fill="white" stroke="none" text-anchor="middle" font-weight="bold">10</text></svg>
           </button>
 
           <!-- Skip Forward 10s -->
-          <button class="ctrl-btn" @click="skip(10)" title="Forward 10s (→)">
+          <button class="ctrl-btn skip-btn" @click="skip(10)" title="Forward 10s (→)">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path><text x="12" y="16" font-size="7" fill="white" stroke="none" text-anchor="middle" font-weight="bold">10</text></svg>
           </button>
 
@@ -195,7 +195,7 @@
           </div>
 
           <!-- Theater Mode -->
-          <button class="ctrl-btn" @click="toggleTheaterMode" :title="isTheaterMode ? 'Exit Theater Mode' : 'Theater Mode'">
+          <button class="ctrl-btn theater-btn" @click="toggleTheaterMode" :title="isTheaterMode ? 'Exit Theater Mode' : 'Theater Mode'">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>
           </button>
 
@@ -1032,6 +1032,36 @@ defineExpose({ videoEl: videoPlayer });
 .ctrl-btn.cc-btn.active svg {
   color: var(--accent-primary-hover);
   filter: drop-shadow(0 0 5px var(--accent-primary-glow));
+}
+
+/* Narrow-viewport controls-row breakpoints, mirroring the proven tier
+   pattern already shipped for MusicMiniPlayer.vue / PodcastMiniPlayer.vue.
+   Measured live: .controls-left (247.97px) + .controls-right (121.16px)
+   demand 369px combined against a 246.6px row at a 320px viewport.
+   Medium (<= 560px): hiding .volume-control and the theater-mode button
+   alone closes the gap down to 450px (1px overflow) and fully resolves it
+   by 480px — 560px is a round, safely-covering boundary for the measured
+   510-540px natural-resolution range (561px already reads 0px overflow
+   with zero hides applied).
+   Compact (<= 480px): the Rewind/Forward 10s buttons (and the
+   playlist-only Prev/Next buttons, which share the same .skip-btn class)
+   are hidden too, closing the remaining 50px gap measured at 320px down
+   to 0px. The seek bar lives in a separate row above .controls-row and is
+   never affected by any of these hides. */
+@media (max-width: 560px) {
+  .volume-control {
+    display: none;
+  }
+
+  .theater-btn {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .skip-btn {
+    display: none;
+  }
 }
 
 @keyframes spin {
