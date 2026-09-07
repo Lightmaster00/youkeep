@@ -395,6 +395,18 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+/* .concurrency-control has no CSS of its own — its layout comes entirely
+   from an inline style (`display: inline-flex; align-items: center; gap:
+   8px;`) repeated identically in SettingsDownloadsTab.vue,
+   SettingsMusicTab.vue, and SettingsPodcastsTab.vue. That inline style sets
+   no flex-wrap, defaulting to nowrap, so the label + number input + Save
+   button (needing ~205px combined) overflowed the row at a 320px viewport
+   (~192px available). A class rule can add flex-wrap without conflicting
+   with the inline style, since the inline style never sets it. */
+.settings-container .concurrency-control {
+  flex-wrap: wrap;
+}
+
 /* Queue List */
 .settings-container .queue-box {
   padding: 24px;
@@ -1014,6 +1026,20 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
+/* Below 480px, the 50px avatar + two action buttons already exceed the
+   available width on their own (measured ~200px needed vs. ~128-136px
+   available at 320px) — no child-level fix (ellipsis, min-width) can close
+   that gap, because the fixed-size siblings are the problem, not the
+   flexible text column. Stacking removes the side-by-side constraint
+   entirely, mirroring the identical fix already used for
+   .artist-detail-header / .show-detail-header. */
+@media (max-width: 480px) {
+  .settings-container .search-channel-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .settings-container .channel-avatar-thumb {
   width: 50px;
   height: 50px;
@@ -1042,6 +1068,14 @@ onUnmounted(() => {
   margin: 2px 0 0;
   font-size: 11px;
   color: var(--text-secondary);
+  /* Its sibling .channel-search-info h5 (the channel/artist name, a few
+     lines above) already has this exact truncation. This line was simply
+     never given the same treatment, and status text like
+     "Downloading•public•356 episode(s)" cannot wrap (no breakable spaces
+     around the bullet separators), so it overflowed its column. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .settings-container .channel-search-desc {
@@ -1517,11 +1551,30 @@ onUnmounted(() => {
 
 .settings-container .search-results-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  /* min(300px, 100%) instead of a bare 300px: minmax()'s minimum is a hard
+     floor, so on a content box narrower than 300px (any viewport under
+     ~430px) the single column was wider than its container — the largest
+     overflow bug found in this sub-project (up to 172px at 320px on the
+     Downloads tab's real search results). No-op at every width where 300px
+     fits. */
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   gap: 12px;
   max-height: 400px;
   overflow-y: auto;
   padding-right: 6px;
+}
+
+/* .form-select (the preset-interval / visibility <select> elements in the
+   Downloads/Music/Podcasts ingestion forms) has no CSS rule anywhere in
+   this codebase — unlike its sibling .form-input, which has width: 100% in
+   main.css:148. Without it, a native <select> falls back to the browser's
+   default content-based sizing (fitting its widest <option> text,
+   e.g. "Every 12 hours"), ignoring its container's actual width.
+   max-width: 100% alone was tested and found inert here — only width: 100%
+   overrides a select's default sizing algorithm. */
+.settings-container .form-select {
+  width: 100%;
+  max-width: 100%;
 }
 
 /* Custom forms integration */
@@ -1658,6 +1711,15 @@ onUnmounted(() => {
 .settings-container .queue-card-channel-name {
   font-size: 11.5px;
   color: var(--text-secondary);
+  /* Its sibling .queue-card-title (a few lines above) already has this
+     exact truncation. This line was simply never given the same treatment
+     — a real channel name like "DirtyBiology" (one unbreakable word) forced
+     the span to its full intrinsic width, visually colliding with
+     neighboring content in the card. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 .settings-container .status-badge {
