@@ -93,7 +93,7 @@ import { usePodcastQueue } from '~/composables/usePodcastQueue';
 const { user: currentUser, isAdmin } = useAuth();
 const route = useRoute();
 
-const allowedTabs = ['stats', 'downloads', 'podcasts', 'users', 'system'];
+const allowedTabs = ['stats', 'downloads', 'music', 'podcasts', 'users', 'system'];
 const queryTab = route.query.tab ? String(route.query.tab) : '';
 const initialTab = allowedTabs.includes(queryTab) ? queryTab : 'stats';
 if (!isAdmin.value) {
