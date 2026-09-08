@@ -30,16 +30,40 @@
 
       <div class="header-center">
         <form @submit.prevent="handleSearch" class="search-form">
-          <input 
-            type="text" 
-            v-model="searchQuery" 
-            placeholder="Search videos, channels..." 
+          <input
+            type="text"
+            v-model="searchQuery"
+            placeholder="Search videos, channels..."
             class="search-input"
+            @input="onSearchInput"
+            @focus="onSearchFocus"
+            @blur="onSearchBlur"
+            @keydown="onSearchKeydown"
           />
           <button type="submit" class="search-btn">
             <!-- Search SVG -->
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </button>
+
+          <div v-if="showDropdown" class="search-dropdown">
+            <div
+              v-for="(item, index) in dropdownItems"
+              :key="`${item.label}-${index}`"
+              class="search-dropdown-item"
+              :class="{ 'is-selected': index === selectedIndex }"
+              @mousedown.prevent="selectDropdownItem(item.label)"
+            >
+              <span class="search-dropdown-label">{{ item.label }}</span>
+              <span v-if="item.sublabel" class="search-dropdown-sublabel">{{ item.sublabel }}</span>
+            </div>
+            <div
+              v-if="searchQuery.trim().length === 0 && historyEntries.length > 0"
+              class="search-dropdown-clear"
+              @mousedown.prevent="onClearHistory"
+            >
+              Effacer
+            </div>
+          </div>
         </form>
       </div>
 
@@ -145,6 +169,84 @@ const { restoreActiveType } = useActiveMiniPlayer();
 const dropdownOpen = ref(false);
 const spaceMenuOpen = ref(false);
 const searchQuery = ref('');
+const { get: getSearchHistory, add: addSearchHistory, clear: clearSearchHistory } = useSearchHistory();
+const { suggestions, fetchSuggestions } = useSearchSuggestions();
+
+const searchFocused = ref(false);
+const selectedIndex = ref(-1);
+const historyEntries = ref<string[]>([]);
+
+const dropdownItems = computed<{ label: string; sublabel: string }[]>(() => {
+  if (searchQuery.value.trim().length === 0) {
+    return historyEntries.value.map((term) => ({ label: term, sublabel: '' }));
+  }
+  return suggestions.value.map((s) => ({ label: s.title, sublabel: s.subtitle }));
+});
+
+const showDropdown = computed(() => {
+  if (!searchFocused.value) return false;
+  if (searchQuery.value.trim().length === 0) return historyEntries.value.length > 0;
+  return searchQuery.value.trim().length >= 2;
+});
+
+function refreshHistoryEntries() {
+  historyEntries.value = getSearchHistory();
+}
+
+function onSearchInput() {
+  selectedIndex.value = -1;
+  const term = searchQuery.value;
+  if (term.trim().length === 0) {
+    refreshHistoryEntries();
+  } else {
+    fetchSuggestions(term, contentSearchMode.value as 'per_space' | 'global', activeSpace.value.id as 'video' | 'music' | 'podcasts');
+  }
+}
+
+function onSearchFocus() {
+  searchFocused.value = true;
+  if (searchQuery.value.trim().length === 0) {
+    refreshHistoryEntries();
+  }
+}
+
+function onSearchBlur() {
+  // Delay so a click on a dropdown item registers before the dropdown hides.
+  setTimeout(() => {
+    searchFocused.value = false;
+    selectedIndex.value = -1;
+  }, 150);
+}
+
+function selectDropdownItem(label: string) {
+  searchQuery.value = label;
+  searchFocused.value = false;
+  selectedIndex.value = -1;
+  handleSearch();
+}
+
+function onSearchKeydown(e: KeyboardEvent) {
+  if (!showDropdown.value || dropdownItems.value.length === 0) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedIndex.value = (selectedIndex.value + 1) % dropdownItems.value.length;
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedIndex.value = selectedIndex.value <= 0 ? dropdownItems.value.length - 1 : selectedIndex.value - 1;
+  } else if (e.key === 'Escape') {
+    searchFocused.value = false;
+    selectedIndex.value = -1;
+  } else if (e.key === 'Enter' && selectedIndex.value >= 0) {
+    e.preventDefault();
+    selectDropdownItem(dropdownItems.value[selectedIndex.value]!.label);
+  }
+}
+
+function onClearHistory() {
+  clearSearchHistory();
+  refreshHistoryEntries();
+}
+
 const router = useRouter();
 const route = useRoute();
 const activeSpace = computed(() => {
@@ -232,6 +334,9 @@ async function fetchContentSearchMode() {
 }
 
 const handleSearch = () => {
+  if (searchQuery.value.trim()) {
+    addSearchHistory(searchQuery.value.trim());
+  }
   if (contentSearchMode.value === 'global') {
     router.push({ path: '/search', query: { q: searchQuery.value || undefined } });
     return;
@@ -427,6 +532,64 @@ onUnmounted(() => {
 .search-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
+}
+
+.search-form {
+  position: relative;
+}
+
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary, #1a1a1a);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.search-dropdown-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.search-dropdown-item:hover,
+.search-dropdown-item.is-selected {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.search-dropdown-label {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-dropdown-sublabel {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+
+.search-dropdown-clear {
+  padding: 8px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--accent-primary);
+  cursor: pointer;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.search-dropdown-clear:hover {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .user-menu {
