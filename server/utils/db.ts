@@ -460,6 +460,16 @@ export function getDb(): Database.Database {
     console.log('Seeded setting default_downloads_dir: empty');
   }
 
+  const podcastIndexKeyCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcastindex_api_key'").get() as { count: number };
+  if (podcastIndexKeyCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcastindex_api_key', '')").run();
+  }
+
+  const podcastIndexSecretCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcastindex_api_secret'").get() as { count: number };
+  if (podcastIndexSecretCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcastindex_api_secret', '')").run();
+  }
+
   const sponsorBlockCategorySeeds = ['sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'filler'];
   for (const category of sponsorBlockCategorySeeds) {
     const key = `sponsorblock_${category}`;
