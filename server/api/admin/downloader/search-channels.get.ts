@@ -1,4 +1,5 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
+import { normalizeYoutubeDataApiChannel } from '../../../utils/youtubeSearch';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -10,6 +11,27 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Search query is required.'
     });
+  }
+
+  const db = getDb();
+  const platformRow = db.prepare("SELECT api_key FROM search_platforms WHERE id = 'youtube_data_api'").get() as { api_key: string } | undefined;
+  const youtubeApiKey = platformRow?.api_key || '';
+
+  if (youtubeApiKey) {
+    try {
+      const data = await globalThis.$fetch<any>('https://www.googleapis.com/youtube/v3/search', {
+        params: { part: 'snippet', type: 'channel', q, key: youtubeApiKey, maxResults: 25 },
+        parseResponse: JSON.parse,
+        timeout: 8000,
+      });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const channels = items
+        .map(normalizeYoutubeDataApiChannel)
+        .filter((c: any): c is NonNullable<typeof c> => c !== null);
+      return { channels };
+    } catch (err) {
+      console.error('[admin/downloader/search-channels] YouTube Data API failed, falling back to scraping', err);
+    }
   }
 
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
@@ -37,7 +59,7 @@ export default defineEventHandler(async (event) => {
     for (const item of contents) {
       if (item.channelRenderer) {
         const cr = item.channelRenderer;
-        
+
         let avatarUrl = cr.thumbnail?.thumbnails?.[cr.thumbnail.thumbnails.length - 1]?.url || cr.thumbnail?.thumbnails?.[0]?.url;
         if (avatarUrl && avatarUrl.startsWith('//')) {
           avatarUrl = 'https:' + avatarUrl;
