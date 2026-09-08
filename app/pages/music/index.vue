@@ -403,6 +403,7 @@ async function fetchTrackSearch() {
 }
 
 function playTrackSearchResult(track: any) {
+  if (!track.local_file_path) return;
   playMusicTrack(track, trackSearchResults.value);
 }
 
