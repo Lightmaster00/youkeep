@@ -101,16 +101,29 @@ describe('getUserFromApiToken', () => {
     expect(row.last_used_at).not.toBeNull();
   });
 
-  it('does not re-update last_used_at on a second lookup within 60 seconds', () => {
+  it('does not re-update last_used_at on a lookup within 60 seconds', () => {
     insertUser(db, { id: 'u1', role: 'user' });
     const created = createApiToken('u1', 'My Phone');
 
-    getUserFromApiToken(created.token);
-    const firstRow = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
+    const recentSentinel = Date.now() - 5_000;
+    db.prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?').run(recentSentinel, created.id);
 
     getUserFromApiToken(created.token);
-    const secondRow = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
 
-    expect(secondRow.last_used_at).toBe(firstRow.last_used_at);
+    const row = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
+    expect(row.last_used_at).toBe(recentSentinel);
+  });
+
+  it('re-updates last_used_at on a lookup after 60 seconds have elapsed', () => {
+    insertUser(db, { id: 'u1', role: 'user' });
+    const created = createApiToken('u1', 'My Phone');
+
+    const staleSentinel = Date.now() - 120_000;
+    db.prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?').run(staleSentinel, created.id);
+
+    getUserFromApiToken(created.token);
+
+    const row = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
+    expect(row.last_used_at).toBeGreaterThan(staleSentinel);
   });
 });
