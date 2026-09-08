@@ -329,67 +329,76 @@ git commit -m "feat: add useSearchHistory composable for recent-search persisten
 ## Task 3: Backend `limit` param on music/podcast search endpoints
 
 **Files:**
-- Modify: `server/api/music/tracks/search.get.ts:56` (the hardcoded `LIMIT 200`)
-- Modify: `server/api/podcasts/episodes/search.get.ts:52` (the hardcoded `LIMIT 200`)
-- Test: `tests/integration/musicTrackSearchLimit.test.ts` (new)
-- Test: `tests/integration/podcastEpisodeSearchLimit.test.ts` (new)
+- Modify: `server/api/music/tracks/search.get.ts:10,56` (add limit parsing after the existing `const search = ...` line; the hardcoded `LIMIT 200`)
+- Modify: `server/api/podcasts/episodes/search.get.ts:10,52` (same two spots)
+- Modify: `tests/integration/music-tracks-search.test.ts` (append new tests to the existing describe block)
+- Modify: `tests/integration/podcast-episodes-search.test.ts` (append new tests to the existing describe block)
 
 **Interfaces:**
 - Produces: both endpoints now accept an optional `?limit=` query param, capped at 200, defaulting to 200 when omitted — consumed by Task 4's `useSearchSuggestions` composable (`limit=5` in `per_space` mode, `limit=3` in `global` mode).
 
-Check the existing integration test setup convention first — run `ls tests/integration/` and open one existing music- or podcast-search-related integration test (if one exists) to match its DB-seeding helper style before writing the new tests. If no existing integration test covers `search.get.ts`, seed directly via `better-sqlite3` against a temp DB the same way `tests/unit/libraryWipe.test.ts` or similar do.
+Both endpoints already have real integration test files that exercise the handler directly against an in-memory `better-sqlite3` DB via `createTestDb()`/`mockEvent()`/`insertMusicTrack()` etc. (`tests/integration/music-tracks-search.test.ts`, `tests/integration/podcast-episodes-search.test.ts` — both already read in full during plan research). This task appends new `it()` blocks to those existing files rather than creating new ones, so the new tests exercise the real route handler end-to-end, not a duplicated helper function.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `tests/integration/musicTrackSearchLimit.test.ts`:
+In `tests/integration/music-tracks-search.test.ts`, add these two tests inside the existing `describe('GET /api/music/tracks/search', ...)` block (after the last existing `it(...)`):
 
 ```typescript
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+  it('caps results at the requested limit', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Prolific Artist' });
+    for (let i = 1; i <= 5; i++) {
+      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
+      db.prepare("UPDATE music_tracks SET title = ? WHERE id = ?").run(`Limit Test ${i}`, `t${i}`);
+    }
 
-// This test exercises the LIMIT-clamping logic directly against a throwaway
-// SQLite DB shaped like the real schema, mirroring this codebase's existing
-// integration-test convention of seeding a real DB rather than mocking it.
-
-let db: InstanceType<typeof Database>;
-let dbPath: string;
-
-function clampLimit(rawLimit: unknown): number {
-  const parsed = parseInt(String(rawLimit ?? '200'), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 200;
-  return Math.min(parsed, 200);
-}
-
-describe('music track search limit clamping', () => {
-  it('defaults to 200 when limit is omitted', () => {
-    expect(clampLimit(undefined)).toBe(200);
+    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Limit&limit=2'));
+    expect(result.tracks).toHaveLength(2);
   });
 
-  it('honors a valid limit under the 200 cap', () => {
-    expect(clampLimit('5')).toBe(5);
-  });
+  it('clamps a requested limit above 200 down to 200', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Prolific Artist' });
+    for (let i = 1; i <= 3; i++) {
+      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
+      db.prepare("UPDATE music_tracks SET title = ? WHERE id = ?").run(`Clamp Test ${i}`, `t${i}`);
+    }
 
-  it('clamps a limit above 200 down to 200', () => {
-    expect(clampLimit('500')).toBe(200);
+    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Clamp&limit=500'));
+    expect(result.tracks).toHaveLength(3);
   });
-
-  it('falls back to 200 for a non-numeric or zero/negative limit', () => {
-    expect(clampLimit('abc')).toBe(200);
-    expect(clampLimit('0')).toBe(200);
-    expect(clampLimit('-5')).toBe(200);
-  });
-});
 ```
 
-Create `tests/integration/podcastEpisodeSearchLimit.test.ts` with the identical body (same `clampLimit` helper, same 4 tests, `describe('podcast episode search limit clamping', ...)`) — this test intentionally duplicates the pure clamping logic to verify both endpoints independently apply the identical rule; the actual endpoint implementations in Step 3 share no code (each route inlines its own clamp), so each test file guards its own route.
+In `tests/integration/podcast-episodes-search.test.ts`, add the identical two tests (adapted to episodes) inside its existing `describe('GET /api/podcasts/episodes/search', ...)` block:
+
+```typescript
+  it('caps results at the requested limit', async () => {
+    insertPodcastShow(db, { id: 's1', title: 'Prolific Show' });
+    for (let i = 1; i <= 5; i++) {
+      insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
+      db.prepare("UPDATE podcast_episodes SET title = ? WHERE id = ?").run(`Limit Test ${i}`, `e${i}`);
+    }
+
+    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Limit&limit=2'));
+    expect(result.episodes).toHaveLength(2);
+  });
+
+  it('clamps a requested limit above 200 down to 200', async () => {
+    insertPodcastShow(db, { id: 's1', title: 'Prolific Show' });
+    for (let i = 1; i <= 3; i++) {
+      insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
+      db.prepare("UPDATE podcast_episodes SET title = ? WHERE id = ?").run(`Clamp Test ${i}`, `e${i}`);
+    }
+
+    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Clamp&limit=500'));
+    expect(result.episodes).toHaveLength(3);
+  });
+```
+
+Both new episode-insert calls need `downloadStatus: 'completed'` if `insertPodcastEpisode`'s default isn't already `'completed'` — check the helper's default in `tests/helpers/testDb.ts` before running; if its default status would exclude these rows from the endpoint's `download_status = 'completed'` filter, add `downloadStatus: 'completed'` explicitly to each `insertPodcastEpisode(...)` call above (matching how the existing `it('excludes a track that is not yet completed', ...)` test in the same file already demonstrates the filter exists). Apply the same check to `insertMusicTrack`'s default for the music-side tests.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `npx vitest run tests/integration/musicTrackSearchLimit.test.ts tests/integration/podcastEpisodeSearchLimit.test.ts`
-Expected: These actually PASS immediately since `clampLimit` is defined inline in the test file, not imported from the route. This is expected — Step 2 here just confirms the test file itself runs cleanly before wiring the real route. Proceed to Step 3 regardless.
+Run: `npx vitest run tests/integration/music-tracks-search.test.ts tests/integration/podcast-episodes-search.test.ts`
+Expected: FAIL — both new tests in each file get back all matching rows (5 and 3 respectively) instead of the requested/clamped count, because `?limit=` is not yet read by either route (both still hardcode `LIMIT 200`).
 
 - [ ] **Step 3: Wire the real `limit` param into both routes**
 
@@ -421,18 +430,13 @@ Apply the identical change to `server/api/podcasts/episodes/search.get.ts`: add 
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `npx vitest run tests/integration/musicTrackSearchLimit.test.ts tests/integration/podcastEpisodeSearchLimit.test.ts`
-Expected: PASS (4 tests each, 8 total)
-
-Also run the full existing suites for both files to confirm no regression to default (omitted-limit) behavior:
-
-Run: `npx vitest run tests/unit tests/integration -t "search"`
-Expected: PASS, no regressions
+Run: `npx vitest run tests/integration/music-tracks-search.test.ts tests/integration/podcast-episodes-search.test.ts`
+Expected: PASS — all pre-existing tests in both files still pass (confirming the default/omitted-limit behavior is unchanged) plus the 2 new tests in each file (4 new total)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/api/music/tracks/search.get.ts server/api/podcasts/episodes/search.get.ts tests/integration/musicTrackSearchLimit.test.ts tests/integration/podcastEpisodeSearchLimit.test.ts
+git add server/api/music/tracks/search.get.ts server/api/podcasts/episodes/search.get.ts tests/integration/music-tracks-search.test.ts tests/integration/podcast-episodes-search.test.ts
 git commit -m "feat: add optional limit param to music/podcast search endpoints"
 ```
 
