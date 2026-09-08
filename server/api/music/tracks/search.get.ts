@@ -17,13 +17,23 @@ export default defineEventHandler(async (event) => {
     whereClauses.push(visClause);
   }
 
+  let joinFtsSql = '';
+  let orderBySql = 'ORDER BY t.title ASC';
+
   if (search) {
     try {
       const ftsQuery = search.split(/\s+/).filter(Boolean).map(word => `"${word.replace(/"/g, '""')}"*`).join(' AND ');
       if (ftsQuery) {
         db.prepare('SELECT 1 FROM music_tracks_fts WHERE music_tracks_fts MATCH ? LIMIT 1').get(ftsQuery);
-        whereClauses.push('t.id IN (SELECT id FROM music_tracks_fts WHERE music_tracks_fts MATCH ?)');
+        // Direct JOIN (not a subquery filter) so FTS5's built-in `rank`
+        // column is available to order by — a subquery `id IN (SELECT id
+        // FROM ... WHERE ... MATCH ?)` filters correctly but exposes no
+        // relevance signal, forcing a fallback to alphabetical ordering
+        // even for a real full-text match. `rank` only exists on rows
+        // actually joined against the FTS virtual table via MATCH.
+        joinFtsSql = 'JOIN music_tracks_fts fts ON fts.id = t.id AND music_tracks_fts MATCH ?';
         params.push(ftsQuery);
+        orderBySql = 'ORDER BY fts.rank';
       }
     } catch (e) {
       whereClauses.push('(t.title LIKE ? OR a.name LIKE ? OR al.title LIKE ?)');
@@ -40,8 +50,9 @@ export default defineEventHandler(async (event) => {
     FROM music_tracks t
     JOIN music_artists a ON t.artist_id = a.id
     LEFT JOIN music_albums al ON t.album_id = al.id
+    ${joinFtsSql}
     ${whereSql}
-    ORDER BY t.title ASC
+    ${orderBySql}
     LIMIT 200
   `).all(...params);
 

@@ -17,13 +17,20 @@ export default defineEventHandler(async (event) => {
     whereClauses.push(visClause);
   }
 
+  let joinFtsSql = '';
+  let orderBySql = 'ORDER BY e.title ASC';
+
   if (search) {
     try {
       const ftsQuery = search.split(/\s+/).filter(Boolean).map(word => `"${word.replace(/"/g, '""')}"*`).join(' AND ');
       if (ftsQuery) {
         db.prepare('SELECT 1 FROM podcast_episodes_fts WHERE podcast_episodes_fts MATCH ? LIMIT 1').get(ftsQuery);
-        whereClauses.push('e.id IN (SELECT id FROM podcast_episodes_fts WHERE podcast_episodes_fts MATCH ?)');
+        // See the equivalent comment in music/tracks/search.get.ts: a direct
+        // JOIN (not a subquery filter) exposes FTS5's `rank` column so real
+        // full-text matches can be ordered by relevance instead of title.
+        joinFtsSql = 'JOIN podcast_episodes_fts fts ON fts.id = e.id AND podcast_episodes_fts MATCH ?';
         params.push(ftsQuery);
+        orderBySql = 'ORDER BY fts.rank';
       }
     } catch (e) {
       whereClauses.push('(e.title LIKE ? OR e.description LIKE ? OR s.title LIKE ?)');
@@ -39,8 +46,9 @@ export default defineEventHandler(async (event) => {
            s.title as show_title, s.cover_url as show_cover_url
     FROM podcast_episodes e
     JOIN podcast_shows s ON e.show_id = s.id
+    ${joinFtsSql}
     ${whereSql}
-    ORDER BY e.title ASC
+    ${orderBySql}
     LIMIT 200
   `).all(...params);
 
