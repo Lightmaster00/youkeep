@@ -154,12 +154,51 @@
           </button>
         </div>
       </div>
+
+      <div class="config-section glass-panel">
+        <div class="section-title-row">
+          <div class="icon-orb bg-pink">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </div>
+          <div>
+            <h3>Search Platforms</h3>
+            <p class="section-desc">Optional API keys that improve admin ingest-search results for podcasts and YouTube channels.</p>
+          </div>
+        </div>
+
+        <div v-for="platform in searchPlatforms" :key="platform.id" class="mt-3 pt-3 border-t">
+          <h4 class="results-header">{{ platformLabels[platform.id] }}</h4>
+          <form @submit.prevent="handleSaveSearchPlatform(platform.id)" class="ingest-form mt-2">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                v-model="platform.apiKey"
+                placeholder="API Key"
+                class="form-input settings-search-input"
+                :disabled="savingPlatformId === platform.id"
+              />
+            </div>
+            <div class="search-input-wrapper" v-if="platform.id === 'podcastindex'">
+              <input
+                type="password"
+                v-model="platform.apiSecret"
+                placeholder="API Secret"
+                class="form-input settings-search-input"
+                :disabled="savingPlatformId === platform.id"
+              />
+            </div>
+            <button type="submit" class="btn btn-secondary-dark" :disabled="savingPlatformId === platform.id">
+              {{ savingPlatformId === platform.id ? 'Saving...' : 'Save' }}
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted } from 'vue';
+import { ref, watch, onUnmounted, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 
@@ -300,4 +339,43 @@ function formatBytes(bytes: number): string {
   }
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
+
+const searchPlatforms = ref<{ id: string; apiKey: string; apiSecret: string }[]>([]);
+const savingPlatformId = ref<string | null>(null);
+const platformLabels: Record<string, string> = {
+  podcastindex: 'PodcastIndex',
+  listennotes: 'Listen Notes',
+  youtube_data_api: 'YouTube Data API'
+};
+
+const fetchSearchPlatforms = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/system/search-platforms');
+    searchPlatforms.value = data.platforms || [];
+  } catch (err) {
+    console.error('Failed to fetch search platforms:', err);
+  }
+};
+
+const handleSaveSearchPlatform = async (id: string) => {
+  const platform = searchPlatforms.value.find((p) => p.id === id);
+  if (!platform) return;
+
+  savingPlatformId.value = id;
+  try {
+    await $fetch('/api/admin/system/search-platforms', {
+      method: 'POST',
+      body: { id: platform.id, apiKey: platform.apiKey, apiSecret: platform.apiSecret }
+    });
+    toast.success(`${platformLabels[id]} credentials saved.`);
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || `Failed to save ${platformLabels[id]} credentials.`);
+  } finally {
+    savingPlatformId.value = null;
+  }
+};
+
+onMounted(() => {
+  fetchSearchPlatforms();
+});
 </script>

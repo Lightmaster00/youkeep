@@ -223,41 +223,6 @@
           </div>
         </div>
 
-        <div class="ingest-box glass-panel mt-4">
-          <div class="section-title-row">
-            <div class="icon-orb bg-blue">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            </div>
-            <div>
-              <h3>PodcastIndex API (optional)</h3>
-              <p class="section-desc">Improves search coverage for independent/less mainstream podcasts. Free key at podcastindex.org.</p>
-            </div>
-          </div>
-
-          <form @submit.prevent="handleSavePodcastIndexCredentials" class="ingest-form mt-3">
-            <div class="search-input-wrapper">
-              <input
-                type="text"
-                v-model="podcastIndexApiKey"
-                placeholder="API Key"
-                class="form-input settings-search-input"
-                :disabled="savingPodcastIndexCredentials"
-              />
-            </div>
-            <div class="search-input-wrapper">
-              <input
-                type="password"
-                v-model="podcastIndexApiSecret"
-                placeholder="API Secret"
-                class="form-input settings-search-input"
-                :disabled="savingPodcastIndexCredentials"
-              />
-            </div>
-            <button type="submit" class="btn btn-secondary-dark" :disabled="savingPodcastIndexCredentials">
-              {{ savingPodcastIndexCredentials ? 'Saving...' : 'Save' }}
-            </button>
-          </form>
-        </div>
       </div>
 
       <!-- Right Side: Queue -->
@@ -376,38 +341,6 @@ const handleSearchPodcastShow = async () => {
 const selectPodcastShowCandidate = (show: any) => {
   podcastFeedInput.value = show.feedUrl || '';
   podcastShowSearchResults.value = [];
-};
-
-const podcastIndexApiKey = ref('');
-const podcastIndexApiSecret = ref('');
-const savingPodcastIndexCredentials = ref(false);
-
-const fetchPodcastIndexCredentials = async () => {
-  try {
-    const data = await $fetch<any>('/api/admin/podcasts/podcastindex-credentials');
-    podcastIndexApiKey.value = data.apiKey || '';
-    podcastIndexApiSecret.value = data.apiSecret || '';
-  } catch (err) {
-    console.error('Failed to fetch PodcastIndex credentials:', err);
-  }
-};
-
-const handleSavePodcastIndexCredentials = async () => {
-  savingPodcastIndexCredentials.value = true;
-  try {
-    await $fetch('/api/admin/podcasts/podcastindex-credentials', {
-      method: 'POST',
-      body: {
-        apiKey: podcastIndexApiKey.value,
-        apiSecret: podcastIndexApiSecret.value
-      }
-    });
-    toast.success('PodcastIndex credentials saved.');
-  } catch (err: any) {
-    toast.error(err.data?.statusMessage || 'Failed to save PodcastIndex credentials.');
-  } finally {
-    savingPodcastIndexCredentials.value = false;
-  }
 };
 
 const togglePodcastPause = async () => {
@@ -599,6 +532,5 @@ const formatStatus = (status: string) => {
 onMounted(() => {
   fetchPodcastConcurrency();
   fetchPodcastSchedule();
-  fetchPodcastIndexCredentials();
 });
 </script>
