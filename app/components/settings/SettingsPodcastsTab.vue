@@ -92,6 +92,50 @@
             </div>
           </div>
 
+          <form @submit.prevent="handleSearchPodcastShow" class="ingest-form mt-3">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                v-model="podcastShowSearchInput"
+                placeholder="Podcast show name (e.g. Planet Money...)"
+                class="form-input settings-search-input"
+                required
+                :disabled="searchingPodcastShow"
+              />
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+            <button type="submit" class="btn btn-primary" :disabled="searchingPodcastShow">
+              <span v-if="searchingPodcastShow">Searching...</span>
+              <span v-else>Search Podcast</span>
+            </button>
+          </form>
+
+          <div v-if="podcastShowSearchResults.length > 0" class="search-results-list mt-4">
+            <h4 class="results-header">Matching Podcasts :</h4>
+            <div class="search-results-grid">
+              <div v-for="s in podcastShowSearchResults" :key="s.feedUrl" class="search-channel-card">
+                <img
+                  :src="s.artworkUrl || '/img/default-avatar.png'"
+                  class="channel-avatar-thumb"
+                  referrerpolicy="no-referrer"
+                  @error="($event) => { const target = $event.target as HTMLImageElement; if (target) { target.src = '/img/default-avatar.png'; } }"
+                />
+                <div class="channel-search-info">
+                  <h5>{{ s.title }}</h5>
+                  <p class="channel-search-meta">
+                    <span>{{ s.author }}</span>
+                  </p>
+                  <p class="channel-search-desc" v-if="s.description">{{ s.description }}</p>
+                </div>
+                <button @click="selectPodcastShowCandidate(s)" class="btn btn-primary btn-xs">
+                  Suivre
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p class="section-desc mt-3">Or paste the RSS feed URL directly:</p>
+
           <form @submit.prevent="handleAddPodcastShow" class="ingest-form mt-3">
             <div class="search-input-wrapper">
               <input
@@ -177,6 +221,42 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <div class="ingest-box glass-panel mt-4">
+          <div class="section-title-row">
+            <div class="icon-orb bg-blue">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            </div>
+            <div>
+              <h3>PodcastIndex API (optional)</h3>
+              <p class="section-desc">Improves search coverage for independent/less mainstream podcasts. Free key at podcastindex.org.</p>
+            </div>
+          </div>
+
+          <form @submit.prevent="handleSavePodcastIndexCredentials" class="ingest-form mt-3">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                v-model="podcastIndexApiKey"
+                placeholder="API Key"
+                class="form-input settings-search-input"
+                :disabled="savingPodcastIndexCredentials"
+              />
+            </div>
+            <div class="search-input-wrapper">
+              <input
+                type="password"
+                v-model="podcastIndexApiSecret"
+                placeholder="API Secret"
+                class="form-input settings-search-input"
+                :disabled="savingPodcastIndexCredentials"
+              />
+            </div>
+            <button type="submit" class="btn btn-secondary-dark" :disabled="savingPodcastIndexCredentials">
+              {{ savingPodcastIndexCredentials ? 'Saving...' : 'Save' }}
+            </button>
+          </form>
         </div>
       </div>
 
@@ -267,6 +347,68 @@ const podcastIngestMessage = ref('');
 const podcastIngestSuccess = ref(false);
 const syncingShowId = ref<string | null>(null);
 const pausingShowId = ref<string | null>(null);
+
+const podcastShowSearchInput = ref('');
+const searchingPodcastShow = ref(false);
+const podcastShowSearchResults = ref<any[]>([]);
+
+const handleSearchPodcastShow = async () => {
+  const q = podcastShowSearchInput.value.trim();
+  if (!q) return;
+
+  searchingPodcastShow.value = true;
+  podcastShowSearchResults.value = [];
+  try {
+    const data = await $fetch<any>('/api/admin/podcasts/search-shows', {
+      params: { q }
+    });
+    podcastShowSearchResults.value = data.shows || [];
+    if (podcastShowSearchResults.value.length === 0) {
+      toast.info('No podcasts found for this search.');
+    }
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Search failed.');
+  } finally {
+    searchingPodcastShow.value = false;
+  }
+};
+
+const selectPodcastShowCandidate = (show: any) => {
+  podcastFeedInput.value = show.feedUrl || '';
+  podcastShowSearchResults.value = [];
+};
+
+const podcastIndexApiKey = ref('');
+const podcastIndexApiSecret = ref('');
+const savingPodcastIndexCredentials = ref(false);
+
+const fetchPodcastIndexCredentials = async () => {
+  try {
+    const data = await $fetch<any>('/api/admin/podcasts/podcastindex-credentials');
+    podcastIndexApiKey.value = data.apiKey || '';
+    podcastIndexApiSecret.value = data.apiSecret || '';
+  } catch (err) {
+    console.error('Failed to fetch PodcastIndex credentials:', err);
+  }
+};
+
+const handleSavePodcastIndexCredentials = async () => {
+  savingPodcastIndexCredentials.value = true;
+  try {
+    await $fetch('/api/admin/podcasts/podcastindex-credentials', {
+      method: 'POST',
+      body: {
+        apiKey: podcastIndexApiKey.value,
+        apiSecret: podcastIndexApiSecret.value
+      }
+    });
+    toast.success('PodcastIndex credentials saved.');
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Failed to save PodcastIndex credentials.');
+  } finally {
+    savingPodcastIndexCredentials.value = false;
+  }
+};
 
 const togglePodcastPause = async () => {
   pausingOrResumingPodcast.value = true;
@@ -457,5 +599,6 @@ const formatStatus = (status: string) => {
 onMounted(() => {
   fetchPodcastConcurrency();
   fetchPodcastSchedule();
+  fetchPodcastIndexCredentials();
 });
 </script>
