@@ -27,7 +27,8 @@ export default defineEventHandler(async (event) => {
 
     const fetchItunes = async (): Promise<any[]> => {
       const data = await globalThis.$fetch<any>('https://itunes.apple.com/search', {
-        params: { media: 'podcast', term: q, limit: 25 }
+        params: { media: 'podcast', term: q, limit: 25 },
+        parseResponse: JSON.parse,
       });
       return Array.isArray(data?.results) ? data.results : [];
     };
