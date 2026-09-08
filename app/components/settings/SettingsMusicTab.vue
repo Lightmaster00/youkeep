@@ -114,6 +114,52 @@
             </div>
           </div>
 
+          <form @submit.prevent="handleSearchMusicArtist" class="ingest-form mt-3">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                v-model="musicArtistSearchInput"
+                placeholder="Artist or channel name (e.g. Stromae, Angèle...)"
+                class="form-input settings-search-input"
+                required
+                :disabled="searchingMusicArtist"
+              />
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </div>
+            <button type="submit" class="btn btn-primary" :disabled="searchingMusicArtist">
+              <span v-if="searchingMusicArtist">Searching...</span>
+              <span v-else>Search Artist</span>
+            </button>
+          </form>
+
+          <div v-if="musicArtistSearchResults.length > 0" class="search-results-list mt-4">
+            <h4 class="results-header">Matching Channels :</h4>
+            <div class="search-results-grid">
+              <div v-for="ch in musicArtistSearchResults" :key="ch.id" class="search-channel-card">
+                <img
+                  :src="ch.avatarUrl || '/img/default-avatar.png'"
+                  class="channel-avatar-thumb"
+                  referrerpolicy="no-referrer"
+                  @error="($event) => { const target = $event.target as HTMLImageElement; if (target) { target.src = '/img/default-avatar.png'; } }"
+                />
+                <div class="channel-search-info">
+                  <h5>{{ ch.title }}</h5>
+                  <p class="channel-search-meta">
+                    <span class="subscribers">{{ ch.subscriberCount }} subs</span>
+                    <span class="meta-dot">•</span>
+                    <span class="videos-count">{{ ch.videoCount }} videos</span>
+                  </p>
+                  <p class="channel-search-desc" v-if="ch.description">{{ ch.description }}</p>
+                </div>
+                <button @click="selectMusicArtistCandidate(ch)" class="btn btn-primary btn-xs">
+                  Suivre
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p class="section-desc mt-3">Or paste the URL/handle directly:</p>
+
           <form @submit.prevent="handleAddMusicArtist" class="ingest-form mt-3">
             <div class="search-input-wrapper">
               <input
@@ -338,6 +384,36 @@ const musicIngestMessage = ref('');
 const musicIngestSuccess = ref(false);
 const syncingArtistId = ref<string | null>(null);
 const pausingArtistId = ref<string | null>(null);
+
+const musicArtistSearchInput = ref('');
+const searchingMusicArtist = ref(false);
+const musicArtistSearchResults = ref<any[]>([]);
+
+const handleSearchMusicArtist = async () => {
+  const q = musicArtistSearchInput.value.trim();
+  if (!q) return;
+
+  searchingMusicArtist.value = true;
+  musicArtistSearchResults.value = [];
+  try {
+    const data = await $fetch<any>('/api/admin/downloader/search-channels', {
+      params: { q }
+    });
+    musicArtistSearchResults.value = data.channels || [];
+    if (musicArtistSearchResults.value.length === 0) {
+      toast.info('No channels found for this search.');
+    }
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Search failed.');
+  } finally {
+    searchingMusicArtist.value = false;
+  }
+};
+
+const selectMusicArtistCandidate = (channel: any) => {
+  musicArtistInput.value = channel.handle || channel.id || '';
+  musicArtistSearchResults.value = [];
+};
 
 const toggleMusicPause = async () => {
   pausingOrResumingMusic.value = true;
