@@ -29,8 +29,8 @@ export default defineEventHandler(async (event) => {
         .map(normalizeYoutubeDataApiChannel)
         .filter((c: any): c is NonNullable<typeof c> => c !== null);
       return { channels };
-    } catch (err) {
-      console.error('[admin/downloader/search-channels] YouTube Data API failed, falling back to scraping', err);
+    } catch (err: any) {
+      console.error('[admin/downloader/search-channels] YouTube Data API failed, falling back to scraping:', err?.statusCode || err?.status || 'unknown status', err?.statusMessage || err?.message || '');
     }
   }
 

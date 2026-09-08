@@ -487,17 +487,24 @@ export function getDb(): Database.Database {
 
   // One-time migration: carry forward any previously-saved PodcastIndex
   // credentials from the old named settings rows into the new generic
-  // search_platforms table. Idempotent — only copies when the new row is
-  // still empty and the old values are non-empty, so this is safe to run
-  // on every server start.
-  const oldPodcastIndexKeyRow = db.prepare("SELECT value FROM settings WHERE key = 'podcastindex_api_key'").get() as { value: string } | undefined;
-  const oldPodcastIndexSecretRow = db.prepare("SELECT value FROM settings WHERE key = 'podcastindex_api_secret'").get() as { value: string } | undefined;
-  const newPodcastIndexRow = db.prepare("SELECT api_key, api_secret FROM search_platforms WHERE id = 'podcastindex'").get() as { api_key: string; api_secret: string } | undefined;
-  const hasOldPodcastIndexValue = !!(oldPodcastIndexKeyRow?.value || oldPodcastIndexSecretRow?.value);
-  const newPodcastIndexRowIsEmpty = !!newPodcastIndexRow && !newPodcastIndexRow.api_key && !newPodcastIndexRow.api_secret;
-  if (newPodcastIndexRowIsEmpty && hasOldPodcastIndexValue) {
-    db.prepare("UPDATE search_platforms SET api_key = ?, api_secret = ?, updated_at = ? WHERE id = 'podcastindex'")
-      .run(oldPodcastIndexKeyRow?.value || '', oldPodcastIndexSecretRow?.value || '', Date.now());
+  // search_platforms table. Gated on a dedicated migration-done flag (not
+  // on "destination still empty") so it genuinely runs exactly once ever —
+  // otherwise clearing the key via the new Search Platforms panel and
+  // restarting the server would silently resurrect the old value forever,
+  // since nothing writes the old settings rows anymore.
+  const migrationFlagRow = db.prepare("SELECT value FROM settings WHERE key = 'search_platforms_migrated'").get() as { value: string } | undefined;
+  if (migrationFlagRow?.value !== '1') {
+    const oldPodcastIndexKeyRow = db.prepare("SELECT value FROM settings WHERE key = 'podcastindex_api_key'").get() as { value: string } | undefined;
+    const oldPodcastIndexSecretRow = db.prepare("SELECT value FROM settings WHERE key = 'podcastindex_api_secret'").get() as { value: string } | undefined;
+    if (oldPodcastIndexKeyRow?.value || oldPodcastIndexSecretRow?.value) {
+      db.prepare("UPDATE search_platforms SET api_key = ?, api_secret = ?, updated_at = ? WHERE id = 'podcastindex'")
+        .run(oldPodcastIndexKeyRow?.value || '', oldPodcastIndexSecretRow?.value || '', Date.now());
+    }
+    if (migrationFlagRow === undefined) {
+      db.prepare("INSERT INTO settings (key, value) VALUES ('search_platforms_migrated', '1')").run();
+    } else {
+      db.prepare("UPDATE settings SET value = '1' WHERE key = 'search_platforms_migrated'").run();
+    }
   }
 
   const sponsorBlockCategorySeeds = ['sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'filler'];

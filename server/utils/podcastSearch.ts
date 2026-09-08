@@ -39,9 +39,9 @@ export function normalizeListenNotesResult(raw: any): ShowCandidate | null {
   if (!feedUrl) return null;
 
   return {
-    title: raw.title || 'Sans nom',
-    author: raw.publisher || '',
-    description: raw.description || '',
+    title: raw.title_original || raw.title || 'Sans nom',
+    author: raw.publisher_original || raw.publisher || '',
+    description: raw.description_original || raw.description || '',
     artworkUrl: raw.image || '',
     feedUrl,
   };

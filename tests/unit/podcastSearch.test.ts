@@ -166,7 +166,24 @@ describe('computePodcastIndexAuthHeaders', () => {
 });
 
 describe('normalizeListenNotesResult', () => {
-  it('maps a Listen Notes result to a ShowCandidate', () => {
+  it('maps a Listen Notes result to a ShowCandidate using the real search-result field names', () => {
+    const result = normalizeListenNotesResult({
+      title_original: 'Planet Money',
+      publisher_original: 'NPR',
+      description_original: 'The economy explained.',
+      image: 'https://example.com/art3.jpg',
+      rss: 'https://feeds.npr.org/510289/podcast.xml',
+    });
+    expect(result).toEqual({
+      title: 'Planet Money',
+      author: 'NPR',
+      description: 'The economy explained.',
+      artworkUrl: 'https://example.com/art3.jpg',
+      feedUrl: 'https://feeds.npr.org/510289/podcast.xml',
+    });
+  });
+
+  it('falls back to the plain title/publisher/description fields when the _original variants are absent', () => {
     const result = normalizeListenNotesResult({
       title: 'Planet Money',
       publisher: 'NPR',
@@ -184,8 +201,8 @@ describe('normalizeListenNotesResult', () => {
   });
 
   it('returns null when rss is missing or empty', () => {
-    expect(normalizeListenNotesResult({ title: 'No Feed' })).toBeNull();
-    expect(normalizeListenNotesResult({ title: 'Empty Feed', rss: '   ' })).toBeNull();
+    expect(normalizeListenNotesResult({ title_original: 'No Feed' })).toBeNull();
+    expect(normalizeListenNotesResult({ title_original: 'Empty Feed', rss: '   ' })).toBeNull();
   });
 
   it('falls back to empty author/description/artworkUrl when those fields are missing', () => {
