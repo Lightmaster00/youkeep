@@ -8,6 +8,8 @@ export default defineEventHandler(async (event) => {
 
   const query = getQuery(event);
   const search = query.q ? String(query.q).trim() : '';
+  const rawLimit = parseInt(String(query.limit ?? '200'), 10);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 200;
 
   const whereClauses: string[] = ["e.download_status = 'completed'"];
   const params: any[] = [];
@@ -49,8 +51,8 @@ export default defineEventHandler(async (event) => {
     ${joinFtsSql}
     ${whereSql}
     ${orderBySql}
-    LIMIT 200
-  `).all(...params);
+    LIMIT ?
+  `).all(...params, limit);
 
   return { episodes };
 });

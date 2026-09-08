@@ -104,4 +104,26 @@ describe('GET /api/music/tracks/search', () => {
     const result: any = await handler(guestEvent('/api/music/tracks/search?q=Downloading'));
     expect(result.tracks).toEqual([]);
   });
+
+  it('caps results at the requested limit', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Prolific Artist' });
+    for (let i = 1; i <= 5; i++) {
+      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
+      db.prepare("UPDATE music_tracks SET title = ? WHERE id = ?").run(`Limit Test ${i}`, `t${i}`);
+    }
+
+    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Limit&limit=2'));
+    expect(result.tracks).toHaveLength(2);
+  });
+
+  it('clamps a requested limit above 200 down to 200', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Prolific Artist' });
+    for (let i = 1; i <= 3; i++) {
+      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
+      db.prepare("UPDATE music_tracks SET title = ? WHERE id = ?").run(`Clamp Test ${i}`, `t${i}`);
+    }
+
+    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Clamp&limit=500'));
+    expect(result.tracks).toHaveLength(3);
+  });
 });

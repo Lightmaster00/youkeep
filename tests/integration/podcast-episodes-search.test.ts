@@ -94,4 +94,26 @@ describe('GET /api/podcasts/episodes/search', () => {
     const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Downloading'));
     expect(result.episodes).toEqual([]);
   });
+
+  it('caps results at the requested limit', async () => {
+    insertPodcastShow(db, { id: 's1', title: 'Prolific Show' });
+    for (let i = 1; i <= 5; i++) {
+      insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
+      db.prepare("UPDATE podcast_episodes SET title = ? WHERE id = ?").run(`Limit Test ${i}`, `e${i}`);
+    }
+
+    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Limit&limit=2'));
+    expect(result.episodes).toHaveLength(2);
+  });
+
+  it('clamps a requested limit above 200 down to 200', async () => {
+    insertPodcastShow(db, { id: 's1', title: 'Prolific Show' });
+    for (let i = 1; i <= 3; i++) {
+      insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
+      db.prepare("UPDATE podcast_episodes SET title = ? WHERE id = ?").run(`Clamp Test ${i}`, `e${i}`);
+    }
+
+    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Clamp&limit=500'));
+    expect(result.episodes).toHaveLength(3);
+  });
 });
