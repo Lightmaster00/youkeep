@@ -186,7 +186,7 @@ const dropdownItems = computed<{ label: string; sublabel: string }[]>(() => {
 const showDropdown = computed(() => {
   if (!searchFocused.value) return false;
   if (searchQuery.value.trim().length === 0) return historyEntries.value.length > 0;
-  return searchQuery.value.trim().length >= 2;
+  return searchQuery.value.trim().length >= 2 && dropdownItems.value.length > 0;
 });
 
 function refreshHistoryEntries() {
@@ -194,6 +194,7 @@ function refreshHistoryEntries() {
 }
 
 function onSearchInput() {
+  searchFocused.value = true;
   selectedIndex.value = -1;
   const term = searchQuery.value;
   if (term.trim().length === 0) {
