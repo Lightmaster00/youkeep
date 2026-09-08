@@ -419,6 +419,22 @@ watch(search, () => {
 });
 watch([genre, language, year], () => fetchArtists());
 
+// Keep `search` in sync with ?q= so the header search bar's navigation to
+// /music?q=<term> (both in per_space mode, and via /search's "Voir plus de
+// musique" link) actually triggers a search — Vue Router does not remount
+// this component for a query-only navigation to the same route, so this
+// must be a watcher, not just an onMounted read.
+watch(
+  () => route.query.q,
+  (newQ) => {
+    const newSearch = newQ ? String(newQ) : '';
+    if (newSearch !== search.value) {
+      search.value = newSearch;
+    }
+  },
+  { immediate: true }
+);
+
 // --- Detail view state ---
 const artist = ref<any>(null);
 const albums = ref<any[]>([]);

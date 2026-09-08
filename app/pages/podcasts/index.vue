@@ -237,6 +237,22 @@ watch(search, () => {
   }, 300);
 });
 
+// Keep `search` in sync with ?q= so the header search bar's navigation to
+// /podcasts?q=<term> (both in per_space mode, and via /search's "Voir plus
+// de podcasts" link) actually triggers a search — Vue Router does not
+// remount this component for a query-only navigation to the same route, so
+// this must be a watcher, not just an onMounted read.
+watch(
+  () => route.query.q,
+  (newQ) => {
+    const newSearch = newQ ? String(newQ) : '';
+    if (newSearch !== search.value) {
+      search.value = newSearch;
+    }
+  },
+  { immediate: true }
+);
+
 // --- Detail view state ---
 const show = ref<any>(null);
 const episodes = ref<any[]>([]);

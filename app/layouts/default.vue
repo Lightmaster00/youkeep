@@ -236,7 +236,7 @@ const handleSearch = () => {
     router.push({ path: '/search', query: { q: searchQuery.value || undefined } });
     return;
   }
-  router.push({ path: activeSpace.value.homeRoute, query: { ...route.query, q: searchQuery.value || undefined, page: undefined } });
+  router.push({ path: activeSpace.value.homeRoute, query: { ...route.query, q: searchQuery.value || undefined, page: undefined, artistId: undefined, showId: undefined } });
 };
 
 const activeDownloadCount = ref(0);
