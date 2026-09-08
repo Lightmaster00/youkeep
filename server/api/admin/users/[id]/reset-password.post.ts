@@ -33,10 +33,11 @@ export default defineEventHandler(async (event) => {
   const passwordHash = hashPassword(tempPassword);
 
   db.prepare(`
-    UPDATE users 
-    SET password_hash = ?, must_change_password = 1 
+    UPDATE users
+    SET password_hash = ?, must_change_password = 1
     WHERE id = ?
   `).run(passwordHash, userId);
+  db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
 
   return {
     success: true,

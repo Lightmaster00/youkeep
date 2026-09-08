@@ -15,6 +15,7 @@ export default defineEventHandler(async (event) => {
   const passwordHash = hashPassword(password);
   
   db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(passwordHash, userSession.id);
+  db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userSession.id);
 
   return { success: true };
 });

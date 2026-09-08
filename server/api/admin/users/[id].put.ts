@@ -35,6 +35,7 @@ export default defineEventHandler(async (event) => {
     if (password && password.trim().length > 0) {
       const passwordHash = hashPassword(password);
       db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(passwordHash, userId);
+      db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
     }
 
     // If role has changed to admin or if it is admin, clear standard permissions (admins see everything)

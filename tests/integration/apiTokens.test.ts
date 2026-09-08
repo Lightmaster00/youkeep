@@ -100,4 +100,17 @@ describe('getUserFromApiToken', () => {
     const row = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
     expect(row.last_used_at).not.toBeNull();
   });
+
+  it('does not re-update last_used_at on a second lookup within 60 seconds', () => {
+    insertUser(db, { id: 'u1', role: 'user' });
+    const created = createApiToken('u1', 'My Phone');
+
+    getUserFromApiToken(created.token);
+    const firstRow = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
+
+    getUserFromApiToken(created.token);
+    const secondRow = db.prepare('SELECT last_used_at FROM api_tokens WHERE id = ?').get(created.id) as any;
+
+    expect(secondRow.last_used_at).toBe(firstRow.last_used_at);
+  });
 });

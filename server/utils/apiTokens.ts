@@ -61,7 +61,11 @@ export function getUserFromApiToken(token: string): UserSession | null {
 
   if (!row) return null;
 
-  db.prepare('UPDATE api_tokens SET last_used_at = ? WHERE id = ?').run(Date.now(), row.token_id);
+  db.prepare(`
+    UPDATE api_tokens
+    SET last_used_at = ?
+    WHERE id = ? AND (last_used_at IS NULL OR last_used_at < ?)
+  `).run(Date.now(), row.token_id, Date.now() - 60_000);
 
   return {
     id: row.id,
