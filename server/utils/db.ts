@@ -288,6 +288,13 @@ export function getDb(): Database.Database {
       created_at INTEGER NOT NULL,
       FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS search_platforms (
+      id TEXT PRIMARY KEY,
+      api_key TEXT NOT NULL DEFAULT '',
+      api_secret TEXT NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL
+    );
   `);
 
   // Run schema updates if columns are missing (database migration)
@@ -468,6 +475,29 @@ export function getDb(): Database.Database {
   const podcastIndexSecretCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcastindex_api_secret'").get() as { count: number };
   if (podcastIndexSecretCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('podcastindex_api_secret', '')").run();
+  }
+
+  const searchPlatformIds = ['podcastindex', 'listennotes', 'youtube_data_api'];
+  for (const platformId of searchPlatformIds) {
+    const platformCheck = db.prepare('SELECT COUNT(*) as count FROM search_platforms WHERE id = ?').get(platformId) as { count: number };
+    if (platformCheck.count === 0) {
+      db.prepare('INSERT INTO search_platforms (id, api_key, api_secret, updated_at) VALUES (?, ?, ?, ?)').run(platformId, '', '', Date.now());
+    }
+  }
+
+  // One-time migration: carry forward any previously-saved PodcastIndex
+  // credentials from the old named settings rows into the new generic
+  // search_platforms table. Idempotent — only copies when the new row is
+  // still empty and the old values are non-empty, so this is safe to run
+  // on every server start.
+  const oldPodcastIndexKeyRow = db.prepare("SELECT value FROM settings WHERE key = 'podcastindex_api_key'").get() as { value: string } | undefined;
+  const oldPodcastIndexSecretRow = db.prepare("SELECT value FROM settings WHERE key = 'podcastindex_api_secret'").get() as { value: string } | undefined;
+  const newPodcastIndexRow = db.prepare("SELECT api_key, api_secret FROM search_platforms WHERE id = 'podcastindex'").get() as { api_key: string; api_secret: string } | undefined;
+  const hasOldPodcastIndexValue = !!(oldPodcastIndexKeyRow?.value || oldPodcastIndexSecretRow?.value);
+  const newPodcastIndexRowIsEmpty = !!newPodcastIndexRow && !newPodcastIndexRow.api_key && !newPodcastIndexRow.api_secret;
+  if (newPodcastIndexRowIsEmpty && hasOldPodcastIndexValue) {
+    db.prepare("UPDATE search_platforms SET api_key = ?, api_secret = ?, updated_at = ? WHERE id = 'podcastindex'")
+      .run(oldPodcastIndexKeyRow?.value || '', oldPodcastIndexSecretRow?.value || '', Date.now());
   }
 
   const sponsorBlockCategorySeeds = ['sponsor', 'intro', 'outro', 'selfpromo', 'interaction', 'filler'];
