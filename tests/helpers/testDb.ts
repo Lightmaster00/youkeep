@@ -147,8 +147,13 @@ export function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY,
       feed_url TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
+      description TEXT,
+      author TEXT,
+      cover_url TEXT,
+      language TEXT,
       sync_status TEXT DEFAULT 'paused',
       visibility TEXT DEFAULT 'public',
+      last_checked_at INTEGER,
       created_at INTEGER NOT NULL
     );
 
@@ -156,9 +161,14 @@ export function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY,
       show_id TEXT NOT NULL,
       title TEXT NOT NULL,
+      description TEXT,
       audio_url TEXT NOT NULL,
       local_file_path TEXT,
+      local_thumbnail_path TEXT,
       duration INTEGER,
+      episode_number INTEGER,
+      season_number INTEGER,
+      pub_date TEXT,
       download_status TEXT DEFAULT 'pending',
       download_progress INTEGER DEFAULT 0,
       download_speed TEXT,
