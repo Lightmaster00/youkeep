@@ -14,7 +14,7 @@
       />
       <template v-else>
         <div class="video-grid stagger-in">
-          <VideoCard v-for="video in videos" :key="video.id" :video="video" />
+          <VideoCard v-for="video in videos" :key="video.id" :video="video" :search-query="query" />
         </div>
         <NuxtLink :to="{ path: '/', query: { q: query } }" class="search-see-more">Voir plus de vidéos</NuxtLink>
       </template>
@@ -38,7 +38,7 @@
             class="search-result-row"
             @click="playTrack(track)"
           >
-            <span class="search-result-title">{{ track.title }}</span>
+            <span class="search-result-title" v-html="highlightMatch(track.title, query)"></span>
             <span class="search-result-subtitle">{{ track.artist_name }}</span>
           </div>
         </div>
@@ -64,7 +64,7 @@
             class="search-result-row"
             @click="playEpisode(episode)"
           >
-            <span class="search-result-title">{{ episode.title }}</span>
+            <span class="search-result-title" v-html="highlightMatch(episode.title, query)"></span>
             <span class="search-result-subtitle">{{ episode.show_title }}</span>
           </div>
         </div>
@@ -79,6 +79,7 @@ import { ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
+import { highlightMatch } from '../utils/highlightMatch';
 
 const route = useRoute();
 const query = computed(() => (route.query.q ? String(route.query.q) : ''));

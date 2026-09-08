@@ -37,7 +37,8 @@
 
     <!-- Video Details -->
     <div class="video-info">
-      <h4 class="video-title" :title="video.title">{{ video.title }}</h4>
+      <h4 v-if="props.searchQuery" class="video-title" :title="video.title" v-html="highlightMatch(video.title, props.searchQuery)"></h4>
+      <h4 v-else class="video-title" :title="video.title">{{ video.title }}</h4>
       <div v-if="showChannelInfo" class="channel-row">
         <img
           :src="video.channel_avatar || fallbackAvatar"
@@ -67,6 +68,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useVideoPreview } from '~/composables/useVideoPreview';
+import { highlightMatch } from '../utils/highlightMatch';
 
 const props = withDefaults(defineProps<{
   video: {
@@ -84,9 +86,11 @@ const props = withDefaults(defineProps<{
   showChannelInfo?: boolean;
   clickable?: boolean;
   to?: string;
+  searchQuery?: string;
 }>(), {
   showChannelInfo: true,
-  clickable: true
+  clickable: true,
+  searchQuery: ''
 });
 
 defineEmits<{

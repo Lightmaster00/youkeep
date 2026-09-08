@@ -42,7 +42,7 @@
             :class="{ 'now-playing': currentTrack?.id === track.id }"
             @click="playTrackSearchResult(track)"
           >
-            <span class="track-row-title">{{ track.title }}</span>
+            <span class="track-row-title" v-html="highlightMatch(track.title, search)"></span>
             <span class="track-row-artist">{{ track.artist_name }}</span>
           </div>
         </div>
@@ -268,6 +268,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
+import { highlightMatch } from '../../utils/highlightMatch';
 
 const { isAdmin } = useAuth();
 const { currentTrack, clipMode, play: playMusicTrack, setClipMode } = useMusicPlayer();

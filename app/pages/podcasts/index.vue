@@ -27,7 +27,7 @@
             class="episode-search-row"
             @click="playEpisodeSearchResult(episode)"
           >
-            <span class="episode-search-title">{{ episode.title }}</span>
+            <span class="episode-search-title" v-html="highlightMatch(episode.title, search)"></span>
             <span class="episode-search-show">{{ episode.show_title }}</span>
           </div>
         </div>
@@ -150,6 +150,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
+import { highlightMatch } from '../../utils/highlightMatch';
 
 const { isAdmin } = useAuth();
 const { play: playPodcastEpisode } = usePodcastPlayer();

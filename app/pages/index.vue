@@ -40,7 +40,7 @@
 
       <h3 class="row-title">Videos matching "{{ searchQuery }}"</h3>
       <div class="video-grid stagger-in">
-        <VideoCard v-for="video in allVideos" :key="video.id" :video="video" @hidden="onVideoHidden" />
+        <VideoCard v-for="video in allVideos" :key="video.id" :video="video" :search-query="searchQuery" @hidden="onVideoHidden" />
       </div>
 
       <!-- Search Pagination -->
