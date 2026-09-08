@@ -400,6 +400,117 @@ export function getDb(): Database.Database {
     console.error('FTS5 virtual table initialization warning (ensure your SQLite build supports FTS5):', err);
   }
 
+  // Setup FTS5 Virtual Table for Music Track Search (if not exists)
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS music_tracks_fts USING fts5(
+        id UNINDEXED,
+        title,
+        artist_name,
+        album_title,
+        genre,
+        tokenize='porter'
+      );
+    `);
+
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS music_tracks_ai AFTER INSERT ON music_tracks BEGIN
+        INSERT INTO music_tracks_fts(rowid, id, title, artist_name, album_title, genre)
+        VALUES (
+          new.rowid,
+          new.id,
+          new.title,
+          (SELECT name FROM music_artists WHERE id = new.artist_id),
+          (SELECT title FROM music_albums WHERE id = new.album_id),
+          new.genre
+        );
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS music_tracks_ad AFTER DELETE ON music_tracks BEGIN
+        DELETE FROM music_tracks_fts WHERE rowid = old.rowid;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS music_tracks_au AFTER UPDATE ON music_tracks BEGIN
+        DELETE FROM music_tracks_fts WHERE rowid = old.rowid;
+
+        INSERT INTO music_tracks_fts(rowid, id, title, artist_name, album_title, genre)
+        VALUES (
+          new.rowid,
+          new.id,
+          new.title,
+          (SELECT name FROM music_artists WHERE id = new.artist_id),
+          (SELECT title FROM music_albums WHERE id = new.album_id),
+          new.genre
+        );
+      END;
+    `);
+
+    db.exec(`
+      INSERT INTO music_tracks_fts(rowid, id, title, artist_name, album_title, genre)
+      SELECT rowid, id, title,
+        (SELECT name FROM music_artists WHERE id = music_tracks.artist_id),
+        (SELECT title FROM music_albums WHERE id = music_tracks.album_id),
+        genre
+      FROM music_tracks
+      WHERE rowid NOT IN (SELECT rowid FROM music_tracks_fts);
+    `);
+  } catch (err) {
+    console.error('FTS5 virtual table initialization warning (music_tracks_fts):', err);
+  }
+
+  // Setup FTS5 Virtual Table for Podcast Episode Search (if not exists)
+  try {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS podcast_episodes_fts USING fts5(
+        id UNINDEXED,
+        title,
+        description,
+        show_title,
+        tokenize='porter'
+      );
+    `);
+
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS podcast_episodes_ai AFTER INSERT ON podcast_episodes BEGIN
+        INSERT INTO podcast_episodes_fts(rowid, id, title, description, show_title)
+        VALUES (
+          new.rowid,
+          new.id,
+          new.title,
+          new.description,
+          (SELECT title FROM podcast_shows WHERE id = new.show_id)
+        );
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS podcast_episodes_ad AFTER DELETE ON podcast_episodes BEGIN
+        DELETE FROM podcast_episodes_fts WHERE rowid = old.rowid;
+      END;
+
+      CREATE TRIGGER IF NOT EXISTS podcast_episodes_au AFTER UPDATE ON podcast_episodes BEGIN
+        DELETE FROM podcast_episodes_fts WHERE rowid = old.rowid;
+
+        INSERT INTO podcast_episodes_fts(rowid, id, title, description, show_title)
+        VALUES (
+          new.rowid,
+          new.id,
+          new.title,
+          new.description,
+          (SELECT title FROM podcast_shows WHERE id = new.show_id)
+        );
+      END;
+    `);
+
+    db.exec(`
+      INSERT INTO podcast_episodes_fts(rowid, id, title, description, show_title)
+      SELECT rowid, id, title, description,
+        (SELECT title FROM podcast_shows WHERE id = podcast_episodes.show_id)
+      FROM podcast_episodes
+      WHERE rowid NOT IN (SELECT rowid FROM podcast_episodes_fts);
+    `);
+  } catch (err) {
+    console.error('FTS5 virtual table initialization warning (podcast_episodes_fts):', err);
+  }
+
   // Seed settings if missing
   const settingsCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'downloader_paused'").get() as { count: number };
   if (settingsCheck.count === 0) {
@@ -551,6 +662,12 @@ export function getDb(): Database.Database {
   if (musicModuleEnabledCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('music_module_enabled', '1')").run();
     console.log('Seeded setting music_module_enabled: 1');
+  }
+
+  const contentSearchModeCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'content_search_mode'").get() as { count: number };
+  if (contentSearchModeCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('content_search_mode', 'per_space')").run();
+    console.log('Seeded setting content_search_mode: per_space');
   }
 
   const musicDownloadClipsCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_download_clips'").get() as { count: number };
