@@ -193,6 +193,25 @@
           </form>
         </div>
       </div>
+
+      <div class="config-section glass-panel">
+        <div class="section-title-row">
+          <div class="icon-orb bg-pink">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </div>
+          <div>
+            <h3>Recherche</h3>
+            <p class="section-desc">Contrôle la barre de recherche du header : recherche isolée par espace, ou recherche globale sur une page dédiée regroupant vidéos, musique et podcasts.</p>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <select v-model="contentSearchMode" @change="handleSaveContentSearchMode" class="form-select" :disabled="savingContentSearchMode">
+            <option value="per_space">Par espace</option>
+            <option value="global">Globale</option>
+          </select>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -375,7 +394,35 @@ const handleSaveSearchPlatform = async (id: string) => {
   }
 };
 
+const contentSearchMode = ref('per_space');
+const savingContentSearchMode = ref(false);
+
+const fetchContentSearchMode = async () => {
+  try {
+    const data = await $fetch<any>('/api/settings/content-search-mode');
+    contentSearchMode.value = data.mode || 'per_space';
+  } catch (err) {
+    console.error('Failed to fetch content search mode:', err);
+  }
+};
+
+const handleSaveContentSearchMode = async () => {
+  savingContentSearchMode.value = true;
+  try {
+    await $fetch('/api/admin/settings/content-search-mode', {
+      method: 'POST',
+      body: { mode: contentSearchMode.value }
+    });
+    toast.success('Mode de recherche mis à jour.');
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Échec de la mise à jour du mode de recherche.');
+  } finally {
+    savingContentSearchMode.value = false;
+  }
+};
+
 onMounted(() => {
   fetchSearchPlatforms();
+  fetchContentSearchMode();
 });
 </script>
