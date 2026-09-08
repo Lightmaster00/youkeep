@@ -6,37 +6,61 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Rechercher un podcast..."
+          placeholder="Rechercher un podcast ou un épisode..."
           class="form-input podcast-search-input"
         />
       </div>
 
-      <div v-if="gridPending" class="podcast-loading">Chargement...</div>
-
-      <div v-else-if="gridError" class="podcast-error">Erreur lors du chargement des podcasts.</div>
-
-      <EmptyState
-        v-else-if="shows.length === 0"
-        icon="music"
-        :title="search ? 'Aucun résultat' : 'Aucun podcast archivé'"
-        :description="search ? 'Aucun résultat pour cette recherche.' : 'Aucun podcast archivé pour l\'instant.'"
-      />
-
-      <div v-else class="show-grid">
-        <div
-          v-for="s in shows"
-          :key="s.id"
-          class="show-card"
-          @click="router.push({ path: '/podcasts', query: { showId: s.id } })"
-        >
-          <img :src="s.cover_url || fallbackCover" @error="handleCoverError" class="show-card-cover" alt="" />
-          <div class="show-card-body">
-            <h3 class="show-card-title">{{ s.title }}</h3>
-            <p class="show-card-meta">{{ s.episode_count }} épisode(s)</p>
-            <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(s.visibility)">{{ formatVisibility(s.visibility) }}</span>
+      <template v-if="search">
+        <div v-if="episodeSearchPending" class="podcast-loading">Chargement...</div>
+        <div v-else-if="episodeSearchError" class="podcast-error">Erreur lors de la recherche.</div>
+        <EmptyState
+          v-else-if="episodeSearchResults.length === 0"
+          icon="music"
+          title="Aucun résultat"
+          description="Aucun épisode ne correspond à cette recherche."
+        />
+        <div v-else class="episode-search-results">
+          <div
+            v-for="episode in episodeSearchResults"
+            :key="episode.id"
+            class="episode-search-row"
+            @click="playEpisodeSearchResult(episode)"
+          >
+            <span class="episode-search-title">{{ episode.title }}</span>
+            <span class="episode-search-show">{{ episode.show_title }}</span>
           </div>
         </div>
-      </div>
+      </template>
+
+      <template v-else>
+        <div v-if="gridPending" class="podcast-loading">Chargement...</div>
+
+        <div v-else-if="gridError" class="podcast-error">Erreur lors du chargement des podcasts.</div>
+
+        <EmptyState
+          v-else-if="shows.length === 0"
+          icon="music"
+          title="Aucun podcast archivé"
+          description="Aucun podcast archivé pour l'instant."
+        />
+
+        <div v-else class="show-grid">
+          <div
+            v-for="s in shows"
+            :key="s.id"
+            class="show-card"
+            @click="router.push({ path: '/podcasts', query: { showId: s.id } })"
+          >
+            <img :src="s.cover_url || fallbackCover" @error="handleCoverError" class="show-card-cover" alt="" />
+            <div class="show-card-body">
+              <h3 class="show-card-title">{{ s.title }}</h3>
+              <p class="show-card-meta">{{ s.episode_count }} épisode(s)</p>
+              <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(s.visibility)">{{ formatVisibility(s.visibility) }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- DETAIL VIEW -->
@@ -162,10 +186,55 @@ async function fetchShows() {
   }
 }
 
+const episodeSearchResults = ref<any[]>([]);
+const episodeSearchPending = ref(false);
+const episodeSearchError = ref(false);
+let episodeSearchRequestId = 0;
+
+async function fetchEpisodeSearch() {
+  const requestId = ++episodeSearchRequestId;
+  episodeSearchPending.value = true;
+  episodeSearchError.value = false;
+  try {
+    const data = await $fetch<any>('/api/podcasts/episodes/search', { params: { q: search.value } });
+    if (requestId !== episodeSearchRequestId) return;
+    episodeSearchResults.value = data.episodes || [];
+  } catch (e) {
+    if (requestId !== episodeSearchRequestId) return;
+    episodeSearchResults.value = [];
+    episodeSearchError.value = true;
+  } finally {
+    if (requestId !== episodeSearchRequestId) return;
+    episodeSearchPending.value = false;
+  }
+}
+
+// The episodes-search endpoint carries the show's cover art, so it's passed
+// through directly to the mini-player — matches how playEpisode() below
+// (the detail view's own click handler) sources show_cover_url from the
+// already-loaded show, just from the search result row instead.
+function playEpisodeSearchResult(ep: any) {
+  if (!ep.local_file_path) return;
+  playPodcastEpisode({
+    id: ep.id,
+    title: ep.title,
+    show_title: ep.show_title,
+    show_cover_url: ep.show_cover_url ?? null,
+    duration: ep.duration ?? null,
+    local_file_path: ep.local_file_path,
+  });
+}
+
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 watch(search, () => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-  searchDebounceTimer = setTimeout(() => fetchShows(), 300);
+  searchDebounceTimer = setTimeout(() => {
+    if (search.value) {
+      fetchEpisodeSearch();
+    } else {
+      fetchShows();
+    }
+  }, 300);
 });
 
 // --- Detail view state ---
@@ -505,6 +574,32 @@ const getVisBadgeClass = (vis: string): string => {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
+}
+
+.episode-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.episode-search-row {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.episode-search-row:hover {
+  background: var(--surface-hover);
+}
+
+.episode-search-title {
+  font-weight: 500;
+}
+
+.episode-search-show {
+  color: var(--text-secondary);
+  margin-left: 8px;
+  font-size: 13px;
 }
 
 .load-more-btn {

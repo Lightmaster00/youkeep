@@ -6,66 +6,93 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Rechercher un artiste..."
+          placeholder="Rechercher un artiste ou un titre..."
           class="form-input music-search-input"
         />
-        <select v-model="genre" class="form-input">
-          <option value="">Tous les genres</option>
-          <option v-for="g in facets.genres" :key="g" :value="g">{{ g }}</option>
-        </select>
-        <select v-model="language" class="form-input">
-          <option value="">Toutes les langues</option>
-          <option v-for="l in facets.languages" :key="l" :value="l">{{ l }}</option>
-        </select>
-        <select v-model="year" class="form-input">
-          <option value="">Toutes les années</option>
-          <option v-for="y in facets.years" :key="y" :value="y">{{ y }}</option>
-        </select>
+        <template v-if="!search">
+          <select v-model="genre" class="form-input">
+            <option value="">Tous les genres</option>
+            <option v-for="g in facets.genres" :key="g" :value="g">{{ g }}</option>
+          </select>
+          <select v-model="language" class="form-input">
+            <option value="">Toutes les langues</option>
+            <option v-for="l in facets.languages" :key="l" :value="l">{{ l }}</option>
+          </select>
+          <select v-model="year" class="form-input">
+            <option value="">Toutes les années</option>
+            <option v-for="y in facets.years" :key="y" :value="y">{{ y }}</option>
+          </select>
+        </template>
       </div>
 
-      <div v-if="playlists.length > 0" class="playlists-row">
-        <div
-          v-for="playlist in playlists"
-          :key="playlist.key"
-          class="playlist-card"
-          @click="playPlaylist(playlist)"
-        >
-          <div class="playlist-card-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          </div>
-          <div class="playlist-card-info">
-            <h4 class="playlist-card-label">{{ playlist.label }}</h4>
-            <p class="playlist-card-count">{{ playlist.tracks.length }} titre(s)</p>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="gridPending" class="music-loading">Chargement...</div>
-
-      <div v-else-if="gridError" class="music-error">Erreur lors du chargement des artistes.</div>
-
-      <EmptyState
-        v-else-if="artists.length === 0"
-        icon="music"
-        :title="hasActiveFilters ? 'Aucun résultat' : 'Aucun artiste archivé'"
-        :description="hasActiveFilters ? 'Aucun résultat pour ces filtres.' : 'Aucun artiste archivé pour l\'instant.'"
-      />
-
-      <div v-else class="artist-grid">
-        <div
-          v-for="a in artists"
-          :key="a.id"
-          class="artist-card"
-          @click="router.push({ path: '/music', query: { artistId: a.id } })"
-        >
-          <img :src="a.avatar_url || fallbackAvatar" @error="handleAvatarError" class="artist-card-avatar" alt="" />
-          <div class="artist-card-body">
-            <h3 class="artist-card-name">{{ a.name }}</h3>
-            <p class="artist-card-meta">{{ a.track_count }} titre(s)</p>
-            <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(a.visibility)">{{ formatVisibility(a.visibility) }}</span>
+      <template v-if="search">
+        <div v-if="trackSearchPending" class="music-loading">Chargement...</div>
+        <div v-else-if="trackSearchError" class="music-error">Erreur lors de la recherche.</div>
+        <EmptyState
+          v-else-if="trackSearchResults.length === 0"
+          icon="music"
+          title="Aucun résultat"
+          description="Aucun titre ne correspond à cette recherche."
+        />
+        <div v-else class="track-search-results">
+          <div
+            v-for="track in trackSearchResults"
+            :key="track.id"
+            class="track-row"
+            :class="{ 'now-playing': currentTrack?.id === track.id }"
+            @click="playTrackSearchResult(track)"
+          >
+            <span class="track-row-title">{{ track.title }}</span>
+            <span class="track-row-artist">{{ track.artist_name }}</span>
           </div>
         </div>
-      </div>
+      </template>
+
+      <template v-else>
+        <div v-if="playlists.length > 0" class="playlists-row">
+          <div
+            v-for="playlist in playlists"
+            :key="playlist.key"
+            class="playlist-card"
+            @click="playPlaylist(playlist)"
+          >
+            <div class="playlist-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </div>
+            <div class="playlist-card-info">
+              <h4 class="playlist-card-label">{{ playlist.label }}</h4>
+              <p class="playlist-card-count">{{ playlist.tracks.length }} titre(s)</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="gridPending" class="music-loading">Chargement...</div>
+
+        <div v-else-if="gridError" class="music-error">Erreur lors du chargement des artistes.</div>
+
+        <EmptyState
+          v-else-if="artists.length === 0"
+          icon="music"
+          :title="hasActiveFilters ? 'Aucun résultat' : 'Aucun artiste archivé'"
+          :description="hasActiveFilters ? 'Aucun résultat pour ces filtres.' : 'Aucun artiste archivé pour l\'instant.'"
+        />
+
+        <div v-else class="artist-grid">
+          <div
+            v-for="a in artists"
+            :key="a.id"
+            class="artist-card"
+            @click="router.push({ path: '/music', query: { artistId: a.id } })"
+          >
+            <img :src="a.avatar_url || fallbackAvatar" @error="handleAvatarError" class="artist-card-avatar" alt="" />
+            <div class="artist-card-body">
+              <h3 class="artist-card-name">{{ a.name }}</h3>
+              <p class="artist-card-meta">{{ a.track_count }} titre(s)</p>
+              <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(a.visibility)">{{ formatVisibility(a.visibility) }}</span>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- DETAIL VIEW -->
@@ -352,10 +379,43 @@ async function fetchArtists() {
   }
 }
 
+const trackSearchResults = ref<any[]>([]);
+const trackSearchPending = ref(false);
+const trackSearchError = ref(false);
+let trackSearchRequestId = 0;
+
+async function fetchTrackSearch() {
+  const requestId = ++trackSearchRequestId;
+  trackSearchPending.value = true;
+  trackSearchError.value = false;
+  try {
+    const data = await $fetch<any>('/api/music/tracks/search', { params: { q: search.value } });
+    if (requestId !== trackSearchRequestId) return;
+    trackSearchResults.value = data.tracks || [];
+  } catch (e) {
+    if (requestId !== trackSearchRequestId) return;
+    trackSearchResults.value = [];
+    trackSearchError.value = true;
+  } finally {
+    if (requestId !== trackSearchRequestId) return;
+    trackSearchPending.value = false;
+  }
+}
+
+function playTrackSearchResult(track: any) {
+  playMusicTrack(track, trackSearchResults.value);
+}
+
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 watch(search, () => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-  searchDebounceTimer = setTimeout(() => fetchArtists(), 300);
+  searchDebounceTimer = setTimeout(() => {
+    if (search.value) {
+      fetchTrackSearch();
+    } else {
+      fetchArtists();
+    }
+  }, 300);
 });
 watch([genre, language, year], () => fetchArtists());
 
@@ -859,6 +919,22 @@ const getVisBadgeClass = (vis: string): string => {
 .track-duration {
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+.track-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.track-row-title {
+  font-weight: 500;
+}
+
+.track-row-artist {
+  color: var(--text-secondary);
+  margin-left: 8px;
+  font-size: 13px;
 }
 
 .badge-clip {
