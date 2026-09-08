@@ -35,7 +35,7 @@ Investigated before this design:
 
 ### Music (no backend change)
 
-`SettingsMusicTab.vue` gains a search block structurally identical to `SettingsDownloadsTab.vue`'s: a text input + "Rechercher" button calling `$fetch('/api/admin/downloader/search-channels', { query: { q } })`, and a results grid (avatar, title, description, subscriber/video counts) with a "Suivre" button per candidate. Clicking "Suivre" sets `musicArtistInput = candidate.handle || candidate.id`; it does not auto-submit — the admin still picks visibility/auto-sync and clicks "Add Artist" as today.
+`SettingsMusicTab.vue` gains a search block structurally identical to `SettingsDownloadsTab.vue`'s: a text input + "Rechercher" button calling `$fetch('/api/admin/downloader/search-channels', { query: { q } })`, and a results grid (avatar, title, description, subscriber/video counts) with a "Suivre" button per candidate. Clicking "Suivre" sets `musicArtistInput` to a full YouTube URL built from the candidate — `https://www.youtube.com${candidate.handle}` when a handle is present, else `https://www.youtube.com/channel/${candidate.id}` — since `candidate.handle`/`candidate.id` alone are bare paths/IDs the ingest endpoint's channel-URL matcher can't parse; it does not auto-submit — the admin still picks visibility/auto-sync and clicks "Add Artist" as today.
 
 ### Podcasts (new endpoint)
 

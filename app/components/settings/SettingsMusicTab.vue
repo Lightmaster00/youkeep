@@ -411,7 +411,9 @@ const handleSearchMusicArtist = async () => {
 };
 
 const selectMusicArtistCandidate = (channel: any) => {
-  musicArtistInput.value = channel.handle || channel.id || '';
+  musicArtistInput.value = channel.handle
+    ? `https://www.youtube.com${channel.handle}`
+    : channel.id ? `https://www.youtube.com/channel/${channel.id}` : '';
   musicArtistSearchResults.value = [];
 };
 

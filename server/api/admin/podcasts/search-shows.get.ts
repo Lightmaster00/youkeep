@@ -29,6 +29,7 @@ export default defineEventHandler(async (event) => {
       const data = await globalThis.$fetch<any>('https://itunes.apple.com/search', {
         params: { media: 'podcast', term: q, limit: 25 },
         parseResponse: JSON.parse,
+        timeout: 8000,
       });
       return Array.isArray(data?.results) ? data.results : [];
     };
@@ -39,7 +40,8 @@ export default defineEventHandler(async (event) => {
       const headers = computePodcastIndexAuthHeaders(apiKey, apiSecret, unixTimestamp);
       const data = await globalThis.$fetch<any>('https://api.podcastindex.org/api/1.0/search/byterm', {
         params: { q },
-        headers
+        headers,
+        timeout: 8000,
       });
       return Array.isArray(data?.feeds) ? data.feeds : [];
     };
