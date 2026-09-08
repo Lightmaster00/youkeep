@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import {
   normalizeItunesResult,
   normalizePodcastIndexResult,
+  normalizeListenNotesResult,
   mergeShowCandidates,
   computePodcastIndexAuthHeaders,
 } from '../../server/utils/podcastSearch';
@@ -161,5 +162,96 @@ describe('computePodcastIndexAuthHeaders', () => {
     const h1 = computePodcastIndexAuthHeaders('k1', 's', 1700000000);
     const h2 = computePodcastIndexAuthHeaders('k2', 's', 1700000000);
     expect(h1['Authorization']).not.toBe(h2['Authorization']);
+  });
+});
+
+describe('normalizeListenNotesResult', () => {
+  it('maps a Listen Notes result to a ShowCandidate', () => {
+    const result = normalizeListenNotesResult({
+      title: 'Planet Money',
+      publisher: 'NPR',
+      description: 'The economy explained.',
+      image: 'https://example.com/art3.jpg',
+      rss: 'https://feeds.npr.org/510289/podcast.xml',
+    });
+    expect(result).toEqual({
+      title: 'Planet Money',
+      author: 'NPR',
+      description: 'The economy explained.',
+      artworkUrl: 'https://example.com/art3.jpg',
+      feedUrl: 'https://feeds.npr.org/510289/podcast.xml',
+    });
+  });
+
+  it('returns null when rss is missing or empty', () => {
+    expect(normalizeListenNotesResult({ title: 'No Feed' })).toBeNull();
+    expect(normalizeListenNotesResult({ title: 'Empty Feed', rss: '   ' })).toBeNull();
+  });
+
+  it('falls back to empty author/description/artworkUrl when those fields are missing', () => {
+    const result = normalizeListenNotesResult({ rss: 'https://a.com/feed.xml' });
+    expect(result?.author).toBe('');
+    expect(result?.description).toBe('');
+    expect(result?.artworkUrl).toBe('');
+  });
+
+  it('falls back to "Sans nom" when title is missing', () => {
+    const result = normalizeListenNotesResult({ rss: 'https://a.com/feed.xml' });
+    expect(result?.title).toBe('Sans nom');
+  });
+});
+
+describe('mergeShowCandidates with a 3rd Listen Notes source', () => {
+  const itunesShow = {
+    title: 'Planet Money (iTunes)',
+    author: 'NPR',
+    description: '',
+    artworkUrl: 'https://itunes.example.com/art.jpg',
+    feedUrl: 'https://feeds.npr.org/510289/podcast.xml',
+  };
+  const podcastIndexShow = {
+    title: 'Planet Money (PodcastIndex)',
+    author: 'NPR',
+    description: 'The economy explained.',
+    artworkUrl: 'https://podcastindex.example.com/art.jpg',
+    feedUrl: 'https://feeds.npr.org/510289/podcast.xml',
+  };
+  const listenNotesShow = {
+    title: 'Planet Money (Listen Notes)',
+    author: 'NPR',
+    description: 'The economy explained differently.',
+    artworkUrl: 'https://listennotes.example.com/art.jpg',
+    feedUrl: 'https://feeds.npr.org/510289/podcast.xml',
+  };
+  const listenNotesUnique = {
+    title: 'Obscure Indie Show',
+    author: 'Someone Else',
+    description: 'A very indie podcast.',
+    artworkUrl: 'https://listennotes.example.com/indie.jpg',
+    feedUrl: 'https://example.com/obscure-feed.xml',
+  };
+
+  it('keeps iTunes when the same feed URL is on all 3 sources', () => {
+    const result = mergeShowCandidates([itunesShow], [podcastIndexShow], [listenNotesShow]);
+    expect(result).toEqual([itunesShow]);
+  });
+
+  it('keeps PodcastIndex over Listen Notes when only those two share a feed URL', () => {
+    const result = mergeShowCandidates([], [podcastIndexShow], [listenNotesShow]);
+    expect(result).toEqual([podcastIndexShow]);
+  });
+
+  it('includes a Listen-Notes-only show not present in either other source', () => {
+    const result = mergeShowCandidates([itunesShow], [], [listenNotesUnique]);
+    expect(result).toEqual([itunesShow, listenNotesUnique]);
+  });
+
+  it('defaults the 3rd argument to an empty array when omitted (backward compatible with 2-source calls)', () => {
+    const result = mergeShowCandidates([itunesShow], []);
+    expect(result).toEqual([itunesShow]);
+  });
+
+  it('returns an empty array when all 3 sources are empty', () => {
+    expect(mergeShowCandidates([], [], [])).toEqual([]);
   });
 });
