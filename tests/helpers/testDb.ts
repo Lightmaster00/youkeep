@@ -23,6 +23,16 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE api_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -195,6 +205,13 @@ export function insertSession(db: Database.Database, opts: { id: string; userId:
     INSERT INTO sessions (id, user_id, expires_at)
     VALUES (?, ?, ?)
   `).run(opts.id, opts.userId, opts.expiresAt ?? Date.now() + 1000 * 60 * 60);
+}
+
+export function insertApiToken(db: Database.Database, opts: { id: string; userId: string; label?: string; tokenHash: string; createdAt?: number; lastUsedAt?: number | null }) {
+  db.prepare(`
+    INSERT INTO api_tokens (id, user_id, label, token_hash, created_at, last_used_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(opts.id, opts.userId, opts.label ?? `Token ${opts.id}`, opts.tokenHash, opts.createdAt ?? Date.now(), opts.lastUsedAt ?? null);
 }
 
 export function insertChannel(db: Database.Database, opts: { id: string; visibility?: string }) {

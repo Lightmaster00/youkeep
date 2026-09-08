@@ -39,6 +39,16 @@ export function getDb(): Database.Database {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS api_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      label TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at INTEGER NOT NULL,
+      last_used_at INTEGER,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS channels (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
