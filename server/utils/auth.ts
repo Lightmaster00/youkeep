@@ -1,6 +1,7 @@
-import { H3Event, getCookie, setCookie, deleteCookie, createError } from 'h3';
+import { H3Event, getCookie, getHeader, setCookie, deleteCookie, createError } from 'h3';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { getUserFromApiToken } from './apiTokens';
 
 export interface UserSession {
   id: string;
@@ -77,7 +78,17 @@ export async function destroySession(event: H3Event): Promise<void> {
 
 export async function getUserFromSession(event: H3Event): Promise<UserSession | null> {
   const sessionId = getCookie(event, SESSION_COOKIE_NAME);
-  if (!sessionId) return null;
+
+  if (!sessionId) {
+    // No session cookie — fall back to an API token, if one was supplied.
+    const authHeader = getHeader(event, 'authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+
+    const token = authHeader.slice('Bearer '.length).trim();
+    if (!token) return null;
+
+    return getUserFromApiToken(token);
+  }
 
   const db = getDb();
   const session = db.prepare(`
