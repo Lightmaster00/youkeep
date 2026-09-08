@@ -121,6 +121,67 @@
             </div>
           </form>
         </div>
+
+        <div class="profile-box glass-panel api-tokens-box">
+          <div class="security-header">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+            <div>
+              <h4>Jetons API</h4>
+              <p class="section-desc mb-0">Générez un jeton pour connecter une application externe (client mobile, script) à votre compte.</p>
+            </div>
+          </div>
+
+          <hr class="separator" />
+
+          <div v-if="newToken" class="form-msg success-msg mt-3 mb-4 alert-box new-token-reveal">
+            <strong>⚠️ Ce jeton ne sera plus jamais affiché.</strong> Copiez-le maintenant :
+            <div class="new-token-value">
+              <code>{{ newToken }}</code>
+              <UiButton variant="secondary" @click="copyNewToken">Copier</UiButton>
+            </div>
+            <UiButton variant="primary" class="mt-3" @click="dismissNewToken">J'ai copié mon jeton</UiButton>
+          </div>
+
+          <form v-else @submit.prevent="handleCreateToken" class="mt-4">
+            <div class="form-group">
+              <label class="form-label" for="token_label">Nom du jeton</label>
+              <input
+                type="text"
+                id="token_label"
+                v-model="newTokenLabel"
+                class="form-input"
+                placeholder="ex : iPhone, Tablette salon"
+                maxlength="100"
+                required
+              />
+            </div>
+
+            <div v-if="tokenMessage" class="form-msg mt-3" :class="tokenSuccess ? 'success-msg' : 'error-msg'">
+              {{ tokenMessage }}
+            </div>
+
+            <div class="form-actions mt-4">
+              <UiButton variant="primary" type="submit" :loading="creatingToken">
+                Générer
+              </UiButton>
+            </div>
+          </form>
+
+          <div v-if="apiTokens.length > 0" class="api-tokens-list mt-4">
+            <div v-for="token in apiTokens" :key="token.id" class="api-token-row">
+              <div class="api-token-info">
+                <span class="api-token-label">{{ token.label }}</span>
+                <span class="api-token-meta">
+                  Créé le {{ formatTokenDate(token.createdAt) }} ·
+                  {{ token.lastUsedAt ? `Utilisé le ${formatTokenDate(token.lastUsedAt)}` : 'Jamais utilisé' }}
+                </span>
+              </div>
+              <UiButton variant="danger" :loading="revokingTokenId === token.id" @click="handleRevokeToken(token.id)">
+                Révoquer
+              </UiButton>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -226,6 +287,84 @@ const handleChangeOwnPassword = async () => {
     savingOwnPassword.value = false;
   }
 };
+
+// --- API Tokens Logic ---
+interface ApiToken {
+  id: string;
+  label: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
+const apiTokens = ref<ApiToken[]>([]);
+const newTokenLabel = ref('');
+const newToken = ref('');
+const creatingToken = ref(false);
+const tokenMessage = ref('');
+const tokenSuccess = ref(true);
+const revokingTokenId = ref('');
+
+const fetchApiTokens = async () => {
+  try {
+    const data = await $fetch<{ tokens: ApiToken[] }>('/api/account/tokens');
+    apiTokens.value = data.tokens;
+  } catch (err: any) {
+    console.error('Failed to load API tokens', err);
+  }
+};
+
+const handleCreateToken = async () => {
+  creatingToken.value = true;
+  tokenMessage.value = '';
+  tokenSuccess.value = true;
+  try {
+    const result = await $fetch<{ id: string; label: string; token: string }>('/api/account/tokens', {
+      method: 'POST',
+      body: { label: newTokenLabel.value }
+    });
+    newToken.value = result.token;
+    newTokenLabel.value = '';
+    await fetchApiTokens();
+  } catch (err: any) {
+    tokenSuccess.value = false;
+    tokenMessage.value = err.data?.statusMessage || 'La création du jeton a échoué.';
+  } finally {
+    creatingToken.value = false;
+  }
+};
+
+const copyNewToken = () => {
+  if (newToken.value) {
+    navigator.clipboard.writeText(newToken.value);
+  }
+};
+
+const dismissNewToken = () => {
+  newToken.value = '';
+};
+
+const handleRevokeToken = async (tokenId: string) => {
+  if (!confirm('Révoquer ce jeton ? Toute application qui l\'utilise perdra immédiatement l\'accès.')) {
+    return;
+  }
+  revokingTokenId.value = tokenId;
+  try {
+    await $fetch(`/api/account/tokens/${tokenId}`, { method: 'DELETE' });
+    await fetchApiTokens();
+  } catch (err: any) {
+    console.error('Failed to revoke API token', err);
+  } finally {
+    revokingTokenId.value = '';
+  }
+};
+
+const formatTokenDate = (timestamp: number): string => {
+  return new Date(timestamp).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
+};
+
+onMounted(() => {
+  fetchApiTokens();
+});
 </script>
 
 <style scoped>
@@ -363,5 +502,60 @@ h4 {
   margin-bottom: 0;
 }
 
+.api-tokens-box {
+  margin-top: 0;
+}
+
+.new-token-reveal {
+  display: block;
+}
+
+.new-token-value {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 8px;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.new-token-value code {
+  flex: 1;
+}
+
+.api-tokens-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.api-token-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+}
+
+.api-token-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.api-token-label {
+  font-weight: 600;
+}
+
+.api-token-meta {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
 
 </style>
