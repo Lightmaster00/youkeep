@@ -176,6 +176,7 @@ onMounted(() => {
   // Runs after both mini-players' own onMounted restores (Vue mounts children
   // before parents), so by now each player has kicked off its own restore.
   restoreActiveType();
+  fetchContentSearchMode();
 });
 
 const checkPasswordEnforcement = () => {
@@ -219,8 +220,23 @@ onUnmounted(() => {
   window.removeEventListener('click', closeDropdown);
 });
 
+const contentSearchMode = ref('per_space');
+
+async function fetchContentSearchMode() {
+  try {
+    const data = await $fetch<{ mode: string }>('/api/settings/content-search-mode');
+    contentSearchMode.value = data.mode === 'global' ? 'global' : 'per_space';
+  } catch (e) {
+    contentSearchMode.value = 'per_space';
+  }
+}
+
 const handleSearch = () => {
-  router.push({ path: '/', query: { ...route.query, q: searchQuery.value || undefined, page: undefined } });
+  if (contentSearchMode.value === 'global') {
+    router.push({ path: '/search', query: { q: searchQuery.value || undefined } });
+    return;
+  }
+  router.push({ path: activeSpace.value.homeRoute, query: { ...route.query, q: searchQuery.value || undefined, page: undefined } });
 };
 
 const activeDownloadCount = ref(0);
