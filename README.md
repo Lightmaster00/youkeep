@@ -38,7 +38,16 @@ All persistent data is stored in the `/app/data` folder inside the container. In
 
 ## Unraid
 
-1. **Add Container** in the Docker tab:
+**Option 1 - template (recommended).** A ready-made Community Applications template is in [`unraid/youkeep.xml`](unraid/youkeep.xml). On the Unraid terminal:
+
+```bash
+wget -O /boot/config/plugins/dockerMan/templates-user/my-youkeep.xml \
+  https://raw.githubusercontent.com/Lightmaster00/youkeep/main/unraid/youkeep.xml
+```
+
+Then Docker tab -> **Add Container** -> pick **YouKeep** in the *Template* dropdown, adjust the paths and click **Apply**.
+
+**Option 2 - manual.** In the Docker tab, **Add Container**:
    - Repository: `ghcr.io/lightmaster00/youkeep:latest` (the package must be public, or build locally with `docker build -t youkeep .` and use `youkeep`)
    - Port `3000` -> `3000`
    - Path `/app/data` -> `/mnt/user/appdata/youkeep` (database and settings)

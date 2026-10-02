@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>YouKeep</Name>
+  <Repository>ghcr.io/lightmaster00/youkeep:latest</Repository>
+  <Registry>https://github.com/Lightmaster00/youkeep/pkgs/container/youkeep</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Lightmaster00/youkeep/issues</Support>
+  <Project>https://github.com/Lightmaster00/youkeep</Project>
+  <Overview>Self-hosted archiver for YouTube videos, music and podcasts. Subscribe to channels, artists and shows, download them with yt-dlp, and browse, search and stream your library from a web UI. Create the admin account on first visit.</Overview>
+  <Category>MediaServer:Video MediaServer:Music MediaServer:Other Downloaders:</Category>
+  <WebUI>http://[IP]:[PORT:3000]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Lightmaster00/youkeep/main/unraid/youkeep.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Lightmaster00/youkeep/main/public/icon.svg</Icon>
+  <ExtraParams>--restart=unless-stopped</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI Port" Target="3000" Default="3000" Mode="tcp" Description="Port of the web interface." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="AppData" Target="/app/data" Default="/mnt/user/appdata/youkeep" Mode="rw" Description="Database and settings (youkeep.db)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/youkeep</Config>
+  <Config Name="Media library" Target="/downloads" Default="/mnt/user/media/youkeep" Mode="rw" Description="Downloaded media. The videos/, music/ and podcasts/ subfolders are created inside. Must be writable by PUID:PGID." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/media/youkeep</Config>
+  <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID that owns the appdata and written files (Unraid 'nobody' = 99)." Type="Variable" Display="advanced" Required="true" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="100" Mode="" Description="Group ID that owns the appdata and written files (Unraid 'users' = 100)." Type="Variable" Display="advanced" Required="true" Mask="false">100</Config>
+  <Config Name="COOKIE_SECURE" Target="COOKIE_SECURE" Default="" Mode="" Description="Leave empty for auto-detection (Secure cookies only over HTTPS / X-Forwarded-Proto). Set true or false to force." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>
