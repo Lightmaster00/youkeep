@@ -8,6 +8,7 @@ import { Cron } from 'croner';
 import { getDb } from './db';
 import { addLog, sanitizeFolderName, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { isEffectivelyPaused, isModuleEnabled } from './modules';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -605,8 +606,7 @@ export async function startPodcastQueueWorker() {
 
     while (getPodcastWorkerShouldRun()) {
       try {
-        const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_downloader_paused'").get() as { value: string } | undefined;
-        if (pausedSetting?.value === '1') {
+        if (isEffectivelyPaused(db, 'podcast_downloader_paused', 'podcasts')) {
           await sleepOrWakeablePodcast(5000);
           continue;
         }
@@ -803,6 +803,7 @@ export async function syncAllPodcastShows(): Promise<void> {
     db,
     activeFlagSettingKey: 'podcast_sync_all_active',
     pausedSettingKey: 'podcast_downloader_paused',
+    moduleId: 'podcasts',
     fetchEntities: () => db.prepare('SELECT id, title, feed_url FROM podcast_shows').all() as { id: string; title: string; feed_url: string }[],
     processEntity: async (show) => {
       addLog(`Resynchronisation du podcast : ${show.title} (${show.id})`);
@@ -850,6 +851,10 @@ export function initPodcastScheduler(): void {
     console.log(`Scheduling podcast auto-sync cron job with expression: "${cronExpression}"`);
     try {
       const job = new Cron(cronExpression, async () => {
+        if (!isModuleEnabled(db, 'podcasts')) {
+          console.log('Automated podcast cron: Podcasts module is disabled. Skipping.');
+          return;
+        }
         console.log('Automated podcast cron trigger: starting show synchronization...');
         const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_sync_all_active'").get() as { value: string } | undefined;
         if (syncSetting?.value === '1') {

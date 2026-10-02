@@ -7,6 +7,7 @@ import { getDb } from './db';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable, getActiveDownloadCount } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { isEffectivelyPaused, isModuleEnabled } from './modules';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -613,8 +614,7 @@ export async function startMusicQueueWorker() {
 
     while (getMusicWorkerShouldRun()) {
       try {
-        const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
-        if (pausedSetting?.value === '1') {
+        if (isEffectivelyPaused(db, 'music_downloader_paused', 'music')) {
           await sleepOrWakeableMusic(5000);
           continue;
         }
@@ -845,6 +845,7 @@ export async function syncAllMusicArtists(): Promise<void> {
     db,
     activeFlagSettingKey: 'music_sync_all_active',
     pausedSettingKey: 'music_downloader_paused',
+    moduleId: 'music',
     fetchEntities: () => db.prepare("SELECT id, name, channel_id FROM music_artists WHERE channel_id IS NOT NULL").all() as { id: string; name: string; channel_id: string }[],
     processEntity: async (artist) => {
       addLog(`Resynchronisation de l'artiste : ${artist.name} (${artist.id})`);
@@ -897,6 +898,10 @@ export function initMusicScheduler(): void {
     console.log(`Scheduling music auto-sync cron job with expression: "${cronExpression}"`);
     try {
       const job = new Cron(cronExpression, async () => {
+        if (!isModuleEnabled(db, 'music')) {
+          console.log('Automated music cron: Music module is disabled. Skipping.');
+          return;
+        }
         console.log('Automated music cron trigger: starting artist synchronization...');
         const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_sync_all_active'").get() as { value: string } | undefined;
         if (syncSetting?.value === '1') {

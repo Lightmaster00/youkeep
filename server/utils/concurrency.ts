@@ -1,5 +1,7 @@
 import fs from 'fs';
 import Database from 'better-sqlite3';
+import { isModuleEnabled, isEffectivelyPaused } from './modules';
+import type { ModuleId } from './modules';
 
 export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 2;
 export const MAX_CONCURRENT_DOWNLOADS_CEILING = 10;
@@ -74,6 +76,9 @@ export interface SyncAllEntitiesConfig<T> {
   onFatalError: (err: any) => void;
   afterLoop?: () => Promise<void>;
   startWorker: () => void;
+  // When set, a disabled module makes the whole run a no-op, and a module that
+  // gets disabled mid-run stops the loop exactly like a pause.
+  moduleId?: ModuleId;
 }
 
 export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): Promise<void> {
@@ -89,7 +94,12 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
     onFatalError,
     afterLoop,
     startWorker,
+    moduleId,
   } = config;
+
+  if (moduleId && !isModuleEnabled(db, moduleId)) {
+    return;
+  }
 
   db.prepare(`UPDATE settings SET value = '1' WHERE key = ?`).run(activeFlagSettingKey);
 
@@ -98,8 +108,10 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
     onStart(entities.length);
 
     for (const entity of entities) {
-      const pausedSetting = db.prepare('SELECT value FROM settings WHERE key = ?').get(pausedSettingKey) as { value: string } | undefined;
-      if (pausedSetting?.value === '1') {
+      const paused = moduleId
+        ? isEffectivelyPaused(db, pausedSettingKey, moduleId)
+        : (db.prepare('SELECT value FROM settings WHERE key = ?').get(pausedSettingKey) as { value: string } | undefined)?.value === '1';
+      if (paused) {
         onPaused();
         break;
       }

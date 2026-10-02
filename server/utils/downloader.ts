@@ -7,6 +7,7 @@ import { Cron } from 'croner';
 import { getDb } from './db';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { getActiveMusicDownloadCount } from './musicDownloader';
 
 export function sanitizeFolderName(name: string): string {
@@ -281,9 +282,8 @@ export async function startQueueWorker() {
 
     while (getWorkerShouldRun()) {
       try {
-        // Check if global download is paused
-        const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
-        if (pausedSetting?.value === '1') {
+        // Check if global download is paused, or the Video module is disabled
+        if (isEffectivelyPaused(db, 'downloader_paused', 'video')) {
           // Don't exit — just wait and poll again when unpaused
           await sleepOrWakeable(5000);
           continue;
@@ -1534,6 +1534,7 @@ export async function syncAllChannels(): Promise<void> {
     db,
     activeFlagSettingKey: 'sync_all_active',
     pausedSettingKey: 'downloader_paused',
+    moduleId: 'video',
     fetchEntities: () => {
       // Video-only pre-loop step: mark every channel as actively downloading before
       // listing them. This runs inside runSyncAllEntities's try block (via this
@@ -1608,10 +1609,9 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
   let commentsUpdated = 0;
 
   for (const video of videosToRefresh) {
-    // Check if global download is paused
-    const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
-    if (pausedSetting?.value === '1') {
-      addLog('Metadata refresh aborted: downloader is paused.');
+    // Check if global download is paused, or the Video module is disabled
+    if (isEffectivelyPaused(db, 'downloader_paused', 'video')) {
+      addLog('Metadata refresh aborted: downloader is paused or the Video module is disabled.');
       break;
     }
 
@@ -1716,6 +1716,10 @@ export function initScheduler(): void {
     console.log(`Scheduling auto-sync cron job with expression: "${cronExpression}"`);
     try {
       const job = new Cron(cronExpression, async () => {
+        if (!isModuleEnabled(db, 'video')) {
+          console.log('Automated cron: Video module is disabled. Skipping.');
+          return;
+        }
         console.log('Automated cron trigger: starting channel synchronization...');
         const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'sync_all_active'").get() as { value: string } | undefined;
         if (syncSetting?.value === '1') {
