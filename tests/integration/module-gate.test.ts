@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import handler from '../../server/middleware/musicModuleGate';
+import handler from '../../server/middleware/moduleGate';
 import { createTestDb, insertSetting, insertUser, insertSession, mockEvent, sessionCookie } from '../helpers/testDb';
 
 let db: Database.Database;
@@ -17,7 +17,7 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
   return sessionCookie(sessionId);
 }
 
-describe('musicModuleGate middleware', () => {
+describe('moduleGate middleware — music', () => {
   it('passes through non-music paths regardless of the setting', async () => {
     insertSetting(db, { key: 'music_module_enabled', value: '0' });
     const result = await handler(mockEvent(undefined, { path: '/api/channels' }));
@@ -129,4 +129,66 @@ describe('musicModuleGate middleware', () => {
     expect(result).toBeUndefined();
     (db as any).prepare = originalPrepare;
   });
+});
+
+describe('moduleGate middleware — video and podcasts', () => {
+  it.each([
+    ['video', 'video_module_enabled', ['/api/videos', '/api/videos/abc', '/api/channels', '/api/channels/c1', '/api/playlists', '/api/home/feed', '/downloads', '/downloads/chan/v.mp4']],
+    ['podcasts', 'podcasts_module_enabled', ['/api/podcasts', '/api/podcasts/shows', '/downloads-podcasts', '/downloads-podcasts/s/e.mp3']],
+  ])('blocks every %s route with a 404 for a guest and a regular user when disabled', async (_name, key, paths) => {
+    insertSetting(db, { key: key as string, value: '0' });
+    const userCookie = loginAs('u1', 'user');
+    for (const path of paths as string[]) {
+      await expect(handler(mockEvent(undefined, { path }))).rejects.toMatchObject({ statusCode: 404 });
+      await expect(handler(mockEvent(userCookie, { path }))).rejects.toMatchObject({ statusCode: 404 });
+    }
+  });
+
+  it.each([
+    ['video_module_enabled', '/api/videos'],
+    ['podcasts_module_enabled', '/api/podcasts/shows'],
+  ])('lets an admin through when %s is 0', async (key, path) => {
+    insertSetting(db, { key, value: '0' });
+    const cookie = loginAs('admin1', 'admin');
+    expect(await handler(mockEvent(cookie, { path }))).toBeUndefined();
+  });
+
+  it('lets an admin through using an API token (no cookie) when the module is disabled', async () => {
+    const { createApiToken } = await import('../../server/utils/apiTokens');
+    insertSetting(db, { key: 'video_module_enabled', value: '0' });
+    insertUser(db, { id: 'admin-token', role: 'admin' });
+    const { token } = createApiToken('admin-token', 'cli');
+    const event = mockEvent(undefined, { path: '/api/videos', headers: { authorization: `Bearer ${token}` } });
+    expect(await handler(event)).toBeUndefined();
+  });
+
+  it('uses the h3 404 message for the module it blocked', async () => {
+    insertSetting(db, { key: 'video_module_enabled', value: '0' });
+    await expect(handler(mockEvent(undefined, { path: '/api/videos/abc' }))).rejects.toMatchObject({
+      statusCode: 404,
+      statusMessage: 'Cannot find any route matching /api/videos/abc.',
+    });
+  });
+
+  it('only blocks the disabled module: other modules stay reachable', async () => {
+    insertSetting(db, { key: 'video_module_enabled', value: '0' });
+    expect(await handler(mockEvent(undefined, { path: '/api/music/artists' }))).toBeUndefined();
+    expect(await handler(mockEvent(undefined, { path: '/api/podcasts/shows' }))).toBeUndefined();
+  });
+
+  it('does not let a disabled video module block /downloads-music or /downloads-podcasts', async () => {
+    insertSetting(db, { key: 'video_module_enabled', value: '0' });
+    expect(await handler(mockEvent(undefined, { path: '/downloads-music/a/t.opus' }))).toBeUndefined();
+    expect(await handler(mockEvent(undefined, { path: '/downloads-podcasts/s/e.mp3' }))).toBeUndefined();
+  });
+
+  it.each(['/api/auth/me', '/api/account/tokens', '/api/settings/modules', '/api/admin/downloader/queue', '/login'])(
+    'never gates %s even with every module flag at 0',
+    async (path) => {
+      insertSetting(db, { key: 'video_module_enabled', value: '0' });
+      insertSetting(db, { key: 'music_module_enabled', value: '0' });
+      insertSetting(db, { key: 'podcasts_module_enabled', value: '0' });
+      expect(await handler(mockEvent(undefined, { path }))).toBeUndefined();
+    }
+  );
 });
