@@ -136,9 +136,10 @@
           <div v-if="newToken" class="form-msg success-msg mt-3 mb-4 alert-box new-token-reveal">
             <strong>⚠️ Ce jeton ne sera plus jamais affiché.</strong> Copiez-le maintenant :
             <div class="new-token-value">
-              <code>{{ newToken }}</code>
+              <code ref="tokenCodeEl">{{ newToken }}</code>
               <UiButton variant="secondary" @click="copyNewToken">Copier</UiButton>
             </div>
+            <p v-if="copyMessage" class="copy-message">{{ copyMessage }}</p>
             <UiButton variant="primary" class="mt-3" @click="dismissNewToken">J'ai copié mon jeton</UiButton>
           </div>
 
@@ -333,14 +334,46 @@ const handleCreateToken = async () => {
   }
 };
 
-const copyNewToken = () => {
-  if (newToken.value) {
-    navigator.clipboard.writeText(newToken.value);
+const tokenCodeEl = ref<HTMLElement | null>(null);
+const copyMessage = ref('');
+
+// navigator.clipboard only exists on HTTPS / localhost; a self-hosted instance
+// reached over plain http://<lan-ip> has none, so fall back to selecting the
+// text and execCommand('copy'), and finally to a manual-copy hint.
+const copyNewToken = async () => {
+  if (!newToken.value) return;
+  copyMessage.value = '';
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(newToken.value);
+      copyMessage.value = 'Jeton copié.';
+      return;
+    }
+  } catch (e) {
+    // fall through to the selection fallback
   }
+  const el = tokenCodeEl.value;
+  if (el) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    try {
+      if (document.execCommand('copy')) {
+        copyMessage.value = 'Jeton copié.';
+        return;
+      }
+    } catch (e) {
+      // leave the text selected for a manual copy
+    }
+  }
+  copyMessage.value = 'Copie automatique impossible : le jeton est sélectionné, copiez-le avec Ctrl+C (ou Cmd+C).';
 };
 
 const dismissNewToken = () => {
   newToken.value = '';
+  copyMessage.value = '';
 };
 
 const handleRevokeToken = async (tokenId: string) => {
@@ -524,6 +557,12 @@ h4 {
 
 .new-token-value code {
   flex: 1;
+  user-select: all;
+}
+
+.copy-message {
+  margin-top: 8px;
+  font-size: 13px;
 }
 
 .api-tokens-list {
