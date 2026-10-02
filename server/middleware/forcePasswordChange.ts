@@ -9,7 +9,10 @@ const ALLOWED_PREFIXES = ['/api/auth/', '/api/account/password', '/api/account/p
 
 export default defineEventHandler(async (event) => {
   const path = (event.path || '').split('?')[0] || '';
-  if (!path.startsWith('/api/')) return;
+  // /downloads* (video), /downloads-music* and /downloads-podcasts* serve the
+  // media files themselves and sit outside /api.
+  const guarded = path.startsWith('/api/') || path.startsWith('/downloads');
+  if (!guarded) return;
   if (ALLOWED_PREFIXES.some((prefix) => path.startsWith(prefix))) return;
 
   const user = await getUserFromSession(event);

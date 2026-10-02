@@ -54,4 +54,11 @@ describe('forcePasswordChange middleware', () => {
     const cookie = mustChange('u2');
     await expect(middleware(mockEvent(cookie, { path: '/account' }))).resolves.toBeUndefined();
   });
+
+  it('also blocks the media file routes outside /api', async () => {
+    const cookie = mustChange('u1');
+    for (const path of ['/downloads/chan/v.mp4', '/downloads-music/a/t.opus', '/downloads-podcasts/s/e.mp3']) {
+      await expect(middleware(mockEvent(cookie, { path }))).rejects.toMatchObject({ statusCode: 403 });
+    }
+  });
 });
