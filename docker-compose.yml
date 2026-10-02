@@ -22,6 +22,8 @@ services:
     environment:
       - PUID=99   # Unraid "nobody"
       - PGID=100  # Unraid "users"
+      - TZ=Europe/Paris  # download schedules run in this timezone
+      - UMASK=022
       - PORT=3000
       - HOST=0.0.0.0
       - NODE_ENV=production

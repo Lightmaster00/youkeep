@@ -59,6 +59,16 @@ Then Docker tab -> **Add Container** -> pick **YouKeep** in the *Template* dropd
 
 `PUID`/`PGID` set the owner of `/app/data` and of every file the app writes. Make sure each media folder is writable by that uid:gid (Unraid shares are `nobody:users`, i.e. 99:100, by default). The entrypoint only changes ownership of `/app/data`, never of your media folders. A channel with a custom save path set in Settings needs its own extra mount for that path.
 
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PUID` / `PGID` | `99` / `100` | Owner of `/app/data` and of every file the app writes |
+| `TZ` | `UTC` | Timezone, e.g. `Europe/Paris`; download schedules (cron) run in it |
+| `UMASK` | `022` | Permissions of created files (`000` = world-writable) |
+| `COOKIE_SECURE` | auto | Force `Secure` cookies on (`true`) or off (`false`) |
+| `PORT` | `3000` | Port inside the container (usually just change the host port instead) |
+
 ### HTTPS / reverse proxy
 
 Session cookies are marked `Secure` only when the request arrives over HTTPS (directly, or through a proxy that sends `X-Forwarded-Proto: https` such as Nginx Proxy Manager, Traefik or Cloudflare Tunnel). Plain `http://<lan-ip>:3000` works too. Set `COOKIE_SECURE=true` or `false` to force the behaviour.

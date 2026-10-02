@@ -12,6 +12,9 @@ echo "Configuring runtime user with UID: $PUID, GID: $PGID"
 mkdir -p /app/data
 chown -R "$PUID:$PGID" /app/data
 
+# Permissions of files the app creates (022 -> 644, 000 -> 666).
+umask "${UMASK:-022}"
+
 # HOME must be writable for the chosen uid (yt-dlp/ffmpeg may write caches).
 export HOME=/app/data
 
