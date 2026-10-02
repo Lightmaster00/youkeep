@@ -674,6 +674,18 @@ export function getDb(): Database.Database {
     console.log('Seeded setting music_module_enabled: 1');
   }
 
+  const videoModuleEnabledCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'video_module_enabled'").get() as { count: number };
+  if (videoModuleEnabledCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('video_module_enabled', '1')").run();
+    console.log('Seeded setting video_module_enabled: 1');
+  }
+
+  const podcastsModuleEnabledCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcasts_module_enabled'").get() as { count: number };
+  if (podcastsModuleEnabledCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcasts_module_enabled', '1')").run();
+    console.log('Seeded setting podcasts_module_enabled: 1');
+  }
+
   const contentSearchModeCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'content_search_mode'").get() as { count: number };
   if (contentSearchModeCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('content_search_mode', 'per_space')").run();
