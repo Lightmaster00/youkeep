@@ -73,4 +73,21 @@ describe('useSearchSuggestions', () => {
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(suggestions.value).toEqual([]);
   });
+
+  it('in global mode, skips disabled modules and only calls the enabled endpoints', async () => {
+    fetchMock.mockResolvedValue({ videos: [], tracks: [], episodes: [] });
+    const { fetchSuggestions } = useSearchSuggestions();
+    fetchSuggestions('foo', 'global', 'video', ['video', 'podcasts']);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenCalledWith('/api/videos', { params: { q: 'foo', limit: 3 } });
+    expect(fetchMock).toHaveBeenCalledWith('/api/podcasts/episodes/search', { params: { q: 'foo', limit: 3 } });
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/music/tracks/search', expect.anything());
+  });
+
+  it('in global mode with the default enabled list, still calls all three endpoints', async () => {
+    fetchMock.mockResolvedValue({ videos: [], tracks: [], episodes: [] });
+    const { fetchSuggestions } = useSearchSuggestions();
+    fetchSuggestions('foo', 'global', 'video');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+  });
 });

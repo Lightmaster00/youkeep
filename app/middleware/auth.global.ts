@@ -1,3 +1,5 @@
+import { moduleForPagePath } from '~/utils/moduleRouting';
+
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const auth = useAuth();
 
@@ -21,5 +23,15 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   // Protect admin dashboard pages from standard users
   if (to.path.startsWith('/admin') && !auth.isAdmin.value) {
     return navigateTo('/');
+  }
+
+  // A disabled module is invisible to non-admins: send them to the first
+  // enabled module's home. Cross-module pages (/search, /account, ...) belong
+  // to no module and are never redirected.
+  const { ensureLoaded, isEnabled, firstEnabledHome } = useModules();
+  await ensureLoaded();
+  const owner = moduleForPagePath(to.path);
+  if (owner && !auth.isAdmin.value && !isEnabled(owner)) {
+    return navigateTo(firstEnabledHome.value);
   }
 });

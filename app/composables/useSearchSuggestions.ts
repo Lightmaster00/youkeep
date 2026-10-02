@@ -40,16 +40,17 @@ export function useSearchSuggestions() {
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let requestId = 0;
 
-  async function runFetch(term: string, mode: SearchMode, activeSpaceId: SpaceId) {
+  async function runFetch(term: string, mode: SearchMode, activeSpaceId: SpaceId, enabled: SpaceId[]) {
     const thisRequestId = ++requestId;
     loading.value = true;
     try {
       let results: Suggestion[];
       if (mode === 'global') {
+        const none = Promise.resolve([] as Suggestion[]);
         const [videos, tracks, episodes] = await Promise.all([
-          fetchVideos(term, 3),
-          fetchTracks(term, 3),
-          fetchEpisodes(term, 3),
+          enabled.includes('video') ? fetchVideos(term, 3) : none,
+          enabled.includes('music') ? fetchTracks(term, 3) : none,
+          enabled.includes('podcasts') ? fetchEpisodes(term, 3) : none,
         ]);
         results = [...videos, ...tracks, ...episodes];
       } else if (activeSpaceId === 'music') {
@@ -69,7 +70,7 @@ export function useSearchSuggestions() {
     }
   }
 
-  function fetchSuggestions(term: string, mode: SearchMode, activeSpaceId: SpaceId) {
+  function fetchSuggestions(term: string, mode: SearchMode, activeSpaceId: SpaceId, enabled: SpaceId[] = ['video', 'music', 'podcasts']) {
     if (debounceTimer) clearTimeout(debounceTimer);
     const trimmed = term.trim();
     if (trimmed.length < 2) {
@@ -78,7 +79,7 @@ export function useSearchSuggestions() {
       loading.value = false;
       return;
     }
-    debounceTimer = setTimeout(() => runFetch(trimmed, mode, activeSpaceId), DEBOUNCE_MS);
+    debounceTimer = setTimeout(() => runFetch(trimmed, mode, activeSpaceId, enabled), DEBOUNCE_MS);
   }
 
   return { suggestions, loading, fetchSuggestions };

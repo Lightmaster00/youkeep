@@ -22,7 +22,7 @@
             >
               <i class="space-switcher-icon" v-html="space.icon"></i>
               {{ space.label }}
-              <span v-if="space.id === 'music' && !musicModuleEnabled" class="badge badge-failed" style="margin-left: auto;">Désactivé</span>
+              <span v-if="!isEnabled(space.id)" class="badge badge-failed" style="margin-left: auto;">Désactivé</span>
             </div>
           </div>
         </div>
@@ -200,7 +200,7 @@ function onSearchInput() {
   if (term.trim().length === 0) {
     refreshHistoryEntries();
   } else {
-    fetchSuggestions(term, contentSearchMode.value as 'per_space' | 'global', activeSpace.value.id as 'video' | 'music' | 'podcasts');
+    fetchSuggestions(term, contentSearchMode.value as 'per_space' | 'global', activeSpace.value.id as 'video' | 'music' | 'podcasts', enabledModules.value);
   }
 }
 
@@ -256,19 +256,11 @@ const activeSpace = computed(() => {
   return spaces.find((s) => s.id === 'video') ?? spaces[0]!;
 });
 
-const musicModuleEnabled = ref(true);
+const { enabledModules, isEnabled, refresh: refreshModules } = useModules();
+// Non-admins only see enabled modules; admins see all, disabled ones carry a badge.
 const visibleSpaces = computed(() =>
-  spaces.filter((s) => s.id !== 'music' || musicModuleEnabled.value || isAdmin.value)
+  spaces.filter((s) => isAdmin.value || isEnabled(s.id))
 );
-
-async function fetchMusicModuleEnabled() {
-  try {
-    const data = await $fetch<{ enabled: boolean }>('/api/settings/music-module');
-    musicModuleEnabled.value = data.enabled;
-  } catch (e) {
-    musicModuleEnabled.value = true;
-  }
-}
 
 // Fill search query on mount if present in URL
 onMounted(() => {
@@ -379,7 +371,7 @@ const handleLogout = async () => {
 onMounted(() => {
   fetchActiveDownloads();
   downloadCountInterval = setInterval(fetchActiveDownloads, 5000);
-  fetchMusicModuleEnabled();
+  refreshModules();
 });
 
 onUnmounted(() => {

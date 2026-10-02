@@ -2,7 +2,7 @@
   <div class="search-page">
     <h1 class="search-page-title">Résultats pour "{{ query }}"</h1>
 
-    <section class="search-section">
+    <section v-if="isEnabled('video')" class="search-section">
       <h2 class="search-section-title">Vidéos</h2>
       <div v-if="videosPending" class="search-loading">Chargement...</div>
       <div v-else-if="videosError" class="search-error">Erreur lors du chargement des vidéos.</div>
@@ -20,7 +20,7 @@
       </template>
     </section>
 
-    <section class="search-section">
+    <section v-if="isEnabled('music')" class="search-section">
       <h2 class="search-section-title">Musique</h2>
       <div v-if="tracksPending" class="search-loading">Chargement...</div>
       <div v-else-if="tracksError" class="search-error">Erreur lors du chargement de la musique.</div>
@@ -46,7 +46,7 @@
       </template>
     </section>
 
-    <section class="search-section">
+    <section v-if="isEnabled('podcasts')" class="search-section">
       <h2 class="search-section-title">Podcasts</h2>
       <div v-if="episodesPending" class="search-loading">Chargement...</div>
       <div v-else-if="episodesError" class="search-error">Erreur lors du chargement des podcasts.</div>
@@ -83,6 +83,7 @@ import { highlightMatch } from '../utils/highlightMatch';
 
 const route = useRoute();
 const query = computed(() => (route.query.q ? String(route.query.q) : ''));
+const { isEnabled } = useModules();
 
 const { play: playMusicTrack } = useMusicPlayer();
 const { play: playPodcastEpisode } = usePodcastPlayer();
@@ -165,9 +166,9 @@ function fetchAll() {
     return;
   }
   // Independent fetches: one section's failure must not block the others.
-  fetchVideos();
-  fetchTracks();
-  fetchEpisodes();
+  if (isEnabled('video')) fetchVideos();
+  if (isEnabled('music')) fetchTracks();
+  if (isEnabled('podcasts')) fetchEpisodes();
 }
 
 watch(query, fetchAll, { immediate: true });
