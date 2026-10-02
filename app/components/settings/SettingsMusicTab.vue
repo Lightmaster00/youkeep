@@ -2,17 +2,6 @@
   <div class="tab-pane">
     <div class="downloads-header-panel glass-panel" style="margin-bottom: 16px;">
       <div class="header-text">
-        <h2>Module Musique</h2>
-        <p>Active ou désactive tout l'espace Musique pour les utilisateurs non-admin (navigation, lecture, API). Les administrateurs gardent toujours accès.</p>
-      </div>
-      <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-        <input type="checkbox" v-model="musicModuleEnabled" @change="toggleMusicModule" :disabled="togglingMusicModule" />
-        <span>{{ musicModuleEnabled ? 'Activé' : 'Désactivé' }}</span>
-      </label>
-    </div>
-
-    <div class="downloads-header-panel glass-panel" style="margin-bottom: 16px;">
-      <div class="header-text">
         <h2>Clips vidéo</h2>
         <p>Télécharge aussi la vidéo (clip officiel) pour chaque nouvelle piste ingérée, en plus de l'audio. Les pistes déjà téléchargées ne sont pas affectées automatiquement — utilise le bouton « Télécharger le clip » sur une piste existante pour la rattraper manuellement.</p>
       </div>
@@ -320,32 +309,6 @@ import { useMusicQueue } from '~/composables/useMusicQueue';
 const toast = useToast();
 const { musicQueue, musicArtists, musicIsPaused, musicFailedCount, fetchMusicQueue } = useMusicQueue();
 
-const musicModuleEnabled = ref(true);
-const togglingMusicModule = ref(false);
-
-async function fetchMusicModuleEnabled() {
-  try {
-    const data = await $fetch<{ enabled: boolean }>('/api/settings/music-module');
-    musicModuleEnabled.value = data.enabled;
-  } catch (e) {
-    // leave the default
-  }
-}
-
-async function toggleMusicModule() {
-  togglingMusicModule.value = true;
-  const desired = musicModuleEnabled.value;
-  try {
-    await $fetch('/api/admin/settings/music-module', { method: 'POST', body: { enabled: desired } });
-    toast.success(desired ? 'Module Musique activé.' : 'Module Musique désactivé.');
-  } catch (e: any) {
-    musicModuleEnabled.value = !desired;
-    toast.error(e?.data?.statusMessage || 'Erreur lors de la mise à jour du module Musique.');
-  } finally {
-    togglingMusicModule.value = false;
-  }
-}
-
 const musicDownloadClipsEnabled = ref(false);
 const togglingMusicDownloadClips = ref(false);
 
@@ -600,7 +563,6 @@ const formatStatus = (status: string) => {
 
 onMounted(() => {
   fetchMusicConcurrency();
-  fetchMusicModuleEnabled();
   fetchMusicDownloadClipsEnabled();
   fetchMusicSchedule();
 });

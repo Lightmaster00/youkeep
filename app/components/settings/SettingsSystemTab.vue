@@ -6,6 +6,41 @@
         <div class="config-section glass-panel">
           <div class="section-title-row">
             <div class="icon-orb bg-pink">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            </div>
+            <div>
+              <h3>Modules</h3>
+              <p class="section-desc">Active ou désactive chaque espace pour les utilisateurs non-admin. Un module désactivé disparaît de la navigation et son travail en arrière-plan (téléchargements, synchronisation) s'arrête ; les données restent intactes. Les administrateurs gardent accès.</p>
+            </div>
+          </div>
+
+          <div class="mt-3" style="display: flex; flex-direction: column; gap: 12px;">
+            <label
+              v-for="m in moduleOptions"
+              :key="m.id"
+              style="display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer;"
+            >
+              <span>
+                <strong>{{ m.label }}</strong>
+                <span class="section-desc" style="display: block; margin: 2px 0 0;">{{ m.description }}</span>
+                <span v-if="isLastEnabledModule(m.id)" class="section-desc" style="display: block; margin: 2px 0 0;">Au moins un module doit rester actif.</span>
+              </span>
+              <span style="display: flex; align-items: center; gap: 8px; white-space: nowrap;">
+                <input
+                  type="checkbox"
+                  :checked="modules[m.id]"
+                  :disabled="savingModuleId !== null || isLastEnabledModule(m.id)"
+                  @change="onModuleChange(m.id, $event)"
+                />
+                <span>{{ modules[m.id] ? 'Activé' : 'Désactivé' }}</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="config-section glass-panel">
+          <div class="section-title-row">
+            <div class="icon-orb bg-pink">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
             </div>
             <div>
@@ -217,7 +252,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onUnmounted, onMounted } from 'vue';
+import { ref, computed, watch, onUnmounted, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 
@@ -421,7 +456,38 @@ const handleSaveContentSearchMode = async () => {
   }
 };
 
+type ModuleKey = 'video' | 'music' | 'podcasts';
+
+const { modules, refresh: refreshModules } = useModules();
+const savingModuleId = ref<ModuleKey | null>(null);
+
+const moduleOptions: { id: ModuleKey; label: string; description: string }[] = [
+  { id: 'video', label: 'Vidéo', description: 'Accueil, Shorts, Chaînes, Abonnements, Playlists et lecture vidéo.' },
+  { id: 'music', label: 'Musique', description: 'Bibliothèque musicale, artistes, lecteur audio.' },
+  { id: 'podcasts', label: 'Podcasts', description: 'Bibliothèque de podcasts et lecteur.' },
+];
+
+const enabledModuleCount = computed(() => moduleOptions.filter((m) => modules.value[m.id]).length);
+const isLastEnabledModule = (id: ModuleKey) => modules.value[id] && enabledModuleCount.value === 1;
+
+const onModuleChange = async (id: ModuleKey, event: Event) => {
+  const enabled = (event.target as HTMLInputElement).checked;
+  savingModuleId.value = id;
+  try {
+    await $fetch('/api/admin/settings/modules', { method: 'POST', body: { [id]: enabled } });
+    toast.success(enabled ? 'Module activé.' : 'Module désactivé.');
+  } catch (err: any) {
+    toast.error(err.data?.statusMessage || 'Échec de la mise à jour du module.');
+  } finally {
+    // Always re-read the truth from the server so the switches and the space
+    // switcher reflect what was actually saved (e.g. after a refused change).
+    await refreshModules();
+    savingModuleId.value = null;
+  }
+};
+
 onMounted(() => {
+  refreshModules();
   fetchSearchPlatforms();
   fetchContentSearchMode();
 });
