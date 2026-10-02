@@ -99,4 +99,12 @@ describe('getUserFromSession with a Bearer token', () => {
     const result = await getUserFromSession(event);
     expect(result?.id).toBe('u1');
   });
+
+  it('accepts a case-insensitive "bearer" scheme (RFC 7235)', async () => {
+    insertUser(db, { id: 'u1', role: 'user' });
+    const created = createApiToken('u1', 'My Phone');
+    const event = mockEvent(undefined, { headers: { authorization: `bearer ${created.token}` } });
+    const result = await getUserFromSession(event);
+    expect(result?.id).toBe('u1');
+  });
 });

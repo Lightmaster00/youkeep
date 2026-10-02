@@ -94,9 +94,9 @@ export async function getUserFromSession(event: H3Event): Promise<UserSession | 
   if (!sessionId) {
     // No session cookie — fall back to an API token, if one was supplied.
     const authHeader = getHeader(event, 'authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-
-    const token = authHeader.slice('Bearer '.length).trim();
+    // RFC 7235: the auth scheme is case-insensitive.
+    const bearer = authHeader?.match(/^Bearer\s+(.+)$/i);
+    const token = bearer?.[1]?.trim();
     if (!token) return null;
 
     return getUserFromApiToken(token);

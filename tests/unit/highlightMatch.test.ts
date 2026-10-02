@@ -44,4 +44,16 @@ describe('highlightMatch', () => {
   it('only wraps the first matching occurrence', () => {
     expect(highlightMatch('cat cat cat', 'cat')).toBe('<mark>cat</mark> cat cat');
   });
+
+  it('highlights each word separately when the whole phrase does not appear contiguously', () => {
+    expect(highlightMatch('Rock & Roll', 'rock roll')).toBe('<mark>Rock</mark> &amp; <mark>Roll</mark>');
+  });
+
+  it('highlights only the words that are present in the multi-word fallback', () => {
+    expect(highlightMatch('Rock & Roll', 'rock zzz')).toBe('<mark>Rock</mark> &amp; Roll');
+  });
+
+  it('still prefers the whole phrase when it appears contiguously', () => {
+    expect(highlightMatch('big rock roll band', 'rock roll')).toBe('big <mark>rock roll</mark> band');
+  });
 });

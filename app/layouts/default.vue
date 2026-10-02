@@ -335,14 +335,15 @@ async function fetchContentSearchMode() {
 }
 
 const handleSearch = () => {
-  if (searchQuery.value.trim()) {
-    addSearchHistory(searchQuery.value.trim());
+  const term = searchQuery.value.trim();
+  if (term) {
+    addSearchHistory(term);
   }
   if (contentSearchMode.value === 'global') {
-    router.push({ path: '/search', query: { q: searchQuery.value || undefined } });
+    router.push({ path: '/search', query: { q: term || undefined } });
     return;
   }
-  router.push({ path: activeSpace.value.homeRoute, query: { ...route.query, q: searchQuery.value || undefined, page: undefined, artistId: undefined, showId: undefined } });
+  router.push({ path: activeSpace.value.homeRoute, query: { ...route.query, q: term || undefined, page: undefined, artistId: undefined, showId: undefined } });
 };
 
 const activeDownloadCount = ref(0);
@@ -569,6 +570,8 @@ onUnmounted(() => {
 
 .search-dropdown-label {
   color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -577,7 +580,10 @@ onUnmounted(() => {
 .search-dropdown-sublabel {
   color: var(--text-secondary);
   font-size: 12.5px;
-  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .search-dropdown-clear {
