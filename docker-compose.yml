@@ -13,10 +13,12 @@ services:
     volumes:
       # Database + settings (e.g. /mnt/user/appdata/youkeep on Unraid)
       - ./data:/app/data
-      # Media library: videos/, music/ and podcasts/ subfolders are created here
-      # (e.g. /mnt/user/media/youkeep on Unraid). Without this mount, media ends
+      # One mount per media type, so each can live on its own share
+      # (e.g. /mnt/user/media/... on Unraid). Without these mounts, media ends
       # up inside ./data/downloads.
-      - ./downloads:/downloads
+      - ./downloads/videos:/downloads/videos
+      - ./downloads/music:/downloads/music
+      - ./downloads/podcasts:/downloads/podcasts
     environment:
       - PUID=99   # Unraid "nobody"
       - PGID=100  # Unraid "users"

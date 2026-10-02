@@ -32,7 +32,7 @@ YouKeep is fully dockerized. You do **not** need to install Node.js, `npm`, or c
 All persistent data is stored in the `/app/data` folder inside the container. In your `docker-compose.yml`, this is mapped to a local `./data` folder:
 
 - **Database**: `./data/youkeep.db` (stores users, subscriptions, settings, history, and playlists)
-- **Downloads**: `/downloads` (mount a host folder; falls back to `./data/downloads/` if not mounted)
+- **Media**: `/downloads/videos`, `/downloads/music`, `/downloads/podcasts` (mount a host folder for each; falls back to `./data/downloads/` if not mounted)
 
 ---
 
@@ -51,11 +51,13 @@ Then Docker tab -> **Add Container** -> pick **YouKeep** in the *Template* dropd
    - Repository: `ghcr.io/lightmaster00/youkeep:latest` (the package must be public, or build locally with `docker build -t youkeep .` and use `youkeep`)
    - Port `3000` -> `3000`
    - Path `/app/data` -> `/mnt/user/appdata/youkeep` (database and settings)
-   - Path `/downloads` -> a media share, e.g. `/mnt/user/media/youkeep` (`videos/`, `music/`, `podcasts/` are created inside)
+   - Path `/downloads/videos` -> e.g. `/mnt/user/media/youkeep/videos`
+   - Path `/downloads/music` -> e.g. `/mnt/user/media/youkeep/music`
+   - Path `/downloads/podcasts` -> e.g. `/mnt/user/media/youkeep/podcasts`
    - Variables `PUID=99` and `PGID=100`
 2. Open `http://<unraid-ip>:3000` and create the admin account.
 
-`PUID`/`PGID` set the owner of `/app/data` and of every file the app writes. Make sure the `/downloads` share is writable by that uid:gid (Unraid shares are `nobody:users`, i.e. 99:100, by default). The entrypoint only changes ownership of `/app/data`, never of your media share.
+`PUID`/`PGID` set the owner of `/app/data` and of every file the app writes. Make sure each media folder is writable by that uid:gid (Unraid shares are `nobody:users`, i.e. 99:100, by default). The entrypoint only changes ownership of `/app/data`, never of your media folders. A channel with a custom save path set in Settings needs its own extra mount for that path.
 
 ### HTTPS / reverse proxy
 
