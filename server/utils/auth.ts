@@ -1,4 +1,4 @@
-import { H3Event, getCookie, getHeader, setCookie, deleteCookie, createError } from 'h3';
+import { H3Event, getCookie, getHeader, getRequestProtocol, setCookie, deleteCookie, createError } from 'h3';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { getUserFromApiToken } from './apiTokens';
@@ -13,6 +13,18 @@ export interface UserSession {
 export const SESSION_COOKIE_NAME = 'youkeep_session';
 export const CSRF_COOKIE_NAME = 'csrf_token';
 export const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+// Cookies are marked Secure only when the request actually arrived over HTTPS
+// (directly, or via a reverse proxy sending X-Forwarded-Proto: https). A
+// Secure cookie is silently dropped by browsers on plain-HTTP LAN access
+// (e.g. http://192.168.x.x:3000), which would make login impossible.
+// COOKIE_SECURE=true|false overrides the detection.
+export function isSecureRequest(event: H3Event): boolean {
+  const override = process.env.COOKIE_SECURE;
+  if (override === 'true') return true;
+  if (override === 'false') return false;
+  return getRequestProtocol(event) === 'https';
+}
 
 // Regenerated on every process start — invalidates in-flight CSRF tokens on
 // restart/deploy, but server/middleware/csrf.ts self-heals this transparently
@@ -46,7 +58,7 @@ export async function createSession(userId: string, event: H3Event): Promise<str
   // Set httpOnly cookie
   setCookie(event, SESSION_COOKIE_NAME, sessionId, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureRequest(event),
     sameSite: 'lax',
     maxAge: SESSION_DURATION / 1000,
     path: '/'
@@ -57,7 +69,7 @@ export async function createSession(userId: string, event: H3Event): Promise<str
   // be able to read it and echo it back as a header on mutating requests.
   setCookie(event, CSRF_COOKIE_NAME, computeCsrfToken(sessionId), {
     httpOnly: false,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isSecureRequest(event),
     sameSite: 'lax',
     maxAge: SESSION_DURATION / 1000,
     path: '/'

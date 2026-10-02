@@ -1,20 +1,27 @@
-version: '3.8'
-
 services:
   youkeep:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Option A: pull the prebuilt image published by GitHub Actions
+    image: ghcr.io/lightmaster00/youkeep:latest
+    # Option B: build locally instead (comment the line above, uncomment below)
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: youkeep
     restart: unless-stopped
     ports:
       - "3000:3000"
     volumes:
-      # Map the configuration database and downloaded videos folder to your host
+      # Database + settings (e.g. /mnt/user/appdata/youkeep on Unraid)
       - ./data:/app/data
+      # Media library: videos/, music/ and podcasts/ subfolders are created here
+      # (e.g. /mnt/user/media/youkeep on Unraid). Without this mount, media ends
+      # up inside ./data/downloads.
+      - ./downloads:/downloads
     environment:
-      - PUID=1000
-      - PGID=1000
+      - PUID=99   # Unraid "nobody"
+      - PGID=100  # Unraid "users"
       - PORT=3000
       - HOST=0.0.0.0
       - NODE_ENV=production
+      # Cookies are Secure only when the request arrives over HTTPS (direct or
+      # via X-Forwarded-Proto). Force with COOKIE_SECURE=true|false if needed.

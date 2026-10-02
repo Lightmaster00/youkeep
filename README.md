@@ -32,39 +32,25 @@ YouKeep is fully dockerized. You do **not** need to install Node.js, `npm`, or c
 All persistent data is stored in the `/app/data` folder inside the container. In your `docker-compose.yml`, this is mapped to a local `./data` folder:
 
 - **Database**: `./data/youkeep.db` (stores users, subscriptions, settings, history, and playlists)
-- **Downloads**: `./data/downloads/` (stores all archived videos, audio, and thumbnails)
+- **Downloads**: `/downloads` (mount a host folder; falls back to `./data/downloads/` if not mounted)
 
 ---
 
-## Unraid and Permission Mapping (PUID & PGID)
+## Unraid
 
-To prevent file permission conflicts on self-hosted servers (like Unraid, Synology, or standard Linux machines), you can map the container's internal processes to use your host user's specific User ID (`PUID`) and Group ID (`PGID`). 
+1. **Add Container** in the Docker tab:
+   - Repository: `ghcr.io/lightmaster00/youkeep:latest` (the package must be public, or build locally with `docker build -t youkeep .` and use `youkeep`)
+   - Port `3000` -> `3000`
+   - Path `/app/data` -> `/mnt/user/appdata/youkeep` (database and settings)
+   - Path `/downloads` -> a media share, e.g. `/mnt/user/media/youkeep` (`videos/`, `music/`, `podcasts/` are created inside)
+   - Variables `PUID=99` and `PGID=100`
+2. Open `http://<unraid-ip>:3000` and create the admin account.
 
-This ensures that all downloaded videos, audio, and database files in your `./data` directory are owned by your host user rather than the `root` user, making them easy to move, delete, or edit from the host.
+`PUID`/`PGID` set the owner of `/app/data` and of every file the app writes. Make sure the `/downloads` share is writable by that uid:gid (Unraid shares are `nobody:users`, i.e. 99:100, by default). The entrypoint only changes ownership of `/app/data`, never of your media share.
 
-### Configuring Permissions in docker-compose.yml:
-```yaml
-version: '3.8'
+### HTTPS / reverse proxy
 
-services:
-  youkeep:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: youkeep
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    volumes:
-      # Map the data folder to your desired path (e.g. /mnt/user/appdata/youkeep on Unraid)
-      - ./data:/app/data
-    environment:
-      - PUID=99     # Set to your host user's UID (Unraid's default app user 'nobody' is 99)
-      - PGID=100    # Set to your host user's GID (Unraid's default app group 'users' is 100)
-      - PORT=3000
-      - HOST=0.0.0.0
-      - NODE_ENV=production
-```
+Session cookies are marked `Secure` only when the request arrives over HTTPS (directly, or through a proxy that sends `X-Forwarded-Proto: https` such as Nginx Proxy Manager, Traefik or Cloudflare Tunnel). Plain `http://<lan-ip>:3000` works too. Set `COOKIE_SECURE=true` or `false` to force the behaviour.
 
 ---
 

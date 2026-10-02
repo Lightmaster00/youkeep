@@ -1,5 +1,5 @@
 import { defineEventHandler, getCookie, getHeader, setCookie, createError } from 'h3';
-import { SESSION_COOKIE_NAME, CSRF_COOKIE_NAME, SESSION_DURATION, computeCsrfToken } from '../utils/auth';
+import { SESSION_COOKIE_NAME, CSRF_COOKIE_NAME, SESSION_DURATION, computeCsrfToken, isSecureRequest } from '../utils/auth';
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -19,7 +19,7 @@ export default defineEventHandler((event) => {
     if (event.method === 'GET' && getCookie(event, CSRF_COOKIE_NAME) !== expectedToken) {
       setCookie(event, CSRF_COOKIE_NAME, expectedToken, {
         httpOnly: false,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isSecureRequest(event),
         sameSite: 'lax',
         maxAge: SESSION_DURATION / 1000,
         path: '/'
