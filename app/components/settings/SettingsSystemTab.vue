@@ -471,7 +471,8 @@ const enabledModuleCount = computed(() => moduleOptions.filter((m) => modules.va
 const isLastEnabledModule = (id: ModuleKey) => modules.value[id] && enabledModuleCount.value === 1;
 
 const onModuleChange = async (id: ModuleKey, event: Event) => {
-  const enabled = (event.target as HTMLInputElement).checked;
+  const input = event.target as HTMLInputElement;
+  const enabled = input.checked;
   savingModuleId.value = id;
   try {
     await $fetch('/api/admin/settings/modules', { method: 'POST', body: { [id]: enabled } });
@@ -482,6 +483,8 @@ const onModuleChange = async (id: ModuleKey, event: Event) => {
     // Always re-read the truth from the server so the switches and the space
     // switcher reflect what was actually saved (e.g. after a refused change).
     await refreshModules();
+    // The browser already flipped the box natively; force it back to server truth.
+    input.checked = !!modules.value[id];
     savingModuleId.value = null;
   }
 };
