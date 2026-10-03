@@ -91,4 +91,13 @@ describe('isHomeFullyHidden', () => {
     expect(isHomeFullyHidden({ homeHero: false, homeSections: ['suggested', 'subscriptions'] }, false)).toBe(true);
     expect(isHomeFullyHidden({ homeHero: false, homeSections: ['suggested'] }, true)).toBe(false);
   });
+  it('a guest with only popular is not fully hidden (popular is visible to guests)', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['popular'] }, false)).toBe(false);
+  });
+  it('a guest with a mix of guest-visible and hidden sections is not fully hidden', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['suggested', 'recent'] }, false)).toBe(false);
+  });
+  it('subscriptions alone is not fully hidden for a logged-in viewer', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['subscriptions'] }, true)).toBe(false);
+  });
 });

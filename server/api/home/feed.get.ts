@@ -3,7 +3,7 @@ import { getRecommendedVideos } from '../../utils/recommend';
 import { getUserFromSession } from '../../utils/auth';
 import type { UserSession } from '../../utils/auth';
 import { getDisplayView } from '../../utils/displayPrefsStore';
-import { APP_DEFAULTS } from '../../../shared/displayPrefs';
+import { APP_DEFAULTS, GUEST_HOME_SECTIONS } from '../../../shared/displayPrefs';
 import type { DisplayPrefs, HomeSectionId, PopularRanking } from '../../../shared/displayPrefs';
 
 interface FeedVideo {
@@ -154,6 +154,9 @@ export default defineEventHandler(async (event) => {
   const sections: any[] = [];
   const rowSize = prefs.rowSize;
 
+  // A guest only gets the sections listed in GUEST_HOME_SECTIONS.
+  const visibleToViewer = (id: HomeSectionId) => session !== null || GUEST_HOME_SECTIONS.includes(id);
+
   // Lazy builders re-query sized from what earlier sections already claimed, so
   // moving 'recent'/'popular' below big sections never starves them.
   const builders: Record<HomeSectionId, () => any | null> = {
@@ -166,13 +169,13 @@ export default defineEventHandler(async (event) => {
       return videos.length > 0 ? { id: 'popular', title: SECTION_TITLES.popular, videos } : null;
     },
     suggested: () => {
-      if (!session) return null;
+      if (!visibleToViewer('suggested') || !session) return null; // `!session` only narrows the type
       const suggestions = getRecommendedVideos(db, session.id, { type: 'all', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
       const videos = claim(suggestions.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'suggested', title: SECTION_TITLES.suggested, videos } : null;
     },
     subscriptions: () => {
-      if (!session) return null;
+      if (!visibleToViewer('subscriptions') || !session) return null; // `!session` only narrows the type
       const subChannels = db.prepare(`
         SELECT c.id, c.title, c.avatar_url
         FROM channels c

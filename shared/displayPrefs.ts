@@ -12,6 +12,8 @@ export type HomeSectionId = 'recent' | 'popular' | 'suggested' | 'subscriptions'
 export type PopularRanking = 'localViewers' | 'youtubeViews' | 'trending7d' | 'watchTime';
 
 export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['recent', 'popular', 'suggested', 'subscriptions'];
+// Sections a logged-out visitor can see (the others need a user).
+export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['recent', 'popular'];
 export const POPULAR_RANKINGS: readonly PopularRanking[] = ['localViewers', 'youtubeViews', 'trending7d', 'watchTime'];
 export const ROW_SIZES: readonly number[] = [10, 15, 20, 30];
 export const SUBSCRIPTION_CHANNEL_COUNTS: readonly number[] = [4, 8, 12, 16];

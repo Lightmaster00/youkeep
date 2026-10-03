@@ -10,8 +10,8 @@
     <!-- Home deliberately emptied by the viewer's preferences -->
     <EmptyState
       v-else-if="!searchQuery && homeFullyHidden"
-      title="Ton accueil est vide"
-      description="Tu as masqué le bloc vedette et toutes les sections. Réactive-en dans les préférences d'affichage de ton compte."
+      :title="emptyHomeCopy.title"
+      :description="emptyHomeCopy.description"
       icon="video"
       :action-text="auth.isLoggedIn.value ? 'Ouvrir mon compte' : undefined"
       action-route="/account"
@@ -149,6 +149,11 @@ const auth = useAuth();
 const { isAdmin } = auth;
 const { effective: displayPrefs } = useDisplayPrefs();
 const homeFullyHidden = computed(() => isHomeFullyHidden(displayPrefs.value, auth.isLoggedIn.value));
+
+// A guest cannot change preferences: the admin hid everything, so say that instead.
+const emptyHomeCopy = computed(() => auth.isLoggedIn.value
+  ? { title: 'Ton accueil est vide', description: "Tu as masqué le bloc vedette et toutes les sections. Réactive-en dans les préférences d'affichage de ton compte." }
+  : { title: 'Accueil vide', description: "L'administrateur a masqué toutes les sections de l'accueil de cette instance." });
 const route = useRoute();
 const router = useRouter();
 
