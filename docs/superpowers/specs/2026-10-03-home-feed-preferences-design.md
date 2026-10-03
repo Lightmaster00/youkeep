@@ -45,7 +45,7 @@ Let each user shape the video home page: which sections appear and in what order
   - `trending7d`: distinct viewers with `watched_at` in the last 7 days DESC, then `view_count` DESC;
   - `watchTime`: `SUM(watch_time_seconds)` over the instance DESC, then `view_count` DESC.
 - Row length is `rowSize`; subscriptions section shows up to `subscriptionChannels` channels (still ≥ 2 unseen videos each, up to 12 videos per channel as today).
-- Recent and popular pools grow from 30 to 60 so `rowSize` 30 stays filled after exclusions.
+- Recent and popular pools grow from 30 to 100 (60 proved too small: the hero, its 4 small slots and a 30-video recent row leave only 25 for popular) so `rowSize` 30 stays filled after exclusions.
 - Response shape is unchanged: `{ featured, sections }`, each section `{ id, title, videos }` or `{ id, title, channels }`. Authentication (cookie or Bearer) and `moduleGate` behaviour are unchanged.
 
 ## Client
