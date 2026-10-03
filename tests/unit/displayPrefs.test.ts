@@ -104,6 +104,11 @@ describe('parseStoredPartial per-key tolerance', () => {
   it('drops a null value (removal marker is write-time only)', () => {
     expect(parseStoredPartial(JSON.stringify({ density: null, rowSize: 10 }))).toEqual({ rowSize: 10 });
   });
+  it('drops a whole array key when any element is invalid', () => {
+    expect(parseStoredPartial(JSON.stringify({ hiddenNavLinks: ['/shorts', '/nope'] }))).toEqual({});
+    expect(parseStoredPartial(JSON.stringify({ homeSections: ['recent', 'bogus'], density: 'compact' })))
+      .toEqual({ density: 'compact' });
+  });
   it('validatePartial still throws on any invalid value', () => {
     expect(() => validatePartial({ density: 'compact', rowSize: 99 })).toThrow();
   });

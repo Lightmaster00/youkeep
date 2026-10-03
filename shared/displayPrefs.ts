@@ -12,7 +12,9 @@ export type HomeSectionId = 'recent' | 'popular' | 'suggested' | 'subscriptions'
 export type PopularRanking = 'localViewers' | 'youtubeViews' | 'trending7d' | 'watchTime';
 
 export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['recent', 'popular', 'suggested', 'subscriptions'];
-// Sections a logged-out visitor can see (the others need a user).
+// Sections a logged-out visitor can see (the others need a user). The server
+// mirrors this by returning null for guests in the suggested/subscriptions
+// builders of server/api/home/feed.get.ts: update both together.
 export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['recent', 'popular'];
 export const POPULAR_RANKINGS: readonly PopularRanking[] = ['localViewers', 'youtubeViews', 'trending7d', 'watchTime'];
 export const ROW_SIZES: readonly number[] = [10, 15, 20, 30];
