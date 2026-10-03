@@ -254,13 +254,13 @@ onMounted(() => {
 
 .playlists-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(max(1, calc(3 + var(--grid-offset, 0))), 1fr);
   gap: 24px;
 }
 
 @media (max-width: 992px) {
   .playlists-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(max(1, calc(2 + var(--grid-offset, 0))), 1fr);
   }
 }
 
