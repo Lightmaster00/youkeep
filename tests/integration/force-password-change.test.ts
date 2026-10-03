@@ -61,4 +61,10 @@ describe('forcePasswordChange middleware', () => {
       await expect(middleware(mockEvent(cookie, { path }))).rejects.toMatchObject({ statusCode: 403 });
     }
   });
+
+  it('lets a user with a temporary password read the display settings but not write preferences', async () => {
+    const cookie = mustChange('u1');
+    await expect(middleware(mockEvent(cookie, { path: '/api/settings/display' }))).resolves.toBeUndefined();
+    await expect(middleware(mockEvent(cookie, { path: '/api/account/preferences', method: 'PUT' }))).rejects.toMatchObject({ statusCode: 403 });
+  });
 });
