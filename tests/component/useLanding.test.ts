@@ -27,7 +27,7 @@ beforeEach(() => {
   useState<boolean>('modules_loaded').value = false;
   useState<any>('display_prefs').value = buildView({}, null);
   useState<any>('display_prefs_for').value = undefined;
-  setUser(null);
+  setUser('u0');
   window.sessionStorage.clear();
 });
 
@@ -39,7 +39,7 @@ describe('useLanding.consumeLandingTarget', () => {
   it('returns null for the default (auto, Video enabled) and still consumes the once-per-session marker', async () => {
     const { consumeLandingTarget } = useLanding();
     expect(await consumeLandingTarget()).toBeNull();
-    expect(window.sessionStorage.getItem('landing_applied')).toBe('guest');
+    expect(window.sessionStorage.getItem('landing_applied')).toBe('u0');
   });
 
   it('returns the chosen space home the first time only', async () => {
@@ -56,6 +56,24 @@ describe('useLanding.consumeLandingTarget', () => {
     setUser('u1');
     expect(await consumeLandingTarget()).toBe('/podcasts');
     expect(window.sessionStorage.getItem('landing_applied')).toBe('u1');
+  });
+
+  it('never redirects a guest and does not write the marker', async () => {
+    displayResponse = buildView({ landingSpace: 'music' }, null);
+    setUser(null);
+    const { consumeLandingTarget } = useLanding();
+    expect(await consumeLandingTarget()).toBeNull();
+    expect(window.sessionStorage.getItem('landing_applied')).toBeNull();
+  });
+
+  it('applies the landing once when a guest then logs in in the same tab', async () => {
+    displayResponse = buildView({ landingSpace: 'music' }, null);
+    setUser(null);
+    const { consumeLandingTarget } = useLanding();
+    expect(await consumeLandingTarget()).toBeNull();
+    setUser('u1');
+    expect(await consumeLandingTarget()).toBe('/music');
+    expect(await consumeLandingTarget()).toBeNull();
   });
 
   it('ignores an explicit choice that points to a disabled module', async () => {

@@ -11,7 +11,9 @@ export const useLanding = () => {
   // or null. Client only; any sessionStorage failure means "no redirect".
   const consumeLandingTarget = async (): Promise<string | null> => {
     if (!import.meta.client) return null;
-    const userKey = auth.user.value?.id ?? 'guest';
+    // Guests are never redirected (the public video home must stay reachable).
+    if (!auth.isLoggedIn.value || !auth.user.value) return null;
+    const userKey = auth.user.value.id;
     try {
       if (window.sessionStorage.getItem(MARKER_KEY) === userKey) return null;
       window.sessionStorage.setItem(MARKER_KEY, userKey);
