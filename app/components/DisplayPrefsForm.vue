@@ -42,13 +42,74 @@
         <option v-for="space in landingOptions" :key="space.id" :value="space.id">{{ space.label }}</option>
       </select>
     </div>
+
+    <!-- Home page -->
+    <div class="pref-block">
+      <div class="pref-head">
+        <span class="form-label">Sections de l'accueil</span>
+        <a v-if="isOverridden('homeSections')" href="#" class="reset-link" @click.prevent="resetKey('homeSections')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+      </div>
+      <div v-for="(row, index) in sectionRows" :key="row.id" class="section-row" :data-testid="`section-row-${row.id}`">
+        <label class="check-row">
+          <input type="checkbox" :checked="row.visible" :disabled="saving" @change="onSectionToggle(row.id, $event)" />
+          <span>{{ SECTION_LABELS[row.id] }}</span>
+        </label>
+        <span class="move-buttons">
+          <button type="button" class="move-btn" :data-testid="`up-${row.id}`" :disabled="saving || !row.visible || index === 0" aria-label="Monter" @click="moveSection(row.id, -1)">↑</button>
+          <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" aria-label="Descendre" @click="moveSection(row.id, 1)">↓</button>
+        </span>
+      </div>
+      <p class="pref-hint">« Suggéré pour toi » et « Par chaîne suivie » ne s'affichent que pour les comptes connectés.</p>
+    </div>
+
+    <div class="pref-block">
+      <div class="pref-head">
+        <span class="form-label">Bloc vedette</span>
+        <a v-if="isOverridden('homeHero')" href="#" class="reset-link" @click.prevent="resetKey('homeHero')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+      </div>
+      <label class="check-row">
+        <input type="checkbox" data-testid="hero-toggle" :checked="shown.homeHero" :disabled="saving" @change="onHeroChange" />
+        <span>Afficher le grand bloc en haut de l'accueil</span>
+      </label>
+    </div>
+
+    <div class="pref-block">
+      <div class="pref-head">
+        <label class="form-label" :for="`${uid}-ranking`">Classement de « Populaires »</label>
+        <a v-if="isOverridden('popularRanking')" href="#" class="reset-link" @click.prevent="resetKey('popularRanking')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+      </div>
+      <select :id="`${uid}-ranking`" class="form-input" :value="shown.popularRanking" :disabled="saving" @change="onRankingChange">
+        <option v-for="opt in RANKING_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+
+    <div class="pref-block">
+      <div class="pref-head">
+        <label class="form-label" :for="`${uid}-rowsize`">Vidéos par rangée</label>
+        <a v-if="isOverridden('rowSize')" href="#" class="reset-link" @click.prevent="resetKey('rowSize')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+      </div>
+      <select :id="`${uid}-rowsize`" class="form-input" :value="String(shown.rowSize)" :disabled="saving" @change="onNumberChange('rowSize', $event)">
+        <option v-for="n in ROW_SIZES" :key="n" :value="String(n)">{{ n }}</option>
+      </select>
+    </div>
+
+    <div class="pref-block">
+      <div class="pref-head">
+        <label class="form-label" :for="`${uid}-subchannels`">Chaînes suivies affichées</label>
+        <a v-if="isOverridden('subscriptionChannels')" href="#" class="reset-link" @click.prevent="resetKey('subscriptionChannels')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+      </div>
+      <select :id="`${uid}-subchannels`" class="form-input" :value="String(shown.subscriptionChannels)" :disabled="saving" @change="onNumberChange('subscriptionChannels', $event)">
+        <option v-for="n in SUBSCRIPTION_CHANNEL_COUNTS" :key="n" :value="String(n)">{{ n }}</option>
+      </select>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useToast } from '~/composables/useToast';
-import type { DisplayPrefs, PrefKey } from '#shared/displayPrefs';
+import { HOME_SECTION_IDS, ROW_SIZES, SUBSCRIPTION_CHANNEL_COUNTS } from '#shared/displayPrefs';
+import type { DisplayPrefs, HomeSectionId, PrefKey } from '#shared/displayPrefs';
 
 const props = defineProps<{ mode: 'user' | 'admin' }>();
 
@@ -120,6 +181,61 @@ function onNavChange(to: string, event: Event) {
   commit({ hiddenNavLinks: next }, () => { el.checked = shown.value.hiddenNavLinks.includes(to); });
 }
 
+const SECTION_LABELS: Record<HomeSectionId, string> = {
+  recent: 'Ajoutés récemment',
+  popular: 'Populaires',
+  suggested: 'Suggéré pour toi',
+  subscriptions: 'Par chaîne suivie',
+};
+const RANKING_OPTIONS = [
+  { value: 'localViewers', label: 'Spectateurs de l’instance' },
+  { value: 'youtubeViews', label: 'Vues YouTube' },
+  { value: 'trending7d', label: 'Tendance des 7 derniers jours' },
+  { value: 'watchTime', label: 'Temps de visionnage cumulé' },
+];
+
+// Visible sections in their configured order, then the hidden ones.
+const sectionRows = computed(() => {
+  const visible = shown.value.homeSections;
+  const hidden = HOME_SECTION_IDS.filter((id) => !visible.includes(id));
+  return [
+    ...visible.map((id) => ({ id, visible: true })),
+    ...hidden.map((id) => ({ id, visible: false })),
+  ];
+});
+const visibleCount = computed(() => shown.value.homeSections.length);
+
+function moveSection(id: HomeSectionId, delta: number) {
+  const list = [...shown.value.homeSections];
+  const i = list.indexOf(id);
+  const j = i + delta;
+  if (i < 0 || j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j]!, list[i]!];
+  commit({ homeSections: list }, () => {});
+}
+
+function onSectionToggle(id: HomeSectionId, event: Event) {
+  const el = event.target as HTMLInputElement;
+  const list = shown.value.homeSections.filter((x) => x !== id);
+  if (el.checked) list.push(id);
+  commit({ homeSections: list }, () => { el.checked = shown.value.homeSections.includes(id); });
+}
+
+function onHeroChange(event: Event) {
+  const el = event.target as HTMLInputElement;
+  commit({ homeHero: el.checked }, () => { el.checked = shown.value.homeHero; });
+}
+
+function onRankingChange(event: Event) {
+  const el = event.target as HTMLSelectElement;
+  commit({ popularRanking: el.value }, () => { el.value = shown.value.popularRanking; });
+}
+
+function onNumberChange(key: 'rowSize' | 'subscriptionChannels', event: Event) {
+  const el = event.target as HTMLSelectElement;
+  commit({ [key]: Number(el.value) }, () => { el.value = String(shown.value[key]); });
+}
+
 async function resetKey(key: PrefKey) {
   await commit({ [key]: null }, () => {});
 }
@@ -162,5 +278,32 @@ async function resetKey(key: PrefKey) {
   font-size: 12.5px;
   color: var(--text-secondary);
   margin: 2px 0 0;
+}
+
+.section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.move-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.move-btn {
+  min-width: 32px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.move-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 </style>
