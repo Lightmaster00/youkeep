@@ -128,6 +128,40 @@ describe('popularRanking', () => {
   });
 });
 
+describe('logged-in viewers', () => {
+  const allIds = (r: any) => [
+    r.featured.large?.id,
+    ...r.featured.small.map((v: any) => v.id),
+    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : s.channels.flatMap((c: any) => c.videos.map((v: any) => v.id))),
+  ].filter(Boolean);
+
+  it('with the hero off, suggested then recent both appear without duplicates', async () => {
+    seedVideos(30, 'c1');
+    seedVideos(30, 'c2');
+    const event = loginAs('viewer');
+    insertUserHistory(db, { userId: 'viewer', videoId: 'c1v0', watchTimeSeconds: 50, watchedAt: Date.now() });
+    setAdminDefaults({ homeHero: false, homeSections: ['suggested', 'recent'] });
+    const r: any = await handler(event);
+    expect(sectionIds(r)).toEqual(['suggested', 'recent']);
+    const all = allIds(r);
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  it('a subscriber never sees a video twice across hero and sections', async () => {
+    seedVideos(30, 'c1');
+    seedVideos(30, 'c2');
+    const event = loginAs('viewer');
+    insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
+    insertUserHistory(db, { userId: 'viewer', videoId: 'c2v0', watchTimeSeconds: 50, watchedAt: Date.now() });
+    const r: any = await handler(event);
+    expect(r.featured.large).not.toBeNull();
+    const all = allIds(r);
+    expect(all.length).toBeGreaterThan(5);
+    expect(new Set(all).size).toBe(all.length);
+    expect(r.featured.small.every((v: any) => v.channel_id !== 'c1')).toBe(true);
+  });
+});
+
 describe('sizes', () => {
   it('limits a row to rowSize', async () => {
     seedVideos(40);

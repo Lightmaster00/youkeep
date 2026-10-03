@@ -62,6 +62,15 @@ const POPULAR_ORDER: Record<PopularRanking, string> = {
   watchTime: 'watch_total DESC, v.view_count DESC',
 };
 
+// The one metric column each ranking orders by (youtubeViews uses a plain
+// column). Keyed by the validated enum, so no user input reaches the SQL.
+const POPULAR_METRIC = (cutoff: number): Record<PopularRanking, string> => ({
+  localViewers: '(SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id) as local_viewers',
+  youtubeViews: '',
+  trending7d: `(SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id AND watched_at >= ${cutoff}) as recent_viewers`,
+  watchTime: '(SELECT COALESCE(SUM(watch_time_seconds), 0) FROM user_history WHERE video_id = v.id) as watch_total',
+});
+
 const POOL_SIZE = 100;
 const TRENDING_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
@@ -86,17 +95,16 @@ export default defineEventHandler(async (event) => {
   // done by the section builders. `limit` is a server-side integer.
   const queryPool = (kind: 'popular' | 'recent', limit: number): FeedVideo[] => {
     const popular = kind === 'popular';
+    const ranking: PopularRanking = POPULAR_ORDER[prefs.popularRanking] ? prefs.popularRanking : 'localViewers';
+    const metric = popular ? POPULAR_METRIC(cutoff)[ranking] : '';
     return db.prepare(`
-      SELECT ${FEED_VIDEO_COLUMNS}${popular ? `,
-             (SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id) as local_viewers,
-             (SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id AND watched_at >= ${cutoff}) as recent_viewers,
-             (SELECT COALESCE(SUM(watch_time_seconds), 0) FROM user_history WHERE video_id = v.id) as watch_total` : ''}
+      SELECT ${FEED_VIDEO_COLUMNS}${metric ? `,\n             ${metric}` : ''}
       FROM videos v
       JOIN channels c ON v.channel_id = c.id
       WHERE v.download_status = 'completed'
         AND ${visibility.sql}
         ${hidden.sql}
-      ORDER BY ${popular ? (POPULAR_ORDER[prefs.popularRanking] ?? POPULAR_ORDER.localViewers) : 'v.created_at DESC'}
+      ORDER BY ${popular ? POPULAR_ORDER[ranking] : 'v.created_at DESC'}
       LIMIT ${Math.trunc(limit)}
     `).all(...visibility.params, ...hidden.params) as FeedVideo[];
   };
@@ -118,11 +126,13 @@ export default defineEventHandler(async (event) => {
   let large: FeedVideo | null = null;
   const small: FeedVideo[] = [];
 
+  // Only the hero's small slots use this (the subscriptions section runs its own
+  // query), so it is skipped when the hero is off.
   // Videos from channels the user is subscribed to are reserved for the
   // dedicated "subscriptions" section and are not spent filling the generic
   // featured "small" slots, which draw from unsubscribed content.
   let subscribedChannelIds: Set<string> = new Set();
-  if (session) {
+  if (session && prefs.homeHero) {
     const subRows = db.prepare(`
       SELECT channel_id FROM user_subscriptions WHERE user_id = ?
     `).all(session.id) as { channel_id: string }[];
