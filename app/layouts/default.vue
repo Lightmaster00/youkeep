@@ -161,7 +161,7 @@ import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { spaces } from '~/spaces';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
-import { filterNavLinks } from '~/utils/displayPrefs';
+import { filterNavLinks, shouldApplyLanding } from '~/utils/displayPrefs';
 
 const { user, isAdmin, logout } = useAuth();
 const displayPrefs = useDisplayPrefs();
@@ -380,7 +380,7 @@ onMounted(() => {
   fetchActiveDownloads();
   downloadCountInterval = setInterval(fetchActiveDownloads, 5000);
   refreshModules();
-  if (route.path === '/') {
+  if (shouldApplyLanding(route.path, route.query)) {
     useLanding().consumeLandingTarget().then((target) => {
       if (target) router.replace(target);
     });

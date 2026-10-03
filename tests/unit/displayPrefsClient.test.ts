@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterNavLinks, resolveLandingTarget } from '../../app/utils/displayPrefs';
+import { filterNavLinks, resolveLandingTarget, shouldApplyLanding } from '../../app/utils/displayPrefs';
 
 const videoLinks = [
   { to: '/', label: 'Home' },
@@ -65,5 +65,14 @@ describe('resolveLandingTarget', () => {
   it('returns null when nothing is enabled', () => {
     expect(resolveLandingTarget('auto', [])).toBeNull();
     expect(resolveLandingTarget('music', [])).toBeNull();
+  });
+});
+
+describe('shouldApplyLanding', () => {
+  it('applies only to a plain / with no query', () => {
+    expect(shouldApplyLanding('/', {})).toBe(true);
+    expect(shouldApplyLanding('/', { q: 'x' })).toBe(false);
+    expect(shouldApplyLanding('/', { page: '3' })).toBe(false);
+    expect(shouldApplyLanding('/music', {})).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import { moduleForPagePath } from '~/utils/moduleRouting';
+import { shouldApplyLanding } from '~/utils/displayPrefs';
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const auth = useAuth();
@@ -42,7 +43,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   // Landing space: when entering the app at '/', start on the user's chosen
   // space, once per browser tab session. Client only (sessionStorage); it runs
   // after every redirect above, so those still win.
-  if (import.meta.client && to.path === '/') {
+  if (import.meta.client && shouldApplyLanding(to.path, to.query)) {
     const target = await useLanding().consumeLandingTarget();
     if (target) return navigateTo(target);
   }

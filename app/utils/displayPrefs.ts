@@ -2,6 +2,12 @@ import { HIDEABLE_NAV_LINKS } from '#shared/displayPrefs';
 import type { LandingSpace } from '#shared/displayPrefs';
 import type { ModuleId } from './moduleRouting';
 
+// The landing redirect applies only to a plain '/' entry: '/?q=...' (search)
+// and '/?page=...' (pagination) are deliberate navigations and must be kept.
+export function shouldApplyLanding(path: string, query: Record<string, unknown>): boolean {
+  return path === '/' && Object.keys(query).length === 0;
+}
+
 // A link is dropped only if it is hideable AND listed as hidden, so Home ('/')
 // and the single library link of the music/podcasts spaces can never disappear.
 export function filterNavLinks<T extends { to: string }>(links: T[], hidden: string[]): T[] {

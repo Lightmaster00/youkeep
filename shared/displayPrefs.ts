@@ -1,5 +1,5 @@
-// Pure module shared by the Nitro server and the Vue app (imported with
-// relative paths): no Nuxt auto-imports and no I/O in here.
+// Pure module shared by the Nitro server and the Vue app (app code imports it
+// via the `#shared/displayPrefs` alias, server code with relative paths): no Nuxt auto-imports and no I/O in here.
 
 export type Density = 'compact' | 'comfortable' | 'spacious';
 export type LandingSpace = 'auto' | 'video' | 'music' | 'podcasts';
