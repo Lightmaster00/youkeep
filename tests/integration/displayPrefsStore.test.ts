@@ -43,6 +43,12 @@ describe('getAdminDefaults / getUserOverrides', () => {
     expect(getUserOverrides(db, 'u1')).toEqual({});
   });
 
+  it('getUserOverrides keeps valid keys when one stored key is invalid', () => {
+    insertUser(db, { id: 'u1', role: 'user' });
+    insertUserPreferences(db, { userId: 'u1', data: '{"density":"huge","landingSpace":"music"}' });
+    expect(getUserOverrides(db, 'u1')).toEqual({ landingSpace: 'music' });
+  });
+
   it('never throw when the database is unavailable', () => {
     const broken = { prepare: () => { throw new Error('db down'); } } as unknown as Database.Database;
     expect(getAdminDefaults(broken)).toEqual({});

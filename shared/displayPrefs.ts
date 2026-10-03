@@ -134,14 +134,30 @@ export function validatePartial(input: unknown): ValidatedChange {
   return { set, remove };
 }
 
-// Stored JSON that is missing, corrupt or no longer valid is an empty partial.
+// Stored JSON that is missing or corrupt is an empty partial; otherwise each
+// known key is validated alone so one bad value never discards the others.
+// null is a write-time removal marker only and is dropped here.
 export function parseStoredPartial(raw: string | null | undefined): PrefsPartial {
   if (!raw) return {};
+  let parsed: unknown;
   try {
-    return validatePartial(JSON.parse(raw)).set;
+    parsed = JSON.parse(raw);
   } catch {
     return {};
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const out: PrefsPartial = {};
+  for (const key of PREF_KEYS) {
+    if (!(key in parsed)) continue;
+    const value = (parsed as Record<string, unknown>)[key];
+    if (value === null) continue;
+    try {
+      (out as Record<string, unknown>)[key] = validateValue(key, value);
+    } catch {
+      // invalid stored value for this key: ignore it
+    }
+  }
+  return out;
 }
 
 export function mergePrefs(base: DisplayPrefs, partial: PrefsPartial | null | undefined): DisplayPrefs {

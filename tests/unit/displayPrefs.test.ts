@@ -90,6 +90,25 @@ describe('parseStoredPartial', () => {
   );
 });
 
+describe('parseStoredPartial per-key tolerance', () => {
+  it('keeps valid keys when another key is invalid', () => {
+    expect(parseStoredPartial(JSON.stringify({ density: 'compact', rowSize: 99, landingSpace: 'music' })))
+      .toEqual({ density: 'compact', landingSpace: 'music' });
+  });
+  it('ignores unknown keys', () => {
+    expect(parseStoredPartial(JSON.stringify({ density: 'compact', bogus: 1 }))).toEqual({ density: 'compact' });
+  });
+  it('treats corrupt JSON as empty', () => {
+    expect(parseStoredPartial('{oops')).toEqual({});
+  });
+  it('drops a null value (removal marker is write-time only)', () => {
+    expect(parseStoredPartial(JSON.stringify({ density: null, rowSize: 10 }))).toEqual({ rowSize: 10 });
+  });
+  it('validatePartial still throws on any invalid value', () => {
+    expect(() => validatePartial({ density: 'compact', rowSize: 99 })).toThrow();
+  });
+});
+
 describe('mergePrefs', () => {
   it('overlays only the keys present in the partial', () => {
     expect(mergePrefs(APP_DEFAULTS, { density: 'compact' })).toEqual({ ...APP_DEFAULTS, density: 'compact' });
