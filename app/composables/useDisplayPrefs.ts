@@ -18,7 +18,9 @@ export const useDisplayPrefs = () => {
     try {
       view.value = await requestFetch<DisplayView>('/api/settings/display');
     } catch {
-      view.value = buildView({}, null);
+      // Keep already-loaded prefs for the same user across a transient failure; otherwise
+      // (first load, or a different user than the loaded one) fall back to the app defaults.
+      if (loadedFor.value !== userId) view.value = buildView({}, null);
     } finally {
       loadedFor.value = userId;
     }

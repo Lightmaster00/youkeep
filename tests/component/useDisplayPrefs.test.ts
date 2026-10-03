@@ -50,6 +50,38 @@ describe('useDisplayPrefs', () => {
     expect(effective.value.density).toBe('comfortable');
   });
 
+  it('keeps the loaded view when a later refresh fails', async () => {
+    const loaded = buildView({}, { density: 'compact' });
+    fetchMock.mockResolvedValueOnce(loaded);
+    const { refresh, effective } = useDisplayPrefs();
+    await refresh();
+    fetchMock.mockRejectedValueOnce(new Error('network'));
+    await refresh();
+    expect(effective.value.density).toBe('compact');
+    expect(useState<any>('display_prefs').value).toEqual(loaded);
+  });
+
+  it('falls back to the app defaults when the first load fails', async () => {
+    useState<any>('display_prefs').value = buildView({ density: 'spacious' }, null);
+    fetchMock.mockRejectedValueOnce(new Error('network'));
+    const { refresh, effective } = useDisplayPrefs();
+    await refresh();
+    expect(effective.value).toEqual(APP_DEFAULTS);
+  });
+
+  it('does not keep the previous user view when the refresh for a different user fails', async () => {
+    setUser('u1');
+    fetchMock.mockResolvedValueOnce(buildView({}, { density: 'compact' }));
+    const { refresh, effective } = useDisplayPrefs();
+    await refresh();
+    expect(effective.value.density).toBe('compact');
+    setUser('u2');
+    fetchMock.mockRejectedValueOnce(new Error('network'));
+    await refresh();
+    expect(effective.value).toEqual(APP_DEFAULTS);
+    expect(useState<any>('display_prefs_for').value).toBe('u2');
+  });
+
   it('saveOverrides PUTs the partial and applies the returned view', async () => {
     const returned = buildView({}, { density: 'spacious' });
     fetchMock.mockResolvedValueOnce(returned);
