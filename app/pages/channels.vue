@@ -431,7 +431,7 @@ onUnmounted(() => {
 
 .channels-page .video-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(max(1, calc(3 + var(--grid-offset, 0))), 1fr);
   column-gap: 24px;
   row-gap: 40px;
   margin-bottom: 40px;
@@ -439,7 +439,7 @@ onUnmounted(() => {
 
 @media (max-width: 1024px) {
   .channels-page .video-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(max(1, calc(2 + var(--grid-offset, 0))), 1fr);
   }
 }
 
@@ -460,7 +460,7 @@ onUnmounted(() => {
    specificity intentionally overrides those breakpoints too, since this grid
    uses its own auto-fill sizing at every width instead of fixed columns. */
 .channels-page .video-grid.playlists-video-grid {
-  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(calc(260px * var(--grid-min-scale, 1)), 100%), 1fr));
 }
 
 .channels-page .video-card.premium-card {

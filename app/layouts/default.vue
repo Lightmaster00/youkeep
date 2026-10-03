@@ -163,6 +163,8 @@ import { spaces } from '~/spaces';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
 
 const { user, isAdmin, logout } = useAuth();
+const displayPrefs = useDisplayPrefs();
+useHead({ htmlAttrs: { 'data-density': computed(() => displayPrefs.effective.value.density) } });
 const { toasts, removeToast } = useToast();
 const { currentTrack } = useMusicPlayer();
 const { currentEpisode } = usePodcastPlayer();

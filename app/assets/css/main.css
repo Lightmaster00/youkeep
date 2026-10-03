@@ -66,6 +66,23 @@
   --font-body: 'Inter', sans-serif;
 }
 
+/* Display density (see DisplayPrefs). Pages fold these into their own grid and
+   card-width rules; comfortable keeps every page exactly as it was. */
+:root {
+  --grid-offset: 0;
+  --grid-min-scale: 1;
+}
+
+html[data-density="compact"] {
+  --grid-offset: 1;
+  --grid-min-scale: 0.8;
+}
+
+html[data-density="spacious"] {
+  --grid-offset: -1;
+  --grid-min-scale: 1.25;
+}
+
 /* Base resets */
 * {
   box-sizing: border-box;

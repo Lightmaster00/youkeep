@@ -1,6 +1,6 @@
 import { computed } from 'vue';
-import { buildView } from '../../shared/displayPrefs';
-import type { DisplayView } from '../../shared/displayPrefs';
+import { buildView } from '#shared/displayPrefs';
+import type { DisplayView } from '#shared/displayPrefs';
 
 export const useDisplayPrefs = () => {
   const auth = useAuth();

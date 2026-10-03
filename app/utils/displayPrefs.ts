@@ -1,5 +1,5 @@
-import { HIDEABLE_NAV_LINKS } from '../../shared/displayPrefs';
-import type { LandingSpace } from '../../shared/displayPrefs';
+import { HIDEABLE_NAV_LINKS } from '#shared/displayPrefs';
+import type { LandingSpace } from '#shared/displayPrefs';
 import type { ModuleId } from './moduleRouting';
 
 // A link is dropped only if it is hideable AND listed as hidden, so Home ('/')

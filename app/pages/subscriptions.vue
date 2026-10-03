@@ -299,7 +299,7 @@ const onVideoHidden = (id: string) => {
      hard floor, so any content box under 280px (viewport under ~415px) made
      the single column wider than its container. This page has no media
      queries at all, so nothing else covered it. */
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(calc(280px * var(--grid-min-scale, 1)), 100%), 1fr));
   gap: 24px;
 }
 

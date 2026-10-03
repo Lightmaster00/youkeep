@@ -34,4 +34,8 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (owner && !auth.isAdmin.value && !isEnabled(owner)) {
     return navigateTo(firstEnabledHome.value);
   }
+
+  // Load the display preferences for the current user (also on the server, so
+  // the density attribute is part of the first HTML response).
+  await useDisplayPrefs().ensureLoaded();
 });
