@@ -41,6 +41,22 @@
         <div class="config-section glass-panel">
           <div class="section-title-row">
             <div class="icon-orb bg-pink">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            </div>
+            <div>
+              <h3>Affichage par défaut</h3>
+              <p class="section-desc">Valeurs de départ de l'affichage pour toute l'instance (invités et utilisateurs). Chaque utilisateur peut ensuite les personnaliser depuis son compte.</p>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <DisplayPrefsForm mode="admin" />
+          </div>
+        </div>
+
+        <div class="config-section glass-panel">
+          <div class="section-title-row">
+            <div class="icon-orb bg-pink">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
             </div>
             <div>
