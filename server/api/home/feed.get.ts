@@ -82,30 +82,27 @@ export default defineEventHandler(async (event) => {
   const prefs = readPrefs(db, session?.id ?? null);
   const cutoff = Date.now() - TRENDING_WINDOW_MS;
 
-  const popularPool = db.prepare(`
-    SELECT ${FEED_VIDEO_COLUMNS},
-           (SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id) as local_viewers,
-           (SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id AND watched_at >= ${cutoff}) as recent_viewers,
-           (SELECT COALESCE(SUM(watch_time_seconds), 0) FROM user_history WHERE video_id = v.id) as watch_total
-    FROM videos v
-    JOIN channels c ON v.channel_id = c.id
-    WHERE v.download_status = 'completed'
-      AND ${visibility.sql}
-      ${hidden.sql}
-    ORDER BY ${POPULAR_ORDER[prefs.popularRanking] ?? POPULAR_ORDER.localViewers}
-    LIMIT ${POOL_SIZE}
-  `).all(...visibility.params, ...hidden.params) as FeedVideo[];
+  // Same SELECT/ORDER BY for the up-front pools (hero) and the lazy re-queries
+  // done by the section builders. `limit` is a server-side integer.
+  const queryPool = (kind: 'popular' | 'recent', limit: number): FeedVideo[] => {
+    const popular = kind === 'popular';
+    return db.prepare(`
+      SELECT ${FEED_VIDEO_COLUMNS}${popular ? `,
+             (SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id) as local_viewers,
+             (SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id AND watched_at >= ${cutoff}) as recent_viewers,
+             (SELECT COALESCE(SUM(watch_time_seconds), 0) FROM user_history WHERE video_id = v.id) as watch_total` : ''}
+      FROM videos v
+      JOIN channels c ON v.channel_id = c.id
+      WHERE v.download_status = 'completed'
+        AND ${visibility.sql}
+        ${hidden.sql}
+      ORDER BY ${popular ? (POPULAR_ORDER[prefs.popularRanking] ?? POPULAR_ORDER.localViewers) : 'v.created_at DESC'}
+      LIMIT ${Math.trunc(limit)}
+    `).all(...visibility.params, ...hidden.params) as FeedVideo[];
+  };
 
-  const recentPool = db.prepare(`
-    SELECT ${FEED_VIDEO_COLUMNS}
-    FROM videos v
-    JOIN channels c ON v.channel_id = c.id
-    WHERE v.download_status = 'completed'
-      AND ${visibility.sql}
-      ${hidden.sql}
-    ORDER BY v.created_at DESC
-    LIMIT ${POOL_SIZE}
-  `).all(...visibility.params, ...hidden.params) as FeedVideo[];
+  const popularPool = queryPool('popular', POOL_SIZE);
+  const recentPool = queryPool('recent', POOL_SIZE);
 
   const usedIds = new Set<string>();
 
@@ -157,13 +154,15 @@ export default defineEventHandler(async (event) => {
   const sections: any[] = [];
   const rowSize = prefs.rowSize;
 
+  // Lazy builders re-query sized from what earlier sections already claimed, so
+  // moving 'recent'/'popular' below big sections never starves them.
   const builders: Record<HomeSectionId, () => any | null> = {
     recent: () => {
-      const videos = claim(recentPool.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
+      const videos = claim(queryPool('recent', usedIds.size + rowSize).filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'recent', title: SECTION_TITLES.recent, videos } : null;
     },
     popular: () => {
-      const videos = claim(popularPool.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
+      const videos = claim(queryPool('popular', usedIds.size + rowSize).filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'popular', title: SECTION_TITLES.popular, videos } : null;
     },
     suggested: () => {

@@ -186,3 +186,28 @@ describe('Bearer token caller', () => {
     expect(sectionIds(r)).toEqual(['popular']);
   });
 });
+
+describe('lazy recent/popular sizing', () => {
+  it('keeps a full recent row after a section that claims most of the newest videos', async () => {
+    const now = Date.now();
+    insertChannel(db, { id: 'old' });
+    for (let i = 0; i < 120; i++) {
+      insertVideo(db, { id: `old${i}`, channelId: 'old', uploadDate: '20250101', viewCount: 10, createdAt: now - 1_000_000 - i * 1000 });
+    }
+    const event = loginAs('u1');
+    for (let c = 0; c < 8; c++) {
+      insertChannel(db, { id: `sub${c}` });
+      insertSubscription(db, { userId: 'u1', channelId: `sub${c}` });
+      for (let i = 0; i < 12; i++) {
+        insertVideo(db, { id: `sub${c}v${i}`, channelId: `sub${c}`, uploadDate: '20260101', viewCount: 5, createdAt: now - (c * 12 + i) * 10 });
+      }
+    }
+    insertUserPreferences(db, { userId: 'u1', data: JSON.stringify({ homeSections: ['subscriptions', 'recent'], homeHero: false, rowSize: 15 }) });
+    const r: any = await handler(event);
+    expect(sectionIds(r)).toEqual(['subscriptions', 'recent']);
+    const recent = r.sections.find((s: any) => s.id === 'recent');
+    expect(recent.videos).toHaveLength(15);
+    const all = r.sections.flatMap((s: any) => s.id === 'subscriptions' ? s.channels.flatMap(ids) : ids(s));
+    expect(new Set(all).size).toBe(all.length);
+  });
+});

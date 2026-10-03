@@ -38,6 +38,7 @@ Let each user shape the video home page: which sections appear and in what order
 ## Feed behaviour (server/api/home/feed.get.ts)
 
 - Resolve the caller's effective prefs once via `getDisplayView` (guest → instance defaults). Any failure falls back to `APP_DEFAULTS`; the feed never fails because of preferences.
+- With default preferences the feed is equivalent in shape and section order to the previous one but not byte-identical: pools are larger, the suggested candidate limit is `max(20, rowSize + 10)`, and suggestions are randomised.
 - Build order: hero first (if `homeHero`), then sections in `homeSections` order, each excluding videos already claimed. Hidden hero: `featured` is `{ large: null, small: [] }` and reserves no videos.
 - `popularRanking` changes only the popular pool's `ORDER BY` (also used to pick the hero's large video):
   - `localViewers`: distinct viewers DESC, `view_count` DESC (current behaviour);

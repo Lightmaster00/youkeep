@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3';
 import { createError } from 'h3';
 import {
   InvalidPrefError,
+  PREF_KEYS,
   applyChange,
   buildView,
   parseStoredPartial,
@@ -69,7 +70,7 @@ export function parseChangeOrThrow(body: unknown): ValidatedChange {
     throw err;
   }
   if (Object.keys(change.set).length === 0 && change.remove.length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'At least one display preference (density, hiddenNavLinks, landingSpace, homeSections, homeHero, popularRanking, rowSize, subscriptionChannels) is required.' });
+    throw createError({ statusCode: 400, statusMessage: `At least one display preference (${PREF_KEYS.join(', ')}) is required.` });
   }
   return change;
 }
