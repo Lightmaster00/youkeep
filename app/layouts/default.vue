@@ -160,6 +160,7 @@ import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { spaces } from '~/spaces';
+import { resolveActiveSpaceId } from '~/utils/moduleRouting';
 
 const { user, isAdmin, logout } = useAuth();
 const { toasts, removeToast } = useToast();
@@ -250,13 +251,12 @@ function onClearHistory() {
 
 const router = useRouter();
 const route = useRoute();
+const { enabledModules, isEnabled, refresh: refreshModules } = useModules();
 const activeSpace = computed(() => {
-  if (route.path.startsWith('/music')) return spaces.find((s) => s.id === 'music') ?? spaces[0]!;
-  if (route.path.startsWith('/podcasts')) return spaces.find((s) => s.id === 'podcasts') ?? spaces[0]!;
-  return spaces.find((s) => s.id === 'video') ?? spaces[0]!;
+  const id = resolveActiveSpaceId(route.path, isAdmin.value, enabledModules.value);
+  return spaces.find((s) => s.id === id) ?? spaces[0]!;
 });
 
-const { enabledModules, isEnabled, refresh: refreshModules } = useModules();
 // Non-admins only see enabled modules; admins see all, disabled ones carry a badge.
 const visibleSpaces = computed(() =>
   spaces.filter((s) => isAdmin.value || isEnabled(s.id))

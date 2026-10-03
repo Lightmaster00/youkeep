@@ -12,3 +12,13 @@ export function moduleForPagePath(rawPath: string): ModuleId | null {
   if (path === '/podcasts' || path.startsWith('/podcasts/')) return 'podcasts';
   return null;
 }
+
+// The space the layout shows for a route. Module-less pages (/account,
+// /search, /settings, /admin) use Video, unless a non-admin has Video disabled,
+// in which case the first enabled space is used so the nav and search stay valid.
+export function resolveActiveSpaceId(path: string, isAdmin: boolean, enabled: ModuleId[]): ModuleId {
+  if (path === '/music' || path.startsWith('/music/')) return 'music';
+  if (path === '/podcasts' || path.startsWith('/podcasts/')) return 'podcasts';
+  if (isAdmin || enabled.includes('video')) return 'video';
+  return enabled[0] ?? 'video';
+}
