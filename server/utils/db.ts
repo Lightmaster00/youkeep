@@ -172,6 +172,13 @@ export function getDb(): Database.Database {
       FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY,
       video_id TEXT NOT NULL,

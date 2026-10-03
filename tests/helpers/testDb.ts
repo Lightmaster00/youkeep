@@ -33,6 +33,13 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE user_preferences (
+      user_id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -212,6 +219,13 @@ export function insertApiToken(db: Database.Database, opts: { id: string; userId
     INSERT INTO api_tokens (id, user_id, label, token_hash, created_at, last_used_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `).run(opts.id, opts.userId, opts.label ?? `Token ${opts.id}`, opts.tokenHash, opts.createdAt ?? Date.now(), opts.lastUsedAt ?? null);
+}
+
+export function insertUserPreferences(db: Database.Database, opts: { userId: string; data: string; updatedAt?: number }) {
+  db.prepare(`
+    INSERT INTO user_preferences (user_id, data, updated_at)
+    VALUES (?, ?, ?)
+  `).run(opts.userId, opts.data, opts.updatedAt ?? Date.now());
 }
 
 export function insertChannel(db: Database.Database, opts: { id: string; visibility?: string }) {
