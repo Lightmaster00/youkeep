@@ -122,15 +122,21 @@ describe('DisplayPrefsForm — home section', () => {
 });
 
 describe('DisplayPrefsForm — modes', () => {
-  const state = () => { useState<any>('display_prefs').value = buildView({ rowSize: 10 }, { rowSize: 30 }); };
+  // Disjoint keys: the admin default is rowSize, the personal override is density,
+  // so which reset links show proves which source each mode reads.
+  const state = () => { useState<any>('display_prefs').value = buildView({ rowSize: 10 }, { density: 'compact' }); };
+  const resetLabelFor = (w: any, link: any) =>
+    link.element.parentElement.querySelector('label').getAttribute('for').replace(/^.*-/, '');
 
   it('admin mode shows the instance default, a reset link, and saves to the admin endpoint', async () => {
     state();
-    fetchMock.mockResolvedValue(buildView({ rowSize: 20 }, { rowSize: 30 }));
+    fetchMock.mockResolvedValue(buildView({ rowSize: 20 }, { density: 'compact' }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'admin' } });
     const sel = w.find('select[id$="-rowsize"]');
     expect((sel.element as HTMLSelectElement).value).toBe('10');
-    expect(w.findAll('a.reset-link').length).toBe(1);
+    const links = w.findAll('a.reset-link');
+    expect(links.length).toBe(1);
+    expect(resetLabelFor(w, links[0])).toBe('rowsize');
     await sel.setValue('20');
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, opts] = fetchMock.mock.calls[0];
@@ -139,9 +145,30 @@ describe('DisplayPrefsForm — modes', () => {
     expect(opts.body).toEqual({ rowSize: 20 });
   });
 
-  it('user mode shows the effective (personal) value', async () => {
+  it('user mode shows the effective value and only the density reset link', async () => {
     state();
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    expect((w.find('select[id$="-rowsize"]').element as HTMLSelectElement).value).toBe('30');
+    expect((w.find('select[id$="-rowsize"]').element as HTMLSelectElement).value).toBe('10');
+    expect((w.find('select[id$="-density"]').element as HTMLSelectElement).value).toBe('compact');
+    const links = w.findAll('a.reset-link');
+    expect(links.length).toBe(1);
+    expect(resetLabelFor(w, links[0])).toBe('density');
+  });
+
+  it('user mode: clicking the density reset link sends { density: null } to the user endpoint', async () => {
+    state();
+    fetchMock.mockResolvedValue(buildView({ rowSize: 10 }, {}));
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
+    await w.find('a.reset-link').trigger('click');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/account/preferences');
+    expect(opts.body).toEqual({ density: null });
+  });
+
+  it('lists the ranking options in order with their French labels', async () => {
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
+    const texts = w.findAll('select[id$="-ranking"] option').map((o: any) => o.text());
+    expect(texts).toEqual(['Spectateurs locaux', 'Vues YouTube', 'Tendance 7 jours', 'Temps de visionnage']);
   });
 });
