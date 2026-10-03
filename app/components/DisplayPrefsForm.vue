@@ -55,8 +55,8 @@
           <span>{{ SECTION_LABELS[row.id] }}</span>
         </label>
         <span class="move-buttons">
-          <button type="button" class="move-btn" :data-testid="`up-${row.id}`" :disabled="saving || !row.visible || index === 0" aria-label="Monter" @click="moveSection(row.id, -1)">↑</button>
-          <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" aria-label="Descendre" @click="moveSection(row.id, 1)">↓</button>
+          <button type="button" class="move-btn" :data-testid="`up-${row.id}`" :disabled="saving || !row.visible || index === 0" :aria-label="`Monter ${SECTION_LABELS[row.id]}`" @click="moveSection(row.id, -1)">↑</button>
+          <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" :aria-label="`Descendre ${SECTION_LABELS[row.id]}`" @click="moveSection(row.id, 1)">↓</button>
         </span>
       </div>
       <p class="pref-hint">« Suggéré pour toi » et « Par chaîne suivie » ne s'affichent que pour les comptes connectés.</p>
@@ -188,10 +188,10 @@ const SECTION_LABELS: Record<HomeSectionId, string> = {
   subscriptions: 'Par chaîne suivie',
 };
 const RANKING_OPTIONS = [
-  { value: 'localViewers', label: 'Spectateurs de l’instance' },
+  { value: 'localViewers', label: 'Spectateurs locaux' },
   { value: 'youtubeViews', label: 'Vues YouTube' },
-  { value: 'trending7d', label: 'Tendance des 7 derniers jours' },
-  { value: 'watchTime', label: 'Temps de visionnage cumulé' },
+  { value: 'trending7d', label: 'Tendance 7 jours' },
+  { value: 'watchTime', label: 'Temps de visionnage' },
 ];
 
 // Visible sections in their configured order, then the hidden ones.
