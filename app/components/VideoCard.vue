@@ -69,6 +69,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useVideoPreview } from '~/composables/useVideoPreview';
 import { highlightMatch } from '../utils/highlightMatch';
+import { nextInstanceId } from '../utils/uniqueId';
 
 const props = withDefaults(defineProps<{
   video: {
@@ -101,7 +102,7 @@ const HOVER_DELAY_MS = 550;
 const PREVIEW_START_RATIO = 0.10;
 const PREVIEW_END_RATIO = 0.40;
 
-const instanceId = crypto.randomUUID();
+const instanceId = nextInstanceId('video-card');
 const { activePreviewId } = useVideoPreview();
 const isPreviewActive = computed(() => activePreviewId.value === instanceId);
 const previewVideoEl = ref<HTMLVideoElement | null>(null);
