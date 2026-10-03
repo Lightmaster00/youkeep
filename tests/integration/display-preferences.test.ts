@@ -45,7 +45,7 @@ describe('GET /api/settings/display', () => {
     insertSetting(db, { key: 'display_defaults', value: '{"density":"spacious","landingSpace":"music"}' });
     insertUserPreferences(db, { userId: 'u1', data: '{"landingSpace":"podcasts"}' });
     const view: any = await get(cookie);
-    expect(view.effective).toEqual({ density: 'spacious', hiddenNavLinks: [], landingSpace: 'podcasts' });
+    expect(view.effective).toEqual({ ...APP_DEFAULTS, density: 'spacious', landingSpace: 'podcasts' });
     expect(view.defaults.landingSpace).toBe('music');
     expect(view.adminDefaults).toEqual({ density: 'spacious', landingSpace: 'music' });
   });

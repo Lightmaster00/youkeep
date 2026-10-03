@@ -12,7 +12,7 @@ import {
 
 describe('APP_DEFAULTS', () => {
   it('has the documented defaults', () => {
-    expect(APP_DEFAULTS).toEqual({ density: 'comfortable', hiddenNavLinks: [], landingSpace: 'auto' });
+    expect(APP_DEFAULTS).toMatchObject({ density: 'comfortable', hiddenNavLinks: [], landingSpace: 'auto' });
   });
 
   it('lists exactly the four hideable links', () => {
@@ -92,7 +92,7 @@ describe('parseStoredPartial', () => {
 
 describe('mergePrefs', () => {
   it('overlays only the keys present in the partial', () => {
-    expect(mergePrefs(APP_DEFAULTS, { density: 'compact' })).toEqual({ density: 'compact', hiddenNavLinks: [], landingSpace: 'auto' });
+    expect(mergePrefs(APP_DEFAULTS, { density: 'compact' })).toEqual({ ...APP_DEFAULTS, density: 'compact' });
   });
 
   it('replaces an array instead of merging it', () => {
@@ -126,13 +126,74 @@ describe('buildView', () => {
 
   it('resolves app defaults → admin defaults → user overrides', () => {
     const view = buildView({ density: 'compact', landingSpace: 'music' }, { landingSpace: 'podcasts' });
-    expect(view.defaults).toEqual({ density: 'compact', hiddenNavLinks: [], landingSpace: 'music' });
-    expect(view.effective).toEqual({ density: 'compact', hiddenNavLinks: [], landingSpace: 'podcasts' });
+    expect(view.defaults).toEqual({ ...APP_DEFAULTS, density: 'compact', landingSpace: 'music' });
+    expect(view.effective).toEqual({ ...APP_DEFAULTS, density: 'compact', landingSpace: 'podcasts' });
     expect(view.overrides).toEqual({ landingSpace: 'podcasts' });
     expect(view.adminDefaults).toEqual({ density: 'compact', landingSpace: 'music' });
   });
 
   it('gives a logged-in user with no choices an empty overrides object, not null', () => {
     expect(buildView({}, {}).overrides).toEqual({});
+  });
+});
+
+describe('home feed keys', () => {
+  it('has the documented home feed defaults', () => {
+    expect(APP_DEFAULTS.homeSections).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
+    expect(APP_DEFAULTS.homeHero).toBe(true);
+    expect(APP_DEFAULTS.popularRanking).toBe('localViewers');
+    expect(APP_DEFAULTS.rowSize).toBe(15);
+    expect(APP_DEFAULTS.subscriptionChannels).toBe(8);
+  });
+
+  it('accepts valid values', () => {
+    const r = validatePartial({
+      homeSections: ['popular', 'recent'], homeHero: false, popularRanking: 'watchTime', rowSize: 30, subscriptionChannels: 16,
+    });
+    expect(r.set).toEqual({
+      homeSections: ['popular', 'recent'], homeHero: false, popularRanking: 'watchTime', rowSize: 30, subscriptionChannels: 16,
+    });
+  });
+
+  it('accepts an empty homeSections array (all hidden)', () => {
+    expect(validatePartial({ homeSections: [] }).set).toEqual({ homeSections: [] });
+  });
+
+  it.each([
+    [{ homeSections: ['recent', 'recent'] }],
+    [{ homeSections: ['recent', 'bogus'] }],
+    [{ homeSections: 'recent' }],
+    [{ homeHero: 'yes' }],
+    [{ popularRanking: 'random' }],
+    [{ rowSize: 12 }],
+    [{ rowSize: '15' }],
+    [{ subscriptionChannels: 7 }],
+  ])('rejects invalid value %j', (input) => {
+    expect(() => validatePartial(input)).toThrow(InvalidPrefError);
+  });
+
+  it('treats null as removal for the new keys', () => {
+    expect(validatePartial({ rowSize: null, homeSections: null }).remove).toEqual(['homeSections', 'rowSize']);
+  });
+
+  it('mergePrefs replaces homeSections instead of merging', () => {
+    expect(mergePrefs(APP_DEFAULTS, { homeSections: ['popular'] }).homeSections).toEqual(['popular']);
+  });
+
+  it('mergePrefs copies homeSections so callers cannot mutate the defaults', () => {
+    const merged = mergePrefs(APP_DEFAULTS, null);
+    merged.homeSections.push('recent');
+    expect(APP_DEFAULTS.homeSections).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
+  });
+
+  it('parseStoredPartial drops a stored row holding an invalid new value', () => {
+    expect(parseStoredPartial(JSON.stringify({ rowSize: 99 }))).toEqual({});
+  });
+
+  it('buildView resolves the new keys admin → user', () => {
+    const view = buildView({ popularRanking: 'youtubeViews', rowSize: 10 }, { rowSize: 20 });
+    expect(view.defaults.rowSize).toBe(10);
+    expect(view.effective.rowSize).toBe(20);
+    expect(view.effective.popularRanking).toBe('youtubeViews');
   });
 });

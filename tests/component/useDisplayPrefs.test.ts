@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useDisplayPrefs } from '../../app/composables/useDisplayPrefs';
-import { buildView } from '../../shared/displayPrefs';
+import { APP_DEFAULTS, buildView } from '../../shared/displayPrefs';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('$fetch', fetchMock);
@@ -19,7 +19,7 @@ beforeEach(() => {
 describe('useDisplayPrefs', () => {
   it('starts with the app defaults', () => {
     const { effective } = useDisplayPrefs();
-    expect(effective.value).toEqual({ density: 'comfortable', hiddenNavLinks: [], landingSpace: 'auto' });
+    expect(effective.value).toEqual(APP_DEFAULTS);
   });
 
   it('ensureLoaded fetches the view once for the same user', async () => {

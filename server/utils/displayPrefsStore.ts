@@ -69,7 +69,7 @@ export function parseChangeOrThrow(body: unknown): ValidatedChange {
     throw err;
   }
   if (Object.keys(change.set).length === 0 && change.remove.length === 0) {
-    throw createError({ statusCode: 400, statusMessage: 'At least one of density, hiddenNavLinks, landingSpace is required.' });
+    throw createError({ statusCode: 400, statusMessage: 'At least one display preference (density, hiddenNavLinks, landingSpace, homeSections, homeHero, popularRanking, rowSize, subscriptionChannels) is required.' });
   }
   return change;
 }

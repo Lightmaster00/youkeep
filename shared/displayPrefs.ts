@@ -8,20 +8,41 @@ export const DENSITIES: readonly Density[] = ['compact', 'comfortable', 'spaciou
 export const LANDING_SPACES: readonly LandingSpace[] = ['auto', 'video', 'music', 'podcasts'];
 export const HIDEABLE_NAV_LINKS = ['/shorts', '/channels', '/subscriptions', '/playlists'] as const;
 
+export type HomeSectionId = 'recent' | 'popular' | 'suggested' | 'subscriptions';
+export type PopularRanking = 'localViewers' | 'youtubeViews' | 'trending7d' | 'watchTime';
+
+export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['recent', 'popular', 'suggested', 'subscriptions'];
+export const POPULAR_RANKINGS: readonly PopularRanking[] = ['localViewers', 'youtubeViews', 'trending7d', 'watchTime'];
+export const ROW_SIZES: readonly number[] = [10, 15, 20, 30];
+export const SUBSCRIPTION_CHANNEL_COUNTS: readonly number[] = [4, 8, 12, 16];
+
 export interface DisplayPrefs {
   density: Density;
   hiddenNavLinks: string[];
   landingSpace: LandingSpace;
+  homeSections: HomeSectionId[];
+  homeHero: boolean;
+  popularRanking: PopularRanking;
+  rowSize: number;
+  subscriptionChannels: number;
 }
 
 export type PrefsPartial = Partial<DisplayPrefs>;
 export type PrefKey = keyof DisplayPrefs;
-export const PREF_KEYS: readonly PrefKey[] = ['density', 'hiddenNavLinks', 'landingSpace'];
+export const PREF_KEYS: readonly PrefKey[] = [
+  'density', 'hiddenNavLinks', 'landingSpace',
+  'homeSections', 'homeHero', 'popularRanking', 'rowSize', 'subscriptionChannels',
+];
 
 export const APP_DEFAULTS: DisplayPrefs = {
   density: 'comfortable',
   hiddenNavLinks: [],
   landingSpace: 'auto',
+  homeSections: ['recent', 'popular', 'suggested', 'subscriptions'],
+  homeHero: true,
+  popularRanking: 'localViewers',
+  rowSize: 15,
+  subscriptionChannels: 8,
 };
 
 export class InvalidPrefError extends Error {
@@ -47,6 +68,35 @@ function validateValue(key: PrefKey, value: unknown): DisplayPrefs[PrefKey] {
     if (typeof value === 'string' && (LANDING_SPACES as readonly string[]).includes(value)) return value as LandingSpace;
     throw new InvalidPrefError(key, `landingSpace must be one of: ${LANDING_SPACES.join(', ')}.`);
   }
+  if (key === 'homeHero') {
+    if (typeof value === 'boolean') return value;
+    throw new InvalidPrefError(key, 'homeHero must be a boolean.');
+  }
+  if (key === 'popularRanking') {
+    if (typeof value === 'string' && (POPULAR_RANKINGS as readonly string[]).includes(value)) return value as PopularRanking;
+    throw new InvalidPrefError(key, `popularRanking must be one of: ${POPULAR_RANKINGS.join(', ')}.`);
+  }
+  if (key === 'rowSize') {
+    if (typeof value === 'number' && ROW_SIZES.includes(value)) return value;
+    throw new InvalidPrefError(key, `rowSize must be one of: ${ROW_SIZES.join(', ')}.`);
+  }
+  if (key === 'subscriptionChannels') {
+    if (typeof value === 'number' && SUBSCRIPTION_CHANNEL_COUNTS.includes(value)) return value;
+    throw new InvalidPrefError(key, `subscriptionChannels must be one of: ${SUBSCRIPTION_CHANNEL_COUNTS.join(', ')}.`);
+  }
+  if (key === 'homeSections') {
+    if (!Array.isArray(value)) throw new InvalidPrefError(key, 'homeSections must be an array.');
+    const seen = new Set<string>();
+    for (const item of value) {
+      if (typeof item !== 'string' || !(HOME_SECTION_IDS as readonly string[]).includes(item)) {
+        throw new InvalidPrefError(key, `homeSections may only contain: ${HOME_SECTION_IDS.join(', ')}.`);
+      }
+      if (seen.has(item)) throw new InvalidPrefError(key, 'homeSections must not contain duplicates.');
+      seen.add(item);
+    }
+    return [...value] as HomeSectionId[];
+  }
+  // hiddenNavLinks
   if (!Array.isArray(value)) {
     throw new InvalidPrefError(key, 'hiddenNavLinks must be an array.');
   }
@@ -99,6 +149,11 @@ export function mergePrefs(base: DisplayPrefs, partial: PrefsPartial | null | un
     density: partial?.density ?? base.density,
     hiddenNavLinks: [...(partial?.hiddenNavLinks ?? base.hiddenNavLinks)],
     landingSpace: partial?.landingSpace ?? base.landingSpace,
+    homeSections: [...(partial?.homeSections ?? base.homeSections)],
+    homeHero: partial?.homeHero ?? base.homeHero,
+    popularRanking: partial?.popularRanking ?? base.popularRanking,
+    rowSize: partial?.rowSize ?? base.rowSize,
+    subscriptionChannels: partial?.subscriptionChannels ?? base.subscriptionChannels,
   };
 }
 
