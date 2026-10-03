@@ -7,9 +7,19 @@
       <p>Loading library...</p>
     </div>
 
-    <!-- Empty -->
+    <!-- Home deliberately emptied by the viewer's preferences -->
     <EmptyState
-      v-else-if="!featuredLarge && !searchQuery"
+      v-else-if="!searchQuery && homeFullyHidden"
+      title="Ton accueil est vide"
+      description="Tu as masqué le bloc vedette et toutes les sections. Réactive-en dans les préférences d'affichage de ton compte."
+      icon="video"
+      :action-text="auth.isLoggedIn.value ? 'Ouvrir mon compte' : undefined"
+      action-route="/account"
+    />
+
+    <!-- Empty library -->
+    <EmptyState
+      v-else-if="!featuredLarge && feedSections.length === 0 && !searchQuery"
       title="No videos found"
       description="Your archive is empty. Log in as administrator to add channels or videos."
       icon="video"
@@ -133,7 +143,12 @@ import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 
-const { isAdmin } = useAuth();
+import { isHomeFullyHidden } from '~/utils/displayPrefs';
+
+const auth = useAuth();
+const { isAdmin } = auth;
+const { effective: displayPrefs } = useDisplayPrefs();
+const homeFullyHidden = computed(() => isHomeFullyHidden(displayPrefs.value, auth.isLoggedIn.value));
 const route = useRoute();
 const router = useRouter();
 

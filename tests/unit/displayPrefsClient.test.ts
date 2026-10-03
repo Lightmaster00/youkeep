@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterNavLinks, resolveLandingTarget, shouldApplyLanding } from '../../app/utils/displayPrefs';
+import { filterNavLinks, isHomeFullyHidden, resolveLandingTarget, shouldApplyLanding } from '../../app/utils/displayPrefs';
 
 const videoLinks = [
   { to: '/', label: 'Home' },
@@ -74,5 +74,21 @@ describe('shouldApplyLanding', () => {
     expect(shouldApplyLanding('/', { q: 'x' })).toBe(false);
     expect(shouldApplyLanding('/', { page: '3' })).toBe(false);
     expect(shouldApplyLanding('/music', {})).toBe(false);
+  });
+});
+
+describe('isHomeFullyHidden', () => {
+  it('is false while the hero is shown', () => {
+    expect(isHomeFullyHidden({ homeHero: true, homeSections: [] }, true)).toBe(false);
+  });
+  it('is true with no hero and no sections', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: [] }, true)).toBe(true);
+  });
+  it('is false with no hero but a visible section', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['recent'] }, false)).toBe(false);
+  });
+  it('treats suggested/subscriptions as invisible to a guest', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['suggested', 'subscriptions'] }, false)).toBe(true);
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['suggested'] }, true)).toBe(false);
   });
 });

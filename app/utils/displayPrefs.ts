@@ -1,5 +1,5 @@
 import { HIDEABLE_NAV_LINKS } from '#shared/displayPrefs';
-import type { LandingSpace } from '#shared/displayPrefs';
+import type { DisplayPrefs, LandingSpace } from '#shared/displayPrefs';
 import type { ModuleId } from './moduleRouting';
 
 // The landing redirect applies only to a plain '/' entry: '/?q=...' (search)
@@ -26,4 +26,16 @@ export function resolveLandingTarget(landing: LandingSpace, enabled: ModuleId[])
   if (!target) return null;
   const home = HOMES[target];
   return home === '/' ? null : home;
+}
+
+const GUEST_SECTIONS = ['recent', 'popular'];
+
+// True when nothing at all is configured to appear on the video home for this viewer.
+export function isHomeFullyHidden(
+  prefs: Pick<DisplayPrefs, 'homeHero' | 'homeSections'>,
+  loggedIn: boolean
+): boolean {
+  if (prefs.homeHero) return false;
+  const visible = loggedIn ? prefs.homeSections : prefs.homeSections.filter((id) => GUEST_SECTIONS.includes(id));
+  return visible.length === 0;
 }
