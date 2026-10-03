@@ -111,7 +111,7 @@
         <div class="sidebar-inner">
           <nav class="sidebar-nav">
             <NuxtLink
-              v-for="link in activeSpace.navLinks"
+              v-for="link in visibleNavLinks"
               v-show="!link.hideWhenMustChangePassword || !user?.mustChangePassword"
               :key="link.to"
               :to="link.to"
@@ -161,6 +161,7 @@ import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { spaces } from '~/spaces';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
+import { filterNavLinks } from '~/utils/displayPrefs';
 
 const { user, isAdmin, logout } = useAuth();
 const displayPrefs = useDisplayPrefs();
@@ -258,6 +259,11 @@ const activeSpace = computed(() => {
   const id = resolveActiveSpaceId(route.path, isAdmin.value, enabledModules.value);
   return spaces.find((s) => s.id === id) ?? spaces[0]!;
 });
+
+// Navigation links the current user chose to show (Home and the library links are never hideable).
+const visibleNavLinks = computed(() =>
+  filterNavLinks(activeSpace.value.navLinks, displayPrefs.effective.value.hiddenNavLinks)
+);
 
 // Non-admins only see enabled modules; admins see all, disabled ones carry a badge.
 const visibleSpaces = computed(() =>
@@ -374,6 +380,11 @@ onMounted(() => {
   fetchActiveDownloads();
   downloadCountInterval = setInterval(fetchActiveDownloads, 5000);
   refreshModules();
+  if (route.path === '/') {
+    useLanding().consumeLandingTarget().then((target) => {
+      if (target) router.replace(target);
+    });
+  }
 });
 
 onUnmounted(() => {

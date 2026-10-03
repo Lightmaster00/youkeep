@@ -38,4 +38,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   // Load the display preferences for the current user (also on the server, so
   // the density attribute is part of the first HTML response).
   await useDisplayPrefs().ensureLoaded();
+
+  // Landing space: when entering the app at '/', start on the user's chosen
+  // space, once per browser tab session. Client only (sessionStorage); it runs
+  // after every redirect above, so those still win.
+  if (import.meta.client && to.path === '/') {
+    const target = await useLanding().consumeLandingTarget();
+    if (target) return navigateTo(target);
+  }
 });
