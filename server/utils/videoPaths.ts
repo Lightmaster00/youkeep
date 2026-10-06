@@ -194,28 +194,79 @@ export interface StoredVideoLocation {
   videoFile: string | null;
 }
 
+// Extra containers yt-dlp may write per format before merging (audio streams).
+const FRAGMENT_EXTENSIONS = [...VIDEO_EXTENSIONS, 'm4a', 'opus', 'mka', 'mp3', 'aac', 'ogg'];
+const MEDIA_RE = new RegExp(`^(?:(?:f[A-Za-z0-9_-]+|temp)\\.)?(?:${FRAGMENT_EXTENSIONS.join('|')})$`, 'i');
+const THUMB_RE = new RegExp(`^(?:${THUMB_EXTENSIONS.join('|')})$`, 'i');
+const SUBTITLE_RE = /^[A-Za-z0-9_-]+\.vtt$/i;
+// Download leftovers: <file>.part, <file>.ytdl, <file>.part-Frag<n>[.part].
+const PARTIAL_SUFFIX_RE = /(?:\.part(?:-Frag\d+(?:\.part)?)?|\.ytdl)$/i;
+
 /**
- * Removes a new-layout video's files: the whole folder when it holds nothing
- * else, otherwise only the entries named after the video. Legacy locations are
- * left to their callers' existing file lists.
+ * True when `entry` is a file name yt-dlp produces for this video: the media
+ * (incl. per-format fragments, merge temp files and partials), thumbnail,
+ * `<lang>.vtt` subtitles or `.info.json`. Anything else is a foreign file.
  */
-export function removeVideoFiles(loc: StoredVideoLocation): void {
-  if (loc.layout !== 'new') return;
-  if (!isContained(loc.baseDir, loc.dir) || !fs.existsSync(loc.dir)) return;
-  const prefix = `${loc.baseName}.`;
-  const entries = fs.readdirSync(loc.dir);
-  const own = entries.filter((entry) => entry.startsWith(prefix));
-  if (own.length === entries.length) {
-    fs.rmSync(loc.dir, { recursive: true, force: true });
-    return;
+export function isVideoArtifactName(baseName: string, entry: string): boolean {
+  const prefix = `${baseName}.`;
+  if (!entry.startsWith(prefix)) return false;
+  const rest = entry.slice(prefix.length);
+  if (rest === 'info.json') return true;
+  const core = rest.replace(PARTIAL_SUFFIX_RE, '');
+  return MEDIA_RE.test(core) || THUMB_RE.test(core) || SUBTITLE_RE.test(core);
+}
+
+function isRegularFile(file: string): boolean {
+  try {
+    return fs.lstatSync(file).isFile();
+  } catch {
+    return false;
   }
+}
+
+/**
+ * Removes a new-layout video's files: only regular files that are known video
+ * artifacts (never a directory, symlink or foreign file), then the folder
+ * itself (non-recursively) when nothing else was in it. Never throws: each
+ * failure is logged and counted. Legacy locations are left to their callers'
+ * existing file lists.
+ */
+export function removeVideoFiles(loc: StoredVideoLocation): { removed: number; failed: number } {
+  const result = { removed: 0, failed: 0 };
+  if (loc.layout !== 'new' || !isContained(loc.baseDir, loc.dir)) return result;
+  let entries: string[];
+  try {
+    if (!fs.existsSync(loc.dir)) return result;
+    entries = fs.readdirSync(loc.dir);
+  } catch (err) {
+    console.error(`Failed to read video folder ${loc.dir}:`, err);
+    result.failed++;
+    return result;
+  }
+  const own = entries.filter((entry) => isVideoArtifactName(loc.baseName, entry) && isRegularFile(path.join(loc.dir, entry)));
   for (const entry of own) {
+    const file = path.join(loc.dir, entry);
     try {
-      fs.rmSync(path.join(loc.dir, entry), { recursive: true, force: true });
-    } catch (err) {
-      console.error(`Failed to delete video file ${path.join(loc.dir, entry)}:`, err);
+      fs.unlinkSync(file);
+      result.removed++;
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') continue;
+      console.error(`Failed to delete video file ${file}:`, err);
+      result.failed++;
     }
   }
+  if (own.length === entries.length && result.failed === 0) {
+    try {
+      fs.rmdirSync(loc.dir);
+    } catch (err: any) {
+      // ENOTEMPTY: something new appeared meanwhile; the folder stays with it.
+      if (err?.code !== 'ENOENT' && err?.code !== 'ENOTEMPTY') {
+        console.error(`Failed to delete video folder ${loc.dir}:`, err);
+        result.failed++;
+      }
+    }
+  }
+  return result;
 }
 
 /**

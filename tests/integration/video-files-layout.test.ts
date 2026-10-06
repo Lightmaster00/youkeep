@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -23,7 +23,10 @@ beforeEach(() => {
   (globalThis as any).cancelDownload = () => true;
   insertChannel(db, { id: 'c1', title: 'Chan' });
 });
-afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+afterEach(() => {
+  vi.restoreAllMocks();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 function newLayout(id: string, title: string, suffixes: string[], baseDir = dir) {
   const p = buildVideoPaths({ baseDir, channelFolder: 'Chan', title, id });
@@ -94,6 +97,70 @@ describe('video files in both layouts', () => {
     expect(fs.readdirSync(sibling.dir).sort()).toEqual([`${sibling.baseName}.jpg`, `${sibling.baseName}.mp4`]);
     expect(fs.readdirSync(path.join(custom, 'Chan'))).toEqual([sibling.baseName]);
     expect(db.prepare('SELECT COUNT(*) n FROM videos').get()).toEqual({ n: 1 });
+  });
+
+  it('deleting removes only known video artifacts; foreign files, a sub-folder and the video folder stay', async () => {
+    const cookie = adminCookie();
+    const p = newLayout('n1', 'Mixed', ['.mp4', '.f137.mp4.part', '.f140.m4a.ytdl', '.temp.mp4', '.webp', '.en-US.vtt', '.info.json', '.notes.txt']);
+    fs.mkdirSync(path.join(p.dir, `${p.baseName}.extras`));
+    fs.writeFileSync(path.join(p.dir, `${p.baseName}.extras`, `${p.baseName}.mp4`), 'x');
+    // A directory named like an artifact is still not a video file.
+    fs.mkdirSync(path.join(p.dir, `${p.baseName}.jpg`));
+
+    const res = await deleteHandler(mockEvent(cookie, { method: 'DELETE', params: { id: 'n1' } }));
+
+    expect(res).toEqual({ success: true });
+    expect(fs.readdirSync(p.dir).sort()).toEqual([`${p.baseName}.extras`, `${p.baseName}.jpg`, `${p.baseName}.notes.txt`]);
+    expect(fs.readdirSync(path.join(p.dir, `${p.baseName}.extras`))).toEqual([`${p.baseName}.mp4`]);
+  });
+
+  it('a file that cannot be removed does not fail the delete; the other files still go', async () => {
+    const cookie = adminCookie();
+    const p = newLayout('n1', 'Busy', ['.mp4', '.jpg', '.fr.vtt']);
+    const realUnlink = fs.unlinkSync;
+    vi.spyOn(fs, 'unlinkSync').mockImplementation(((file: fs.PathLike) => {
+      if (String(file).endsWith('.mp4')) throw Object.assign(new Error('EBUSY: resource busy'), { code: 'EBUSY' });
+      return realUnlink(file);
+    }) as any);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await deleteHandler(mockEvent(cookie, { method: 'DELETE', params: { id: 'n1' } }));
+
+    expect(res).toMatchObject({ success: true, warning: expect.stringContaining('1 of its files') });
+    expect(fs.readdirSync(p.dir)).toEqual([`${p.baseName}.mp4`]);
+    expect(db.prepare('SELECT COUNT(*) n FROM videos').get()).toEqual({ n: 0 });
+  });
+
+  it('a stored path pointing at another video\'s folder or another channel\'s folder deletes nothing there', async () => {
+    const cookie = adminCookie();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const otherVideo = path.join(dir, 'Chan', 'Other [zzz]');
+    const otherChannel = path.join(dir, 'OtherChan', 'Title [n2]');
+    for (const [folder, base] of [[otherVideo, 'Other [zzz]'], [otherChannel, 'Title [n2]']] as const) {
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(path.join(folder, `${base}.mp4`), 'x');
+    }
+    insertVideo(db, { id: 'n1', channelId: 'c1', localVideoPath: '/downloads/Chan/Other%20%5Bzzz%5D/Other%20%5Bzzz%5D.mp4' });
+    insertVideo(db, { id: 'n2', channelId: 'c1', localVideoPath: '/downloads/OtherChan/Title%20%5Bn2%5D/Title%20%5Bn2%5D.mp4' });
+
+    await deleteHandler(mockEvent(cookie, { method: 'DELETE', params: { id: 'n1' } }));
+    await deleteHandler(mockEvent(cookie, { method: 'DELETE', params: { id: 'n2' } }));
+
+    expect(fs.readdirSync(otherVideo)).toEqual(['Other [zzz].mp4']);
+    expect(fs.readdirSync(otherChannel)).toEqual(['Title [n2].mp4']);
+  });
+
+  it('a video without a stored path loses its new-layout folder and its legacy partials, nothing else', async () => {
+    const cookie = adminCookie();
+    insertVideo(db, { id: 'p1', channelId: 'c1', title: 'Pending', downloadStatus: 'downloading', localVideoPath: null });
+    const p = buildVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'Pending', id: 'p1' });
+    fs.mkdirSync(p.dir, { recursive: true });
+    fs.writeFileSync(path.join(p.dir, `${p.baseName}.f137.mp4.part`), 'x');
+    for (const f of ['p1.mp4.part', 'p10.mp4.part']) fs.writeFileSync(path.join(dir, 'Chan', f), 'x');
+
+    await deleteHandler(mockEvent(cookie, { method: 'DELETE', params: { id: 'p1' } }));
+
+    expect(fs.readdirSync(path.join(dir, 'Chan'))).toEqual(['p10.mp4.part']);
   });
 
   it('deleting a legacy video still removes its files from the channel folder', async () => {

@@ -48,12 +48,25 @@ export default defineEventHandler(async (event) => {
   db.prepare('DELETE FROM videos WHERE id = ?').run(videoId);
 
   if (location.layout === 'new') {
-    // Removes the folder only when it holds nothing but this video's files.
-    removeVideoFiles(location);
+    let warning: string | undefined;
+    // Only a folder directly in this channel's folder (or the channel base
+    // itself, for a custom save path ending in the channel folder name) is
+    // ever touched; a stored path pointing elsewhere is left alone.
+    const parent = path.dirname(location.dir);
+    const inChannelFolder = parent === channelDir
+      || (parent === path.resolve(basePath) && path.basename(parent) === path.basename(channelDir));
+    if (inChannelFolder) {
+      // Removes the folder only when it holds nothing but this video's files.
+      const { failed } = removeVideoFiles(location);
+      if (failed > 0) warning = `The video was deleted, but ${failed} of its files could not be removed from disk (see the server log).`;
+    } else {
+      console.error(`Video ${videoId}: stored folder ${location.dir} is outside its channel folder ${channelDir}; files left in place.`);
+      warning = 'The video was deleted, but its files are outside its channel folder and were left in place.';
+    }
     // A video without a stored path may still have partial files from a
     // download started before the one-folder-per-video layout: fall through
     // to the legacy list below (exact <id>.<ext> names in the channel folder).
-    if (video.local_video_path) return { success: true };
+    if (video.local_video_path) return warning ? { success: true, warning } : { success: true };
   }
 
   // 4. Remove local files from disk (any container extension, thumbnail,
