@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
+import { candidateVideoDirs, channelReadBaseDir, decodeUrlSegments, idFromVideoFolder, isContained, storedUrlSegments } from '../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
   const filePath = event.context.params?.path;
@@ -14,44 +15,73 @@ export default defineEventHandler(async (event) => {
   let matchedVideoId: string | undefined;
 
   const parts = filePath.split('/');
-  if (parts.length < 2) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid file path' });
-  }
-  {
-    const fileName = parts[parts.length - 1] || '';
-    // Files are always stored flat as {channelDir}/{videoId}.{ext} — never in
-    // nested subdirectories — so the remainder after the channel segment must
-    // be a single, plain filename. Reject anything else outright.
-    const remainingPath = parts.slice(1).join('/');
-    if (parts.length !== 2 || remainingPath !== fileName || remainingPath.includes('..')) {
+  if (parts.length === 3) {
+    // One folder per video: <channel folder>/<Title [id]>/<file>, percent-encoded.
+    // The id comes from the folder name, and the folder must be the one stored
+    // for that video (the database is the source of truth for file locations).
+    const segments = decodeUrlSegments(parts);
+    const videoId = segments ? idFromVideoFolder(segments[1]!) : null;
+    if (!segments || !videoId) {
       throw createError({ statusCode: 400, statusMessage: 'Invalid file path' });
     }
-
-    const videoId = fileName.split('.')[0] || '';
+    const [channelSegment, videoFolder, fileName] = segments as [string, string, string];
     const db = getDb();
-
-    // Find the channel_id for this video, falling back to treating the first
-    // path segment as a channel id directly (e.g. avatar/before video is ingested)
-    const video = db.prepare('SELECT id, channel_id FROM videos WHERE id = ?').get(videoId) as { id: string; channel_id: string } | undefined;
-    const channelId = video ? video.channel_id : (parts[0] || '');
-    if (video) matchedVideoId = video.id;
-
-    const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
-    if (channel) {
-      const hasCustomPath = !!(channel.custom_save_path && channel.custom_save_path.trim().length > 0);
-      const basePath = hasCustomPath ? (channel.custom_save_path as string) : downloadsDir;
-      const channelDir = path.resolve(basePath, sanitizeFolderName(channel.title || channelId));
-      const resolvedPath = path.resolve(channelDir, fileName);
-
-      // Containment check: resolvedPath must stay inside channelDir, whether
-      // it's the default downloads dir or a channel's custom save path.
-      const relativeToChannelDir = path.relative(channelDir, resolvedPath);
-      if (relativeToChannelDir.startsWith('..') || path.isAbsolute(relativeToChannelDir)) {
-        throw createError({ statusCode: 403, statusMessage: 'Access denied' });
+    const video = db.prepare(`
+      SELECT v.id, v.local_video_path, v.local_thumbnail_path, c.custom_save_path
+      FROM videos v JOIN channels c ON c.id = v.channel_id
+      WHERE v.id = ?
+    `).get(videoId) as { id: string; local_video_path: string | null; local_thumbnail_path: string | null; custom_save_path: string | null } | undefined;
+    const stored = storedUrlSegments(video?.local_video_path) ?? storedUrlSegments(video?.local_thumbnail_path);
+    if (!video || !stored || stored[0] !== channelSegment || stored[1] !== videoFolder) {
+      throw createError({ statusCode: 404, statusMessage: 'File not found' });
+    }
+    const baseDir = path.resolve(channelReadBaseDir(video.custom_save_path, downloadsDir));
+    const candidates = candidateVideoDirs(baseDir, channelSegment, videoFolder).map((dir) => path.resolve(dir, fileName));
+    if (candidates.some((candidate) => !isContained(baseDir, candidate))) {
+      throw createError({ statusCode: 403, statusMessage: 'Access denied' });
+    }
+    absolutePath = candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+    matchedVideoId = video.id;
+  } else {
+    if (parts.length < 2) {
+      throw createError({ statusCode: 400, statusMessage: 'Invalid file path' });
+    }
+    {
+      const fileName = parts[parts.length - 1] || '';
+      // Legacy files are stored flat as {channelDir}/{videoId}.{ext} — never in
+      // nested subdirectories — so the remainder after the channel segment must
+      // be a single, plain filename. Reject anything else outright.
+      const remainingPath = parts.slice(1).join('/');
+      if (parts.length !== 2 || remainingPath !== fileName || remainingPath.includes('..')) {
+        throw createError({ statusCode: 400, statusMessage: 'Invalid file path' });
       }
 
-      if (fs.existsSync(resolvedPath)) {
-        absolutePath = resolvedPath;
+      const videoId = fileName.split('.')[0] || '';
+      const db = getDb();
+
+      // Find the channel_id for this video, falling back to treating the first
+      // path segment as a channel id directly (e.g. avatar/before video is ingested)
+      const video = db.prepare('SELECT id, channel_id FROM videos WHERE id = ?').get(videoId) as { id: string; channel_id: string } | undefined;
+      const channelId = video ? video.channel_id : (parts[0] || '');
+      if (video) matchedVideoId = video.id;
+
+      const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
+      if (channel) {
+        const hasCustomPath = !!(channel.custom_save_path && channel.custom_save_path.trim().length > 0);
+        const basePath = hasCustomPath ? (channel.custom_save_path as string) : downloadsDir;
+        const channelDir = path.resolve(basePath, sanitizeFolderName(channel.title || channelId));
+        const resolvedPath = path.resolve(channelDir, fileName);
+
+        // Containment check: resolvedPath must stay inside channelDir, whether
+        // it's the default downloads dir or a channel's custom save path.
+        const relativeToChannelDir = path.relative(channelDir, resolvedPath);
+        if (relativeToChannelDir.startsWith('..') || path.isAbsolute(relativeToChannelDir)) {
+          throw createError({ statusCode: 403, statusMessage: 'Access denied' });
+        }
+
+        if (fs.existsSync(resolvedPath)) {
+          absolutePath = resolvedPath;
+        }
       }
     }
   }

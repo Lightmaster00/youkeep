@@ -229,16 +229,17 @@ export function insertUserPreferences(db: Database.Database, opts: { userId: str
   `).run(opts.userId, opts.data, opts.updatedAt ?? Date.now());
 }
 
-export function insertChannel(db: Database.Database, opts: { id: string; visibility?: string }) {
+export function insertChannel(db: Database.Database, opts: { id: string; visibility?: string; title?: string; customSavePath?: string | null }) {
   db.prepare(`
-    INSERT INTO channels (id, title, visibility, created_at)
-    VALUES (?, ?, ?, ?)
-  `).run(opts.id, `Channel ${opts.id}`, opts.visibility ?? 'public', Date.now());
+    INSERT INTO channels (id, title, visibility, custom_save_path, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(opts.id, opts.title ?? `Channel ${opts.id}`, opts.visibility ?? 'public', opts.customSavePath ?? null, Date.now());
 }
 
 export function insertVideo(db: Database.Database, opts: {
   id: string;
   channelId: string;
+  title?: string;
   visibility?: string;
   shareToken?: string | null;
   downloadStatus?: string;
@@ -255,7 +256,7 @@ export function insertVideo(db: Database.Database, opts: {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
-    `Video ${opts.id}`,
+    opts.title ?? `Video ${opts.id}`,
     null,
     opts.channelId,
     opts.visibility ?? 'public',
