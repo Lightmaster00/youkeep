@@ -84,89 +84,38 @@ async function setupPlayer() {
 }
 
 describe('formatPodcastTime', () => {
-  it('renders M:SS below one hour', () => {
-    expect(formatPodcastTime(0)).toBe('0:00');
-    expect(formatPodcastTime(9)).toBe('0:09');
-    expect(formatPodcastTime(75)).toBe('1:15');
-    expect(formatPodcastTime(3599)).toBe('59:59');
-  });
-
-  it('renders H:MM:SS at one hour and above', () => {
-    expect(formatPodcastTime(3600)).toBe('1:00:00');
-    expect(formatPodcastTime(3661)).toBe('1:01:01');
-    expect(formatPodcastTime(7325)).toBe('2:02:05');
-  });
-
-  it('floors fractional seconds instead of leaking float noise', () => {
-    // audio.currentTime is a float; podcasts/index.vue's own formatter does
-    // `seconds % 60` unfloored, which would render "1:01:1.4000000000000341".
-    expect(formatPodcastTime(3661.4000000000005)).toBe('1:01:01');
-    expect(formatPodcastTime(75.9)).toBe('1:15');
-  });
-
-  it('returns 0:00 for null, undefined, NaN and negatives', () => {
-    expect(formatPodcastTime(null)).toBe('0:00');
-    expect(formatPodcastTime(undefined)).toBe('0:00');
-    expect(formatPodcastTime(NaN)).toBe('0:00');
-    expect(formatPodcastTime(-5)).toBe('0:00');
+  it('renders M:SS / H:MM:SS, floors float seconds and maps invalid input to 0:00', () => {
+    const cases: Array<[number | null | undefined, string]> = [
+    [0, '0:00'], [9, '0:09'], [3599, '59:59'], [3600, '1:00:00'], [7325, '2:02:05'],
+    // audio.currentTime is a float: floor instead of leaking "1:01:1.4000000000000341".
+    [3661.4000000000005, '1:01:01'], [75.9, '1:15'],
+    [null, '0:00'], [undefined, '0:00'], [NaN, '0:00'], [-5, '0:00'],
+  ];
+    for (const [input, expected] of cases) expect(formatPodcastTime(input), String(input)).toBe(expected);
   });
 });
 
 describe('clampSeekTime', () => {
-  it('passes through a time inside the range', () => {
-    expect(clampSeekTime(50, 100)).toBe(50);
-  });
-
-  it('clamps below zero to zero', () => {
-    expect(clampSeekTime(-15, 100)).toBe(0);
-  });
-
-  it('clamps past the duration to the duration', () => {
-    expect(clampSeekTime(130, 100)).toBe(100);
-  });
-
-  it('only clamps the lower bound when the duration is unknown (0)', () => {
-    expect(clampSeekTime(130, 0)).toBe(130);
-    expect(clampSeekTime(-3, 0)).toBe(0);
-  });
-
-  it('returns 0 for non-finite input', () => {
-    expect(clampSeekTime(NaN, 100)).toBe(0);
-    expect(clampSeekTime(Infinity, 100)).toBe(0);
+  it('clamps to [0, duration] (lower bound only when the duration is unknown) and maps non-finite input to 0', () => {
+    const cases: Array<[number, number, number]> = [
+    [50, 100, 50], [-15, 100, 0], [130, 100, 100],
+    [130, 0, 130], [-3, 0, 0], // unknown duration: only the lower bound applies
+    [NaN, 100, 0], [Infinity, 100, 0],
+  ];
+    for (const [t, d, expected] of cases) expect(clampSeekTime(t, d), `${t}, ${d}`).toBe(expected);
   });
 });
 
 describe('isFinishedPosition', () => {
-  it('is false for a position well before the end', () => {
-    expect(isFinishedPosition(500, 3600)).toBe(false);
-  });
-
-  it('is true for a position exactly at the duration', () => {
-    expect(isFinishedPosition(3600, 3600)).toBe(true);
-  });
-
-  it('is true for a position within the default 2s tolerance of the end', () => {
-    expect(isFinishedPosition(3599, 3600)).toBe(true);
-    expect(isFinishedPosition(3598.5, 3600)).toBe(true);
-  });
-
-  it('is false just outside the tolerance', () => {
-    expect(isFinishedPosition(3597.9, 3600)).toBe(false);
-  });
-
-  it('respects a custom tolerance', () => {
-    expect(isFinishedPosition(3590, 3600, 15)).toBe(true);
-    expect(isFinishedPosition(3580, 3600, 15)).toBe(false);
-  });
-
-  it('is false when duration is unknown (<= 0)', () => {
-    expect(isFinishedPosition(9999, 0)).toBe(false);
-    expect(isFinishedPosition(9999, -1)).toBe(false);
-  });
-
-  it('is false for non-finite input', () => {
-    expect(isFinishedPosition(NaN, 3600)).toBe(false);
-    expect(isFinishedPosition(100, NaN)).toBe(false);
+  it('is true within the (default 2s or custom) tolerance of a known, finite duration', () => {
+    const cases: Array<[number, number, number | undefined, boolean]> = [
+    [500, 3600, undefined, false], [3600, 3600, undefined, true], [3598.5, 3600, undefined, true],
+    [3597.9, 3600, undefined, false], [3590, 3600, 15, true], [3580, 3600, 15, false],
+    [9999, 0, undefined, false], [9999, -1, undefined, false], [NaN, 3600, undefined, false], [100, NaN, undefined, false],
+  ];
+    for (const [pos, dur, tol, expected] of cases) {
+      expect(tol === undefined ? isFinishedPosition(pos, dur) : isFinishedPosition(pos, dur, tol), `${pos}, ${dur}, ${tol}`).toBe(expected);
+    }
   });
 });
 
@@ -201,19 +150,20 @@ describe('usePodcastPlayer', () => {
       expect(player.isPlaying.value).toBe(true);
     });
 
-    it('resumes the saved position when replaying the SAME episode id', () => {
+    it('resumes the saved mid-episode position when replaying the SAME episode id', () => {
       const el = fakeAudio();
       player.audioEl.value = el as unknown as HTMLMediaElement;
-      const ep = episode('e1');
+      const ep = episode('e1', { duration: 3600 });
       player.currentEpisode.value = ep;
-      player.currentTime.value = 620;
+      player.duration.value = 3600;
+      player.currentTime.value = 1200;
 
       player.play(ep);
       // The position is applied once the element reports metadata, since
       // setting .src resets currentTime to 0 in a real browser.
       el.fire('loadedmetadata');
-      expect(el.currentTime).toBe(620);
-      expect(player.currentTime.value).toBe(620);
+      expect(el.currentTime).toBe(1200);
+      expect(player.currentTime.value).toBe(1200);
     });
 
     it('starts a DIFFERENT episode from zero even if a position was held', () => {
@@ -250,20 +200,6 @@ describe('usePodcastPlayer', () => {
       expect(player.currentTime.value).toBe(0);
     });
 
-    it('still resumes mid-episode when the held position is well before the end', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      const ep = episode('e1', { duration: 3600 });
-      player.currentEpisode.value = ep;
-      player.duration.value = 3600;
-      player.currentTime.value = 1200;
-
-      player.play(ep);
-      el.fire('loadedmetadata');
-      expect(el.currentTime).toBe(1200);
-      expect(player.currentTime.value).toBe(1200);
-    });
-
     it('sets isPlaying false when the browser rejects play()', async () => {
       const el = fakeAudio();
       el.play = vi.fn(() => Promise.reject(new Error('NotAllowedError')));
@@ -275,78 +211,45 @@ describe('usePodcastPlayer', () => {
     });
   });
 
-  describe('skipBack()/skipForward()', () => {
-    it('skips back 15 seconds', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
+  describe('skipBack()/skipForward()/setPlaybackRate()', () => {
+    beforeEach(() => {
+      player.audioEl.value = fakeAudio() as unknown as HTMLMediaElement;
       player.currentEpisode.value = episode('e1');
       player.duration.value = 3600;
+    });
+
+    it('skips back 15 seconds, clamped to 0', () => {
       player.currentTime.value = 100;
       player.skipBack();
       expect(player.currentTime.value).toBe(100 - SKIP_BACK_SECONDS);
-      expect(el.currentTime).toBe(85);
-    });
-
-    it('clamps a skip back near the start to 0', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      player.currentEpisode.value = episode('e1');
-      player.duration.value = 3600;
+      expect(player.audioEl.value!.currentTime).toBe(85);
       player.currentTime.value = 4;
       player.skipBack();
       expect(player.currentTime.value).toBe(0);
     });
 
-    it('skips forward 30 seconds', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      player.currentEpisode.value = episode('e1');
-      player.duration.value = 3600;
+    it('skips forward 30 seconds, clamped to the duration (or the episode metadata duration before the element reports one)', () => {
       player.currentTime.value = 100;
       player.skipForward();
       expect(player.currentTime.value).toBe(100 + SKIP_FORWARD_SECONDS);
-    });
-
-    it('clamps a skip forward near the end to the duration', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      player.currentEpisode.value = episode('e1');
-      player.duration.value = 3600;
       player.currentTime.value = 3590;
       player.skipForward();
       expect(player.currentTime.value).toBe(3600);
-    });
-
-    it('falls back to the episode metadata duration when the element has not reported one', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
       player.currentEpisode.value = episode('e1', { duration: 120 });
       player.duration.value = 0;
       player.currentTime.value = 110;
       player.skipForward();
       expect(player.currentTime.value).toBe(120);
     });
-  });
 
-  describe('setPlaybackRate()', () => {
-    it('applies an allowed rate to state and the element and persists it', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      player.currentEpisode.value = episode('e1');
+    it('applies and persists an allowed playback rate, ignores one outside PLAYBACK_RATES', () => {
       player.setPlaybackRate(1.5);
       expect(player.playbackRate.value).toBe(1.5);
-      expect(el.playbackRate).toBe(1.5);
-      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
-      expect(saved.playbackRate).toBe(1.5);
-    });
-
-    it('ignores a rate outside PLAYBACK_RATES', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      player.playbackRate.value = 1;
-      player.setPlaybackRate(4);
-      expect(player.playbackRate.value).toBe(1);
+      expect(player.audioEl.value!.playbackRate).toBe(1.5);
+      expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).playbackRate).toBe(1.5);
       expect(PLAYBACK_RATES).not.toContain(4);
+      player.setPlaybackRate(4);
+      expect(player.playbackRate.value).toBe(1.5);
     });
   });
 
@@ -392,15 +295,8 @@ describe('usePodcastPlayer', () => {
       expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
     });
 
-    it('clears the key and no-ops on malformed JSON', () => {
-      window.localStorage.setItem(STORAGE_KEY, '{not json');
-      player.restoreFromLocalStorage();
-      expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
-      expect(player.currentEpisode.value).toBeNull();
-    });
-
-    it('clears the key and no-ops on a structurally invalid entry', () => {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ episode: { id: 'x' } }));
+    it.each(['{not json', JSON.stringify({ episode: { id: 'x' } })])('clears the key and no-ops on a malformed or structurally invalid entry: %s', (raw) => {
+      window.localStorage.setItem(STORAGE_KEY, raw);
       player.restoreFromLocalStorage();
       expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
       expect(player.currentEpisode.value).toBeNull();
@@ -475,19 +371,13 @@ describe('usePodcastPlayer', () => {
   });
 
   describe('activation and lastPlayedAt', () => {
-    it('marks podcast active and stamps lastPlayedAt when play() is called', () => {
+    it('play() marks podcast active, stamps lastPlayedAt and persists it into the saved payload', () => {
       const el = fakeAudio();
       player.audioEl.value = el as unknown as HTMLMediaElement;
       const before = Date.now();
       player.play(episode('e1'));
       expect(useActiveMiniPlayer().activeType.value).toBe('podcast');
       expect(player.lastPlayedAt.value).toBeGreaterThanOrEqual(before);
-    });
-
-    it('persists lastPlayedAt into the saved payload', () => {
-      const el = fakeAudio();
-      player.audioEl.value = el as unknown as HTMLMediaElement;
-      player.play(episode('e1'));
       const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
       expect(saved.lastPlayedAt).toBe(player.lastPlayedAt.value);
       expect(saved.episode.id).toBe('e1');

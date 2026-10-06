@@ -30,47 +30,24 @@ async function setupActive() {
   return holder.active!;
 }
 
-describe('readLastPlayedAt', () => {
-  it('returns the stamp from a well-formed payload', () => {
+describe('readLastPlayedAt / pickActiveFromLastPlayedAt', () => {
+  it('reads a finite stamp, else null (missing key, malformed JSON, legacy payload, non-numeric stamp)', () => {
     expect(readLastPlayedAt(JSON.stringify({ lastPlayedAt: 1725400000000 }))).toBe(1725400000000);
-  });
-
-  it('returns null for a missing key', () => {
     expect(readLastPlayedAt(null)).toBeNull();
-  });
-
-  it('returns null for malformed JSON instead of throwing', () => {
     expect(readLastPlayedAt('{not json')).toBeNull();
-  });
-
-  it('returns null for a legacy payload with no lastPlayedAt field', () => {
     // Every session saved before this feature shipped looks like this.
     expect(readLastPlayedAt(JSON.stringify({ currentTime: 42, playbackRate: 1 }))).toBeNull();
-  });
-
-  it('returns null for a non-finite or non-numeric stamp', () => {
     expect(readLastPlayedAt(JSON.stringify({ lastPlayedAt: 'yesterday' }))).toBeNull();
     expect(readLastPlayedAt(JSON.stringify({ lastPlayedAt: null }))).toBeNull();
   });
-});
 
-describe('pickActiveFromLastPlayedAt', () => {
-  it('picks the more recently played type', () => {
+  it('picks the more recent (or only) stamped type, music on an exact tie, null with no stamp', () => {
     expect(pickActiveFromLastPlayedAt(200, 100)).toBe('music');
     expect(pickActiveFromLastPlayedAt(100, 200)).toBe('podcast');
-  });
-
-  it('picks the only side that has a stamp', () => {
     expect(pickActiveFromLastPlayedAt(100, null)).toBe('music');
     expect(pickActiveFromLastPlayedAt(null, 100)).toBe('podcast');
-  });
-
-  it('returns null when neither side has a stamp', () => {
-    expect(pickActiveFromLastPlayedAt(null, null)).toBeNull();
-  });
-
-  it('breaks an exact tie deterministically in favour of music', () => {
     expect(pickActiveFromLastPlayedAt(500, 500)).toBe('music');
+    expect(pickActiveFromLastPlayedAt(null, null)).toBeNull();
   });
 });
 
@@ -86,14 +63,10 @@ describe('useActiveMiniPlayer', () => {
   });
 
   describe('setActive()', () => {
-    it('writes state and localStorage together', () => {
+    it('writes state and localStorage together, overwriting a previous activation', () => {
       active.setActive('podcast');
       expect(active.activeType.value).toBe('podcast');
       expect(window.localStorage.getItem(ACTIVE_KEY)).toBe('podcast');
-    });
-
-    it('overwrites a previous activation', () => {
-      active.setActive('podcast');
       active.setActive('music');
       expect(active.activeType.value).toBe('music');
       expect(window.localStorage.getItem(ACTIVE_KEY)).toBe('music');

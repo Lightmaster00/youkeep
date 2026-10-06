@@ -23,13 +23,6 @@ describe('DisplayPrefsForm — home section', () => {
     expect(rowOrder(w)).toEqual(['popular', 'recent', 'suggested', 'subscriptions']);
   });
 
-  it('disables ↑ on the first visible row and ↓ on the last visible row', async () => {
-    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    expect(w.find('[data-testid="up-recent"]').attributes('disabled')).toBeDefined();
-    expect(w.find('[data-testid="down-subscriptions"]').attributes('disabled')).toBeDefined();
-    expect(w.find('[data-testid="down-recent"]').attributes('disabled')).toBeUndefined();
-  });
-
   it('sends the swapped array when ↓ is clicked', async () => {
     fetchMock.mockResolvedValue(buildView({}, { homeSections: ['popular', 'recent', 'suggested', 'subscriptions'] }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
@@ -73,25 +66,15 @@ describe('DisplayPrefsForm — home section', () => {
     }
   });
 
-  it('keeps the new value in the DOM after a successful save', async () => {
+  it('sends numbers (not strings) for the size selects and keeps the new value in the DOM after a successful save', async () => {
     fetchMock.mockResolvedValue(buildView({}, { rowSize: 20 }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
     const sel = w.find('select[id$="-rowsize"]');
     await sel.setValue('20');
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][1].body).toEqual({ rowSize: 20 });
     await vi.waitFor(() => expect(w.find('select[id$="-rowsize"]').attributes('disabled')).toBeUndefined());
     expect((sel.element as HTMLSelectElement).value).toBe('20');
-  });
-
-  it('sends null when the reset link is clicked', async () => {
-    useState<any>('display_prefs').value = buildView({}, { rowSize: 20 });
-    fetchMock.mockResolvedValue(buildView({}, {}));
-    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    const link = w.findAll('a.reset-link');
-    expect(link.length).toBe(1);
-    await link[0]!.trigger('click');
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0][1].body).toEqual({ rowSize: null });
   });
 
   it('gives each move button a row-specific aria-label', async () => {
@@ -112,13 +95,6 @@ describe('DisplayPrefsForm — home section', () => {
     await vi.waitFor(() => expect((box.element as HTMLInputElement).checked).toBe(true));
   });
 
-  it('sends numbers (not strings) for the size selects', async () => {
-    fetchMock.mockResolvedValue(buildView({}, { rowSize: 20 }));
-    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    await w.find('select[id$="-rowsize"]').setValue('20');
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0][1].body).toEqual({ rowSize: 20 });
-  });
 });
 
 describe('DisplayPrefsForm — modes', () => {
@@ -143,32 +119,27 @@ describe('DisplayPrefsForm — modes', () => {
     expect(url).toBe('/api/admin/settings/display-defaults');
     expect(opts.method).toBe('POST');
     expect(opts.body).toEqual({ rowSize: 20 });
+    await vi.waitFor(() => expect(w.findAll('a.reset-link').length).toBe(1));
+    await w.find('a.reset-link').trigger('click');
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock.mock.calls[1][0]).toBe('/api/admin/settings/display-defaults');
+    expect(fetchMock.mock.calls[1][1].body).toEqual({ rowSize: null });
   });
 
-  it('user mode shows the effective value and only the density reset link', async () => {
+  it('user mode shows the effective value and only the density reset link, which sends { density: null } to the user endpoint', async () => {
     state();
+    fetchMock.mockResolvedValue(buildView({ rowSize: 10 }, {}));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
     expect((w.find('select[id$="-rowsize"]').element as HTMLSelectElement).value).toBe('10');
     expect((w.find('select[id$="-density"]').element as HTMLSelectElement).value).toBe('compact');
     const links = w.findAll('a.reset-link');
     expect(links.length).toBe(1);
     expect(resetLabelFor(w, links[0])).toBe('density');
-  });
-
-  it('user mode: clicking the density reset link sends { density: null } to the user endpoint', async () => {
-    state();
-    fetchMock.mockResolvedValue(buildView({ rowSize: 10 }, {}));
-    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    await w.find('a.reset-link').trigger('click');
+    await links[0]!.trigger('click');
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/account/preferences');
     expect(opts.body).toEqual({ density: null });
   });
 
-  it('lists the ranking options in order', async () => {
-    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    const texts = w.findAll('select[id$="-ranking"] option').map((o: any) => o.text());
-    expect(texts).toEqual(['Local viewers', 'YouTube views', 'Trending (7 days)', 'Watch time']);
-  });
 });

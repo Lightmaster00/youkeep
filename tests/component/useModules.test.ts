@@ -17,6 +17,7 @@ describe('useModules', () => {
     expect(isEnabled('video')).toBe(true);
     expect(enabledModules.value).toEqual(['video', 'music', 'podcasts']);
     expect(firstEnabledHome.value).toBe('/');
+    expect(isEnabled('something-else')).toBe(true); // unknown id: treated as enabled
   });
 
   it('refresh() loads the states from /api/settings/modules', async () => {
@@ -40,21 +41,15 @@ describe('useModules', () => {
     expect(firstEnabledHome.value).toBe('/music');
   });
 
-  it('treats everything as enabled when the fetch fails', async () => {
-    fetchMock.mockRejectedValueOnce(new Error('network'));
-    const { refresh, isEnabled } = useModules();
-    await refresh();
-    expect(isEnabled('video')).toBe(true);
-    expect(isEnabled('music')).toBe(true);
-    expect(isEnabled('podcasts')).toBe(true);
-  });
-
-  it('treats a missing key in the response as enabled', async () => {
+  it('treats a missing key in the response as enabled, and everything as enabled when the fetch fails', async () => {
     fetchMock.mockResolvedValueOnce({ music: false });
-    const { refresh, isEnabled } = useModules();
+    const { refresh, isEnabled, enabledModules } = useModules();
     await refresh();
-    expect(isEnabled('video')).toBe(true);
-    expect(isEnabled('music')).toBe(false);
+    expect(enabledModules.value).toEqual(['video', 'podcasts']);
+    fetchMock.mockRejectedValueOnce(new Error('network'));
+    await refresh();
+    expect(isEnabled('music')).toBe(true);
+    expect(enabledModules.value).toEqual(['video', 'music', 'podcasts']);
   });
 
   it('ensureLoaded() fetches once, then reuses the loaded state', async () => {
@@ -65,7 +60,4 @@ describe('useModules', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('isEnabled() ignores an unknown id (treated as enabled)', () => {
-    expect(useModules().isEnabled('something-else')).toBe(true);
-  });
 });

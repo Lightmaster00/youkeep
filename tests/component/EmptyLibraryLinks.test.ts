@@ -2,14 +2,19 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountSuspended, registerEndpoint } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import ChannelDirectoryView from '../../app/components/channels/ChannelDirectoryView.vue';
+import IndexPage from '../../app/pages/index.vue';
 
 // Adding sources lives in Settings > Library; the empty-library calls to action must open it.
 const ADD_ROUTE = '/settings?tab=library&section=videos';
+let feed: any;
 
 beforeEach(() => {
   useState('auth_loading').value = false;
   useState('auth_user').value = { id: 'a1', username: 'admin', role: 'admin' };
+  feed = { featured: { large: null, small: [] }, sections: [] };
+  clearNuxtData();
   registerEndpoint('/api/channels', () => ({ channels: [] }));
+  registerEndpoint('/api/home/feed', () => feed);
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -22,20 +27,22 @@ describe('empty-library calls to action', () => {
     expect(link.attributes('href')).toBe(ADD_ROUTE);
   });
 
-  it('the home page empty-library action is wired to the same route', async () => {
-    const { readFileSync } = await import('node:fs');
-    const src = readFileSync('app/pages/index.vue', 'utf8');
-    const block = src.slice(src.indexOf('<!-- Empty library -->'), src.indexOf('<!-- Search Mode -->'));
-    expect(block).toContain(`action-route="${ADD_ROUTE}"`);
-    expect(block).toContain(`'Add channels'`);
+  it('the home page "Add channels" action opens the same route', async () => {
+    const w = await mountSuspended(IndexPage, { route: '/' });
+    await flushPromises();
+    const link = w.findAll('a').find((a) => a.text().includes('Add channels'));
+    expect(link?.attributes('href')).toBe(ADD_ROUTE);
   });
 });
 
 describe('channel links on the home page', () => {
   it('use the channelId query the channels page reads, never ?id=', async () => {
-    const { readFileSync } = await import('node:fs');
-    const src = readFileSync('app/pages/index.vue', 'utf8');
-    expect(src).not.toContain('/channels?id=');
-    expect(src.match(/\/channels\?channelId=/g)?.length).toBe(2);
+    feed = { featured: { large: null, small: [] }, sections: [
+      { id: 'subscriptions', title: 'Subscriptions', channels: [{ channelId: 'UC1', channelTitle: 'Chan', channelAvatar: null, videos: [] }] },
+    ] };
+    const w = await mountSuspended(IndexPage, { route: '/' });
+    await flushPromises();
+    const link = w.findAll('a').find((a) => a.text().includes('See all'));
+    expect(link?.attributes('href')).toBe('/channels?channelId=UC1');
   });
 });

@@ -9,50 +9,33 @@ describe('useSearchSuggestions', () => {
     fetchMock.mockReset();
   });
 
-  it('normalizes video results with type "video"', async () => {
-    fetchMock.mockResolvedValueOnce({
+  it('in per_space mode, calls only the active space endpoint with limit=5', async () => {
+    for (const [space, url] of [['music', '/api/music/tracks/search'], ['podcasts', '/api/podcasts/episodes/search'], ['video', '/api/videos']] as const) {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValueOnce({});
+      const { fetchSuggestions } = useSearchSuggestions();
+      fetchSuggestions('foo', 'per_space', space);
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(url, { params: { q: 'foo', limit: 5 } });
+    }
+  });
+
+  it('in global mode, calls all 3 endpoints in parallel with limit=3 each and normalizes each result type', async () => {
+    fetchMock.mockResolvedValue({
       videos: [{ id: '1', title: 'My Video', channel_title: 'My Channel' }],
-    });
-    const { suggestions, fetchSuggestions } = useSearchSuggestions();
-    fetchSuggestions('foo', 'per_space', 'video');
-    await vi.waitFor(() => expect(suggestions.value).toHaveLength(1));
-    expect(suggestions.value[0]).toEqual({ type: 'video', title: 'My Video', subtitle: 'My Channel' });
-  });
-
-  it('normalizes track results with type "track"', async () => {
-    fetchMock.mockResolvedValueOnce({
       tracks: [{ id: '1', title: 'My Track', artist_name: 'My Artist' }],
-    });
-    const { suggestions, fetchSuggestions } = useSearchSuggestions();
-    fetchSuggestions('foo', 'per_space', 'music');
-    await vi.waitFor(() => expect(suggestions.value).toHaveLength(1));
-    expect(suggestions.value[0]).toEqual({ type: 'track', title: 'My Track', subtitle: 'My Artist' });
-  });
-
-  it('normalizes episode results with type "episode"', async () => {
-    fetchMock.mockResolvedValueOnce({
       episodes: [{ id: '1', title: 'My Episode', show_title: 'My Show' }],
     });
     const { suggestions, fetchSuggestions } = useSearchSuggestions();
-    fetchSuggestions('foo', 'per_space', 'podcasts');
-    await vi.waitFor(() => expect(suggestions.value).toHaveLength(1));
-    expect(suggestions.value[0]).toEqual({ type: 'episode', title: 'My Episode', subtitle: 'My Show' });
-  });
-
-  it('in per_space mode, calls only the active space endpoint with limit=5', async () => {
-    fetchMock.mockResolvedValueOnce({ tracks: [] });
-    const { fetchSuggestions } = useSearchSuggestions();
-    fetchSuggestions('foo', 'per_space', 'music');
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith('/api/music/tracks/search', { params: { q: 'foo', limit: 5 } });
-  });
-
-  it('in global mode, calls all 3 endpoints in parallel with limit=3 each', async () => {
-    fetchMock.mockResolvedValue({ videos: [], tracks: [], episodes: [] });
-    const { fetchSuggestions } = useSearchSuggestions();
     fetchSuggestions('foo', 'global', 'video');
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(suggestions.value).toHaveLength(3));
+    expect(suggestions.value).toEqual([
+      { type: 'video', title: 'My Video', subtitle: 'My Channel' },
+      { type: 'track', title: 'My Track', subtitle: 'My Artist' },
+      { type: 'episode', title: 'My Episode', subtitle: 'My Show' },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock).toHaveBeenCalledWith('/api/videos', { params: { q: 'foo', limit: 3 } });
     expect(fetchMock).toHaveBeenCalledWith('/api/music/tracks/search', { params: { q: 'foo', limit: 3 } });
     expect(fetchMock).toHaveBeenCalledWith('/api/podcasts/episodes/search', { params: { q: 'foo', limit: 3 } });

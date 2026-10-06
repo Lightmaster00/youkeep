@@ -75,22 +75,17 @@ describe('DownloadsAdvanced', () => {
     expect(w.find('#podcast-preset').exists()).toBe(false); // podcast schedule is off
   });
 
-  it('saves a schedule for its own type', async () => {
-    const w = await mountAdvanced();
-    await w.find('#video-preset').setValue('weekly');
-    await w.find('[data-testid="schedule-video"]').trigger('submit');
-    await flushPromises();
-    expect(posts('/api/admin/downloader/schedule')[0][1].body).toEqual({ enabled: true, schedule: '0 3 * * 0' });
-    expect(posts('/api/admin/music/schedule')).toHaveLength(0);
-  });
-
-  it('refuses an empty custom cron without calling the server', async () => {
+  it('refuses an empty custom cron without calling the server, and trims one before sending', async () => {
     const w = await mountAdvanced();
     await w.find('#music-cron').setValue('  ');
     await w.find('[data-testid="schedule-music"]').trigger('submit');
     await flushPromises();
     expect(posts('/api/admin/music/schedule')).toHaveLength(0);
     expect(toastMessages()).toContain('Enter a cron expression.');
+    await w.find('#music-cron').setValue('  5 5 * * *  ');
+    await w.find('[data-testid="schedule-music"]').trigger('submit');
+    await flushPromises();
+    expect(posts('/api/admin/music/schedule')[0][1].body.schedule).toBe('5 5 * * *');
   });
 
   it('after a failed save, shows the error and reloads the saved schedule', async () => {
@@ -133,8 +128,14 @@ describe('DownloadsAdvanced', () => {
     expect((toggle.element as HTMLInputElement).checked).toBe(true);
   });
 
-  it('podcast and music save their own daily presets', async () => {
+  it('each type saves its own presets to its own route', async () => {
     const w = await mountAdvanced();
+    await w.find('#video-preset').setValue('weekly');
+    await w.find('[data-testid="schedule-video"]').trigger('submit');
+    await flushPromises();
+    expect(posts('/api/admin/downloader/schedule')[0][1].body).toEqual({ enabled: true, schedule: '0 3 * * 0' });
+    expect(posts('/api/admin/music/schedule')).toHaveLength(0);
+
     await w.find('[data-testid="schedule-podcast-enabled"]').setValue(true);
     await flushPromises();
     await w.find('#podcast-preset').setValue('daily');
@@ -156,14 +157,6 @@ describe('DownloadsAdvanced', () => {
     await w.find('[data-testid="schedule-music"]').trigger('submit');
     await flushPromises();
     expect(posts('/api/admin/music/schedule')[0][1].body.enabled).toBe(false);
-  });
-
-  it('trims the cron string before sending', async () => {
-    const w = await mountAdvanced();
-    await w.find('#music-cron').setValue('  5 5 * * *  ');
-    await w.find('[data-testid="schedule-music"]').trigger('submit');
-    await flushPromises();
-    expect(posts('/api/admin/music/schedule')[0][1].body.schedule).toBe('5 5 * * *');
   });
 
   it('goes preset -> custom -> preset', async () => {

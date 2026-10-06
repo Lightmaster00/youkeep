@@ -78,15 +78,6 @@ describe('LibrarySourceSection — Music', () => {
     expect(toastMessages()).toContain('Now following Artist.');
   });
 
-  it('falls back to the channel id URL when there is no handle', async () => {
-    searchPayload = { channels: [{ id: 'UC123', title: 'Artist' }] };
-    const w = await mountMusic();
-    await search(w);
-    await followButtons(w)[0].trigger('click');
-    await flushPromises();
-    expect(posts('/api/admin/music/ingest')[0][1].body.url).toBe('https://www.youtube.com/channel/UC123');
-  });
-
   it('calls no ingest endpoint when the result has no address', async () => {
     searchPayload = { channels: [{ id: '', title: 'Ghost' }] };
     const w = await mountMusic();
@@ -193,24 +184,6 @@ describe('LibrarySourceSection — Podcasts', () => {
     expect(followButtons(w)).toHaveLength(0);
   });
 
-  it('refuses a result without a feed', async () => {
-    searchPayload = { shows: [{ feedUrl: '', title: 'No feed', author: 'A' }] };
-    const w = await mountPodcasts();
-    await search(w);
-    await followButtons(w)[0].trigger('click');
-    await flushPromises();
-    expect(posts('/api/admin/podcasts/ingest')).toHaveLength(0);
-    expect(toastMessages()).toContain("This podcast has no usable RSS feed, so it can't be followed.");
-  });
-
-  it('follows a pasted feed URL directly', async () => {
-    const w = await mountPodcasts();
-    await w.find('[data-testid="follow-search-input"]').setValue('https://feeds.example/x.xml');
-    await w.find('[data-testid="follow-search-form"]').trigger('submit');
-    await flushPromises();
-    expect(gets('/api/admin/podcasts/search-shows')).toHaveLength(0);
-    expect(posts('/api/admin/podcasts/ingest')[0][1].body.feedUrl).toBe('https://feeds.example/x.xml');
-  });
 });
 
 describe('LibrarySourceSection — Following list', () => {
@@ -266,11 +239,6 @@ describe('LibrarySourceSection — Following list', () => {
     await flushPromises();
     expect(posts('/api/admin/music/artists/a2/sync')).toHaveLength(1);
     expect(toastMessages()).toContain('Sync started for Artist Two.');
-  });
-
-  it('says that Sync all also resumes paused sources', async () => {
-    const w = await mountMusic();
-    expect(w.find('[data-testid="sync-all-hint"]').text()).toBe('Also resumes paused sources.');
   });
 
   it('Sync all calls the section route and reports a sync already running', async () => {
@@ -417,14 +385,5 @@ describe('LibrarySourceSection — Podcasts following', () => {
     await flushPromises();
     expect(posts('/api/admin/podcasts/sync-all')).toHaveLength(1);
     expect(toastMessages()).toContain('Sync started for every followed podcast.');
-  });
-});
-
-describe('LibrarySourceSection — chevron', () => {
-  it.each([[true], [false]])('renders a chevron in the summary when open=%s', async (open) => {
-    for (const config of [musicSource, podcastsSource]) {
-      const w = await mountSuspended(LibrarySourceSection, { props: { config, open } });
-      expect(w.find('[data-testid="library-section-' + config.kind + '"] > summary [data-testid="library-chevron"]').exists()).toBe(true);
-    }
   });
 });

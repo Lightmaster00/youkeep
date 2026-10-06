@@ -90,88 +90,51 @@ describe('useMusicPlayer', () => {
       return tracks;
     }
 
-    it("next() does nothing further at the end of the queue when repeatMode is 'off'", () => {
+    const at = (i: number, mode: 'off' | 'all' | 'one') => {
       const tracks = seedQueue();
-      player.currentIndex.value = 2;
-      player.currentTrack.value = tracks[2]!;
-      player.repeatMode.value = 'off';
+      player.currentIndex.value = i;
+      player.currentTrack.value = tracks[i]!;
+      player.repeatMode.value = mode;
+    };
+    const pos = () => [player.currentTrack.value?.id, player.currentIndex.value];
+
+    it("next(): stops at the end with 'off', wraps with 'all', replays the same index with 'one'", () => {
+      at(2, 'off');
       player.next();
-      // stayed on the last track, did not wrap
-      expect(player.currentTrack.value?.id).toBe('3');
-      expect(player.currentIndex.value).toBe(2);
+      expect(pos()).toEqual(['3', 2]);
       expect(player.isPlaying.value).toBe(false);
-    });
-
-    it("next() wraps to index 0 at the end of the queue when repeatMode is 'all'", () => {
-      const tracks = seedQueue();
-      player.currentIndex.value = 2;
-      player.currentTrack.value = tracks[2]!;
-      player.repeatMode.value = 'all';
+      at(2, 'all');
       player.next();
-      expect(player.currentTrack.value?.id).toBe('1');
-      expect(player.currentIndex.value).toBe(0);
-    });
-
-    it("next() replays the same index when repeatMode is 'one'", () => {
-      const tracks = seedQueue();
-      player.currentIndex.value = 1;
-      player.currentTrack.value = tracks[1]!;
-      player.repeatMode.value = 'one';
+      expect(pos()).toEqual(['1', 0]);
+      at(1, 'one');
       player.next();
-      expect(player.currentTrack.value?.id).toBe('2');
-      expect(player.currentIndex.value).toBe(1);
+      expect(pos()).toEqual(['2', 1]);
     });
 
-    it("prev() does nothing further before the start of the queue when repeatMode is 'off'", () => {
-      const tracks = seedQueue();
-      player.currentIndex.value = 0;
-      player.currentTrack.value = tracks[0]!;
-      player.repeatMode.value = 'off';
+    it("prev(): stops at the start with 'off', wraps with 'all', and does NOT special-case 'one'", () => {
+      at(0, 'off');
       player.prev();
-      expect(player.currentTrack.value?.id).toBe('1');
-      expect(player.currentIndex.value).toBe(0);
+      expect(pos()).toEqual(['1', 0]);
       expect(player.isPlaying.value).toBe(false);
-    });
-
-    it("prev() wraps to the last index before the start of the queue when repeatMode is 'all'", () => {
-      const tracks = seedQueue();
-      player.currentIndex.value = 0;
-      player.currentTrack.value = tracks[0]!;
-      player.repeatMode.value = 'all';
+      at(0, 'all');
       player.prev();
-      expect(player.currentTrack.value?.id).toBe('3');
-      expect(player.currentIndex.value).toBe(2);
-    });
-
-    it("prev() does NOT special-case repeatMode 'one' (asymmetric with next() -- prevIndex() has no 'one' branch) and moves to the previous index", () => {
-      const tracks = seedQueue();
-      player.currentIndex.value = 1;
-      player.currentTrack.value = tracks[1]!;
-      player.repeatMode.value = 'one';
+      expect(pos()).toEqual(['3', 2]);
+      // prevIndex() only special-cases shuffle and 'all' (asymmetric with nextIndex()).
+      at(1, 'one');
       player.prev();
-      // Verified against the actual source: prevIndex() only special-cases
-      // shuffle and 'all'; unlike nextIndex(), it has no `repeatMode.value
-      // === 'one'` guard, so prev() falls through to plain decrement.
-      expect(player.currentTrack.value?.id).toBe('1');
-      expect(player.currentIndex.value).toBe(0);
+      expect(pos()).toEqual(['1', 0]);
     });
   });
 
   describe('toggleShuffle()', () => {
-    it('generates a shuffledOrder that includes every queue index exactly once', () => {
+    it('generates a shuffledOrder holding every queue index exactly once, cleared when toggled back off', () => {
       const tracks = [track('1'), track('2'), track('3'), track('4')];
       player.play(tracks[0]!, tracks);
       player.toggleShuffle();
       expect(player.shuffleOn.value).toBe(true);
-      const order = useState<number[] | null>('music_player_shuffled_order').value;
-      expect(order).not.toBeNull();
-      expect([...order!].sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);
-    });
-
-    it('clears shuffledOrder when toggled back off', () => {
-      const tracks = [track('1'), track('2')];
-      player.play(tracks[0]!, tracks);
-      player.toggleShuffle();
+      const shuffled = useState<number[] | null>('music_player_shuffled_order').value;
+      expect(shuffled).not.toBeNull();
+      expect([...shuffled!].sort((a, b) => a - b)).toEqual([0, 1, 2, 3]);
       player.toggleShuffle();
       expect(player.shuffleOn.value).toBe(false);
       const order = useState<number[] | null>('music_player_shuffled_order').value;
@@ -238,15 +201,11 @@ describe('useMusicPlayer', () => {
       } as unknown as HTMLMediaElement;
     }
 
-    it('marks music active and stamps lastPlayedAt when play() is called', () => {
+    it('play() marks music active, stamps lastPlayedAt and persists it into the saved payload', () => {
       const before = Date.now();
-      player.play(track('1'), [track('1'), track('2')]);
+      player.play(track('1'), [track('1')]);
       expect(useActiveMiniPlayer().activeType.value).toBe('music');
       expect(player.lastPlayedAt.value).toBeGreaterThanOrEqual(before);
-    });
-
-    it('persists lastPlayedAt into the saved payload', () => {
-      player.play(track('1'), [track('1')]);
       const saved = JSON.parse(window.localStorage.getItem('music_player_state')!);
       expect(saved.lastPlayedAt).toBe(player.lastPlayedAt.value);
       expect(saved.trackId).toBe('1');

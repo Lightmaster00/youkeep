@@ -39,22 +39,12 @@ describe('useSearchHistory', () => {
     restoreRealStorage();
   });
 
-  it('returns an empty list when nothing has been added', () => {
-    const { get } = useSearchHistory();
-    expect(get()).toEqual([]);
-  });
-
-  it('adds a term and returns it most-recent-first', () => {
+  it('starts empty, returns terms most-recent-first and moves a re-added term to the front', () => {
     const { add, get } = useSearchHistory();
+    expect(get()).toEqual([]);
     add('foo');
     add('bar');
     expect(get()).toEqual(['bar', 'foo']);
-  });
-
-  it('dedupes a re-added term, moving it to the front', () => {
-    const { add, get } = useSearchHistory();
-    add('foo');
-    add('bar');
     add('foo');
     expect(get()).toEqual(['foo', 'bar']);
   });
@@ -68,15 +58,11 @@ describe('useSearchHistory', () => {
     expect(result).not.toContain('term1');
   });
 
-  it('ignores an empty or whitespace-only term', () => {
-    const { add, get } = useSearchHistory();
+  it('ignores an empty or whitespace-only term, and clear() empties the history', () => {
+    const { add, get, clear } = useSearchHistory();
     add('');
     add('   ');
     expect(get()).toEqual([]);
-  });
-
-  it('clears the history', () => {
-    const { add, get, clear } = useSearchHistory();
     add('foo');
     clear();
     expect(get()).toEqual([]);

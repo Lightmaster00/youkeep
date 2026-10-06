@@ -46,12 +46,13 @@ describe('DownloadTypeCard', () => {
     expect(w.find('[data-testid="pause-toggle"]').text()).toBe('Pause');
   });
 
-  it('Pause and Resume call the type routes and ask for a refresh', async () => {
+  it('Pause and Resume call the type routes, toast with the pill wording and ask for a refresh', async () => {
     const w = await mountCard('music', st());
     await w.find('[data-testid="pause-toggle"]').trigger('click');
     await flushPromises();
     expect(posts('/api/admin/music/pause')).toHaveLength(1);
     expect(w.emitted('changed')).toHaveLength(1);
+    expect(useToast().toasts.value.map((x) => x.message)).toContain('Music downloads paused.');
 
     const p = await mountCard('podcast', st({ isPaused: true }));
     expect(p.find('[data-testid="type-card-state"]').text()).toBe('Paused');
@@ -112,15 +113,18 @@ describe('DownloadTypeCard', () => {
     expect(posts('/api/admin/downloader/clear-queue')).toHaveLength(1);
   });
 
-  it.each(['', '0', '50', '3.5'])('rejects the invalid value "%s" without any request', async (bad) => {
+  it('rejects invalid values ("", 0, 11, 50, 3.5) without any request and restores the server value', async () => {
     const w = await mountCard('music', st());
     const input = w.find('[data-testid="concurrency-input"]');
-    await input.setValue(bad);
-    await w.find('[data-testid="concurrency-save"]').trigger('click');
-    await flushPromises();
-    expect(posts('/api/admin/music/concurrency')).toHaveLength(0);
-    expect(useToast().toasts.value.map((x) => x.message)).toContain('Enter a whole number from 1 to 10.');
-    expect((input.element as HTMLInputElement).value).toBe('3');
+    for (const bad of ['', '0', '11', '50', '3.5']) {
+      useToast().toasts.value = [];
+      await input.setValue(bad);
+      await w.find('[data-testid="concurrency-save"]').trigger('click');
+      await flushPromises();
+      expect(posts('/api/admin/music/concurrency'), bad).toHaveLength(0);
+      expect(useToast().toasts.value.map((x) => x.message), bad).toContain('Enter a whole number from 1 to 10.');
+      expect((input.element as HTMLInputElement).value, bad).toBe('3');
+    }
   });
 
   it('disables Save while the request is pending', async () => {
@@ -179,13 +183,6 @@ describe('DownloadTypeCard', () => {
     expect(w.find('[data-testid="type-card-state"]').text()).toBe('Active');
   });
 
-  it('uses the pill wording in pause toasts', async () => {
-    const w = await mountCard('video', st());
-    await w.find('[data-testid="pause-toggle"]').trigger('click');
-    await flushPromises();
-    expect(useToast().toasts.value.map((x) => x.message)).toContain('Video downloads paused.');
-  });
-
   it('a double click on Clear queue sends one request', async () => {
     let release!: () => void;
     fetchMock.mockImplementation(async (url: string, opts?: any) => {
@@ -202,15 +199,16 @@ describe('DownloadTypeCard', () => {
     expect(posts('/api/admin/downloader/clear-queue')).toHaveLength(1);
   });
 
-  it.each([['music', '/api/admin/music'], ['podcast', '/api/admin/podcasts'], ['video', '/api/admin/downloader']] as const)(
-    'uses the %s concurrency and retry endpoints', async (kind, base) => {
+  it('uses each type\'s concurrency and retry endpoints', async () => {
+    for (const [kind, base] of [['music', '/api/admin/music'], ['podcast', '/api/admin/podcasts'], ['video', '/api/admin/downloader']] as const) {
       const w = await mountCard(kind, st({ failedCount: 1, total: 1 }));
-      expect(fetchMock.mock.calls.some(([u, o]) => u === `${base}/concurrency` && !o?.method)).toBe(true);
+      expect(fetchMock.mock.calls.some(([u, o]) => u === `${base}/concurrency` && !o?.method), kind).toBe(true);
       await w.find('[data-testid="concurrency-input"]').setValue('4');
       await w.find('[data-testid="concurrency-save"]').trigger('click');
       await w.find('[data-testid="retry-failed"]').trigger('click');
       await flushPromises();
-      expect(posts(`${base}/concurrency`)).toHaveLength(1);
-      expect(posts(`${base}/retry-failed`)).toHaveLength(1);
-    });
+      expect(posts(`${base}/concurrency`), kind).toHaveLength(1);
+      expect(posts(`${base}/retry-failed`), kind).toHaveLength(1);
+    }
+  });
 });

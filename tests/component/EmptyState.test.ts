@@ -3,14 +3,6 @@ import { mountSuspended } from '@nuxt/test-utils/runtime';
 import EmptyState from '../../app/components/EmptyState.vue';
 
 describe('EmptyState', () => {
-  it('renders the title and description text', async () => {
-    const wrapper = await mountSuspended(EmptyState, {
-      props: { title: 'No videos yet', description: 'Subscribe to a channel to get started' }
-    });
-    expect(wrapper.text()).toContain('No videos yet');
-    expect(wrapper.text()).toContain('Subscribe to a channel to get started');
-  });
-
   it('renders a NuxtLink (not a button) when actionRoute and actionText are both set', async () => {
     const wrapper = await mountSuspended(EmptyState, {
       props: {
@@ -20,6 +12,7 @@ describe('EmptyState', () => {
         actionText: 'Create playlist'
       }
     });
+    expect(wrapper.text()).toContain('Create one to get started');
     const link = wrapper.find('a');
     expect(link.exists()).toBe(true);
     expect(link.attributes('href')).toBe('/playlists/new');
@@ -55,26 +48,10 @@ describe('EmptyState', () => {
     expect(emitted![0]).toEqual([]);
   });
 
-  it('renders the book icon variant', async () => {
-    const wrapper = await mountSuspended(EmptyState, {
-      props: { title: 't', description: 'd', icon: 'book' }
-    });
-    const path = wrapper.find('svg.main-icon path');
-    expect(path.attributes('d')).toContain('M4 19.5A2.5 2.5 0 0 1 6.5 17H20');
-  });
-
-  it('renders the music icon variant (two circles)', async () => {
-    const wrapper = await mountSuspended(EmptyState, {
-      props: { title: 't', description: 'd', icon: 'music' }
-    });
-    expect(wrapper.findAll('svg.main-icon circle').length).toBe(2);
-  });
-
-  it('renders the default (video) icon variant when icon is unset', async () => {
-    const wrapper = await mountSuspended(EmptyState, {
-      props: { title: 't', description: 'd' }
-    });
-    expect(wrapper.findAll('svg.main-icon polygon').length).toBe(1);
-    expect(wrapper.findAll('svg.main-icon rect').length).toBe(1);
+  it('picks the icon variant from the icon prop (video by default)', async () => {
+    const icon = async (i?: string) => (await mountSuspended(EmptyState, { props: { title: 't', description: 'd', ...(i ? { icon: i } : {}) } })).find('svg.main-icon');
+    expect((await icon('book')).find('path').attributes('d')).toContain('M4 19.5A2.5 2.5 0 0 1 6.5 17H20');
+    expect((await icon('music')).findAll('circle')).toHaveLength(2);
+    expect((await icon()).findAll('polygon')).toHaveLength(1);
   });
 });

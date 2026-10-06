@@ -61,7 +61,7 @@ describe('PodcastEpisodeEditModal', () => {
     expect((wrapper.find('#episode-edit-season').element as HTMLInputElement).value).toBe('');
   });
 
-  it('PATCHes the camelCase body to the episode endpoint on submit', async () => {
+  it('PATCHes the camelCase body to the episode endpoint on submit and emits "saved" with the returned episode', async () => {
     const wrapper = await mountSuspended(PodcastEpisodeEditModal, {
       props: { show: true, episode: EPISODE }
     });
@@ -79,13 +79,6 @@ describe('PodcastEpisodeEditModal', () => {
         seasonNumber: 2
       }
     });
-  });
-
-  it('emits "saved" with the episode object from the response', async () => {
-    const wrapper = await mountSuspended(PodcastEpisodeEditModal, {
-      props: { show: true, episode: EPISODE }
-    });
-    await wrapper.find('form').trigger('submit');
     await new Promise((r) => setTimeout(r, 0));
 
     const saved = wrapper.emitted('saved');
