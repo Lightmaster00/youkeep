@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 
 // One folder per video: <base>/<Channel>/<Title> [<id>]/<Title> [<id>].<ext>
@@ -144,4 +145,64 @@ export function candidateVideoDirs(baseDir: string, channelFolder: string, video
 export function isContained(parent: string, child: string): boolean {
   const rel = path.relative(path.resolve(parent), path.resolve(child));
   return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+/** Locates the files yt-dlp produced for a video (any container / thumbnail extension). */
+export function locateDownloadedFiles(p: VideoPaths): { videoFile: string | null; videoUrl: string | null; thumbnailUrl: string | null; infoJsonFile: string } {
+  let videoFile: string | null = null;
+  let videoUrl: string | null = null;
+  for (const ext of VIDEO_EXTENSIONS) {
+    const candidate = path.join(p.dir, `${p.baseName}.${ext}`);
+    if (fs.existsSync(candidate)) {
+      videoFile = candidate;
+      videoUrl = p.videoUrlFor(ext);
+      break;
+    }
+  }
+  let thumbnailUrl: string | null = null;
+  for (const ext of THUMB_EXTENSIONS) {
+    if (fs.existsSync(path.join(p.dir, `${p.baseName}.${ext}`))) {
+      thumbnailUrl = p.thumbUrlFor(ext);
+      break;
+    }
+  }
+  return { videoFile, videoUrl, thumbnailUrl, infoJsonFile: path.join(p.dir, `${p.baseName}.info.json`) };
+}
+
+export interface StoredVideoLocation {
+  layout: 'new' | 'legacy';
+  /** Absolute channel base folder (custom save path or downloads dir). */
+  baseDir: string;
+  /** Absolute folder holding the video's files. */
+  dir: string;
+  /** File-name stem: '<Title> [<id>]' (new layout) or '<id>' (legacy). */
+  baseName: string;
+  /** Web folder: percent-encoded for the new layout, raw (as always) for legacy. */
+  urlDir: string;
+  /** Absolute path of the stored video file, when a path is stored. */
+  videoFile: string | null;
+}
+
+/**
+ * Removes a new-layout video's files: the whole folder when it holds nothing
+ * else, otherwise only the entries named after the video. Legacy locations are
+ * left to their callers' existing file lists.
+ */
+export function removeVideoFiles(loc: StoredVideoLocation): void {
+  if (loc.layout !== 'new') return;
+  if (!isContained(loc.baseDir, loc.dir) || !fs.existsSync(loc.dir)) return;
+  const prefix = `${loc.baseName}.`;
+  const entries = fs.readdirSync(loc.dir);
+  const own = entries.filter((entry) => entry.startsWith(prefix));
+  if (own.length === entries.length) {
+    fs.rmSync(loc.dir, { recursive: true, force: true });
+    return;
+  }
+  for (const entry of own) {
+    try {
+      fs.rmSync(path.join(loc.dir, entry), { recursive: true, force: true });
+    } catch (err) {
+      console.error(`Failed to delete video file ${path.join(loc.dir, entry)}:`, err);
+    }
+  }
 }

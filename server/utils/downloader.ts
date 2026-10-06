@@ -9,6 +9,7 @@ import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlock
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
+import { buildVideoPaths, locateDownloadedFiles, removeVideoFiles } from './videoPaths';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -28,11 +29,14 @@ export function buildSpawnEnv(): NodeJS.ProcessEnv {
 // Removes a video's downloaded/partial files from disk, honoring the
 // channel's custom_save_path if set. Used both on explicit cancel and on
 // watchdog timeout so partial downloads never linger indefinitely.
+// Covers both layouts: legacy files directly in the channel folder, and the
+// video's own folder (one folder per video, named from its title).
 export function cleanupPartialFiles(videoId: string, channelId: string): void {
   const db = getDb();
   const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
   const basePath = resolveChannelBaseDir(channel?.custom_save_path);
-  const channelDir = path.join(basePath, sanitizeFolderName(channel?.title || channelId));
+  const channelFolder = sanitizeFolderName(channel?.title || channelId);
+  const channelDir = path.join(basePath, channelFolder);
   const mp4File = path.join(channelDir, `${videoId}.mp4`);
   const jpgFile = path.join(channelDir, `${videoId}.jpg`);
   const partFile = path.join(channelDir, `${videoId}.mp4.part`);
@@ -43,6 +47,14 @@ export function cleanupPartialFiles(videoId: string, channelId: string): void {
       try { fs.unlinkSync(f); } catch (e) {}
     }
   });
+
+  const video = db.prepare('SELECT title FROM videos WHERE id = ?').get(videoId) as { title: string } | undefined;
+  if (video) {
+    const paths = buildVideoPaths({ baseDir: basePath, channelFolder, title: video.title, id: videoId });
+    try {
+      removeVideoFiles({ layout: 'new', baseDir: basePath, dir: paths.dir, baseName: paths.baseName, urlDir: paths.urlDir, videoFile: null });
+    } catch (e) {}
+  }
 }
 
 // Define global-backed state to survive development HMR module hot reloads
@@ -684,17 +696,22 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
 
     const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
     const basePath = resolveChannelBaseDir(channel?.custom_save_path);
-    const channelDir = path.join(basePath, sanitizeFolderName(channel?.title || channelId));
-
-    const outputTemplate = path.join(channelDir, `${videoId}.%(ext)s`);
+    const videoRow = db.prepare('SELECT is_short, title FROM videos WHERE id = ?').get(videoId) as { is_short: number; title: string } | undefined;
+    // One folder per video: <base>/<Channel>/<Title> [<id>]/<Title> [<id>].<ext>
+    const paths = buildVideoPaths({
+      baseDir: basePath,
+      channelFolder: sanitizeFolderName(channel?.title || channelId),
+      title: videoRow?.title,
+      id: videoId,
+    });
+    const outputTemplate = paths.outputTemplate;
 
     // Ensure directory exists
-    if (!fs.existsSync(channelDir)) {
-      fs.mkdirSync(channelDir, { recursive: true });
+    if (!fs.existsSync(paths.dir)) {
+      fs.mkdirSync(paths.dir, { recursive: true });
     }
 
-    const isShortRecord = db.prepare('SELECT is_short FROM videos WHERE id = ?').get(videoId) as { is_short: number } | undefined;
-    const isShort = isShortRecord?.is_short === 1;
+    const isShort = videoRow?.is_short === 1;
     const targetVideoUrl = isShort 
       ? `https://www.youtube.com/shorts/${videoId}`
       : `https://www.youtube.com/watch?v=${videoId}`;
@@ -843,41 +860,20 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
       activeProcesses.delete(videoId);
       if (settled) return; // Already resolved/rejected by watchdog or error handler
       if (code === 0) {
-        const folderName = sanitizeFolderName(channel?.title || channelId);
+        // Locate what yt-dlp wrote in the video's own folder (mp4, webm, mkv, ...
+        // and jpg, webp, png, ... thumbnails).
+        const found = locateDownloadedFiles(paths);
+        const videoFile = found.videoFile;
+        const videoUrlPath = found.videoUrl;
 
-        // Locate downloaded video file (can be mp4, webm, mkv, etc.)
-        let videoFile = path.join(channelDir, `${videoId}.mp4`);
-        let videoUrlPath: string | null = null;
-        const videoExtensions = ['mp4', 'webm', 'mkv', '3gp', 'flv'];
-        for (const ext of videoExtensions) {
-          const testPath = path.join(channelDir, `${videoId}.${ext}`);
-          if (fs.existsSync(testPath)) {
-            videoFile = testPath;
-            videoUrlPath = `/downloads/${folderName}/${videoId}.${ext}`;
-            break;
-          }
-        }
-
-        if (!videoUrlPath) {
+        if (!videoFile || !videoUrlPath) {
           const errorMsg = lastStderr ? `yt-dlp a terminé mais aucun fichier vidéo n'a été trouvé : ${lastStderr}` : `yt-dlp a terminé mais aucun fichier vidéo n'a été trouvé`;
           settle(() => reject(new Error(errorMsg)));
           return;
         }
 
-        // Locate downloaded thumbnail file (can be jpg, png, webp, etc.)
-        let thumbnailFile = path.join(channelDir, `${videoId}.jpg`);
-        let thumbnailUrlPath: string | null = null;
-        const thumbExtensions = ['jpg', 'jpeg', 'webp', 'png'];
-        for (const ext of thumbExtensions) {
-          const testPath = path.join(channelDir, `${videoId}.${ext}`);
-          if (fs.existsSync(testPath)) {
-            thumbnailFile = testPath;
-            thumbnailUrlPath = `/downloads/${folderName}/${videoId}.${ext}`;
-            break;
-          }
-        }
-
-        const infoJsonFile = path.join(channelDir, `${videoId}.info.json`);
+        const thumbnailUrlPath = found.thumbnailUrl;
+        const infoJsonFile = found.infoJsonFile;
         
         let desc = null;
         let views = null;
