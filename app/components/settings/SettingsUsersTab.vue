@@ -9,8 +9,8 @@
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
             </div>
             <div>
-              <h3>{{ editingUserId ? 'Modify User Profile' : 'Register Account' }}</h3>
-              <p class="section-desc">Create profiles, define access roles, and assign channel track lists permissions.</p>
+              <h3>{{ editingUserId ? 'Edit user' : 'Add a user' }}</h3>
+              <p class="section-desc">Create accounts, choose each person's role, and decide which ultra-private channels they can see.</p>
             </div>
           </div>
 
@@ -30,7 +30,7 @@
 
             <div class="form-group">
               <label class="form-label" for="u_password">
-                {{ editingUserId ? 'New password (leave empty to keep unchanged)' : 'Password (leave empty to auto-generate)' }}
+                {{ editingUserId ? 'New password (leave empty to keep the current one)' : 'Password (leave empty to generate one)' }}
               </label>
               <input
                 type="password"
@@ -42,20 +42,20 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label">Authorization Role</label>
+              <label class="form-label">Role</label>
               <div class="role-selector-premium">
                 <label class="role-card" :class="{ active: userForm.role === 'user' }">
                   <input type="radio" v-model="userForm.role" value="user" style="display: none;" />
                   <div class="role-card-inner">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                    <span>Standard User</span>
+                    <span>User</span>
                   </div>
                 </label>
                 <label class="role-card" :class="{ active: userForm.role === 'admin' }">
                   <input type="radio" v-model="userForm.role" value="admin" style="display: none;" />
                   <div class="role-card-inner">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
-                    <span>Administrator</span>
+                    <span>Admin</span>
                   </div>
                 </label>
               </div>
@@ -63,19 +63,19 @@
 
             <!-- Access checklist for user role -->
             <div v-if="userForm.role === 'user'" class="permissions-section-premium mt-3">
-              <h4>Channel Scope Permissions</h4>
+              <h4>Channel access</h4>
 
               <div class="form-group mt-2">
                 <label class="checkbox-container">
                   <input type="checkbox" v-model="fullChannelAccess" />
                   <span class="checkmark"></span>
-                  Full visibility on all channels
+                  Can see every channel
                 </label>
               </div>
 
               <!-- Channels list (only if NOT full access) -->
               <div v-if="!fullChannelAccess" class="perm-col mt-2">
-                <span class="perm-label">Restrict access to specific channels :</span>
+                <span class="perm-label">Ultra-private channels this user can see:</span>
                 <div class="checklist-container-premium mt-2">
                   <label v-for="ch in channels" :key="ch.id" class="check-item-premium">
                     <input type="checkbox" v-model="userForm.channelAccess" :value="ch.id" />
@@ -87,7 +87,7 @@
             </div>
 
              <div v-if="generatedPassword" class="credentials-alert-box mt-3">
-              <strong class="alert-title">Account configured successfully!</strong>
+              <strong class="alert-title">Account saved.</strong>
               <div class="credentials-display mt-2">
                 <div>Username: <code>{{ oldUsername || userForm.username }}</code></div>
                 <div class="mt-1">Temporary password: <code class="pass-code">{{ generatedPassword }}</code></div>
@@ -107,7 +107,7 @@
 
             <div class="form-actions mt-3">
               <button type="submit" class="btn btn-primary">
-                {{ editingUserId ? 'Update Profile' : 'Create Account' }}
+                {{ editingUserId ? 'Save changes' : 'Create user' }}
               </button>
               <button v-if="editingUserId" type="button" @click="cancelEditUser" class="btn btn-secondary-dark ml-2">
                 Cancel
@@ -123,7 +123,7 @@
           <div class="col-header-row">
             <div class="flex-align-center gap-10">
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: white;">Saved User Accounts</h3>
+              <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: white;">Users</h3>
             </div>
           </div>
 
@@ -142,7 +142,7 @@
                 <div class="user-headline-col">
                   <h4>{{ u.username }}</h4>
                   <UiBadge :tone="u.role === 'admin' ? 'completed' : 'neutral'">
-                    {{ u.role === 'admin' ? 'Administrator' : 'Standard User' }}
+                    {{ u.role === 'admin' ? 'Admin' : 'User' }}
                   </UiBadge>
                 </div>
               </div>
@@ -162,7 +162,7 @@
                   :disabled="u.id === currentUser?.id"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                  <span>Reset Password</span>
+                  <span>Reset password</span>
                 </button>
                 <button @click="loadUserForEdit(u)" class="btn-action-premium-icon" title="Edit Profile">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -216,7 +216,7 @@ const oldUsername = ref('');
 const copyCredentials = () => {
   const text = `YouKeep Credentials:\nUsername: ${oldUsername.value || userForm.username}\nTemporary password: ${generatedPassword.value}`;
   navigator.clipboard.writeText(text).then(() => {
-    toast.success('Credentials copied to clipboard!');
+    toast.success('Sign-in details copied.');
   }).catch(() => {
     toast.error('Copy failed.');
   });
