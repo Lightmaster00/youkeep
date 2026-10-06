@@ -140,7 +140,7 @@
                   </p>
                   <p class="channel-search-desc" v-if="ch.description">{{ ch.description }}</p>
                 </div>
-                <button @click="selectMusicArtistCandidate(ch)" class="btn btn-primary btn-xs">
+                <button @click="selectMusicArtistCandidate(ch)" class="btn btn-primary btn-xs" :disabled="addingMusicArtist">
                   Suivre
                 </button>
               </div>
@@ -373,11 +373,18 @@ const handleSearchMusicArtist = async () => {
   }
 };
 
-const selectMusicArtistCandidate = (channel: any) => {
-  musicArtistInput.value = channel.handle
+const selectMusicArtistCandidate = async (channel: any) => {
+  if (addingMusicArtist.value) return;
+  const url = channel.handle
     ? `https://www.youtube.com${channel.handle}`
     : channel.id ? `https://www.youtube.com/channel/${channel.id}` : '';
+  if (!url) {
+    toast.error("Impossible de déterminer l'adresse de cet artiste.");
+    return;
+  }
+  musicArtistInput.value = url;
   musicArtistSearchResults.value = [];
+  await handleAddMusicArtist();
 };
 
 const toggleMusicPause = async () => {

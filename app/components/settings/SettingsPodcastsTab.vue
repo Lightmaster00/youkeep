@@ -127,7 +127,7 @@
                   </p>
                   <p class="channel-search-desc" v-if="s.description">{{ s.description }}</p>
                 </div>
-                <button @click="selectPodcastShowCandidate(s)" class="btn btn-primary btn-xs">
+                <button @click="selectPodcastShowCandidate(s)" class="btn btn-primary btn-xs" :disabled="addingPodcastShow">
                   Suivre
                 </button>
               </div>
@@ -338,9 +338,15 @@ const handleSearchPodcastShow = async () => {
   }
 };
 
-const selectPodcastShowCandidate = (show: any) => {
-  podcastFeedInput.value = show.feedUrl || '';
+const selectPodcastShowCandidate = async (show: any) => {
+  if (addingPodcastShow.value) return;
+  if (!show.feedUrl) {
+    toast.error("Ce podcast n'a pas de flux RSS exploitable.");
+    return;
+  }
+  podcastFeedInput.value = show.feedUrl;
   podcastShowSearchResults.value = [];
+  await handleAddPodcastShow();
 };
 
 const togglePodcastPause = async () => {
