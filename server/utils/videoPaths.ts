@@ -65,9 +65,10 @@ export interface VideoPaths {
   subtitleUrlFor(fileName: string): string;
 }
 
-export function buildVideoPaths(opts: { baseDir: string; channelFolder: string; title: string | null | undefined; id: string }): VideoPaths {
+export function buildVideoPaths(opts: { baseDir: string; channelFolder: string; title: string | null | undefined; id: string; folderName?: string }): VideoPaths {
   const channelFolder = channelSegment(opts.channelFolder);
-  const baseName = videoBaseName(opts.title, opts.id);
+  // An existing folder name (found on disk) wins over one built from the title.
+  const baseName = opts.folderName ?? videoBaseName(opts.title, opts.id);
   let dir = path.join(opts.baseDir, channelFolder, baseName);
   if (!isContained(opts.baseDir, dir)) dir = path.join(opts.baseDir, '_', baseName);
   const urlDir = `/downloads/${encodeURIComponent(channelFolder)}/${encodeURIComponent(baseName)}`;
@@ -205,4 +206,42 @@ export function removeVideoFiles(loc: StoredVideoLocation): void {
       console.error(`Failed to delete video file ${path.join(loc.dir, entry)}:`, err);
     }
   }
+}
+
+/**
+ * Name of a video folder already on disk in `channelDir` for this id (its
+ * `[<id>]` suffix matches), or null. Several matches: the first, in name order,
+ * that holds a file named after it (media or `.part`), else the first.
+ */
+export function findExistingVideoDir(channelDir: string, id: string): string | null {
+  const wanted = cleanName(id) || '_';
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(channelDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const matches = entries
+    .filter((entry) => entry.isDirectory() && idFromVideoFolder(entry.name) === wanted)
+    .map((entry) => entry.name)
+    .sort();
+  if (matches.length === 0) return null;
+  const withOwnFiles = matches.find((name) => {
+    try {
+      return fs.readdirSync(path.join(channelDir, name)).some((f) => f.startsWith(`${name}.`));
+    } catch {
+      return false;
+    }
+  });
+  return withOwnFiles ?? matches[0]!;
+}
+
+/**
+ * Paths for downloading (or cleaning up) a video: reuses the video's folder
+ * already on disk, so a title change between attempts keeps resume and cleanup
+ * in the same folder; otherwise the folder is named from the current title.
+ */
+export function resolveVideoPaths(opts: { baseDir: string; channelFolder: string; title: string | null | undefined; id: string }): VideoPaths {
+  const existing = findExistingVideoDir(path.join(opts.baseDir, channelSegment(opts.channelFolder)), opts.id);
+  return buildVideoPaths({ ...opts, folderName: existing ?? undefined });
 }

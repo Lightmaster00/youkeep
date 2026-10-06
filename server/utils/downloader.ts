@@ -9,7 +9,7 @@ import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlock
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { buildVideoPaths, locateDownloadedFiles, removeVideoFiles } from './videoPaths';
+import { resolveVideoPaths, locateDownloadedFiles, removeVideoFiles } from './videoPaths';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -42,19 +42,27 @@ export function cleanupPartialFiles(videoId: string, channelId: string): void {
   const partFile = path.join(channelDir, `${videoId}.mp4.part`);
   const ytdlPartFile = path.join(channelDir, `${videoId}.mp4.ytdl`);
 
-  [mp4File, jpgFile, partFile, ytdlPartFile].forEach(f => {
+  // Legacy per-format partials (e.g. <id>.f137.mp4.part, <id>.f140.m4a.ytdl).
+  let legacyFragments: string[] = [];
+  try {
+    legacyFragments = fs.readdirSync(channelDir)
+      .filter(f => f.startsWith(`${videoId}.f`) && (f.endsWith('.part') || f.endsWith('.ytdl')))
+      .map(f => path.join(channelDir, f));
+  } catch (e) {}
+
+  [mp4File, jpgFile, partFile, ytdlPartFile, ...legacyFragments].forEach(f => {
     if (fs.existsSync(f)) {
       try { fs.unlinkSync(f); } catch (e) {}
     }
   });
 
+  // The video's own folder: the one already on disk for this id (even if the
+  // title changed since), else the one named from the current title.
   const video = db.prepare('SELECT title FROM videos WHERE id = ?').get(videoId) as { title: string } | undefined;
-  if (video) {
-    const paths = buildVideoPaths({ baseDir: basePath, channelFolder, title: video.title, id: videoId });
-    try {
-      removeVideoFiles({ layout: 'new', baseDir: basePath, dir: paths.dir, baseName: paths.baseName, urlDir: paths.urlDir, videoFile: null });
-    } catch (e) {}
-  }
+  const paths = resolveVideoPaths({ baseDir: basePath, channelFolder, title: video?.title, id: videoId });
+  try {
+    removeVideoFiles({ layout: 'new', baseDir: basePath, dir: paths.dir, baseName: paths.baseName, urlDir: paths.urlDir, videoFile: null });
+  } catch (e) {}
 }
 
 // Define global-backed state to survive development HMR module hot reloads
@@ -698,7 +706,8 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     const basePath = resolveChannelBaseDir(channel?.custom_save_path);
     const videoRow = db.prepare('SELECT is_short, title FROM videos WHERE id = ?').get(videoId) as { is_short: number; title: string } | undefined;
     // One folder per video: <base>/<Channel>/<Title> [<id>]/<Title> [<id>].<ext>
-    const paths = buildVideoPaths({
+    // An existing folder for this id is reused (resume after a title change).
+    const paths = resolveVideoPaths({
       baseDir: basePath,
       channelFolder: sanitizeFolderName(channel?.title || channelId),
       title: videoRow?.title,

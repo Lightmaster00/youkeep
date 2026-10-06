@@ -7,7 +7,7 @@ import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { cleanupPartialFiles } from '../../server/utils/downloader';
-import { buildVideoPaths, locateDownloadedFiles } from '../../server/utils/videoPaths';
+import { buildVideoPaths, locateDownloadedFiles, resolveVideoPaths } from '../../server/utils/videoPaths';
 import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
 
 let db: Database.Database;
@@ -56,5 +56,42 @@ describe('downloader, one folder per video', () => {
     expect(fs.existsSync(a.dir)).toBe(false);
     expect(fs.readdirSync(b.dir)).toEqual(['notes.txt']);
     expect(fs.existsSync(path.join(dir, 'Chan', 'abc.mp4.part'))).toBe(false);
+  });
+
+  it('a resumed download keeps the folder already on disk when the title changed, and never takes another id\'s folder', () => {
+    const old = path.join(dir, 'Chan', 'Old Title [abc]');
+    fs.mkdirSync(old, { recursive: true });
+    fs.writeFileSync(path.join(old, 'Old Title [abc].f137.mp4.part'), 'x');
+    fs.mkdirSync(path.join(dir, 'Chan', 'New Title [abcd]'));
+
+    const p = resolveVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'New Title', id: 'abc' });
+    expect(p.dir).toBe(old);
+    expect(p.outputTemplate).toBe(`${path.join(old, 'Old Title [abc]')}.%(ext)s`);
+    expect(p.videoUrlFor('mp4')).toBe('/downloads/Chan/Old%20Title%20%5Babc%5D/Old%20Title%20%5Babc%5D.mp4');
+
+    // A folder for a different id (similar name) is never reused.
+    expect(resolveVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'New Title', id: 'bc' }).dir).toBe(path.join(dir, 'Chan', 'New Title [bc]'));
+  });
+
+  it('two folders for one id: the one holding the video\'s files wins, else name order', () => {
+    const chan = path.join(dir, 'Chan');
+    for (const f of ['B [abc]', 'C [abc]']) fs.mkdirSync(path.join(chan, f), { recursive: true });
+    expect(resolveVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'Z', id: 'abc' }).baseName).toBe('B [abc]');
+    fs.writeFileSync(path.join(chan, 'C [abc]', 'C [abc].mp4.part'), 'x');
+    expect(resolveVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'Z', id: 'abc' }).baseName).toBe('C [abc]');
+  });
+
+  it('cancel cleanup after a title change removes the folder on disk and legacy format partials', () => {
+    insertVideo(db, { id: 'abc', channelId: 'c1', title: 'New Title', downloadStatus: 'downloading' });
+    const chan = path.join(dir, 'Chan');
+    const old = path.join(chan, 'Old Title [abc]');
+    fs.mkdirSync(old, { recursive: true });
+    fs.writeFileSync(path.join(old, 'Old Title [abc].f137.mp4.part'), 'x');
+    for (const f of ['abc.f137.mp4.part', 'abc.f140.m4a.ytdl', 'abcd.f137.mp4.part']) fs.writeFileSync(path.join(chan, f), 'x');
+
+    cleanupPartialFiles('abc', 'c1');
+
+    expect(fs.existsSync(old)).toBe(false);
+    expect(fs.readdirSync(chan)).toEqual(['abcd.f137.mp4.part']);
   });
 });
