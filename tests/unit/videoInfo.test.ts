@@ -11,6 +11,9 @@ describe('extractInfoFields', () => {
   it('rounds float durations', () => {
     expect(extractInfoFields({ duration: 61.6 }).duration).toBe(62);
   });
+  it('floors tiny positive durations at 1', () => {
+    expect(extractInfoFields({ duration: 0.4 }).duration).toBe(1);
+  });
   it.each([[undefined], [null], [0], [-5], ['120'], [NaN], [Infinity]])('duration %s -> null', (d) => {
     expect(extractInfoFields({ duration: d }).duration).toBeNull();
   });

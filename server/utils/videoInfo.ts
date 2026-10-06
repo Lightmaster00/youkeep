@@ -17,7 +17,7 @@ export function extractInfoFields(infoData: any): VideoInfoFields {
     likeCount: d.like_count || null,
     wasLive: d.live_status === 'was_live' ? 1 : 0,
     duration: typeof d.duration === 'number' && Number.isFinite(d.duration) && d.duration > 0
-      ? Math.round(d.duration)
+      ? Math.max(1, Math.round(d.duration))
       : null,
   };
 }
