@@ -288,3 +288,129 @@ describe('LibrarySourceSection — Following list', () => {
     expect(w2.find('[data-testid="library-section-music"]').attributes('open')).toBeDefined();
   });
 });
+
+// Wraps the shared mock so individual tests can intercept specific calls.
+function intercept(fn: (url: string, opts?: any) => any) {
+  const base = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (url: string, opts?: any) => {
+    const r = fn(url, opts);
+    return r === undefined ? base(url, opts) : r;
+  });
+}
+
+describe('LibrarySourceSection — robustness', () => {
+  const twoArtists = () => ({ artists: [
+    { id: 'a1', name: 'Artist One', avatar_url: '', sync_status: 'downloading', visibility: 'public', track_count: 3 },
+    { id: 'a2', name: 'Artist Two', avatar_url: '', sync_status: 'paused', visibility: 'public', track_count: 1 },
+  ] });
+  const mountMusic = async () => {
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: musicSource } });
+    await flushPromises();
+    return w;
+  };
+  const disabled = (w: any, id: string) => (w.find(`[data-testid="${id}"]`).element as HTMLButtonElement).disabled;
+
+  it('Sync now failure shows the error and re-enables the row', async () => {
+    listPayload = twoArtists();
+    failRowAction = true;
+    const w = await mountMusic();
+    await w.find('[data-testid="sync-now-a1"]').trigger('click');
+    await flushPromises();
+    expect(toastMessages()).toContain('Server unreachable');
+    expect(disabled(w, 'sync-now-a1')).toBe(false);
+  });
+
+  it('Sync all failure shows the error and re-enables the button', async () => {
+    listPayload = twoArtists();
+    const w = await mountMusic();
+    intercept((url, opts) => {
+      if (opts?.method === 'POST' && url.endsWith('/sync-all')) throw Object.assign(new Error('x'), { data: { statusMessage: 'Sync exploded' } });
+    });
+    await w.find('[data-testid="sync-all"]').trigger('click');
+    await flushPromises();
+    expect(toastMessages()).toContain('Sync exploded');
+    expect(disabled(w, 'sync-all')).toBe(false);
+  });
+
+  it('shows the error state when the list fetch fails', async () => {
+    intercept((url) => {
+      if (url === '/api/admin/music/queue') throw new Error('down');
+    });
+    const w = await mountMusic();
+    expect(w.find('[data-testid="following-error"]').exists()).toBe(true);
+    expect(w.find('[data-testid="following-empty"]').exists()).toBe(false);
+  });
+
+  it('shows Loading before the first load settles, then the empty message', async () => {
+    let release: (v: any) => void = () => {};
+    intercept((url) => {
+      if (url === '/api/admin/music/queue') return new Promise((res) => { release = res; });
+    });
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: musicSource } });
+    await flushPromises();
+    expect(w.find('[data-testid="following-loading"]').exists()).toBe(true);
+    expect(w.find('[data-testid="following-empty"]').exists()).toBe(false);
+    release({ artists: [] });
+    await flushPromises();
+    expect(w.find('[data-testid="following-loading"]').exists()).toBe(false);
+    expect(w.find('[data-testid="following-empty"]').text()).toBe("You're not following any artist yet.");
+  });
+
+  it('keeps a row disabled while its own request is pending, other rows stay usable', async () => {
+    listPayload = twoArtists();
+    const resolvers: Array<(v: any) => void> = [];
+    const w = await mountMusic();
+    intercept((url, opts) => {
+      if (opts?.method === 'POST' && url === '/api/admin/music/artists/a1/sync') return new Promise((res) => resolvers.push(res));
+    });
+    await w.find('[data-testid="sync-now-a1"]').trigger('click');
+    await flushPromises();
+    expect(disabled(w, 'sync-now-a1')).toBe(true);
+    expect(disabled(w, 'sync-now-a2')).toBe(false);
+    await w.find('[data-testid="sync-now-a2"]').trigger('click');
+    await flushPromises();
+    expect(posts('/api/admin/music/artists/a2/sync')).toHaveLength(1);
+    expect(disabled(w, 'sync-now-a1')).toBe(true);
+    expect(disabled(w, 'sync-switch-a1')).toBe(true);
+    resolvers.forEach((r) => r({ success: true }));
+    await flushPromises();
+    expect(disabled(w, 'sync-now-a1')).toBe(false);
+  });
+
+  it('a successful toggle leaves the switch in the new state', async () => {
+    listPayload = twoArtists();
+    const w = await mountMusic();
+    const sw = w.find('[data-testid="sync-switch-a2"]');
+    listPayload = { artists: [{ ...twoArtists().artists[0] }, { ...twoArtists().artists[1], sync_status: 'downloading' }] };
+    await sw.setValue(true);
+    await flushPromises();
+    expect((w.find('[data-testid="sync-switch-a2"]').element as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('keeps the typed query when a direct follow fails', async () => {
+    failIngest = true;
+    const w = await mountMusic();
+    await w.find('[data-testid="follow-search-input"]').setValue('@someone');
+    await w.find('[data-testid="follow-search-form"]').trigger('submit');
+    await flushPromises();
+    expect((w.find('[data-testid="follow-search-input"]').element as HTMLInputElement).value).toBe('@someone');
+    expect(toastMessages()).toContain('nope');
+  });
+});
+
+describe('LibrarySourceSection — Podcasts following', () => {
+  it('renders shows and uses the podcast pause and sync-all routes', async () => {
+    listPayload = { shows: [{ id: 's1', title: 'Show One', cover_url: '', sync_status: 'downloading', visibility: 'public', episode_count: 2 }] };
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: podcastsSource } });
+    await flushPromises();
+    expect(w.find('[data-testid="following-s1"]').text()).toContain('Show One');
+    expect(w.find('[data-testid="following-s1"]').text()).toContain('2 episodes');
+    await w.find('[data-testid="sync-switch-s1"]').setValue(false);
+    await flushPromises();
+    expect(posts('/api/admin/podcasts/shows/s1/pause')).toHaveLength(1);
+    await w.find('[data-testid="sync-all"]').trigger('click');
+    await flushPromises();
+    expect(posts('/api/admin/podcasts/sync-all')).toHaveLength(1);
+    expect(toastMessages()).toContain('Sync started for every followed podcast.');
+  });
+});

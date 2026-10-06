@@ -85,8 +85,9 @@
         >{{ syncingAll ? 'Starting...' : 'Sync all' }}</button>
       </div>
 
-      <p v-if="listError" class="settings-error-msg mt-2">Couldn't load the list. Reload the page to try again.</p>
-      <p v-else-if="rows.length === 0" class="section-desc mt-2">{{ config.emptyFollowingMessage }}</p>
+      <p v-if="!loaded" class="section-desc mt-2" data-testid="following-loading">Loading…</p>
+      <p v-else-if="listError" class="settings-error-msg mt-2" data-testid="following-error">Couldn't load the list. Reload the page to try again.</p>
+      <p v-else-if="rows.length === 0" class="section-desc mt-2" data-testid="following-empty">{{ config.emptyFollowingMessage }}</p>
       <ul v-else class="following-list">
         <li v-for="row in rows" :key="row.id" class="following-row" :data-testid="`following-${row.id}`">
           <img
@@ -104,7 +105,7 @@
             <input
               type="checkbox"
               :checked="row.syncActive"
-              :disabled="busyRowId === row.id"
+              :disabled="isBusy(row.id)"
               :data-testid="`sync-switch-${row.id}`"
               @change="onToggleSync(row, $event)"
             />
@@ -113,7 +114,7 @@
           <button
             type="button"
             class="btn btn-secondary-dark btn-xs"
-            :disabled="busyRowId === row.id"
+            :disabled="isBusy(row.id)"
             :data-testid="`sync-now-${row.id}`"
             @click="onSyncNow(row)"
           >Sync now</button>
@@ -143,7 +144,9 @@ const adding = ref(false);
 const options = reactive<FollowOptions>(defaultFollowOptions(props.config.kind));
 const rows = ref<FollowedSource[]>([]);
 const listError = ref(false);
-const busyRowId = ref<string | null>(null);
+const busyRows = reactive(new Set<string>());
+const loaded = ref(false);
+const isBusy = (id: string) => busyRows.has(id);
 const syncingAll = ref(false);
 
 const resultViews = computed(() => results.value.map((raw) => props.config.toResultView(raw)));
@@ -165,6 +168,8 @@ async function loadFollowing() {
     listError.value = false;
   } catch {
     listError.value = true;
+  } finally {
+    loaded.value = true;
   }
 }
 
@@ -229,8 +234,12 @@ function rowAfterReload(row: FollowedSource): FollowedSource {
 
 async function onToggleSync(row: FollowedSource, event: Event) {
   const input = event.target as HTMLInputElement;
+  if (busyRows.has(row.id)) {
+    input.checked = rowAfterReload(row).syncActive;
+    return;
+  }
   const wantActive = input.checked;
-  busyRowId.value = row.id;
+  busyRows.add(row.id);
   try {
     await $fetch(wantActive ? props.config.syncUrl(row.id) : props.config.pauseUrl(row.id), { method: 'POST' });
     toast.success(wantActive ? `${row.name} is active.` : `${row.name} is paused.`);
@@ -240,19 +249,20 @@ async function onToggleSync(row: FollowedSource, event: Event) {
     await loadFollowing();
     // One-way binding: the browser already flipped the box, force it back to server truth.
     input.checked = rowAfterReload(row).syncActive;
-    busyRowId.value = null;
+    busyRows.delete(row.id);
   }
 }
 
 async function onSyncNow(row: FollowedSource) {
-  busyRowId.value = row.id;
+  if (busyRows.has(row.id)) return;
+  busyRows.add(row.id);
   try {
     await $fetch(props.config.syncUrl(row.id), { method: 'POST' });
     toast.success(`Sync started for ${row.name}.`);
   } catch (err: any) {
     toast.error(err?.data?.statusMessage || `Could not sync ${row.name}.`);
   } finally {
-    busyRowId.value = null;
+    busyRows.delete(row.id);
     await loadFollowing();
   }
 }
