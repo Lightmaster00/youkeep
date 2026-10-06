@@ -6,8 +6,11 @@
     :open="open"
   >
     <summary class="library-section-summary">
-      <span class="library-section-title">{{ config.title }}</span>
-      <span class="section-desc">{{ config.description }}</span>
+      <span class="library-chevron" aria-hidden="true" data-testid="library-chevron"></span>
+      <span class="library-section-text">
+        <span class="library-section-title">{{ config.title }}</span>
+        <span class="section-desc">{{ config.description }}</span>
+      </span>
     </summary>
 
     <form class="ingest-form mt-3" data-testid="follow-search-form" @submit.prevent="onSubmit">
@@ -396,7 +399,11 @@ defineExpose({ loadFollowing });
 
 <style scoped>
 .library-section { padding: 20px; display: flex; flex-direction: column; }
-.library-section-summary { cursor: pointer; display: flex; flex-direction: column; gap: 4px; list-style-position: outside; }
+.library-section-summary { cursor: pointer; display: flex; align-items: flex-start; gap: 12px; list-style: none; }
+.library-section-summary::-webkit-details-marker { display: none; }
+.library-section-text { display: flex; flex-direction: column; gap: 4px; }
+.library-chevron { flex: none; width: 8px; height: 8px; margin-top: 9px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; }
+details[open] > .library-section-summary > .library-chevron { transform: rotate(45deg); }
 .library-section-title { font-size: 18px; font-weight: 700; }
 .follow-options { border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 12px; }
 .follow-options > summary { cursor: pointer; font-weight: 600; font-size: 14px; }

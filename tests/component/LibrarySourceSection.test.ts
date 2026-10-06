@@ -414,3 +414,12 @@ describe('LibrarySourceSection — Podcasts following', () => {
     expect(toastMessages()).toContain('Sync started for every followed podcast.');
   });
 });
+
+describe('LibrarySourceSection — chevron', () => {
+  it.each([[true], [false]])('renders a chevron in the summary when open=%s', async (open) => {
+    for (const config of [musicSource, podcastsSource]) {
+      const w = await mountSuspended(LibrarySourceSection, { props: { config, open } });
+      expect(w.find('[data-testid="library-section-' + config.kind + '"] > summary [data-testid="library-chevron"]').exists()).toBe(true);
+    }
+  });
+});
