@@ -312,14 +312,17 @@ const formatUploadDate = (dateStr: string | null): string => {
 .featured-bento {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr;
-  grid-template-rows: repeat(2, 1fr);
+  grid-template-rows: repeat(2, auto);
   gap: 16px;
   margin-bottom: 32px;
-  height: 420px;
+  /* Rows size to their content so a wrapped title never clips the channel row. */
+  height: auto;
+  min-height: 420px;
 }
 
 .featured-large {
   grid-row: span 2;
+  min-height: 420px;
   position: relative;
   border-radius: var(--border-radius-lg);
   overflow: hidden;
@@ -436,7 +439,7 @@ const formatUploadDate = (dateStr: string | null): string => {
 
 .featured-small {
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .featured-small :deep(.thumbnail-wrapper) {
@@ -449,6 +452,11 @@ const formatUploadDate = (dateStr: string | null): string => {
 
 .featured-small :deep(.video-title) {
   margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 @media (max-width: 900px) {
@@ -456,11 +464,13 @@ const formatUploadDate = (dateStr: string | null): string => {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: 240px repeat(2, auto);
     height: auto;
+    min-height: 0;
   }
   .featured-large {
     grid-row: 1;
     grid-column: 1 / -1;
     height: 240px;
+    min-height: 0;
   }
   .hero-content { left: 24px; bottom: 24px; }
   .hero-title { font-size: 20px; }
