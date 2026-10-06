@@ -5,6 +5,7 @@ import path from 'path';
 import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
 import { EventEmitter } from 'events';
 import { backfillMissingVideoDurations, runFfprobe } from '../../server/utils/videoDurations';
+import { buildVideoPaths } from '../../server/utils/videoPaths';
 
 const wipe = vi.hoisted(() => ({ on: false }));
 vi.mock('../../server/utils/libraryWipe', () => ({ isWipeInProgress: () => wipe.on }));
@@ -139,6 +140,15 @@ describe('backfillMissingVideoDurations', () => {
     const probe = vi.fn(async () => 9);
     expect(await backfillMissingVideoDurations(db, probe, { downloadsDir: dir })).toEqual({ checked: 0, updated: 0 });
     expect(probe).not.toHaveBeenCalled();
+  });
+  it('probes a new-layout video inside its own folder', async () => {
+    const p = buildVideoPaths({ baseDir: dir, channelFolder: 'Channel c1', title: 'Clip: one', id: 'nl' });
+    insertVideo(db, { id: 'nl', channelId: 'c1', localVideoPath: p.videoUrlFor('mp4') });
+    fs.mkdirSync(p.dir, { recursive: true });
+    fs.writeFileSync(path.join(p.dir, `${p.baseName}.mp4`), 'x');
+    const probe = vi.fn(async () => 12);
+    expect((await backfillMissingVideoDurations(db, probe, { downloadsDir: dir })).updated).toBe(1);
+    expect(probe).toHaveBeenCalledWith(path.join(p.dir, `${p.baseName}.mp4`));
   });
 });
 

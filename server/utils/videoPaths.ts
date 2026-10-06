@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import type Database from 'better-sqlite3';
+import { getDownloadsDir, sanitizeFolderName } from './downloader';
 
 // One folder per video: <base>/<Channel>/<Title> [<id>]/<Title> [<id>].<ext>
 // (spec docs/superpowers/specs/2026-10-06-video-storage-layout-design.md).
@@ -252,4 +254,65 @@ export function findExistingVideoDir(channelDir: string, id: string): string | n
 export function resolveVideoPaths(opts: { baseDir: string; channelFolder: string; title: string | null | undefined; id: string }): VideoPaths {
   const existing = findExistingVideoDir(path.join(opts.baseDir, channelSegment(opts.channelFolder)), opts.id);
   return buildVideoPaths({ ...opts, folderName: existing ?? undefined });
+}
+
+/**
+ * Where a video's files are on disk. The stored path is the source of truth:
+ * a new-layout URL maps to its own folder (looked up the same way the file
+ * route does), a legacy URL to the channel folder; only a video without a
+ * stored path yet gets its folder computed from title + id (reusing a folder
+ * already on disk for this id, like the downloader does).
+ */
+export function resolveStoredPath(
+  db: Database.Database,
+  row: { id: string; channel_id: string; title?: string | null; local_video_path: string | null },
+  opts: { downloadsDir?: string } = {},
+): StoredVideoLocation {
+  const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(row.channel_id) as
+    { title: string | null; custom_save_path: string | null } | undefined;
+  const downloadsDir = opts.downloadsDir ?? getDownloadsDir();
+  const baseDir = path.resolve(channelReadBaseDir(channel?.custom_save_path, downloadsDir));
+  const channelFolder = sanitizeFolderName(channel?.title || row.channel_id);
+
+  const stored = isNewLayoutUrl(row.local_video_path, row.id) ? storedUrlSegments(row.local_video_path) : null;
+  if (stored) {
+    const [channelFolderSegment, videoFolder, fileName] = stored;
+    const candidates = candidateVideoDirs(baseDir, channelFolderSegment, videoFolder);
+    const dir = candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+    return {
+      layout: 'new',
+      baseDir,
+      dir,
+      baseName: videoFolder,
+      urlDir: `/downloads/${encodeSegment(channelFolderSegment)}/${encodeSegment(videoFolder)}`,
+      videoFile: path.join(dir, fileName),
+    };
+  }
+  if (row.local_video_path) {
+    const dir = path.resolve(baseDir, channelFolder);
+    return {
+      layout: 'legacy',
+      baseDir,
+      dir,
+      baseName: row.id,
+      urlDir: `/downloads/${channelFolder}`,
+      videoFile: path.resolve(dir, path.posix.basename(row.local_video_path)),
+    };
+  }
+  const p = resolveVideoPaths({ baseDir, channelFolder, title: row.title, id: row.id });
+  return { layout: 'new', baseDir, dir: p.dir, baseName: p.baseName, urlDir: p.urlDir, videoFile: null };
+}
+
+/** Subtitle files `<baseName>.<code>.vtt` next to the video. */
+export function listSubtitleFiles(loc: StoredVideoLocation): { code: string; fileName: string; url: string }[] {
+  if (!isContained(loc.baseDir, loc.dir) || !fs.existsSync(loc.dir)) return [];
+  const prefix = `${loc.baseName}.`;
+  return fs.readdirSync(loc.dir)
+    .filter((file) => file.startsWith(prefix) && file.endsWith('.vtt'))
+    .map((file) => ({
+      code: file.slice(prefix.length, file.length - '.vtt'.length),
+      fileName: file,
+      url: loc.layout === 'new' ? `${loc.urlDir}/${encodeSegment(file)}` : `${loc.urlDir}/${file}`,
+    }))
+    .filter((sub) => sub.code.length > 0);
 }

@@ -1,8 +1,6 @@
 import { defineEventHandler, createError, getQuery } from 'h3';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import { getDownloadsDir } from '../../utils/downloader';
+import { listSubtitleFiles, resolveStoredPath } from '../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
@@ -74,46 +72,27 @@ export default defineEventHandler(async (event) => {
     ORDER BY start_time ASC
   `).all(videoId);
 
-  // Détecter les sous-titres locaux disponibles (.vtt)
+  // Local subtitles (.vtt) next to the video: in its own folder (one folder per
+  // video) or, for legacy videos, in the channel folder as <id>.<lang>.vtt.
   const subtitles: { code: string; label: string; url: string }[] = [];
   if (video.local_video_path && video.local_video_path.startsWith('/downloads/')) {
     try {
-      const downloadsDir = getDownloadsDir();
-      const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(video.channel_id) as any;
-      const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0
-        ? channel.custom_save_path
-        : downloadsDir;
-      
-      const channelFolder = sanitizeFolderName(channel?.title || video.channel_id);
-      const dirPath = path.join(basePath, channelFolder);
-
-      if (fs.existsSync(dirPath)) {
-        const files = fs.readdirSync(dirPath);
-        const prefix = `${video.id}.`;
-        
-        for (const file of files) {
-          if (file.startsWith(prefix) && file.endsWith('.vtt')) {
-            const langCode = file.substring(prefix.length, file.length - '.vtt'.length);
-            if (langCode && langCode.length > 0) {
-              const labelMap: Record<string, string> = {
-                en: 'English',
-                fr: 'French',
-                es: 'Spanish',
-                de: 'German',
-                it: 'Italian',
-                ja: 'Japanese',
-                zh: 'Chinese',
-                ru: 'Russian',
-                pt: 'Portuguese',
-              };
-              // Match codes like en-US, fr-FR, etc.
-              const cleanCode = langCode.split('-')[0]?.toLowerCase() || langCode.toLowerCase();
-              const label = labelMap[cleanCode] || langCode.toUpperCase();
-              const url = `/downloads/${channelFolder}/${file}`;
-              subtitles.push({ code: langCode, label, url });
-            }
-          }
-        }
+      const labelMap: Record<string, string> = {
+        en: 'English',
+        fr: 'French',
+        es: 'Spanish',
+        de: 'German',
+        it: 'Italian',
+        ja: 'Japanese',
+        zh: 'Chinese',
+        ru: 'Russian',
+        pt: 'Portuguese',
+      };
+      const location = resolveStoredPath(db, video, { downloadsDir: getDownloadsDir() });
+      for (const sub of listSubtitleFiles(location)) {
+        // Match codes like en-US, fr-FR, etc.
+        const cleanCode = sub.code.split('-')[0]?.toLowerCase() || sub.code.toLowerCase();
+        subtitles.push({ code: sub.code, label: labelMap[cleanCode] || sub.code.toUpperCase(), url: sub.url });
       }
     } catch (e) {
       console.error('Error scanning subtitles:', e);

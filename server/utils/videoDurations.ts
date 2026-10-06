@@ -1,8 +1,8 @@
 import fs from 'fs';
-import path from 'path';
 import type Database from 'better-sqlite3';
 import { spawn } from 'child_process';
-import { buildSpawnEnv, getDownloadsDir, sanitizeFolderName } from './downloader';
+import { buildSpawnEnv, getDownloadsDir } from './downloader';
+import { isContained, resolveStoredPath } from './videoPaths';
 import { isWipeInProgress } from './libraryWipe';
 import { isModuleEnabled } from './modules';
 
@@ -55,8 +55,8 @@ const BATCH_SIZE = 200;
 
 /**
  * Fills `duration` for already-downloaded videos that were ingested without one.
- * Never throws. File path mirrors server/routes/downloads: channel custom_save_path
- * (or the downloads dir) / sanitized channel title / file name.
+ * Never throws. File path comes from resolveStoredPath (same mapping as
+ * server/routes/downloads).
  */
 export async function backfillMissingVideoDurations(
   db: Database.Database,
@@ -92,13 +92,11 @@ export async function backfillMissingVideoDurations(
         examined++;
         lastId = row.id;
         try {
-          const fileName = path.basename(row.localPath);
-          const base = row.customPath && row.customPath.trim() ? row.customPath : downloadsDir;
-          const channelDir = path.resolve(base, sanitizeFolderName(row.title || row.channelId));
-          const filePath = path.resolve(channelDir, fileName);
-          const rel = path.relative(channelDir, filePath);
-          const relDir = path.relative(path.resolve(base), channelDir);
-          if (rel.startsWith('..') || path.isAbsolute(rel) || relDir.startsWith('..') || path.isAbsolute(relDir)) continue;
+          // Same mapping as server/routes/downloads: the stored path decides the
+          // folder (one folder per video, or the channel folder for legacy rows).
+          const location = resolveStoredPath(db, { id: row.id, channel_id: row.channelId, local_video_path: row.localPath }, { downloadsDir });
+          const filePath = location.videoFile;
+          if (!filePath || !isContained(location.baseDir, filePath)) continue;
           if (!fs.existsSync(filePath)) continue;
           result.checked++;
           const seconds = await probe(filePath);

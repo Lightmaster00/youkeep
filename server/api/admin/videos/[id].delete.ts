@@ -1,6 +1,7 @@
 import { defineEventHandler, createError } from 'h3';
 import fs from 'fs';
 import path from 'path';
+import { removeVideoFiles, resolveStoredPath } from '../../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -13,7 +14,9 @@ export default defineEventHandler(async (event) => {
   const db = getDb();
 
   // 1. Retrieve video details to get local paths and channel ID
-  const video = db.prepare('SELECT channel_id, local_video_path, local_thumbnail_path FROM videos WHERE id = ?').get(videoId) as {
+  const video = db.prepare('SELECT id, title, channel_id, local_video_path, local_thumbnail_path FROM videos WHERE id = ?').get(videoId) as {
+    id: string;
+    title: string;
     channel_id: string;
     local_video_path: string | null;
     local_thumbnail_path: string | null;
@@ -34,11 +37,24 @@ export default defineEventHandler(async (event) => {
     : getDownloadsDir();
   const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || video.channel_id));
 
+  // Where this video's files are, resolved before its row is deleted: its own
+  // folder (one folder per video) or, for legacy videos, the channel folder.
+  const location = resolveStoredPath(db, video, { downloadsDir: getDownloadsDir() });
+
   // 2. Kill the download if it's running
   cancelDownload(videoId);
 
   // 3. Delete from database
   db.prepare('DELETE FROM videos WHERE id = ?').run(videoId);
+
+  if (location.layout === 'new') {
+    // Removes the folder only when it holds nothing but this video's files.
+    removeVideoFiles(location);
+    // A video without a stored path may still have partial files from a
+    // download started before the one-folder-per-video layout: fall through
+    // to the legacy list below (exact <id>.<ext> names in the channel folder).
+    if (video.local_video_path) return { success: true };
+  }
 
   // 4. Remove local files from disk (any container extension, thumbnail,
   // subtitles, metadata, and partial-download leftovers)
