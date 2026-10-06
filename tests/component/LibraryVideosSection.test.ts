@@ -121,7 +121,7 @@ describe('LibrarySourceSection — Videos', () => {
     expect((w.find('[data-testid="visibility-UC9"]').element as HTMLSelectElement).value).toBe('private');
   });
 
-  it('a failed visibility change toasts and puts the select back to the server value', async () => {
+  it('a failed visibility change toasts and the select shows the server value', async () => {
     failVisibility = true;
     const w = await mountVideos();
     const select = w.find('[data-testid="visibility-UC9"]');

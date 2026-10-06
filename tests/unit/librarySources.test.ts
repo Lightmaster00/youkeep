@@ -145,8 +145,8 @@ describe('videosSource', () => {
       { id: 'UC1', title: 'Chan', avatar_url: 'a.jpg', sync_status: 'downloading', visibility: 'private', completed_count: 12, total_count: 20 },
       { id: 'UC2', title: 'Old', avatar_url: null, sync_status: 'active', visibility: 'public', completed_count: 1, total_count: 1 },
     ] })).toEqual([
-      { id: 'UC1', name: 'Chan', imageUrl: 'a.jpg', countLabel: '12 videos', syncActive: true, visibility: 'private', href: '/channels?id=UC1' },
-      { id: 'UC2', name: 'Old', imageUrl: '', countLabel: '1 video', syncActive: false, visibility: 'public', href: '/channels?id=UC2' },
+      { id: 'UC1', name: 'Chan', imageUrl: 'a.jpg', countLabel: '12 videos', syncActive: true, visibility: 'private', href: '/channels?channelId=UC1' },
+      { id: 'UC2', name: 'Old', imageUrl: '', countLabel: '1 video', syncActive: false, visibility: 'public', href: '/channels?channelId=UC2' },
     ]);
   });
 

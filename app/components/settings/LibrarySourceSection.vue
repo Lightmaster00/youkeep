@@ -247,6 +247,7 @@ async function onVisibilityChange(row: FollowedSource, event: Event) {
     toast.error(err?.data?.statusMessage || 'Could not change the visibility.');
   } finally {
     await loadFollowing();
+    // Defensive redundancy: Vue re-patches a select's value on re-render, so tests cannot prove this line.
     // One-way binding: put the select back to what the server kept.
     select.value = rowAfterReload(row).visibility;
     busyRows.delete(row.id);

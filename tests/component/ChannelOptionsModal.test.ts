@@ -64,5 +64,6 @@ describe('ChannelOptionsModal', () => {
     expect(useToast().toasts.value.map((t) => t.message)).toContain('Disk full');
     expect(val(w, 'opt-shorts').checked).toBe(false);
     expect(w.emitted('saved')).toBeUndefined();
+    expect(w.emitted('close')).toBeUndefined();
   });
 });

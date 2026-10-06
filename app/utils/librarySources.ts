@@ -250,7 +250,7 @@ export const videosSource: LibrarySourceConfig = {
     countLabel: plural(Number(c.completed_count) || 0, 'video'),
     syncActive: c.sync_status === 'downloading',
     visibility: String(c.visibility || 'public'),
-    href: `/channels?id=${enc(String(c.id))}`,
+    href: `/channels?channelId=${enc(String(c.id))}`,
   })),
   emptyFollowingMessage: "You're not following any channel yet.",
   pauseUrl: (id) => `/api/admin/channels/${enc(id)}/pause`,
