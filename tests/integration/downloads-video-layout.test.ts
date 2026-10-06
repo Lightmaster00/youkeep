@@ -44,10 +44,19 @@ function seed(opts: { id: string; channelId: string; channelTitle: string; title
   return p;
 }
 
-// The stored (percent-encoded) URL is what the browser requests; h3 hands the
-// route the raw remainder of the path, still encoded.
+// Production shape (verified against h3 1.15.11): h3 percent-decodes the path
+// before routing EXCEPT %25 and %2F, which stay encoded. So params.path holds
+// spaces/brackets/accents decoded, and a literal "%" or "/" still as %25 / %2F.
+function productionParam(url: string): string {
+  const rest = url.slice('/downloads/'.length);
+  const keep = rest.replace(/%25/gi, '\u0001').replace(/%2f/gi, '\u0002');
+  let decoded = keep;
+  try { decoded = decodeURIComponent(keep); } catch { /* malformed: h3 leaves it as is */ }
+  return decoded.replace(/\u0001/g, '%25').replace(/\u0002/g, '%2F');
+}
 const eventFor = (url: string, headers?: Record<string, string>) =>
-  mockEvent(undefined, { path: url, params: { path: url.slice('/downloads/'.length) }, headers });
+  mockEvent(undefined, { path: url, params: { path: productionParam(url) }, headers });
+const eventRaw = (param: string) => mockEvent(undefined, { params: { path: param } });
 
 describe('GET /downloads/<channel>/<Title [id]>/<file>', () => {
   it('serves a file from the video folder, with Range support', async () => {
@@ -85,7 +94,37 @@ describe('GET /downloads/<channel>/<Title [id]>/<file>', () => {
     await expect(handler(eventFor('/downloads/My%20Chan/Renamed%20%5Bv1%5D/a.mp4'))).rejects.toMatchObject({ statusCode: 404 });
 
     const secret = seed({ id: 'v2', channelId: 'c3', channelTitle: 'Secret', title: 'Hidden', baseDir: dir, visibility: 'private' });
-    await expect(handler(eventFor(secret.videoUrlFor('mp4')))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(handler(eventFor(secret.videoUrlFor('mp4')))).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('serves a title containing %, # and spaces; a literal %2F stays rejected', async () => {
+    const p = seed({ id: 'v1', channelId: 'c1', channelTitle: 'My Chan', title: 'Episode #3: 100% done? ', baseDir: dir });
+    const event = eventRaw('My Chan/Episode #3_ 100%25 done_ [v1]/Episode #3_ 100%25 done_ [v1].mp4');
+    closeIfStream(await handler(event));
+    expect(event.node.res.statusCode).toBe(200);
+    expect(p.baseName).toBe('Episode #3_ 100% done_ [v1]');
+    await expect(handler(eventRaw(`My Chan/${p.baseName.replace(/%/g, '%25')}/..%2Fsecret.txt`))).rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  it('honours share tokens and does not reveal what exists to guests', async () => {
+    const p = seed({ id: 'v2', channelId: 'c3', channelTitle: 'Secret', title: 'Hidden', baseDir: dir, visibility: 'private' });
+    db.prepare("UPDATE videos SET share_token = 'tok' WHERE id = 'v2'").run();
+    fs.writeFileSync(path.join(p.dir, `${p.baseName}.fr.vtt`), 'WEBVTT');
+    const fileUrl = (name: string) => `/downloads/Secret/${encodeURIComponent(p.baseName)}/${encodeURIComponent(name)}`;
+    const status = async (url: string) => {
+      try { closeIfStream(await handler(eventFor(url))); return 200; } catch (e: any) { return e.statusCode; }
+    };
+    // Guest: right file, existing sidecar, missing sidecar, wrong folder, unknown id: all the same 404.
+    expect(await status(p.videoUrlFor('mp4'))).toBe(404);
+    expect(await status(fileUrl(`${p.baseName}.fr.vtt`))).toBe(404);
+    expect(await status(fileUrl(`${p.baseName}.de.vtt`))).toBe(404);
+    expect(await status(`/downloads/Secret/${encodeURIComponent('Guess [v2]')}/x.mp4`)).toBe(404);
+    expect(await status(`/downloads/Secret/${encodeURIComponent('Guess [nope]')}/x.mp4`)).toBe(404);
+    // A valid share token opens the video and its sidecars.
+    (globalThis as any).getQuery = () => ({ token: 'tok' });
+    expect(await status(p.videoUrlFor('mp4'))).toBe(200);
+    expect(await status(fileUrl(`${p.baseName}.fr.vtt`))).toBe(200);
+    expect(await status(fileUrl(`${p.baseName}.de.vtt`))).toBe(404);
   });
 });
 

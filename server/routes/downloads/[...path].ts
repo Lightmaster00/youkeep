@@ -31,8 +31,15 @@ export default defineEventHandler(async (event) => {
       FROM videos v JOIN channels c ON c.id = v.channel_id
       WHERE v.id = ?
     `).get(videoId) as { id: string; local_video_path: string | null; local_thumbnail_path: string | null; custom_save_path: string | null } | undefined;
-    const stored = storedUrlSegments(video?.local_video_path) ?? storedUrlSegments(video?.local_thumbnail_path);
-    if (!video || !stored || stored[0] !== channelSegment || stored[1] !== videoFolder) {
+    // Authorise before revealing anything: denied and nonexistent must be
+    // indistinguishable (404), so folder names and sidecars cannot be probed.
+    const query = getQuery(event);
+    const token = query.token ? String(query.token) : undefined;
+    if (!video || !(await canAccessVideo(video.id, event, token))) {
+      throw createError({ statusCode: 404, statusMessage: 'File not found' });
+    }
+    const stored = storedUrlSegments(video.local_video_path) ?? storedUrlSegments(video.local_thumbnail_path);
+    if (!stored || stored[0] !== channelSegment || stored[1] !== videoFolder) {
       throw createError({ statusCode: 404, statusMessage: 'File not found' });
     }
     const baseDir = path.resolve(channelReadBaseDir(video.custom_save_path, downloadsDir));
