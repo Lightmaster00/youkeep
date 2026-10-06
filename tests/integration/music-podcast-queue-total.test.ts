@@ -23,7 +23,8 @@ beforeEach(() => {
 const cookie = () => sessionCookie('sess-admin');
 
 describe('GET /api/admin/music/queue queueTotal', () => {
-  it('counts downloading, pending and failed tracks and keeps the list capped at 100', async () => {
+  it('is 0 on an empty queue, then counts downloading, pending and failed tracks and keeps the list capped at 100', async () => {
+    expect(((await musicQueue(mockEvent(cookie(), { path: '/api/admin/music/queue' }))) as any).queueTotal).toBe(0);
     for (let i = 0; i < 120; i++) insertMusicTrack(db, { id: `p${i}`, artistId: 'a1', downloadStatus: 'pending', createdAt: 1000 + i });
     insertMusicTrack(db, { id: 'd1', artistId: 'a1', downloadStatus: 'downloading', createdAt: 999999 });
     insertMusicTrack(db, { id: 'f1', artistId: 'a1', downloadStatus: 'failed' });
@@ -38,15 +39,11 @@ describe('GET /api/admin/music/queue queueTotal', () => {
     expect(Array.isArray(res.history)).toBe(true);
     expect(res.isPaused).toBe(false);
   });
-
-  it('is 0 on an empty queue', async () => {
-    const res: any = await musicQueue(mockEvent(cookie(), { path: '/api/admin/music/queue' }));
-    expect(res.queueTotal).toBe(0);
-  });
 });
 
 describe('GET /api/admin/podcasts/queue queueTotal', () => {
-  it('counts downloading, pending and failed episodes and keeps the list capped at 100', async () => {
+  it('is 0 on an empty queue, then counts downloading, pending and failed episodes and keeps the list capped at 100', async () => {
+    expect(((await podcastQueue(mockEvent(cookie(), { path: '/api/admin/podcasts/queue' }))) as any).queueTotal).toBe(0);
     for (let i = 0; i < 110; i++) insertPodcastEpisode(db, { id: `p${i}`, showId: 's1', downloadStatus: 'pending', createdAt: 1000 + i });
     insertPodcastEpisode(db, { id: 'd1', showId: 's1', downloadStatus: 'downloading', createdAt: 999999 });
     insertPodcastEpisode(db, { id: 'f1', showId: 's1', downloadStatus: 'failed' });
@@ -59,10 +56,5 @@ describe('GET /api/admin/podcasts/queue queueTotal', () => {
     expect(res.queueTotal).toBe(113);
     expect(res.failedCount).toBe(2);
     expect(Array.isArray(res.shows)).toBe(true);
-  });
-
-  it('is 0 on an empty queue', async () => {
-    const res: any = await podcastQueue(mockEvent(cookie(), { path: '/api/admin/podcasts/queue' }));
-    expect(res.queueTotal).toBe(0);
   });
 });

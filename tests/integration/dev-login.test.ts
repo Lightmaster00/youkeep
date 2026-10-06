@@ -28,23 +28,14 @@ afterEach(() => {
 });
 
 describe('POST /api/dev/login', () => {
-  it('404s when NODE_ENV is production, even with ALLOW_DEV_LOGIN=1', async () => {
-    process.env.NODE_ENV = 'production';
-    process.env.ALLOW_DEV_LOGIN = '1';
-
-    await expect(loginHandler(mockEvent(undefined, { path: '/api/dev/login' }))).rejects.toMatchObject({ statusCode: 404 });
-  });
-
-  it('404s when ALLOW_DEV_LOGIN is not set, even when NODE_ENV is not production', async () => {
-    process.env.NODE_ENV = 'development';
-    delete process.env.ALLOW_DEV_LOGIN;
-
-    await expect(loginHandler(mockEvent(undefined, { path: '/api/dev/login' }))).rejects.toMatchObject({ statusCode: 404 });
-  });
-
-  it('404s when ALLOW_DEV_LOGIN is set to a wrong value', async () => {
-    process.env.NODE_ENV = 'development';
-    process.env.ALLOW_DEV_LOGIN = 'true'; // not the exact string '1'
+  it.each([
+    ['production', '1'],
+    ['development', undefined],
+    ['development', 'true'], // not the exact string '1'
+  ])('404s unless NODE_ENV is not production AND ALLOW_DEV_LOGIN is exactly "1" (NODE_ENV=%s, ALLOW_DEV_LOGIN=%s)', async (nodeEnv, allow) => {
+    process.env.NODE_ENV = nodeEnv;
+    if (allow === undefined) delete process.env.ALLOW_DEV_LOGIN;
+    else process.env.ALLOW_DEV_LOGIN = allow;
 
     await expect(loginHandler(mockEvent(undefined, { path: '/api/dev/login' }))).rejects.toMatchObject({ statusCode: 404 });
   });

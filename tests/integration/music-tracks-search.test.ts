@@ -40,90 +40,46 @@ describe('GET /api/music/tracks/search', () => {
     expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
   });
 
-  it('includes the joined artist_name and album_title', async () => {
+  it('includes the joined artist_name and album_title (null for a standalone track)', async () => {
     insertMusicArtist(db, { id: 'a1', name: 'Daft Punk' });
     insertMusicAlbum(db, { id: 'al1', artistId: 'a1', title: 'Random Access Memories' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1' });
     db.prepare("UPDATE music_tracks SET title = 'Get Lucky' WHERE id = 't1'").run();
+    db.prepare("UPDATE music_tracks SET title = 'Lucky Star' WHERE id = 't2'").run();
 
     const result: any = await handler(guestEvent('/api/music/tracks/search?q=Lucky'));
-    expect(result.tracks[0].artist_name).toBe('Daft Punk');
-    expect(result.tracks[0].album_title).toBe('Random Access Memories');
+    const byId = Object.fromEntries(result.tracks.map((t: any) => [t.id, t]));
+    expect(byId.t1).toMatchObject({ artist_name: 'Daft Punk', album_title: 'Random Access Memories' });
+    expect(byId.t2.album_title).toBeNull();
   });
 
-  it('returns null album_title for a standalone track with no album', async () => {
-    insertMusicArtist(db, { id: 'a1', name: 'Daft Punk' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    db.prepare("UPDATE music_tracks SET title = 'One More Time' WHERE id = 't1'").run();
+  it('applies artist visibility per viewer (guest: public; user: + private; admin: + ultra_private) and skips incomplete tracks', async () => {
+    insertMusicArtist(db, { id: 'pub', visibility: 'public' });
+    insertMusicArtist(db, { id: 'priv', visibility: 'private' });
+    insertMusicArtist(db, { id: 'ultra', visibility: 'ultra_private' });
+    insertMusicTrack(db, { id: 't-pub', artistId: 'pub' });
+    insertMusicTrack(db, { id: 't-priv', artistId: 'priv' });
+    insertMusicTrack(db, { id: 't-ultra', artistId: 'ultra' });
+    insertMusicTrack(db, { id: 't-dl', artistId: 'pub', downloadStatus: 'downloading' });
+    db.prepare("UPDATE music_tracks SET title = 'Secret ' || id").run();
+    const path = '/api/music/tracks/search?q=Secret';
+    const sorted = (r: any) => r.tracks.map((t: any) => t.id).sort();
 
-    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Time'));
-    expect(result.tracks[0].album_title).toBeNull();
+    expect(sorted(await handler(guestEvent(path)))).toEqual(['t-pub']);
+    expect(sorted(await handler(loginAs('u1', 'user', path)))).toEqual(['t-priv', 't-pub']);
+    expect(sorted(await handler(loginAs('admin1', 'admin', path)))).toEqual(['t-priv', 't-pub', 't-ultra']);
   });
 
-  it('excludes a track whose artist is private, for a guest', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    db.prepare("UPDATE music_tracks SET title = 'Secret Song' WHERE id = 't1'").run();
-
-    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Secret'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('includes a track whose artist is private, for a logged-in non-admin user', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    db.prepare("UPDATE music_tracks SET title = 'Secret Song' WHERE id = 't1'").run();
-
-    const result: any = await handler(loginAs('u1', 'user', '/api/music/tracks/search?q=Secret'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('excludes a track whose artist is ultra_private, for a logged-in non-admin user', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    db.prepare("UPDATE music_tracks SET title = 'Ultra Secret' WHERE id = 't1'").run();
-
-    const result: any = await handler(loginAs('u1', 'user', '/api/music/tracks/search?q=Ultra'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('includes an ultra_private track for an admin', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    db.prepare("UPDATE music_tracks SET title = 'Ultra Secret' WHERE id = 't1'").run();
-
-    const result: any = await handler(loginAs('admin1', 'admin', '/api/music/tracks/search?q=Ultra'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('excludes a track that is not yet completed', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'downloading' });
-    db.prepare("UPDATE music_tracks SET title = 'Still Downloading' WHERE id = 't1'").run();
-
-    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Downloading'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('caps results at the requested limit', async () => {
+  it('caps results at the requested limit, clamped to 200', async () => {
     insertMusicArtist(db, { id: 'a1', name: 'Prolific Artist' });
-    for (let i = 1; i <= 5; i++) {
-      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
-      db.prepare("UPDATE music_tracks SET title = ? WHERE id = ?").run(`Limit Test ${i}`, `t${i}`);
-    }
+    const insert = db.transaction(() => {
+      for (let i = 1; i <= 205; i++) insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
+    });
+    insert();
+    db.prepare("UPDATE music_tracks SET title = 'Limit Test ' || id").run();
 
-    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Limit&limit=2'));
-    expect(result.tracks).toHaveLength(2);
-  });
-
-  it('clamps a requested limit above 200 down to 200', async () => {
-    insertMusicArtist(db, { id: 'a1', name: 'Prolific Artist' });
-    for (let i = 1; i <= 3; i++) {
-      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
-      db.prepare("UPDATE music_tracks SET title = ? WHERE id = ?").run(`Clamp Test ${i}`, `t${i}`);
-    }
-
-    const result: any = await handler(guestEvent('/api/music/tracks/search?q=Clamp&limit=500'));
-    expect(result.tracks).toHaveLength(3);
+    expect((await handler(guestEvent('/api/music/tracks/search?q=Limit&limit=2')) as any).tracks).toHaveLength(2);
+    expect((await handler(guestEvent('/api/music/tracks/search?q=Limit&limit=500')) as any).tracks).toHaveLength(200);
   });
 });

@@ -19,21 +19,13 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 }
 
 describe('GET /api/settings/music-clips', () => {
-  it('defaults to false when the row is missing', async () => {
-    const result: any = await getHandler(mockEvent(undefined, { path: '/api/settings/music-clips' }));
-    expect(result.enabled).toBe(false);
-  });
-
-  it('reflects enabled: true', async () => {
+  it('defaults to false when the row is missing and reflects the stored value', async () => {
+    const get = async () => ((await getHandler(mockEvent(undefined, { path: '/api/settings/music-clips' }))) as any).enabled;
+    expect(await get()).toBe(false);
     insertSetting(db, { key: 'music_download_clips', value: '1' });
-    const result: any = await getHandler(mockEvent(undefined, { path: '/api/settings/music-clips' }));
-    expect(result.enabled).toBe(true);
-  });
-
-  it('reflects enabled: false', async () => {
-    insertSetting(db, { key: 'music_download_clips', value: '0' });
-    const result: any = await getHandler(mockEvent(undefined, { path: '/api/settings/music-clips' }));
-    expect(result.enabled).toBe(false);
+    expect(await get()).toBe(true);
+    db.prepare("UPDATE settings SET value = '0' WHERE key = 'music_download_clips'").run();
+    expect(await get()).toBe(false);
   });
 
   it('fails open to false (not true) when the DB read throws', async () => {
@@ -50,11 +42,8 @@ describe('GET /api/settings/music-clips', () => {
 });
 
 describe('POST /api/admin/settings/music-clips', () => {
-  it('returns 401 for a guest', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(postHandler(mockEvent(undefined, { path: '/api/admin/settings/music-clips', body: { enabled: true } }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
     const cookie = loginAs('u1', 'user');
     await expect(postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-clips', body: { enabled: true } }))).rejects.toMatchObject({ statusCode: 403 });
   });
@@ -65,20 +54,12 @@ describe('POST /api/admin/settings/music-clips', () => {
     await expect(postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-clips', body: { enabled: 'yes' } }))).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  it('persists enabled: true for an admin even when the row does not exist yet', async () => {
+  it('persists the value for an admin, creating then overwriting the row', async () => {
     const cookie = loginAs('admin1', 'admin');
-    const result: any = await postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-clips', body: { enabled: true } }));
-    expect(result.enabled).toBe(true);
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'music_download_clips'").get() as { value: string };
-    expect(row.value).toBe('1');
-  });
-
-  it('persists enabled: false for an admin, overwriting an existing row', async () => {
-    insertSetting(db, { key: 'music_download_clips', value: '1' });
-    const cookie = loginAs('admin1', 'admin');
-    const result: any = await postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-clips', body: { enabled: false } }));
-    expect(result.enabled).toBe(false);
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'music_download_clips'").get() as { value: string };
-    expect(row.value).toBe('0');
+    const stored = () => (db.prepare("SELECT value FROM settings WHERE key = 'music_download_clips'").get() as { value: string }).value;
+    expect(((await postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-clips', body: { enabled: true } }))) as any).enabled).toBe(true);
+    expect(stored()).toBe('1');
+    expect(((await postHandler(mockEvent(cookie, { path: '/api/admin/settings/music-clips', body: { enabled: false } }))) as any).enabled).toBe(false);
+    expect(stored()).toBe('0');
   });
 });

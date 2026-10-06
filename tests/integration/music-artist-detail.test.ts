@@ -31,11 +31,8 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 }
 
 describe('GET /api/music/artists/[id]', () => {
-  it('returns 404 for a nonexistent artist', async () => {
+  it('returns 404 for a nonexistent artist and 403 for a private artist requested by a guest', async () => {
     await expect(handler(eventFor('missing'))).rejects.toMatchObject({ statusCode: 404 });
-  });
-
-  it('returns 403 for a private artist requested by a guest', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
     await expect(handler(eventFor('a1'))).rejects.toMatchObject({ statusCode: 403 });
   });
@@ -55,25 +52,18 @@ describe('GET /api/music/artists/[id]', () => {
     expect(result.standaloneTrackCount).toBe(1);
   });
 
-  it('only counts completed tracks in album track_count and standaloneTrackCount', async () => {
+  it('only counts completed tracks, and omits an album with zero completed tracks entirely', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
+    insertMusicAlbum(db, { id: 'al2', artistId: 'a1' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', downloadStatus: 'completed' });
     insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: 'al1', downloadStatus: 'pending' });
     insertMusicTrack(db, { id: 't3', artistId: 'a1', albumId: null, downloadStatus: 'failed' });
+    insertMusicTrack(db, { id: 't4', artistId: 'a1', albumId: 'al2', downloadStatus: 'pending' });
 
     const result: any = await handler(eventFor('a1'));
-    expect(result.albums[0].track_count).toBe(1);
+    expect(result.albums.map((al: any) => [al.id, al.track_count])).toEqual([['al1', 1]]);
     expect(result.standaloneTrackCount).toBe(0);
-  });
-
-  it('omits an album with zero completed tracks entirely', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', downloadStatus: 'pending' });
-
-    const result: any = await handler(eventFor('a1'));
-    expect(result.albums).toHaveLength(0);
   });
 
   it('orders albums by release_year descending with nulls last', async () => {
@@ -99,24 +89,17 @@ describe('GET /api/music/artists/[id]', () => {
     expect(result.albums[0].cover_url).toBe('/downloads-music/a1/t1.jpg');
   });
 
-  it('prefers a manually-set cover_url over the computed thumbnail fallback', async () => {
+  it('prefers a manually-set cover_url over the computed thumbnail fallback (manual_cover_url null otherwise)', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', trackNumber: 1, localThumbnailPath: '/downloads-music/a1/t1.jpg' });
+    let album = ((await handler(eventFor('a1'))) as any).albums[0];
+    expect(album.manual_cover_url).toBeNull();
+    expect(album.cover_url).toBe('/downloads-music/a1/t1.jpg');
+
     db.prepare('UPDATE music_albums SET cover_url = ? WHERE id = ?').run('https://example.com/manual-cover.jpg', 'al1');
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', trackNumber: 1, localThumbnailPath: '/downloads-music/a1/t1.jpg' });
-
-    const result: any = await handler(eventFor('a1'));
-    expect(result.albums[0].cover_url).toBe('https://example.com/manual-cover.jpg');
-  });
-
-  it('exposes manual_cover_url as null when only the computed fallback applies', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', trackNumber: 1, localThumbnailPath: '/downloads-music/a1/t1.jpg' });
-
-    const result: any = await handler(eventFor('a1'));
-    expect(result.albums[0].manual_cover_url).toBeNull();
-    expect(result.albums[0].cover_url).toBe('/downloads-music/a1/t1.jpg');
+    album = ((await handler(eventFor('a1'))) as any).albums[0];
+    expect(album.cover_url).toBe('https://example.com/manual-cover.jpg');
   });
 
   it('is accessible to an admin even for an ultra_private artist', async () => {

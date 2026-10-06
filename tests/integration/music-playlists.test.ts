@@ -35,6 +35,28 @@ function eventFor(path: string, cookieHeader?: string) {
   return mockEvent(cookieHeader, { path });
 }
 
+const ids = (r: any) => r.tracks.map((t: any) => t.id);
+const FORTY_DAYS_AGO = Date.now() - 1000 * 60 * 60 * 24 * 40;
+
+describe('every playlist route', () => {
+  it('includes has_clip on its tracks', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock', hasClip: true });
+    const cookie = loginAs('u1');
+    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1', playedAt: FORTY_DAYS_AGO });
+    const results: any[] = [
+      await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie)),
+      await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added')),
+      await rediscoverHandler(eventFor('/api/music/playlists/rediscover', cookie)),
+      await genreMixHandler(eventFor('/api/music/playlists/genre-mix?genre=Rock')),
+      await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1')),
+      await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed')),
+    ];
+    for (const r of results) expect(r.tracks.find((t: any) => t.id === 't1').has_clip).toBe(1);
+  });
+});
+
 describe('GET /api/music/playlists/most-played', () => {
   it('returns an empty list for a guest', async () => {
     const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played'));
@@ -56,81 +78,39 @@ describe('GET /api/music/playlists/most-played', () => {
     insertMusicPlay(db, { id: 'p6', trackId: 't1', userId: 'u2' });
 
     const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t2', 't1']);
+    expect(ids(result)).toEqual(['t2', 't1']);
   });
 
-  it('excludes a private artist for a user without access', async () => {
+  it('excludes an ultra_private artist for a user, includes it for an admin', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
     const cookie = loginAs('u1');
+    const adminCookie = loginAs('admin1', 'admin');
     insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1' });
+    insertMusicPlay(db, { id: 'p2', trackId: 't1', userId: 'admin1' });
 
-    const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('includes an ultra_private artist for an admin', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'admin1' });
-
-    const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
-    const cookie = loginAs('u1');
-    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1' });
-
-    const result: any = await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie));
-    expect(result.tracks[0].has_clip).toBe(1);
+    expect(ids(await mostPlayedHandler(eventFor('/api/music/playlists/most-played', cookie)))).toEqual([]);
+    expect(ids(await mostPlayedHandler(eventFor('/api/music/playlists/most-played', adminCookie)))).toEqual(['t1']);
   });
 });
 
 describe('GET /api/music/playlists/recently-added', () => {
-  it('works for a guest and orders by created_at descending', async () => {
+  it('works for a guest, orders by created_at descending and excludes tracks that are not completed', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
     insertMusicTrack(db, { id: 'old', artistId: 'a1', createdAt: 1000 });
     insertMusicTrack(db, { id: 'new', artistId: 'a1', createdAt: 2000 });
+    insertMusicTrack(db, { id: 'pending', artistId: 'a1', createdAt: 3000, downloadStatus: 'pending' });
 
     const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['new', 'old']);
+    expect(ids(result)).toEqual(['new', 'old']);
   });
 
-  it('excludes tracks that are not completed', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'pending' });
-
-    const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('excludes a private artist for a guest', async () => {
+  it('excludes a private artist for a guest, includes it for a logged-in non-admin user', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-
-    const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('includes a private artist for a logged-in non-admin user', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    expect(ids(await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added')))).toEqual([]);
     const cookie = loginAs('u1');
-
-    const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added', cookie));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
-
-    const result: any = await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added'));
-    expect(result.tracks[0].has_clip).toBe(1);
+    expect(ids(await recentlyAddedHandler(eventFor('/api/music/playlists/recently-added', cookie)))).toEqual(['t1']);
   });
 });
 
@@ -140,37 +120,16 @@ describe('GET /api/music/playlists/rediscover', () => {
     expect(result.tracks).toEqual([]);
   });
 
-  it('excludes a track played by the current user within the last 30 days', async () => {
+  it('excludes a track played by the current user within the last 30 days, keeps one played earlier', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1' });
+    insertMusicTrack(db, { id: 'recent', artistId: 'a1' });
+    insertMusicTrack(db, { id: 'old', artistId: 'a1' });
     const cookie = loginAs('u1');
-    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1', playedAt: Date.now() });
+    insertMusicPlay(db, { id: 'p1', trackId: 'recent', userId: 'u1', playedAt: Date.now() });
+    insertMusicPlay(db, { id: 'p2', trackId: 'old', userId: 'u1', playedAt: FORTY_DAYS_AGO });
 
     const result: any = await rediscoverHandler(eventFor('/api/music/playlists/rediscover', cookie));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t2']);
-  });
-
-  it('includes a track played more than 30 days ago', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('u1');
-    const fortyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 40;
-    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1', playedAt: fortyDaysAgo });
-
-    const result: any = await rediscoverHandler(eventFor('/api/music/playlists/rediscover', cookie));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
-    const cookie = loginAs('u1');
-    const fortyDaysAgo = Date.now() - 1000 * 60 * 60 * 24 * 40;
-    insertMusicPlay(db, { id: 'p1', trackId: 't1', userId: 'u1', playedAt: fortyDaysAgo });
-
-    const result: any = await rediscoverHandler(eventFor('/api/music/playlists/rediscover', cookie));
-    expect(result.tracks[0].has_clip).toBe(1);
+    expect(ids(result)).toEqual(['old']);
   });
 });
 
@@ -179,21 +138,15 @@ describe('GET /api/music/playlists/genre-mix', () => {
     await expect(genreMixHandler(eventFor('/api/music/playlists/genre-mix'))).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  it('returns only tracks matching the requested genre, for a guest', async () => {
+  it('returns only accessible tracks matching the requested genre, for a guest', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicArtist(db, { id: 'a2', visibility: 'private' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock' });
     insertMusicTrack(db, { id: 't2', artistId: 'a1', genre: 'Electro' });
+    insertMusicTrack(db, { id: 't3', artistId: 'a2', genre: 'Rock' });
 
     const result: any = await genreMixHandler(eventFor('/api/music/playlists/genre-mix?genre=Rock'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('excludes a private artist\'s tracks for a guest', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock' });
-
-    const result: any = await genreMixHandler(eventFor('/api/music/playlists/genre-mix?genre=Rock'));
-    expect(result.tracks).toEqual([]);
+    expect(ids(result)).toEqual(['t1']);
   });
 
   it('is not vulnerable to SQL injection via the genre parameter', async () => {
@@ -203,14 +156,6 @@ describe('GET /api/music/playlists/genre-mix', () => {
     const result: any = await genreMixHandler(eventFor(`/api/music/playlists/genre-mix?genre=${encodeURIComponent("Rock' OR '1'='1")}`));
     expect(result.tracks).toEqual([]);
   });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock', hasClip: true });
-
-    const result: any = await genreMixHandler(eventFor('/api/music/playlists/genre-mix?genre=Rock'));
-    expect(result.tracks[0].has_clip).toBe(1);
-  });
 });
 
 describe('GET /api/music/playlists/artist-mix', () => {
@@ -218,66 +163,30 @@ describe('GET /api/music/playlists/artist-mix', () => {
     await expect(artistMixHandler(eventFor('/api/music/playlists/artist-mix'))).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  it('returns only tracks from the requested artist, for a guest', async () => {
+  it('returns only completed tracks from the requested artist, for a guest', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
     insertMusicArtist(db, { id: 'a2', visibility: 'public' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    insertMusicTrack(db, { id: 'pending', artistId: 'a1', downloadStatus: 'pending' });
     insertMusicTrack(db, { id: 't2', artistId: 'a2' });
 
     const result: any = await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
+    expect(ids(result)).toEqual(['t1']);
   });
 
-  it('excludes a private artist\'s tracks for a guest', async () => {
+  it('excludes a private artist\'s tracks for a guest, includes them for a logged-in non-admin user', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-
-    const result: any = await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('includes a private artist\'s tracks for a logged-in non-admin user', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    expect(ids(await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1')))).toEqual([]);
     const cookie = loginAs('u1');
-
-    const result: any = await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1', cookie));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-  });
-
-  it('excludes tracks that are not completed', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'pending' });
-
-    const result: any = await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1'));
-    expect(result.tracks).toEqual([]);
-  });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: true });
-
-    const result: any = await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1'));
-    expect(result.tracks[0].has_clip).toBe(1);
+    expect(ids(await artistMixHandler(eventFor('/api/music/playlists/artist-mix?artistId=a1', cookie)))).toEqual(['t1']);
   });
 });
 
 describe('GET /api/music/playlists/radio', () => {
-  it('returns 400 when trackId is missing', async () => {
+  it('returns 400 when trackId is missing and 404 when it does not exist', async () => {
     await expect(radioHandler(eventFor('/api/music/playlists/radio'))).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('returns 404 when trackId does not exist', async () => {
     await expect(radioHandler(eventFor('/api/music/playlists/radio?trackId=nope'))).rejects.toMatchObject({ statusCode: 404 });
-  });
-
-  it('excludes the seed track from the result', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1', genre: 'Rock' });
-
-    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
-    expect(result.tracks.map((t: any) => t.id)).not.toContain('seed');
   });
 
   it('caps same-artist tracks at RADIO_SAME_ARTIST_MAX (8) when the seed has a genre, filling the rest from the same genre', async () => {
@@ -295,16 +204,20 @@ describe('GET /api/music/playlists/radio', () => {
     const sameArtistCount = result.tracks.filter((t: any) => t.artist_id === 'a1').length;
     expect(sameArtistCount).toBeLessThanOrEqual(8);
     expect(result.tracks.length).toBe(18); // 10 same-artist candidates capped at 8, plus 10 same-genre candidates (only 18 total exist)
+    expect(ids(result)).not.toContain('seed');
   });
 
-  it('excludes tracks with a different genre when the seed has a genre', async () => {
+  it('excludes other genres and private artists (for a guest) when the seed has a genre', async () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
     insertMusicArtist(db, { id: 'a2', visibility: 'public' });
+    insertMusicArtist(db, { id: 'a3', visibility: 'private' });
     insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
+    insertMusicTrack(db, { id: 'rock', artistId: 'a2', genre: 'Rock' });
     insertMusicTrack(db, { id: 'other-genre', artistId: 'a2', genre: 'Electro' });
+    insertMusicTrack(db, { id: 'hidden', artistId: 'a3', genre: 'Rock' });
 
     const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
-    expect(result.tracks.map((t: any) => t.id)).not.toContain('other-genre');
+    expect(ids(result)).toEqual(['rock']);
   });
 
   it('falls back to same-artist-only when the seed has no genre', async () => {
@@ -315,25 +228,6 @@ describe('GET /api/music/playlists/radio', () => {
     insertMusicTrack(db, { id: 'other-artist', artistId: 'a2', genre: null });
 
     const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['same-artist']);
-  });
-
-  it('excludes a private artist\'s tracks for a guest', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicArtist(db, { id: 'a2', visibility: 'private' });
-    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
-    insertMusicTrack(db, { id: 'hidden', artistId: 'a2', genre: 'Rock' });
-
-    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
-    expect(result.tracks.map((t: any) => t.id)).not.toContain('hidden');
-  });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
-    insertMusicTrack(db, { id: 'seed', artistId: 'a1', genre: 'Rock' });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1', genre: 'Rock', hasClip: true });
-
-    const result: any = await radioHandler(eventFor('/api/music/playlists/radio?trackId=seed'));
-    expect(result.tracks.find((t: any) => t.id === 't2').has_clip).toBe(1);
+    expect(ids(result)).toEqual(['same-artist']);
   });
 });

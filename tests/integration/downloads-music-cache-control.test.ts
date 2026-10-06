@@ -53,25 +53,16 @@ function eventFor(trackId: string, ext: string, headers?: Record<string, string>
 }
 
 describe('GET /downloads-music/[...path] — Cache-Control', () => {
-  it('sets an immutable long-lived Cache-Control on an audio file, with no Last-Modified', async () => {
+  it('sets an immutable long-lived Cache-Control, with no Last-Modified, on audio and clip (.mp4) files', async () => {
     insertMusicTrack(db, { id: 't1', artistId, downloadStatus: 'completed' });
-    writeFile('t1', 'opus');
-    const event = eventFor('t1', 'opus');
-
-    closeIfStream(await handler(event));
-
-    expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
-    expect(event.node.res.headers['last-modified']).toBeUndefined();
-  });
-
-  it('sets an immutable Cache-Control on a clip (.mp4) file too', async () => {
     insertMusicTrack(db, { id: 't2', artistId, downloadStatus: 'completed', hasClip: true });
+    writeFile('t1', 'opus');
     writeFile('t2', 'mp4');
-    const event = eventFor('t2', 'mp4');
-
-    closeIfStream(await handler(event));
-
-    expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+    for (const event of [eventFor('t1', 'opus'), eventFor('t2', 'mp4')]) {
+      closeIfStream(await handler(event));
+      expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+      expect(event.node.res.headers['last-modified']).toBeUndefined();
+    }
   });
 
   it('sets a must-revalidate Cache-Control and Last-Modified on a cover image', async () => {
@@ -85,28 +76,18 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     expect(event.node.res.headers['last-modified']).toBeDefined();
   });
 
-  it('returns 304 with no body when If-Modified-Since is at or after the file mtime', async () => {
+  it('answers If-Modified-Since: 304 with no body at or after the file mtime, 200 with content before it', async () => {
     insertMusicTrack(db, { id: 't4', artistId, downloadStatus: 'completed' });
     const mtime = new Date('2026-01-01T00:00:00Z');
     writeFile('t4', 'jpg', mtime);
-    const event = eventFor('t4', 'jpg', { 'if-modified-since': new Date('2026-01-01T00:00:00Z').toUTCString() });
+    const notModified = eventFor('t4', 'jpg', { 'if-modified-since': mtime.toUTCString() });
+    expect(await handler(notModified)).toBeFalsy();
+    expect(notModified.node.res.statusCode).toBe(304);
 
-    const result = await handler(event);
-
-    expect(event.node.res.statusCode).toBe(304);
-    expect(result).toBeFalsy();
-  });
-
-  it('returns 200 with content when If-Modified-Since predates the file mtime', async () => {
-    insertMusicTrack(db, { id: 't5', artistId, downloadStatus: 'completed' });
-    const mtime = new Date('2026-01-01T00:00:00Z');
-    writeFile('t5', 'jpg', mtime);
-    const event = eventFor('t5', 'jpg', { 'if-modified-since': new Date('2025-01-01T00:00:00Z').toUTCString() });
-
-    const result = await handler(event);
+    const modified = eventFor('t4', 'jpg', { 'if-modified-since': new Date('2025-01-01T00:00:00Z').toUTCString() });
+    const result = await handler(modified);
     closeIfStream(result);
-
-    expect(event.node.res.statusCode).toBe(200);
+    expect(modified.node.res.statusCode).toBe(200);
     expect(result).toBeTruthy();
   });
 

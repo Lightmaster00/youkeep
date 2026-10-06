@@ -21,47 +21,31 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 }
 
 describe('GET /api/admin/music/schedule', () => {
-  it('returns 401 for a guest', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(getHandler(mockEvent(undefined, { path: '/api/admin/music/schedule' }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
     const cookie = loginAs('u1', 'user');
     await expect(getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }))).rejects.toMatchObject({ statusCode: 403 });
   });
 
-  it('defaults to disabled with the default schedule when no settings rows exist', async () => {
+  it('defaults to disabled with the default schedule, then reflects persisted settings', async () => {
     const cookie = loginAs('admin1', 'admin');
-    const result: any = await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }));
-    expect(result).toEqual({ enabled: false, schedule: '30 3 * * *' });
-  });
-
-  it('reflects persisted settings', async () => {
+    expect(await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }))).toEqual({ enabled: false, schedule: '30 3 * * *' });
     insertSetting(db, { key: 'music_sync_cron_enabled', value: '1' });
     insertSetting(db, { key: 'music_sync_cron_schedule', value: '0 * * * *' });
-    const cookie = loginAs('admin1', 'admin');
-    const result: any = await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }));
-    expect(result).toEqual({ enabled: true, schedule: '0 * * * *' });
+    expect(await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }))).toEqual({ enabled: true, schedule: '0 * * * *' });
   });
 });
 
 describe('POST /api/admin/music/schedule', () => {
-  it('returns 401 for a guest', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(postHandler(mockEvent(undefined, { path: '/api/admin/music/schedule', body: { enabled: true, schedule: '0 3 * * *' } }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
     const cookie = loginAs('u1', 'user');
     await expect(postHandler(mockEvent(cookie, { path: '/api/admin/music/schedule', body: { enabled: true, schedule: '0 3 * * *' } }))).rejects.toMatchObject({ statusCode: 403 });
   });
 
-  it('returns 400 when enabled is true but schedule is missing', async () => {
+  it('returns 400 when enabled with a missing or invalid cron expression', async () => {
     const cookie = loginAs('admin1', 'admin');
     await expect(postHandler(mockEvent(cookie, { path: '/api/admin/music/schedule', body: { enabled: true, schedule: '' } }))).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('returns 400 for an invalid cron expression when enabled', async () => {
-    const cookie = loginAs('admin1', 'admin');
     await expect(postHandler(mockEvent(cookie, { path: '/api/admin/music/schedule', body: { enabled: true, schedule: 'not a cron expression' } }))).rejects.toMatchObject({ statusCode: 400 });
   });
 

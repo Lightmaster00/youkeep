@@ -30,82 +30,52 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
   return sessionCookie(sessionId);
 }
 
-describe('GET /api/music/artists/[id]/tracks', () => {
-  it('returns 404 for a nonexistent artist', async () => {
-    await expect(handler(eventFor('missing', '?albumId=none'))).rejects.toMatchObject({ statusCode: 404 });
-  });
+const ids = (r: any) => r.tracks.map((t: any) => t.id);
 
-  it('returns 403 for a private artist requested by a guest', async () => {
+describe('GET /api/music/artists/[id]/tracks', () => {
+  it('returns 404 for a nonexistent artist, 403 for a private artist requested by a guest, 400 without albumId', async () => {
+    await expect(handler(eventFor('missing', '?albumId=none'))).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
     await expect(handler(eventFor('a1', '?albumId=none'))).rejects.toMatchObject({ statusCode: 403 });
+    insertMusicArtist(db, { id: 'a2' });
+    await expect(handler(eventFor('a2', ''))).rejects.toMatchObject({ statusCode: 400 });
   });
 
-  it('returns 400 when albumId is missing', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    await expect(handler(eventFor('a1', ''))).rejects.toMatchObject({ statusCode: 400 });
+  it('is accessible to an admin even for an ultra_private artist', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null });
+    const result: any = await handler(eventFor('a1', '?albumId=none', loginAs('admin1', 'admin')));
+    expect(ids(result)).toEqual(['t1']);
   });
 
-  it('returns tracks scoped to one album', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
-    insertMusicAlbum(db, { id: 'al2', artistId: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1' });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: 'al2' });
-
-    const result: any = await handler(eventFor('a1', '?albumId=al1'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-    expect(result.total).toBe(1);
-  });
-
-  it('includes local_file_path and artist_name needed for playback', async () => {
-    insertMusicArtist(db, { id: 'a1', name: 'Test Artist' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null, localFilePath: '/downloads-music/a1/t1.opus' });
-
-    const result: any = await handler(eventFor('a1', '?albumId=none'));
-    expect(result.tracks[0].local_file_path).toBe('/downloads-music/a1/t1.opus');
-    expect(result.tracks[0].artist_name).toBe('Test Artist');
-  });
-
-  it('includes has_clip', async () => {
-    insertMusicArtist(db, { id: 'a1', name: 'Test Artist' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null, hasClip: true });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: null, hasClip: false });
-
-    const result: any = await handler(eventFor('a1', '?albumId=none'));
-    const byId = Object.fromEntries(result.tracks.map((t: any) => [t.id, t.has_clip]));
-    expect(byId['t1']).toBe(1);
-    expect(byId['t2']).toBe(0);
-  });
-
-  it("returns album-less tracks when albumId=none", async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1' });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: null });
-
-    const result: any = await handler(eventFor('a1', '?albumId=none'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t2']);
-  });
-
-  it('only returns completed tracks', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null, downloadStatus: 'completed' });
-    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: null, downloadStatus: 'pending' });
-
-    const result: any = await handler(eventFor('a1', '?albumId=none'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['t1']);
-    expect(result.total).toBe(1);
-  });
-
-  it('returns empty results for an albumId that does not belong to the artist, without erroring', async () => {
+  it('scopes to one album, to album-less tracks with albumId=none, and returns nothing for another artist\'s album', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicArtist(db, { id: 'a2' });
+    insertMusicAlbum(db, { id: 'al1', artistId: 'a1' });
+    insertMusicAlbum(db, { id: 'al2', artistId: 'a1' });
     insertMusicAlbum(db, { id: 'al-of-a2', artistId: 'a2' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a2', albumId: 'al-of-a2' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: 'al2' });
+    insertMusicTrack(db, { id: 't3', artistId: 'a1', albumId: null });
+    insertMusicTrack(db, { id: 't4', artistId: 'a2', albumId: 'al-of-a2' });
 
-    const result: any = await handler(eventFor('a1', '?albumId=al-of-a2'));
-    expect(result.tracks).toEqual([]);
-    expect(result.total).toBe(0);
+    expect(await handler(eventFor('a1', '?albumId=al1'))).toMatchObject({ total: 1, tracks: [{ id: 't1' }] });
+    expect(ids(await handler(eventFor('a1', '?albumId=none')))).toEqual(['t3']);
+    expect(await handler(eventFor('a1', '?albumId=al-of-a2'))).toEqual({ tracks: [], total: 0 });
+  });
+
+  it('returns only completed tracks with the playback fields (local_file_path, artist_name, has_clip)', async () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Test Artist' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null, localFilePath: '/downloads-music/a1/t1.opus', hasClip: true });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', albumId: null, hasClip: false });
+    insertMusicTrack(db, { id: 't3', artistId: 'a1', albumId: null, downloadStatus: 'pending' });
+
+    const result: any = await handler(eventFor('a1', '?albumId=none'));
+    expect(result.total).toBe(2);
+    const byId = Object.fromEntries(result.tracks.map((t: any) => [t.id, t]));
+    expect(byId.t1).toMatchObject({ local_file_path: '/downloads-music/a1/t1.opus', artist_name: 'Test Artist', has_clip: 1 });
+    expect(byId.t2.has_clip).toBe(0);
+    expect(byId.t3).toBeUndefined();
   });
 
   it('orders by track_number ascending with nulls last, then title', async () => {
@@ -113,54 +83,16 @@ describe('GET /api/music/artists/[id]/tracks', () => {
     insertMusicTrack(db, { id: 'no-number', artistId: 'a1', albumId: null, trackNumber: null });
     insertMusicTrack(db, { id: 'two', artistId: 'a1', albumId: null, trackNumber: 2 });
     insertMusicTrack(db, { id: 'one', artistId: 'a1', albumId: null, trackNumber: 1 });
-
-    const result: any = await handler(eventFor('a1', '?albumId=none'));
-    expect(result.tracks.map((t: any) => t.id)).toEqual(['one', 'two', 'no-number']);
+    expect(ids(await handler(eventFor('a1', '?albumId=none')))).toEqual(['one', 'two', 'no-number']);
   });
 
-  it('paginates with limit and offset, respecting total across pages', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    for (let i = 1; i <= 5; i++) {
-      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1', albumId: null, trackNumber: i });
-    }
-
-    const page1: any = await handler(eventFor('a1', '?albumId=none&limit=2&offset=0'));
-    expect(page1.tracks.map((t: any) => t.id)).toEqual(['t1', 't2']);
-    expect(page1.total).toBe(5);
-
-    const page2: any = await handler(eventFor('a1', '?albumId=none&limit=2&offset=2'));
-    expect(page2.tracks.map((t: any) => t.id)).toEqual(['t3', 't4']);
-    expect(page2.total).toBe(5);
-  });
-
-  it('defaults to limit=50 when not provided', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    for (let i = 1; i <= 60; i++) {
-      insertMusicTrack(db, { id: `t${i}`, artistId: 'a1', albumId: null, trackNumber: i });
-    }
-
-    const result: any = await handler(eventFor('a1', '?albumId=none'));
-    expect(result.tracks).toHaveLength(50);
-    expect(result.total).toBe(60);
-  });
-
-  it('caps limit at 200 even when a larger value is requested', async () => {
+  it('paginates with limit and offset, defaults to limit=50 and caps limit at 200', async () => {
     insertMusicArtist(db, { id: 'a1' });
     for (let i = 1; i <= 250; i++) {
       insertMusicTrack(db, { id: `t${i}`, artistId: 'a1', albumId: null, trackNumber: i });
     }
-
-    const result: any = await handler(eventFor('a1', '?albumId=none&limit=999999999'));
-    expect(result.tracks).toHaveLength(200);
-    expect(result.total).toBe(250);
-  });
-
-  it('is accessible to an admin even for an ultra_private artist', async () => {
-    insertMusicArtist(db, { id: 'a1', visibility: 'ultra_private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: null });
-    const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('a1', '?albumId=none', cookie));
-    expect(result.tracks).toHaveLength(1);
+    expect(await handler(eventFor('a1', '?albumId=none&limit=2&offset=2'))).toMatchObject({ total: 250, tracks: [{ id: 't3' }, { id: 't4' }] });
+    expect((await handler(eventFor('a1', '?albumId=none')) as any).tracks).toHaveLength(50);
+    expect((await handler(eventFor('a1', '?albumId=none&limit=999999999')) as any).tracks).toHaveLength(200);
   });
 });

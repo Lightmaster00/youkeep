@@ -39,11 +39,8 @@ const cases = [
 ];
 
 describe.each(cases)('POST /api/admin/$name/sync-all', ({ handler, fn, flag }) => {
-  it('rejects a guest with 401', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(handler(mockEvent(undefined, { method: 'POST' }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('rejects a non-admin with 403', async () => {
     await expect(handler(mockEvent(loginAs('u1', 'user'), { method: 'POST' }))).rejects.toMatchObject({ statusCode: 403 });
   });
 

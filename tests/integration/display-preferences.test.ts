@@ -28,9 +28,12 @@ const storedRow = (userId: string) => db.prepare('SELECT data FROM user_preferen
 const storedDefaults = () => (db.prepare("SELECT value FROM settings WHERE key = 'display_defaults'").get() as { value: string } | undefined)?.value;
 
 describe('GET /api/settings/display', () => {
-  it('returns the app defaults and null overrides to a guest', async () => {
+  it('returns the app defaults and null overrides to a guest, then the admin defaults once set', async () => {
+    expect(await get()).toEqual({ effective: APP_DEFAULTS, defaults: APP_DEFAULTS, overrides: null, adminDefaults: {} });
+    insertSetting(db, { key: 'display_defaults', value: '{"density":"compact"}' });
     const view: any = await get();
-    expect(view).toEqual({ effective: APP_DEFAULTS, defaults: APP_DEFAULTS, overrides: null, adminDefaults: {} });
+    expect(view.effective.density).toBe('compact');
+    expect(view.overrides).toBeNull();
   });
 
   it('gives a logged-in user with no choices an empty overrides object', async () => {
@@ -48,13 +51,6 @@ describe('GET /api/settings/display', () => {
     expect(view.effective).toEqual({ ...APP_DEFAULTS, density: 'spacious', landingSpace: 'podcasts' });
     expect(view.defaults.landingSpace).toBe('music');
     expect(view.adminDefaults).toEqual({ density: 'spacious', landingSpace: 'music' });
-  });
-
-  it('shows a guest the admin defaults', async () => {
-    insertSetting(db, { key: 'display_defaults', value: '{"density":"compact"}' });
-    const view: any = await get();
-    expect(view.effective.density).toBe('compact');
-    expect(view.overrides).toBeNull();
   });
 
   it('resolves a Bearer API token (no cookie) to that user', async () => {
@@ -87,18 +83,12 @@ describe('PUT /api/account/preferences', () => {
     await expect(put(undefined, { density: 'compact' })).rejects.toMatchObject({ statusCode: 401 });
   });
 
-  it('stores only the changed keys and returns the new view', async () => {
+  it('stores only the given keys and returns the new view', async () => {
     const cookie = loginAs('u1');
-    const view: any = await put(cookie, { density: 'compact' });
-    expect(JSON.parse(storedRow('u1')!.data)).toEqual({ density: 'compact' });
-    expect(view.overrides).toEqual({ density: 'compact' });
-    expect(view.effective.density).toBe('compact');
-  });
-
-  it('accepts several keys at once', async () => {
-    const cookie = loginAs('u1');
-    await put(cookie, { hiddenNavLinks: ['/shorts'], landingSpace: 'music' });
+    const view: any = await put(cookie, { hiddenNavLinks: ['/shorts'], landingSpace: 'music' });
     expect(JSON.parse(storedRow('u1')!.data)).toEqual({ hiddenNavLinks: ['/shorts'], landingSpace: 'music' });
+    expect(view.overrides).toEqual({ hiddenNavLinks: ['/shorts'], landingSpace: 'music' });
+    expect(view.effective.landingSpace).toBe('music');
   });
 
   it('removes a key with null, and deletes the row when nothing is left', async () => {
@@ -110,25 +100,15 @@ describe('PUT /api/account/preferences', () => {
     expect(storedRow('u1')).toBeUndefined();
   });
 
-  it('writes nothing and returns 400 for an invalid value', async () => {
+  // Per-key validation rules are pinned in tests/unit/displayPrefs.test.ts.
+  it('returns 400 and writes nothing for an invalid value (even mixed with a valid key), an empty body or no recognised key', async () => {
     const cookie = loginAs('u1');
     await expect(put(cookie, { density: 'huge' })).rejects.toMatchObject({ statusCode: 400 });
-    await expect(put(cookie, { hiddenNavLinks: ['/'] })).rejects.toMatchObject({ statusCode: 400 });
-    await expect(put(cookie, { hiddenNavLinks: ['/shorts', '/shorts'] })).rejects.toMatchObject({ statusCode: 400 });
-    expect(storedRow('u1')).toBeUndefined();
-  });
-
-  it('does not partially apply a body that mixes a valid and an invalid key', async () => {
-    const cookie = loginAs('u1');
     await expect(put(cookie, { landingSpace: 'music', density: 'huge' })).rejects.toMatchObject({ statusCode: 400 });
-    expect(storedRow('u1')).toBeUndefined();
-  });
-
-  it('returns 400 for an empty body or a body with no recognised key', async () => {
-    const cookie = loginAs('u1');
     await expect(put(cookie, {})).rejects.toMatchObject({ statusCode: 400 });
     await expect(put(cookie, { theme: 'light' })).rejects.toMatchObject({ statusCode: 400 });
     await expect(put(cookie, null)).rejects.toMatchObject({ statusCode: 400 });
+    expect(storedRow('u1')).toBeUndefined();
   });
 
   it('works for a Bearer API token', async () => {
@@ -155,11 +135,13 @@ describe('POST /api/admin/settings/display-defaults', () => {
     expect(storedDefaults()).toBeUndefined();
   });
 
-  it('stores the defaults and returns the admin view', async () => {
+  it('stores the defaults, returns the admin view, and deletes the setting once every default is removed', async () => {
     const cookie = loginAs('admin1', 'admin');
     const view: any = await adminPost(cookie, { density: 'spacious', landingSpace: 'music' });
     expect(JSON.parse(storedDefaults()!)).toEqual({ density: 'spacious', landingSpace: 'music' });
     expect(view.adminDefaults).toEqual({ density: 'spacious', landingSpace: 'music' });
+    await adminPost(cookie, { density: null, landingSpace: null });
+    expect(storedDefaults()).toBeUndefined();
   });
 
   it('applies to a user without overrides and to a guest, but not over a personal choice', async () => {
@@ -173,13 +155,6 @@ describe('POST /api/admin/settings/display-defaults', () => {
     expect(((await get(sessionCookie('sess-plain'))) as any).effective.density).toBe('compact');
     expect(((await get(sessionCookie('sess-picky'))) as any).effective.density).toBe('spacious');
     expect(((await get()) as any).effective.density).toBe('compact');
-  });
-
-  it('removes a default with null and deletes the setting when nothing is left', async () => {
-    const cookie = loginAs('admin1', 'admin');
-    await adminPost(cookie, { density: 'compact' });
-    await adminPost(cookie, { density: null });
-    expect(storedDefaults()).toBeUndefined();
   });
 
   it('returns 400 and writes nothing for an invalid value or an empty body', async () => {

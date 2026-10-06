@@ -31,40 +31,26 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 }
 
 describe('POST /api/admin/music/retry-failed', () => {
-  it('returns 401 for a guest', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(retryFailedHandler(mockEvent(undefined, { path: '/api/admin/music/retry-failed', body: {} }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
     const cookie = loginAs('u1', 'user');
     await expect(retryFailedHandler(mockEvent(cookie, { path: '/api/admin/music/retry-failed', body: {} }))).rejects.toMatchObject({ statusCode: 403 });
   });
 
-  it('resets a single failed track to pending with retry_count reset to 0', async () => {
+  it('resets a single failed track to pending with retry_count/last_error cleared, and leaves a non-failed track alone', async () => {
     vi.spyOn(musicDownloader, 'startMusicQueueWorker').mockImplementation(async () => {});
     insertMusicArtist(db, { id: 'a1' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'failed' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', downloadStatus: 'completed' });
     db.prepare('UPDATE music_tracks SET retry_count = 3, last_error = ? WHERE id = ?').run('some error', 't1');
 
     const cookie = loginAs('admin1', 'admin');
     await retryFailedHandler(mockEvent(cookie, { path: '/api/admin/music/retry-failed', body: { trackId: 't1' } }));
+    await retryFailedHandler(mockEvent(cookie, { path: '/api/admin/music/retry-failed', body: { trackId: 't2' } }));
 
     const row = db.prepare('SELECT download_status, retry_count, last_error FROM music_tracks WHERE id = ?').get('t1') as any;
-    expect(row.download_status).toBe('pending');
-    expect(row.retry_count).toBe(0);
-    expect(row.last_error).toBeNull();
-  });
-
-  it('does not touch a track that is not failed', async () => {
-    vi.spyOn(musicDownloader, 'startMusicQueueWorker').mockImplementation(async () => {});
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'completed' });
-
-    const cookie = loginAs('admin1', 'admin');
-    await retryFailedHandler(mockEvent(cookie, { path: '/api/admin/music/retry-failed', body: { trackId: 't1' } }));
-
-    const row = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get('t1') as any;
-    expect(row.download_status).toBe('completed');
+    expect(row).toEqual({ download_status: 'pending', retry_count: 0, last_error: null });
+    expect((db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get('t2') as any).download_status).toBe('completed');
   });
 
   it('resets all failed tracks to pending with retry_count reset to 0 when no trackId is given', async () => {

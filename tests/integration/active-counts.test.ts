@@ -30,11 +30,8 @@ function seed() {
 }
 
 describe('GET /api/admin/downloader/active-counts', () => {
-  it('rejects a guest with 401', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(call()).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('rejects a non-admin with 403', async () => {
     await expect(call(loginAs('u1', 'user'))).rejects.toMatchObject({ statusCode: 403 });
   });
 

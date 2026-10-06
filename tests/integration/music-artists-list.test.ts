@@ -29,55 +29,27 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 const guestEvent = (path = '/api/music/artists') => mockEvent(undefined, { path });
 
 describe('GET /api/music/artists', () => {
-  it('only includes public artists for a guest', async () => {
-    insertMusicArtist(db, { id: 'pub', name: 'Public Artist', visibility: 'public' });
-    insertMusicTrack(db, { id: 't1', artistId: 'pub' });
-    insertMusicArtist(db, { id: 'priv', name: 'Private Artist', visibility: 'private' });
-    insertMusicTrack(db, { id: 't2', artistId: 'priv' });
-
-    const result: any = await handler(guestEvent());
-    const ids = result.artists.map((a: any) => a.id);
-    expect(ids).toContain('pub');
-    expect(ids).not.toContain('priv');
+  it('applies artist visibility per viewer (guest: public; user: + private; admin: + ultra_private)', async () => {
+    for (const v of ['public', 'private', 'ultra_private']) {
+      insertMusicArtist(db, { id: v, visibility: v });
+      insertMusicTrack(db, { id: `t-${v}`, artistId: v });
+    }
+    const sorted = (r: any) => r.artists.map((a: any) => a.id).sort();
+    expect(sorted(await handler(guestEvent()))).toEqual(['public']);
+    expect(sorted(await handler(loginAs('u1')))).toEqual(['private', 'public']);
+    expect(sorted(await handler(loginAs('admin1', 'admin')))).toEqual(['private', 'public', 'ultra_private']);
   });
 
-  it('includes private artists for a logged-in user but not ultra_private', async () => {
-    insertMusicArtist(db, { id: 'priv', visibility: 'private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'priv' });
-    insertMusicArtist(db, { id: 'ultra', visibility: 'ultra_private' });
-    insertMusicTrack(db, { id: 't2', artistId: 'ultra' });
-
-    const result: any = await handler(loginAs('u1'));
-    const ids = result.artists.map((a: any) => a.id);
-    expect(ids).toContain('priv');
-    expect(ids).not.toContain('ultra');
-  });
-
-  it('includes ultra_private artists for an admin', async () => {
-    insertMusicArtist(db, { id: 'ultra', visibility: 'ultra_private' });
-    insertMusicTrack(db, { id: 't1', artistId: 'ultra' });
-
-    const result: any = await handler(loginAs('admin1', 'admin'));
-    expect(result.artists.map((a: any) => a.id)).toContain('ultra');
-  });
-
-  it('excludes an artist with zero completed tracks', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'downloading' });
-
-    const result: any = await handler(guestEvent());
-    expect(result.artists.map((a: any) => a.id)).not.toContain('a1');
-  });
-
-  it('counts only completed tracks in track_count', async () => {
+  it('counts only completed tracks and excludes an artist with none', async () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'completed' });
     insertMusicTrack(db, { id: 't2', artistId: 'a1', downloadStatus: 'completed' });
     insertMusicTrack(db, { id: 't3', artistId: 'a1', downloadStatus: 'pending' });
+    insertMusicArtist(db, { id: 'a2' });
+    insertMusicTrack(db, { id: 't4', artistId: 'a2', downloadStatus: 'downloading' });
 
     const result: any = await handler(guestEvent());
-    const artist = result.artists.find((a: any) => a.id === 'a1');
-    expect(artist.track_count).toBe(2);
+    expect(result.artists.map((a: any) => [a.id, a.track_count])).toEqual([['a1', 2]]);
   });
 
   it('filters by search (case-insensitive substring of name)', async () => {

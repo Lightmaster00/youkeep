@@ -50,70 +50,32 @@ describe('GET /api/podcasts/episodes/search', () => {
     expect(result.episodes[0].show_cover_url).toBe('https://example.com/cover.jpg');
   });
 
-  it('excludes an episode whose show is private, for a guest', async () => {
-    insertPodcastShow(db, { id: 's1', visibility: 'private' });
-    insertPodcastEpisode(db, { id: 'e1', showId: 's1' });
-    db.prepare("UPDATE podcast_episodes SET title = 'Secret Episode' WHERE id = 'e1'").run();
+  it('applies show visibility per viewer (guest: public; user: + private; admin: + ultra_private) and skips incomplete episodes', async () => {
+    insertPodcastShow(db, { id: 'pub', visibility: 'public' });
+    insertPodcastShow(db, { id: 'priv', visibility: 'private' });
+    insertPodcastShow(db, { id: 'ultra', visibility: 'ultra_private' });
+    insertPodcastEpisode(db, { id: 'e-pub', showId: 'pub' });
+    insertPodcastEpisode(db, { id: 'e-priv', showId: 'priv' });
+    insertPodcastEpisode(db, { id: 'e-ultra', showId: 'ultra' });
+    insertPodcastEpisode(db, { id: 'e-dl', showId: 'pub', downloadStatus: 'downloading' });
+    db.prepare("UPDATE podcast_episodes SET title = 'Secret ' || id").run();
+    const path = '/api/podcasts/episodes/search?q=Secret';
+    const sorted = (r: any) => r.episodes.map((e: any) => e.id).sort();
 
-    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Secret'));
-    expect(result.episodes).toEqual([]);
+    expect(sorted(await handler(guestEvent(path)))).toEqual(['e-pub']);
+    expect(sorted(await handler(loginAs('u1', 'user', path)))).toEqual(['e-priv', 'e-pub']);
+    expect(sorted(await handler(loginAs('admin1', 'admin', path)))).toEqual(['e-priv', 'e-pub', 'e-ultra']);
   });
 
-  it('includes an episode whose show is private, for a logged-in non-admin user', async () => {
-    insertPodcastShow(db, { id: 's1', visibility: 'private' });
-    insertPodcastEpisode(db, { id: 'e1', showId: 's1' });
-    db.prepare("UPDATE podcast_episodes SET title = 'Secret Episode' WHERE id = 'e1'").run();
-
-    const result: any = await handler(loginAs('u1', 'user', '/api/podcasts/episodes/search?q=Secret'));
-    expect(result.episodes.map((e: any) => e.id)).toEqual(['e1']);
-  });
-
-  it('excludes an episode whose show is ultra_private, for a logged-in non-admin user', async () => {
-    insertPodcastShow(db, { id: 's1', visibility: 'ultra_private' });
-    insertPodcastEpisode(db, { id: 'e1', showId: 's1' });
-    db.prepare("UPDATE podcast_episodes SET title = 'Ultra Secret Episode' WHERE id = 'e1'").run();
-
-    const result: any = await handler(loginAs('u1', 'user', '/api/podcasts/episodes/search?q=Ultra'));
-    expect(result.episodes).toEqual([]);
-  });
-
-  it('includes an ultra_private show episode for an admin', async () => {
-    insertPodcastShow(db, { id: 's1', visibility: 'ultra_private' });
-    insertPodcastEpisode(db, { id: 'e1', showId: 's1' });
-    db.prepare("UPDATE podcast_episodes SET title = 'Ultra Secret Episode' WHERE id = 'e1'").run();
-
-    const result: any = await handler(loginAs('admin1', 'admin', '/api/podcasts/episodes/search?q=Ultra'));
-    expect(result.episodes.map((e: any) => e.id)).toEqual(['e1']);
-  });
-
-  it('excludes an episode that is not yet completed', async () => {
-    insertPodcastShow(db, { id: 's1' });
-    insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'downloading' });
-    db.prepare("UPDATE podcast_episodes SET title = 'Still Downloading Episode' WHERE id = 'e1'").run();
-
-    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Downloading'));
-    expect(result.episodes).toEqual([]);
-  });
-
-  it('caps results at the requested limit', async () => {
+  it('caps results at the requested limit, clamped to 200', async () => {
     insertPodcastShow(db, { id: 's1', title: 'Prolific Show' });
-    for (let i = 1; i <= 5; i++) {
-      insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
-      db.prepare("UPDATE podcast_episodes SET title = ? WHERE id = ?").run(`Limit Test ${i}`, `e${i}`);
-    }
+    const insert = db.transaction(() => {
+      for (let i = 1; i <= 205; i++) insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
+    });
+    insert();
+    db.prepare("UPDATE podcast_episodes SET title = 'Limit Test ' || id").run();
 
-    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Limit&limit=2'));
-    expect(result.episodes).toHaveLength(2);
-  });
-
-  it('clamps a requested limit above 200 down to 200', async () => {
-    insertPodcastShow(db, { id: 's1', title: 'Prolific Show' });
-    for (let i = 1; i <= 3; i++) {
-      insertPodcastEpisode(db, { id: `e${i}`, showId: 's1' });
-      db.prepare("UPDATE podcast_episodes SET title = ? WHERE id = ?").run(`Clamp Test ${i}`, `e${i}`);
-    }
-
-    const result: any = await handler(guestEvent('/api/podcasts/episodes/search?q=Clamp&limit=500'));
-    expect(result.episodes).toHaveLength(3);
+    expect((await handler(guestEvent('/api/podcasts/episodes/search?q=Limit&limit=2')) as any).episodes).toHaveLength(2);
+    expect((await handler(guestEvent('/api/podcasts/episodes/search?q=Limit&limit=500')) as any).episodes).toHaveLength(200);
   });
 });

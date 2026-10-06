@@ -31,27 +31,17 @@ function seedVideos(n: number, channelId = 'c1') {
   }
 }
 
-describe('feed with default preferences', () => {
-  it('keeps the historical order recent → popular for a guest', async () => {
+describe('homeSections', () => {
+  it('keeps the historical guest order recent → popular by default, then honours the configured order and omissions', async () => {
     seedVideos(40);
-    const r: any = await handler(guestEvent());
+    let r: any = await handler(guestEvent());
     expect(sectionIds(r)).toEqual(['recent', 'popular']);
     expect(r.featured.large).not.toBeNull();
-  });
-});
-
-describe('homeSections', () => {
-  it('honours the configured order', async () => {
-    seedVideos(40);
     setAdminDefaults({ homeSections: ['popular', 'recent'] });
-    const r: any = await handler(guestEvent());
+    r = await handler(guestEvent());
     expect(sectionIds(r)).toEqual(['popular', 'recent']);
-  });
-
-  it('omits a section that is not listed', async () => {
-    seedVideos(40);
-    setAdminDefaults({ homeSections: ['recent'] });
-    const r: any = await handler(guestEvent());
+    db.prepare("UPDATE settings SET value = ? WHERE key = 'display_defaults'").run(JSON.stringify({ homeSections: ['recent'] }));
+    r = await handler(guestEvent());
     expect(sectionIds(r)).toEqual(['recent']);
   });
 
@@ -154,11 +144,24 @@ describe('logged-in viewers', () => {
     insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
     insertUserHistory(db, { userId: 'viewer', videoId: 'c2v0', watchTimeSeconds: 50, watchedAt: Date.now() });
     const r: any = await handler(event);
+    expect(sectionIds(r)).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
     expect(r.featured.large).not.toBeNull();
     const all = allIds(r);
     expect(all.length).toBeGreaterThan(5);
     expect(new Set(all).size).toBe(all.length);
     expect(r.featured.small.every((v: any) => v.channel_id !== 'c1')).toBe(true);
+  });
+});
+
+describe('subscriptions section', () => {
+  it('drops a subscribed channel with fewer than 2 videos left after the hero claimed its only one (and the section when empty)', async () => {
+    insertChannel(db, { id: 'c1' });
+    insertVideo(db, { id: 'v1', channelId: 'c1', uploadDate: '20260101', viewCount: 1000 });
+    const event = loginAs('u1');
+    insertSubscription(db, { userId: 'u1', channelId: 'c1' });
+    const r: any = await handler(event);
+    expect(r.featured.large.id).toBe('v1');
+    expect(sectionIds(r)).not.toContain('subscriptions');
   });
 });
 

@@ -25,11 +25,8 @@ function eventFor(trackId: string, cookieHeader?: string) {
 }
 
 describe('POST /api/admin/music/tracks/[id]/download-clip', () => {
-  it('returns 401 for a guest', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(handler(eventFor('t1'))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
     const cookie = loginAs('u1', 'user');
     await expect(handler(eventFor('t1', cookie))).rejects.toMatchObject({ statusCode: 403 });
   });

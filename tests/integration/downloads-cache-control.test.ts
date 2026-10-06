@@ -75,28 +75,18 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     expect(event.node.res.headers['last-modified']).toBeDefined();
   });
 
-  it('returns 304 with no body when If-Modified-Since is at or after the file mtime', async () => {
+  it('answers If-Modified-Since: 304 with no body at or after the file mtime, 200 with content before it', async () => {
     insertVideo(db, { id: 'v3', channelId, downloadStatus: 'completed' });
     const mtime = new Date('2026-01-01T00:00:00Z');
     writeFile('v3', 'jpg', mtime);
-    const event = eventFor('v3', 'jpg', { 'if-modified-since': new Date('2026-01-01T00:00:00Z').toUTCString() });
+    const notModified = eventFor('v3', 'jpg', { 'if-modified-since': mtime.toUTCString() });
+    expect(await handler(notModified)).toBeFalsy();
+    expect(notModified.node.res.statusCode).toBe(304);
 
-    const result = await handler(event);
-
-    expect(event.node.res.statusCode).toBe(304);
-    expect(result).toBeFalsy();
-  });
-
-  it('returns 200 with content when If-Modified-Since predates the file mtime', async () => {
-    insertVideo(db, { id: 'v4', channelId, downloadStatus: 'completed' });
-    const mtime = new Date('2026-01-01T00:00:00Z');
-    writeFile('v4', 'jpg', mtime);
-    const event = eventFor('v4', 'jpg', { 'if-modified-since': new Date('2025-01-01T00:00:00Z').toUTCString() });
-
-    const result = await handler(event);
+    const modified = eventFor('v3', 'jpg', { 'if-modified-since': new Date('2025-01-01T00:00:00Z').toUTCString() });
+    const result = await handler(modified);
     closeIfStream(result);
-
-    expect(event.node.res.statusCode).toBe(200);
+    expect(modified.node.res.statusCode).toBe(200);
     expect(result).toBeTruthy();
   });
 

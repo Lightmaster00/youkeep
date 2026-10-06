@@ -30,110 +30,35 @@ function eventFor(trackId: string, body: any, cookieHeader?: string) {
 }
 
 describe('PATCH /api/admin/music/tracks/[id]', () => {
-  it('returns 401 for a guest', async () => {
+  beforeEach(() => {
     insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', trackNumber: 3, genre: 'Rock', language: 'en' });
+  });
+
+  it('returns 401 for a guest, 403 for a non-admin and 404 for a nonexistent track', async () => {
     await expect(handler(eventFor('t1', { title: 'New Title' }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('u1', 'user');
-    await expect(handler(eventFor('t1', { title: 'New Title' }, cookie))).rejects.toMatchObject({ statusCode: 403 });
-  });
-
-  it('returns 404 for a nonexistent track', async () => {
-    const cookie = loginAs('admin1', 'admin');
-    await expect(handler(eventFor('missing', { title: 'X' }, cookie))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(handler(eventFor('t1', { title: 'New Title' }, loginAs('u1', 'user')))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(handler(eventFor('missing', { title: 'X' }, loginAs('admin1', 'admin')))).rejects.toMatchObject({ statusCode: 404 });
   });
 
   it('updates only the fields provided, leaving others untouched', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', trackNumber: 3, genre: 'Rock', language: 'en' });
     const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('t1', { genre: 'Electro' }, cookie));
-    expect(result.track.genre).toBe('Electro');
-    expect(result.track.track_number).toBe(3);
-    expect(result.track.language).toBe('en');
+    let result: any = await handler(eventFor('t1', { genre: 'Electro' }, cookie));
+    expect(result.track).toMatchObject({ genre: 'Electro', track_number: 3, language: 'en' });
+    result = await handler(eventFor('t1', { title: 'Corrected Title', trackNumber: 7 }, cookie));
+    expect(result.track).toMatchObject({ title: 'Corrected Title', track_number: 7, genre: 'Electro' });
   });
 
-  it('clears an optional field to NULL when submitted empty', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', genre: 'Rock' });
+  it('clears optional fields (genre, language, trackNumber) to NULL when submitted empty', async () => {
     const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('t1', { genre: '' }, cookie));
-    expect(result.track.genre).toBeNull();
+    const result: any = await handler(eventFor('t1', { genre: '', language: '', trackNumber: '' }, cookie));
+    expect(result.track).toMatchObject({ genre: null, language: null, track_number: null });
   });
 
-  it('clears the language field to NULL when submitted empty', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', language: 'en' });
+  it('returns 400 for a null body, no updatable field, a blank title or a non-positive-integer trackNumber', async () => {
     const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('t1', { language: '' }, cookie));
-    expect(result.track.language).toBeNull();
-  });
-
-  it('returns 400 for a null request body', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-
-    await expect(handler(eventFor('t1', null, cookie))).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('rejects an empty title', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-
-    await expect(handler(eventFor('t1', { title: '   ' }, cookie))).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('updates the title when a non-empty value is provided', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('t1', { title: 'Corrected Title' }, cookie));
-    expect(result.track.title).toBe('Corrected Title');
-  });
-
-  it('rejects a trackNumber that is not a positive integer', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-
-    await expect(handler(eventFor('t1', { trackNumber: -1 }, cookie))).rejects.toMatchObject({ statusCode: 400 });
-    await expect(handler(eventFor('t1', { trackNumber: 1.5 }, cookie))).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('clears trackNumber to NULL when submitted as an empty string', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1', trackNumber: 5 });
-    const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('t1', { trackNumber: '' }, cookie));
-    expect(result.track.track_number).toBeNull();
-  });
-
-  it('sets trackNumber when a valid positive integer is provided', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-
-    const result: any = await handler(eventFor('t1', { trackNumber: 7 }, cookie));
-    expect(result.track.track_number).toBe(7);
-  });
-
-  it('returns 400 when the body has no updatable fields', async () => {
-    insertMusicArtist(db, { id: 'a1' });
-    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    const cookie = loginAs('admin1', 'admin');
-
-    await expect(handler(eventFor('t1', {}, cookie))).rejects.toMatchObject({ statusCode: 400 });
+    for (const body of [null, {}, { title: '   ' }, { trackNumber: -1 }, { trackNumber: 1.5 }]) {
+      await expect(handler(eventFor('t1', body, cookie)), JSON.stringify(body)).rejects.toMatchObject({ statusCode: 400 });
+    }
   });
 });

@@ -27,11 +27,8 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 }
 
 describe('POST /api/admin/music/artists/:id/pause', () => {
-  it('returns 401 for a guest', async () => {
+  it('returns 401 for a guest and 403 for a non-admin', async () => {
     await expect(pauseHandler(mockEvent(undefined, { path: '/api/admin/music/artists/a1/pause', params: { id: 'a1' } }))).rejects.toMatchObject({ statusCode: 401 });
-  });
-
-  it('returns 403 for a logged-in non-admin', async () => {
     const cookie = loginAs('u1', 'user');
     await expect(pauseHandler(mockEvent(cookie, { path: '/api/admin/music/artists/a1/pause', params: { id: 'a1' } }))).rejects.toMatchObject({ statusCode: 403 });
   });
