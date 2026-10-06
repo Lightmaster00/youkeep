@@ -23,8 +23,8 @@
       title="No videos found"
       description="Your archive is empty. Log in as administrator to add channels or videos."
       icon="video"
-      :action-text="isAdmin ? 'Go to downloads' : undefined"
-      action-route="/settings?tab=downloads"
+      :action-text="isAdmin ? 'Add channels' : undefined"
+      action-route="/settings?tab=library&section=videos"
     />
 
     <!-- Search Mode -->

@@ -353,14 +353,11 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
-/* .concurrency-control has no CSS of its own — its layout comes entirely
-   from an inline style (`display: inline-flex; align-items: center; gap:
-   8px;`) repeated identically in SettingsDownloadsTab.vue,
-   SettingsMusicTab.vue, and SettingsPodcastsTab.vue. That inline style sets
-   no flex-wrap, defaulting to nowrap, so the label + number input + Save
-   button (needing ~205px combined) overflowed the row at a 320px viewport
-   (~192px available). A class rule can add flex-wrap without conflicting
-   with the inline style, since the inline style never sets it. */
+/* .concurrency-control is used by DownloadTypeCard.vue, whose scoped style
+   gives it `display: inline-flex; align-items: center; gap: 8px; flex-wrap:
+   wrap`. This global rule predates that (the old per-type tabs used an inline
+   style without flex-wrap, so the label + number input + Save button, ~205px
+   combined, overflowed a 320px viewport) and is kept as a safety net. */
 .settings-container .concurrency-control {
   flex-wrap: wrap;
 }

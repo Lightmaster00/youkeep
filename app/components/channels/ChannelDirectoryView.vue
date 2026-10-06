@@ -22,7 +22,7 @@
       description="Start adding YouTube channels in the downloader settings to see them here."
       icon="channels"
       :action-text="isAdmin ? 'Add a channel' : undefined"
-      action-route="/settings?tab=downloads"
+      action-route="/settings?tab=library&section=videos"
     />
 
     <div v-else class="channel-grid">

@@ -54,6 +54,7 @@ describe('settings page shell', () => {
   it('opens the tab named in the query and re-normalises on a later query change', async () => {
     const w = await mountPage({ tab: 'users' });
     expect(w.find('[data-testid="pane-users"]').exists()).toBe(true);
+    expect(w.find('[data-testid="pane-downloads"]').exists()).toBe(false);
     await useRouter().push({ path: '/settings', query: { tab: 'system' } });
     await flushPromises();
     expect(w.find('[data-testid="pane-system"]').exists()).toBe(true);
@@ -61,6 +62,7 @@ describe('settings page shell', () => {
     await useRouter().push({ path: '/settings', query: { tab: 'bogus' } });
     await flushPromises();
     expect(w.find('[data-testid="pane-overview"]').exists()).toBe(true);
+    expect(w.find('[data-testid="pane-downloads"]').exists()).toBe(false);
   });
 
   it('selecting a tab shows it and updates the query', async () => {

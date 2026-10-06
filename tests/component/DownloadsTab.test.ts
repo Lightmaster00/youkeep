@@ -87,12 +87,17 @@ describe('DownloadsTab', () => {
 
   it('runs a queue action and refreshes', async () => {
     const w = await mountTab();
-    const before = fetchMock.mock.calls.filter(([u]) => u === '/api/admin/downloader/queue').length;
+    // Fake only the poll timer, so no polling tick can produce a refresh here.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
+    const queueCalls = () => fetchMock.mock.calls.filter(([u]) => u === '/api/admin/downloader/queue').length;
+    const before = queueCalls();
     await w.find('[data-testid="queue-item-video-v1"] [data-testid="queue-action-prioritize"]').trigger('click');
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    vi.useRealTimers();
     await flushPromises();
     const post = fetchMock.mock.calls.find(([u, o]) => u === '/api/admin/downloader/prioritize' && o?.method === 'POST');
     expect(post![1].body).toEqual({ videoId: 'v1' });
-    expect(fetchMock.mock.calls.filter(([u]) => u === '/api/admin/downloader/queue').length).toBeGreaterThan(before);
+    expect(queueCalls()).toBeGreaterThan(before);
   });
 
   it('shows the empty state', async () => {
