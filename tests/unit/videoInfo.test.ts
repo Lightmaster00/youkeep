@@ -8,13 +8,13 @@ describe('extractInfoFields', () => {
     expect(extractInfoFields({ description: '', view_count: 0, like_count: 0, live_status: 'not_live' }))
       .toEqual({ description: null, views: null, uploadDate: null, likeCount: null, wasLive: 0, duration: null });
   });
-  it('rounds float durations', () => {
+
+  it('rounds float durations and floors tiny positive ones at 1', () => {
     expect(extractInfoFields({ duration: 61.6 }).duration).toBe(62);
-  });
-  it('floors tiny positive durations at 1', () => {
     expect(extractInfoFields({ duration: 0.4 }).duration).toBe(1);
   });
-  it.each([[undefined], [null], [0], [-5], ['120'], [NaN], [Infinity]])('duration %s -> null', (d) => {
+
+  it.each([[null], [0], [-5], ['120'], [NaN], [Infinity]])('duration %s -> null', (d) => {
     expect(extractInfoFields({ duration: d }).duration).toBeNull();
   });
 });

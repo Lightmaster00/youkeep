@@ -14,22 +14,29 @@ function filesUnder(dir: string, ext: string): string[] {
   });
 }
 
-const FILES = [
-  ...filesUnder(join(ROOT, 'app/components/settings'), '.vue'),
-  join(ROOT, 'app/pages/settings.vue'),
-  // Rendered in System > Default display.
-  join(ROOT, 'app/components/DisplayPrefsForm.vue'),
-  // Admin copy kept in shared utils/composables.
-  join(ROOT, 'app/utils/librarySources.ts'),
-  join(ROOT, 'app/utils/allDownloads.ts'),
-  join(ROOT, 'app/utils/schedulePresets.ts'),
-  join(ROOT, 'app/utils/settingsTabs.ts'),
-  join(ROOT, 'app/composables/useAllDownloads.ts'),
-  join(ROOT, 'app/composables/useActiveCounts.ts'),
-  join(ROOT, 'server/api/channels/[id].get.ts'),
+// One scan group per kind of admin source; each group is a single test that
+// lists every offending file:line on failure.
+const GROUPS: Record<string, string[]> = {
+  'settings components and pages': [
+    ...filesUnder(join(ROOT, 'app/components/settings'), '.vue'),
+    join(ROOT, 'app/pages/settings.vue'),
+    // Rendered in System > Default display.
+    join(ROOT, 'app/components/DisplayPrefsForm.vue'),
+  ],
+  'admin copy in shared utils/composables': [
+    join(ROOT, 'app/utils/librarySources.ts'),
+    join(ROOT, 'app/utils/allDownloads.ts'),
+    join(ROOT, 'app/utils/schedulePresets.ts'),
+    join(ROOT, 'app/utils/settingsTabs.ts'),
+    join(ROOT, 'app/composables/useAllDownloads.ts'),
+    join(ROOT, 'app/composables/useActiveCounts.ts'),
+  ],
   // Admin API routes: their messages are shown in admin toasts.
-  ...filesUnder(join(ROOT, 'server/api/admin'), '.ts'),
-];
+  'admin API routes': [
+    join(ROOT, 'server/api/channels/[id].get.ts'),
+    ...filesUnder(join(ROOT, 'server/api/admin'), '.ts'),
+  ],
+};
 
 const ACCENTED = /[àâäçéèêëîïôöùûüÿœæÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸŒÆ«»]/;
 const FRENCH_WORDS = [
@@ -60,13 +67,11 @@ describe('admin screens are English only', () => {
     expect(frenchHits('<h3>Recherche</h3>', 'x.vue')).toHaveLength(1);
     expect(frenchHits("toast.error('Échec')", 'x.vue')).toHaveLength(1);
     expect(frenchHits('<span>{{ on ? "Active" : "Paused" }}</span>', 'x.vue')).toHaveLength(0);
+    expect(Object.values(GROUPS).flat().length).toBeGreaterThan(30);
   });
 
-  it('covers the settings components and admin routes', () => {
-    expect(FILES.length).toBeGreaterThan(30);
-  });
-
-  it.each(FILES.map((f) => [relative(ROOT, f), f]))('%s has no French text', (rel, full) => {
-    expect(frenchHits(readFileSync(full, 'utf8'), rel)).toEqual([]);
+  it.each(Object.entries(GROUPS))('%s have no French text', (_group, files) => {
+    const hits = files.flatMap((full) => frenchHits(readFileSync(full, 'utf8'), relative(ROOT, full)));
+    expect(hits, `French text found:\n${hits.join('\n')}`).toEqual([]);
   });
 });

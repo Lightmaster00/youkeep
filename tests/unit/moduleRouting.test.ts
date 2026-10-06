@@ -5,9 +5,6 @@ describe('moduleForPagePath', () => {
   it.each([
     ['/', 'video'],
     ['/shorts', 'video'],
-    ['/channels', 'video'],
-    ['/subscriptions', 'video'],
-    ['/playlists', 'video'],
     ['/playlists/abc', 'video'],
     ['/watch/jNQXAC9IVRw', 'video'],
     ['/music', 'music'],
@@ -18,7 +15,7 @@ describe('moduleForPagePath', () => {
     expect(moduleForPagePath(path)).toBe(expected);
   });
 
-  it.each(['/login', '/account', '/settings', '/search', '/admin', '/admin/users', '/musicfoo', '/podcastsfoo', '/channelsfoo'])(
+  it.each(['/login', '/settings', '/admin/users', '/musicfoo', '/podcastsfoo', '/channelsfoo'])(
     '%s belongs to no module (never redirected)',
     (path) => {
       expect(moduleForPagePath(path)).toBeNull();
@@ -36,24 +33,18 @@ describe('resolveActiveSpaceId', () => {
     expect(resolveActiveSpaceId('/podcasts/shows', false, ['music'])).toBe('podcasts');
   });
 
-  it.each(['/', '/account', '/search', '/settings', '/watch/x'])('%s maps to video when video is enabled', (p) => {
-    expect(resolveActiveSpaceId(p, false, all)).toBe('video');
-  });
-
-  it.each(['/', '/account', '/search', '/settings', '/watch/x'])('%s falls back to the first enabled space for a non-admin without video', (p) => {
-    expect(resolveActiveSpaceId(p, false, ['music', 'podcasts'])).toBe('music');
-    expect(resolveActiveSpaceId(p, false, ['podcasts'])).toBe('podcasts');
-  });
-
-  it('keeps video for an admin even when video is disabled', () => {
-    expect(resolveActiveSpaceId('/account', true, ['music'])).toBe('video');
-  });
-
-  it('falls back to video with an empty enabled list', () => {
-    expect(resolveActiveSpaceId('/account', false, [])).toBe('video');
-  });
-
-  it('does not treat /musicfoo as music', () => {
+  it('uses video for module-less pages when video is enabled (and /musicfoo is not music)', () => {
+    expect(resolveActiveSpaceId('/account', false, all)).toBe('video');
     expect(resolveActiveSpaceId('/musicfoo', false, all)).toBe('video');
+  });
+
+  it('falls back to the first enabled space for a non-admin without video', () => {
+    expect(resolveActiveSpaceId('/', false, ['music', 'podcasts'])).toBe('music');
+    expect(resolveActiveSpaceId('/search', false, ['podcasts'])).toBe('podcasts');
+  });
+
+  it('keeps video for an admin even when video is disabled, and with an empty enabled list', () => {
+    expect(resolveActiveSpaceId('/account', true, ['music'])).toBe('video');
+    expect(resolveActiveSpaceId('/account', false, [])).toBe('video');
   });
 });

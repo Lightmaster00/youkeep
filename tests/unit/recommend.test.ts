@@ -10,43 +10,23 @@ beforeEach(() => {
 });
 
 describe('getRecommendedVideos', () => {
-  it('filters by type: short returns only is_short videos', () => {
+  it('filters by type: short, video or all', () => {
     insertChannel(db, { id: 'c1' });
     insertVideo(db, { id: 'v1', channelId: 'c1', isShort: true, uploadDate: '20260101' });
     insertVideo(db, { id: 'v2', channelId: 'c1', isShort: false, uploadDate: '20260101' });
-    const results = getRecommendedVideos(db, 'u1', { type: 'short', limit: 15 });
-    expect(results.map(v => v.id)).toEqual(['v1']);
+    expect(getRecommendedVideos(db, 'u1', { type: 'short', limit: 15 }).map(v => v.id)).toEqual(['v1']);
+    expect(getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 }).map(v => v.id)).toEqual(['v2']);
+    expect(getRecommendedVideos(db, 'u1', { type: 'all', limit: 15 }).map(v => v.id).sort()).toEqual(['v1', 'v2']);
   });
 
-  it('filters by type: video returns only long-form videos', () => {
-    insertChannel(db, { id: 'c1' });
-    insertVideo(db, { id: 'v1', channelId: 'c1', isShort: true, uploadDate: '20260101' });
-    insertVideo(db, { id: 'v2', channelId: 'c1', isShort: false, uploadDate: '20260101' });
-    const results = getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 });
-    expect(results.map(v => v.id)).toEqual(['v2']);
-  });
-
-  it('type: all returns both shorts and long-form videos', () => {
-    insertChannel(db, { id: 'c1' });
-    insertVideo(db, { id: 'v1', channelId: 'c1', isShort: true, uploadDate: '20260101' });
-    insertVideo(db, { id: 'v2', channelId: 'c1', isShort: false, uploadDate: '20260101' });
-    const results = getRecommendedVideos(db, 'u1', { type: 'all', limit: 15 });
-    expect(results.map(v => v.id).sort()).toEqual(['v1', 'v2']);
-  });
-
-  it('excludes hidden videos', () => {
+  it('excludes hidden videos and videos not in completed status', () => {
     insertChannel(db, { id: 'c1' });
     insertVideo(db, { id: 'v1', channelId: 'c1', isShort: false, uploadDate: '20260101' });
+    insertVideo(db, { id: 'v2', channelId: 'c1', isShort: false, downloadStatus: 'downloading', uploadDate: '20260101' });
+    insertVideo(db, { id: 'v3', channelId: 'c1', isShort: false, uploadDate: '20260101' });
     insertHiddenVideo(db, { userId: 'u1', videoId: 'v1' });
-    const results = getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 });
-    expect(results).toHaveLength(0);
-  });
-
-  it('excludes videos not in completed status', () => {
-    insertChannel(db, { id: 'c1' });
-    insertVideo(db, { id: 'v1', channelId: 'c1', isShort: false, downloadStatus: 'downloading', uploadDate: '20260101' });
-    const results = getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 });
-    expect(results).toHaveLength(0);
+    expect(getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 }).map(v => v.id)).toEqual(['v3']);
+    expect(getRecommendedVideos(db, 'u1', { type: 'short', limit: 15 })).toEqual([]);
   });
 
   it('respects the limit', () => {

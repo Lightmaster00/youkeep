@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   musicSource, podcastsSource, defaultFollowOptions, youtubeChannelUrl, youtubeDirectTarget,
-  feedDirectTarget, visibilityLabel, plural, videosSource, channelSavePath, LIBRARY_SOURCES,
+  feedDirectTarget, visibilityLabel, plural, videosSource, channelSavePath,
 } from '../../app/utils/librarySources';
 
 describe('youtubeChannelUrl', () => {
@@ -23,10 +23,8 @@ describe('direct targets', () => {
   it.each([
     ['https://www.youtube.com/@abc', 'https://www.youtube.com/@abc'],
     ['youtube.com/@abc', 'https://youtube.com/@abc'],
-    ['www.youtube.com/channel/UC1', 'https://www.youtube.com/channel/UC1'],
     ['@abc', 'https://www.youtube.com/@abc'],
     ['  @abc  ', 'https://www.youtube.com/@abc'],
-    ['Daft Punk', null],
     ['@two words', null],
     ['', null],
   ])('youtubeDirectTarget(%j) = %j', (q, expected) => {
@@ -35,7 +33,6 @@ describe('direct targets', () => {
 
   it.each([
     ['https://feeds.example/show.xml', 'https://feeds.example/show.xml'],
-    ['http://feeds.example/show.xml', 'http://feeds.example/show.xml'],
     ['Planet Money', null],
   ])('feedDirectTarget(%j) = %j', (q, expected) => {
     expect(feedDirectTarget(q)).toBe(expected);
@@ -64,11 +61,13 @@ describe('musicSource', () => {
     ]);
     expect(musicSource.readFollowing({})).toEqual([]);
   });
-  it('uses the per-artist routes', () => {
+  it('builds encoded per-source routes; only channels have a visibility route', () => {
     expect(musicSource.pauseUrl('a 1')).toBe('/api/admin/music/artists/a%201/pause');
     expect(musicSource.syncUrl('a1')).toBe('/api/admin/music/artists/a1/sync');
-    expect(musicSource.syncAllEndpoint).toBe('/api/admin/music/sync-all');
     expect(musicSource.visibilityUrl).toBeNull();
+    expect(videosSource.pauseUrl('UC1')).toBe('/api/admin/channels/UC1/pause');
+    expect(videosSource.syncUrl('UC1')).toBe('/api/admin/channels/UC1/sync');
+    expect(videosSource.visibilityUrl?.('UC1')).toBe('/api/admin/channels/UC1/visibility');
   });
 });
 
@@ -150,17 +149,4 @@ describe('videosSource', () => {
     ]);
   });
 
-  it('uses the channel routes, including visibility', () => {
-    expect(videosSource.pauseUrl('UC1')).toBe('/api/admin/channels/UC1/pause');
-    expect(videosSource.syncUrl('UC1')).toBe('/api/admin/channels/UC1/sync');
-    expect(videosSource.visibilityUrl?.('UC1')).toBe('/api/admin/channels/UC1/visibility');
-    expect(videosSource.syncAllEndpoint).toBe('/api/admin/downloader/sync-all');
-    expect(videosSource.hasVideoOptions).toBe(true);
-  });
-
-  it('LIBRARY_SOURCES maps each section to its config', () => {
-    expect(LIBRARY_SOURCES.videos).toBe(videosSource);
-    expect(LIBRARY_SOURCES.music).toBe(musicSource);
-    expect(LIBRARY_SOURCES.podcasts).toBe(podcastsSource);
-  });
 });

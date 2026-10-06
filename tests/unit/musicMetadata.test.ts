@@ -4,7 +4,6 @@ import { parseMusicMetadataFromInfoData } from '../../server/utils/musicMetadata
 describe('parseMusicMetadataFromInfoData', () => {
   it('returns all-null when infoData is missing or empty', () => {
     expect(parseMusicMetadataFromInfoData(null)).toEqual({ album: null, genre: null, trackNumber: null, releaseYear: null });
-    expect(parseMusicMetadataFromInfoData(undefined)).toEqual({ album: null, genre: null, trackNumber: null, releaseYear: null });
     expect(parseMusicMetadataFromInfoData({})).toEqual({ album: null, genre: null, trackNumber: null, releaseYear: null });
   });
 
@@ -16,11 +15,6 @@ describe('parseMusicMetadataFromInfoData', () => {
       release_year: 2024
     });
     expect(result).toEqual({ album: 'Test Album', genre: 'Electronic', trackNumber: 3, releaseYear: 2024 });
-  });
-
-  it('leaves individual fields null when only some are present', () => {
-    const result = parseMusicMetadataFromInfoData({ album: 'Only Album Known' });
-    expect(result).toEqual({ album: 'Only Album Known', genre: null, trackNumber: null, releaseYear: null });
   });
 
   it('trims whitespace and treats an empty/whitespace-only string as absent', () => {

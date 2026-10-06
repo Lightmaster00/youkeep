@@ -14,25 +14,14 @@ describe('rateLimit', () => {
     vi.useRealTimers();
   });
 
-  it('is not locked before any failed attempt', () => {
+  it('locks out on the 5th failed attempt within the window, not before, per key (e.g. per ip:username)', () => {
     expect(isLoginLocked(key).locked).toBe(false);
-  });
-
-  it('does not lock out before reaching the max attempt count', () => {
     for (let i = 0; i < 4; i++) recordFailedLogin(key);
     expect(isLoginLocked(key).locked).toBe(false);
-  });
-
-  it('locks out after the 5th failed attempt within the window', () => {
-    for (let i = 0; i < 5; i++) recordFailedLogin(key);
+    recordFailedLogin(key);
     const status = isLoginLocked(key);
     expect(status.locked).toBe(true);
     expect(status.retryAfterMs).toBeGreaterThan(0);
-  });
-
-  it('keeps a distinct counter per key (e.g. per ip:username)', () => {
-    for (let i = 0; i < 5; i++) recordFailedLogin(key);
-    expect(isLoginLocked(key).locked).toBe(true);
     expect(isLoginLocked('other-key').locked).toBe(false);
   });
 
