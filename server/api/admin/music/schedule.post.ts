@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     try {
       new Cron(schedule);
     } catch (err) {
-      throw createError({ statusCode: 400, statusMessage: `Expression cron invalide : ${err}` });
+      throw createError({ statusCode: 400, statusMessage: `Invalid cron expression: ${err}` });
     }
   }
 

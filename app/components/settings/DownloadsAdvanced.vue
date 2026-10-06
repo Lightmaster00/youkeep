@@ -19,6 +19,11 @@
       <section>
         <h3>Sponsor segments (videos)</h3>
         <p class="section-desc">Uses the community SponsorBlock database and applies to new downloads only. Each kind of segment can be kept, marked as a chapter, or cut from the file.</p>
+        <p v-if="sbLoadFailed" class="section-desc" data-testid="sponsorblock-load-error">
+          Could not load the current settings. Reload to try again.
+          <button type="button" class="btn btn-secondary-dark" data-testid="sponsorblock-retry" @click="loadSponsorBlock">Retry</button>
+        </p>
+        <p v-else-if="!sbLoaded" class="section-desc" data-testid="sponsorblock-loading">Loading…</p>
         <form class="policy-forms-grid mt-3" data-testid="sponsorblock-form" @submit.prevent="saveSponsorBlock">
           <div v-for="cat in SPONSORBLOCK_CATEGORIES" :key="cat.key" class="form-group">
             <label class="form-label" :for="`sb-${cat.key}`">{{ cat.label }}</label>
@@ -29,7 +34,7 @@
             </select>
           </div>
           <div class="form-actions mt-3">
-            <button type="submit" class="btn btn-secondary-dark" :disabled="savingSponsorBlock">{{ savingSponsorBlock ? 'Saving...' : 'Save sponsor settings' }}</button>
+            <button type="submit" class="btn btn-secondary-dark" :disabled="savingSponsorBlock || !sbLoaded">{{ savingSponsorBlock ? 'Saving...' : 'Save sponsor settings' }}</button>
           </div>
         </form>
       </section>
@@ -67,17 +72,24 @@ const sponsorBlock = ref<Record<string, string>>({
   sponsor: 'ignore', intro: 'ignore', outro: 'ignore', selfpromo: 'ignore', interaction: 'ignore', filler: 'ignore',
 });
 const savingSponsorBlock = ref(false);
+const sbLoaded = ref(false);
+const sbLoadFailed = ref(false);
 
 async function loadSponsorBlock() {
   try {
     const data = await $fetch<{ settings?: Record<string, string> }>('/api/admin/downloader/sponsorblock');
     if (data?.settings) sponsorBlock.value = { ...sponsorBlock.value, ...data.settings };
+    sbLoaded.value = true;
+    sbLoadFailed.value = false;
   } catch (err) {
     console.error('Failed to fetch SponsorBlock settings:', err);
+    sbLoaded.value = false;
+    sbLoadFailed.value = true;
   }
 }
 
 async function saveSponsorBlock() {
+  if (savingSponsorBlock.value || !sbLoaded.value) return;
   savingSponsorBlock.value = true;
   try {
     await $fetch('/api/admin/downloader/sponsorblock', { method: 'POST', body: sponsorBlock.value });
@@ -127,7 +139,10 @@ onMounted(() => {
 
 <style scoped>
 .downloads-advanced { padding: 20px; }
-.downloads-advanced-summary { cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.downloads-advanced-summary { cursor: pointer; display: flex; flex-direction: column; gap: 4px; list-style: none; position: relative; padding-right: 28px; }
+.downloads-advanced-summary::-webkit-details-marker { display: none; }
+.downloads-advanced-summary::after { content: ''; position: absolute; right: 6px; top: 8px; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform 0.15s; }
+.downloads-advanced[open] > .downloads-advanced-summary::after { transform: rotate(-135deg); top: 12px; }
 .downloads-advanced-title { font-size: 18px; font-weight: 700; }
 .downloads-advanced-body { display: flex; flex-direction: column; gap: 24px; margin-top: 16px; }
 .downloads-advanced-body h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; }

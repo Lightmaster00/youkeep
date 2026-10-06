@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     const action = body?.[category];
     if (action === undefined) continue;
     if (!VALID_ACTIONS.includes(action)) {
-      throw createError({ statusCode: 400, statusMessage: `Valeur invalide pour la catégorie "${category}": ${action}` });
+      throw createError({ statusCode: 400, statusMessage: `Invalid value for category "${category}": ${action}` });
     }
     updates.push({ category, action });
   }

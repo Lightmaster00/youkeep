@@ -1,6 +1,11 @@
 <template>
   <form class="policy-form-block schedule-form" :data-testid="`schedule-${idPrefix}`" @submit.prevent="save">
     <h4 class="results-header">{{ title }}</h4>
+    <p v-if="loadFailed" class="section-desc" data-testid="load-error">
+      Could not load the current settings. Reload to try again.
+      <button type="button" class="btn btn-secondary-dark" data-testid="load-retry" @click="load">Retry</button>
+    </p>
+    <p v-else-if="!loaded" class="section-desc" data-testid="loading">Loading…</p>
     <label class="checkbox-container">
       <input v-model="form.enabled" type="checkbox" :data-testid="`schedule-${idPrefix}-enabled`" />
       <span class="checkmark"></span>
@@ -25,7 +30,7 @@
     </div>
 
     <div class="form-actions mt-3">
-      <button type="submit" class="btn btn-secondary-dark" :disabled="saving">{{ saving ? 'Saving...' : 'Save schedule' }}</button>
+      <button type="submit" class="btn btn-secondary-dark" :disabled="saving || !loaded">{{ saving ? 'Saving...' : 'Save schedule' }}</button>
     </div>
   </form>
 </template>
@@ -46,6 +51,8 @@ const props = defineProps<{
 
 const toast = useToast();
 const saving = ref(false);
+const loaded = ref(false);
+const loadFailed = ref(false);
 const form = reactive<{ enabled: boolean; preset: ScheduleKey | 'custom'; schedule: string }>({
   enabled: false,
   preset: 'daily',
@@ -62,12 +69,17 @@ async function load() {
     form.enabled = !!data?.enabled;
     form.schedule = data?.schedule || props.presets.daily;
     form.preset = presetForSchedule(props.presets, form.schedule);
+    loaded.value = true;
+    loadFailed.value = false;
   } catch (err) {
     console.error(`Failed to load ${props.endpoint}:`, err);
+    loaded.value = false;
+    loadFailed.value = true;
   }
 }
 
 async function save() {
+  if (saving.value || !loaded.value) return;
   // Validated here: the browser's `required` would silently block the submit.
   if (form.enabled && form.preset === 'custom' && !form.schedule.trim()) {
     toast.error('Enter a cron expression.');
