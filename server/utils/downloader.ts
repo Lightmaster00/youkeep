@@ -7,6 +7,7 @@ import { Cron } from 'croner';
 import { getDb } from './db';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { extractInfoFields } from './videoInfo';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 
 export function sanitizeFolderName(name: string): string {
@@ -883,15 +884,18 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
         let uploadDate = null;
         let likeCount = null;
         let wasLive = 0;
+        let duration: number | null = null;
 
         if (fs.existsSync(infoJsonFile)) {
           try {
             const infoData = JSON.parse(fs.readFileSync(infoJsonFile, 'utf8'));
-            desc = infoData.description || null;
-            views = infoData.view_count || null;
-            uploadDate = infoData.upload_date || null;
-            likeCount = infoData.like_count || null;
-            wasLive = infoData.live_status === 'was_live' ? 1 : 0;
+            const info = extractInfoFields(infoData);
+            desc = info.description;
+            views = info.views;
+            uploadDate = info.uploadDate;
+            likeCount = info.likeCount;
+            wasLive = info.wasLive;
+            duration = info.duration;
 
             // Ingest comments
             if (infoData.comments && Array.isArray(infoData.comments)) {
@@ -957,6 +961,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
                 view_count = COALESCE(?, view_count),
                 upload_date = COALESCE(?, upload_date),
                 like_count = COALESCE(?, like_count),
+                duration = COALESCE(?, duration),
                 size_bytes = ?,
                 was_live = ?
             WHERE id = ?
@@ -967,6 +972,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
             views,
             uploadDate,
             likeCount,
+            duration,
             fileSize,
             wasLive,
             videoId
