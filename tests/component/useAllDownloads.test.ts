@@ -100,4 +100,87 @@ describe('useAllDownloads', () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(queueCalls()).toBe(4);
   });
+
+  it('stop while an iteration is in flight: no further fetch after it resolves, no timer left', async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    fetchMock.mockImplementation(async (url: string) => { await gate; return payloads[url] ?? {}; });
+    const d = useAllDownloads();
+    d.startPolling();
+    await vi.advanceTimersByTimeAsync(0);
+    d.stopPolling();
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+    const before = fetchMock.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  it('stop between iterations clears the pending timer', async () => {
+    vi.useFakeTimers();
+    const d = useAllDownloads();
+    d.startPolling();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(1);
+    const before = fetchMock.mock.calls.length;
+    d.stopPolling();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(fetchMock.mock.calls.length).toBe(before);
+  });
+
+  it('start, stop, start while the first iteration is in flight leaves exactly ONE loop', async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    let gated = true;
+    const gate = new Promise<void>((r) => { release = r; });
+    fetchMock.mockImplementation(async (url: string) => { if (gated) await gate; return payloads[url] ?? {}; });
+    const queueCalls = () => fetchMock.mock.calls.filter(([u]) => u === '/api/admin/downloader/queue').length;
+    const d = useAllDownloads();
+    d.startPolling();
+    await vi.advanceTimersByTimeAsync(0);
+    d.stopPolling();
+    d.startPolling();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(queueCalls()).toBe(2); // iteration A and B both in flight
+    gated = false;
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(1); // only B reschedules
+    const base = queueCalls();
+    await vi.advanceTimersByTimeAsync(500 * 4); // m1 downloads -> 500 ms loop
+    expect(queueCalls() - base).toBe(4);
+    d.stopPolling();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(queueCalls() - base).toBe(4);
+  });
+
+  it('cap boundary: 100 items shows no notice, 101 shows it', async () => {
+    const mk = (n: number, total: number) => ({
+      queue: Array.from({ length: n }, (_, i) => ({ id: `v${i}`, title: 'x', download_status: 'pending', channel_title: 'c' })),
+      queueTotal: total, failedCount: 0, isPaused: false,
+    });
+    payloads['/api/admin/music/queue'] = { queue: [], queueTotal: 0, failedCount: 0, isPaused: false };
+    payloads['/api/admin/podcasts/queue'] = { queue: [], queueTotal: 0, failedCount: 0, isPaused: false };
+    payloads['/api/admin/downloader/queue'] = mk(100, 100);
+    const d = useAllDownloads();
+    await d.refreshAll();
+    expect(d.notice.value).toBeNull();
+    payloads['/api/admin/downloader/queue'] = mk(100, 101);
+    await d.refreshAll();
+    expect(d.notice.value).toBe('Showing the first 100 of 101');
+  });
+
+  it('keeps the last good total for a type whose route failed; other types stay correct', async () => {
+    const d = useAllDownloads();
+    await d.refreshAll();
+    failing.add('/api/admin/music/queue');
+    payloads['/api/admin/downloader/queue'] = { queue: [], queueTotal: 7, failedCount: 0, isPaused: false };
+    await d.refreshAll();
+    expect(d.states.value.music.error).toBe(true);
+    expect(d.counts.value).toEqual({ all: 9, video: 7, music: 1, podcast: 1 });
+  });
 });

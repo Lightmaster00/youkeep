@@ -10,6 +10,8 @@ import {
 // Module-level so that every caller shares the single polling loop.
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let polling = false;
+// Bumped on every start/stop so an iteration that outlives a stop can never reschedule.
+let generation = 0;
 
 export function useAllDownloads() {
   const video = useDownloadsQueue();
@@ -59,21 +61,22 @@ export function useAllDownloads() {
     await Promise.all([video.fetchQueue(), music.fetchMusicQueue(), podcast.fetchPodcastQueue()]);
   }
 
-  async function tick() {
-    if (!polling) return;
+  async function tick(gen: number) {
+    if (gen !== generation) return;
     await refreshAll();
-    if (!polling) return;
-    pollTimer = setTimeout(tick, nextPollDelay(states.value));
+    if (gen !== generation) return;
+    pollTimer = setTimeout(() => tick(gen), nextPollDelay(states.value));
   }
 
   function startPolling() {
-    if (polling) return;
+    if (typeof window === 'undefined' || polling) return;
     polling = true;
-    tick();
+    tick(++generation);
   }
 
   function stopPolling() {
     polling = false;
+    generation++; // invalidates any iteration still in flight
     if (pollTimer) {
       clearTimeout(pollTimer);
       pollTimer = null;
