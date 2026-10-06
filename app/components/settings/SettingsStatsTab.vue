@@ -1,29 +1,30 @@
 <template>
   <div class="tab-pane">
+    <OverviewActivityCard />
     <!-- Premium Welcome & Summary Banner -->
     <div class="dashboard-banner glass-panel">
       <div class="banner-content">
         <span class="system-status-badge">
           <span class="pulse-dot"></span>
-          System Online & Syncing
+          Running
         </span>
-        <h2>Library Diagnostic Dashboard</h2>
-        <p>Comprehensive overview of local storage consumption, catalog data, and channel archiving metrics.</p>
+        <h2>Overview</h2>
+        <p>What your library holds and how much space it uses.</p>
       </div>
       <div class="banner-quick-stats">
         <div class="quick-stat-item">
           <span class="stat-number text-gradient">{{ formatViews(stats?.totalViews || 0) }}</span>
-          <span class="stat-label">Catalog Views</span>
+          <span class="stat-label">YouTube views</span>
         </div>
         <div class="quick-stat-divider"></div>
         <div class="quick-stat-item">
           <span class="stat-number">{{ stats?.totalComments?.toLocaleString() || 0 }}</span>
-          <span class="stat-label">Indexed Comments</span>
+          <span class="stat-label">Comments saved</span>
         </div>
         <div class="quick-stat-divider"></div>
         <div class="quick-stat-item">
           <span class="stat-number" :class="{ 'settings-text-accent': (stats?.totalQueue || 0) > 0 }">{{ stats?.totalQueue || 0 }}</span>
-          <span class="stat-label">Queue Tasks</span>
+          <span class="stat-label">Videos queued</span>
         </div>
       </div>
     </div>
@@ -33,49 +34,49 @@
       <!-- Archived Videos Card -->
       <div class="metric-card glass-panel glow-purple">
         <div class="metric-card-header">
-          <span class="metric-label">Archived Videos</span>
+          <span class="metric-label">Videos</span>
           <div class="metric-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
           </div>
         </div>
         <span class="metric-value">{{ stats?.totalVideos?.toLocaleString() || 0 }}</span>
-        <div class="metric-sub">Videos locally cataloged & verified</div>
+        <div class="metric-sub">Downloaded and ready to watch</div>
       </div>
 
       <!-- Media Disk Space Card -->
       <div class="metric-card glass-panel glow-blue">
         <div class="metric-card-header">
-          <span class="metric-label">Media Disk Space</span>
+          <span class="metric-label">Disk space</span>
           <div class="metric-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           </div>
         </div>
         <span class="metric-value text-gradient">{{ formatBytes(stats?.mediaSize || 0) }}</span>
-        <div class="metric-sub">Total space used by MP4/JPG files</div>
+        <div class="metric-sub">Used by video files and thumbnails</div>
       </div>
 
       <!-- Archived Duration Card -->
       <div class="metric-card glass-panel glow-green">
         <div class="metric-card-header">
-          <span class="metric-label">Archived Duration</span>
+          <span class="metric-label">Total duration</span>
           <div class="metric-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
           </div>
         </div>
         <span class="metric-value">{{ formatSecondsToHours(stats?.totalDuration || 0) }}</span>
-        <div class="metric-sub">Cumulative playback playtime</div>
+        <div class="metric-sub">Of all downloaded videos</div>
       </div>
 
       <!-- SQLite Database Card -->
       <div class="metric-card glass-panel glow-pink">
         <div class="metric-card-header">
-          <span class="metric-label">SQLite Database</span>
+          <span class="metric-label">Database</span>
           <div class="metric-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>
           </div>
         </div>
         <span class="metric-value">{{ formatBytes(stats?.dbSize || 0) }}</span>
-        <div class="metric-sub">Metadata & search indexing database</div>
+        <div class="metric-sub">Titles, descriptions and search index</div>
       </div>
     </div>
 
@@ -85,10 +86,10 @@
       <div class="stats-col glass-panel">
         <div class="col-header">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-primary);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          <h3>Top Channels (by videos)</h3>
+          <h3>Top channels</h3>
         </div>
         <div v-if="channels.length === 0" class="stats-empty">
-          No channels found. Start tracking channels to view archiving metrics.
+          No channels yet. Follow a channel in Library to see it here.
         </div>
         <div v-else class="stats-list">
           <div
@@ -101,7 +102,7 @@
                 <span class="item-title" :title="ch.title">{{ ch.title }}</span>
                 <span v-if="ch.visibility" :class="['visibility-tag mini-tag', ch.visibility]">{{ ch.visibility }}</span>
               </div>
-              <span class="item-count">{{ ch.completed_count }} / {{ ch.total_count }} videos</span>
+              <span class="item-count">{{ ch.completed_count }} of {{ ch.total_count }} videos downloaded</span>
             </div>
             <!-- Progress Bar -->
             <div class="stats-item-bar-bg">
@@ -118,34 +119,34 @@
       <div class="stats-col glass-panel diagnostic-panel">
         <div class="col-header">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-secondary);"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-          <h3>Infrastructure & Analytics</h3>
+          <h3>Details</h3>
         </div>
 
         <div class="diagnostic-list">
           <div class="diag-item">
-            <div class="diag-label">Active tracked channels</div>
+            <div class="diag-label">Channels followed</div>
             <div class="diag-value font-highlight">{{ stats?.totalChannels || 0 }} channels</div>
           </div>
 
           <div class="diag-item">
-            <div class="diag-label">Total YouTube catalog views</div>
+            <div class="diag-label">YouTube views of your videos</div>
             <div class="diag-value">{{ formatViews(stats?.totalViews || 0) }} views</div>
           </div>
 
           <div class="diag-item">
-            <div class="diag-label">Comments database load</div>
-            <div class="diag-value">{{ stats?.totalComments?.toLocaleString() || 0 }} rows</div>
+            <div class="diag-label">Comments saved</div>
+            <div class="diag-value">{{ stats?.totalComments?.toLocaleString() || 0 }} comments</div>
           </div>
 
           <div class="diag-item">
-            <div class="diag-label">Pending sync downloads</div>
+            <div class="diag-label">Videos waiting to download</div>
             <div class="diag-value" :class="{ 'warning-highlight': (stats?.totalQueue || 0) > 0 }">
-              {{ stats?.totalQueue || 0 }} in queue
+              {{ stats?.totalQueue || 0 }} queued
             </div>
           </div>
 
           <div class="diag-item">
-            <div class="diag-label">Database indexing engine</div>
+            <div class="diag-label">Database engine</div>
             <div class="diag-value">better-sqlite3 v9.x</div>
           </div>
         </div>
@@ -156,8 +157,8 @@
             <span class="radar-ring"></span>
           </div>
           <div class="check-text">
-            <h4>All Services Operational</h4>
-            <p>Archiver engine listening for sync triggers.</p>
+            <h4>Everything is running</h4>
+            <p>Followed sources are checked on their schedule.</p>
           </div>
         </div>
       </div>
@@ -167,6 +168,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import OverviewActivityCard from '~/components/settings/OverviewActivityCard.vue';
 import { useAdminChannels } from '~/composables/useAdminChannels';
 
 const { stats, channels } = await useAdminChannels();
