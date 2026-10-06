@@ -7,8 +7,6 @@ import {
   isValidMaxConcurrentValue,
   hasEnoughDiskSpace,
   MIN_FREE_DISK_SPACE_BYTES,
-  COMBINED_MAX_CONCURRENT_DOWNLOADS,
-  hasCapacityForCombinedDownloads,
   resetStaleDownloadsForTable,
 } from '../../server/utils/concurrency';
 import {
@@ -116,28 +114,6 @@ describe('hasEnoughDiskSpace', () => {
 
   it('exports the 500 MB threshold constant', () => {
     expect(MIN_FREE_DISK_SPACE_BYTES).toBe(500 * 1024 * 1024);
-  });
-});
-
-describe('hasCapacityForCombinedDownloads', () => {
-  it('returns true when total active count is below the combined max', () => {
-    expect(hasCapacityForCombinedDownloads(2, 3)).toBe(true);
-  });
-
-  it('returns false when total active count equals the combined max', () => {
-    expect(hasCapacityForCombinedDownloads(3, 3)).toBe(false);
-  });
-
-  it('returns false when total active count exceeds the combined max (e.g. after both pipelines were already at capacity)', () => {
-    expect(hasCapacityForCombinedDownloads(4, 3)).toBe(false);
-  });
-
-  it('returns true when nothing is active', () => {
-    expect(hasCapacityForCombinedDownloads(0, 3)).toBe(true);
-  });
-
-  it('exports the combined cap constant as 3', () => {
-    expect(COMBINED_MAX_CONCURRENT_DOWNLOADS).toBe(3);
   });
 });
 

@@ -584,11 +584,8 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
 /**
  * Background loop that processes the podcast download queue. Persistent:
  * polls every few seconds instead of exiting when empty. Mirrors
- * startMusicQueueWorker exactly, with one deliberate omission: no
- * hasCapacityForCombinedDownloads check against COMBINED_MAX_CONCURRENT_DOWNLOADS.
- * Podcasts run their own independent per-pipeline cap only — extending the
- * video+music combined cap to a third pipeline is a separate decision this
- * plan does not make (see Global Constraints).
+ * startMusicQueueWorker exactly, with its own independent per-pipeline
+ * concurrency cap (podcast_max_concurrent_downloads); no pipeline shares a cap with another.
  */
 export async function startPodcastQueueWorker() {
   if (getIsPodcastProcessing()) {

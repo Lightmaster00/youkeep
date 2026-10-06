@@ -6,9 +6,8 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { getActiveMusicDownloadCount } from './musicDownloader';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -298,8 +297,8 @@ export async function startQueueWorker() {
 
         // Check disk space first — it's the only await in this sequence, so running it
         // before the capacity checks below ensures nothing yields the event loop between
-        // those checks passing and the counter increment, closing the cross-pipeline race
-        // window on the combined cap.
+        // those checks passing and the counter increment, closing the race window on this
+        // pipeline's own cap.
         if (!(await hasEnoughDiskSpace(getDownloadsDir()))) {
           await sleepOrWakeable(5000);
           continue;
@@ -309,13 +308,6 @@ export async function startQueueWorker() {
         const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'max_concurrent_downloads'").get() as { value: string } | undefined;
         const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
         if (!hasCapacityForMoreDownloads(getActiveDownloadCount(), maxConcurrent)) {
-          await sleepOrWakeable(1000);
-          continue;
-        }
-
-        // Combined ceiling across both pipelines — an additional guard on top of this
-        // pipeline's own per-pipeline cap above, not a replacement for it.
-        if (!hasCapacityForCombinedDownloads(getActiveDownloadCount() + getActiveMusicDownloadCount(), COMBINED_MAX_CONCURRENT_DOWNLOADS)) {
           await sleepOrWakeable(1000);
           continue;
         }

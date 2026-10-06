@@ -37,12 +37,6 @@ export async function hasEnoughDiskSpace(dirPath: string): Promise<boolean> {
   }
 }
 
-export const COMBINED_MAX_CONCURRENT_DOWNLOADS = 3;
-
-export function hasCapacityForCombinedDownloads(totalActiveCount: number, maxCombined: number): boolean {
-  return totalActiveCount < maxCombined;
-}
-
 export function resetStaleDownloadsForTable(
   db: Database.Database,
   table: 'videos' | 'music_tracks' | 'podcast_episodes',

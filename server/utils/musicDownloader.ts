@@ -4,9 +4,9 @@ import path from 'path';
 import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
-import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable, getActiveDownloadCount } from './downloader';
+import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, COMBINED_MAX_CONCURRENT_DOWNLOADS, hasCapacityForCombinedDownloads, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 
 // Define global-backed state to survive development HMR module hot reloads,
@@ -628,8 +628,8 @@ export async function startMusicQueueWorker() {
 
         // Check disk space first — it's the only await in this sequence, so running it
         // before the capacity checks below ensures nothing yields the event loop between
-        // those checks passing and the counter increment, closing the cross-pipeline race
-        // window on the combined cap.
+        // those checks passing and the counter increment, closing the race window on this
+        // pipeline's own cap.
         if (!(await hasEnoughDiskSpace(getMusicDownloadsDir()))) {
           await sleepOrWakeableMusic(5000);
           continue;
@@ -638,13 +638,6 @@ export async function startMusicQueueWorker() {
         const concurrencySetting = db.prepare("SELECT value FROM settings WHERE key = 'music_max_concurrent_downloads'").get() as { value: string } | undefined;
         const maxConcurrent = parseMaxConcurrentDownloads(concurrencySetting?.value);
         if (!hasCapacityForMoreDownloads(getActiveMusicDownloadCount(), maxConcurrent)) {
-          await sleepOrWakeableMusic(1000);
-          continue;
-        }
-
-        // Combined ceiling across both pipelines — an additional guard on top of this
-        // pipeline's own per-pipeline cap above, not a replacement for it.
-        if (!hasCapacityForCombinedDownloads(getActiveMusicDownloadCount() + getActiveDownloadCount(), COMBINED_MAX_CONCURRENT_DOWNLOADS)) {
           await sleepOrWakeableMusic(1000);
           continue;
         }
