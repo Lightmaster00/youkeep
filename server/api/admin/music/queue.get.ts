@@ -60,5 +60,9 @@ export default defineEventHandler(async (event) => {
   const failedRow = db.prepare(`SELECT COUNT(*) as count FROM music_tracks WHERE download_status = 'failed'`).get() as { count: number };
   const failedCount = failedRow?.count || 0;
 
-  return { queue, history, artists, isPaused, failedCount };
+  // Same semantics as /api/admin/downloader/queue: everything the queue view could show.
+  const totalRow = db.prepare(`SELECT COUNT(*) as count FROM music_tracks WHERE download_status IN ('downloading', 'pending', 'failed')`).get() as { count: number };
+  const queueTotal = totalRow?.count || 0;
+
+  return { queue, queueTotal, history, artists, isPaused, failedCount };
 });
