@@ -37,11 +37,13 @@
       <!-- Tab Content Area -->
       <div class="settings-content">
         <SettingsStatsTab v-if="activeTab === 'overview' && isAdmin" />
-        <div v-if="activeTab === 'library' && isAdmin" class="tab-pane">
-          <SettingsMusicTab id="library-music" />
-          <SettingsPodcastsTab id="library-podcasts" />
+        <LibraryTab v-if="activeTab === 'library' && isAdmin" :section="librarySection" />
+        <!-- Interim until the unified Downloads tab lands: the old per-type tabs, stacked. -->
+        <div v-if="activeTab === 'downloads' && isAdmin" class="tab-pane">
+          <SettingsDownloadsTab />
+          <SettingsMusicTab />
+          <SettingsPodcastsTab />
         </div>
-        <SettingsDownloadsTab v-if="activeTab === 'downloads' && isAdmin" />
         <SettingsSystemTab v-if="activeTab === 'system' && isAdmin" />
         <SettingsUsersTab v-if="activeTab === 'users' && isAdmin" />
       </div>
@@ -51,6 +53,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import LibraryTab from '~/components/settings/LibraryTab.vue';
 import { useAuth } from '~/composables/useAuth';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import { useMusicQueue } from '~/composables/useMusicQueue';
@@ -110,7 +113,7 @@ const runPolling = async () => {
 let musicPollingTimeout: any = null;
 
 const runMusicPolling = async () => {
-  if (!isAdmin.value || activeTab.value !== 'library') {
+  if (!isAdmin.value || activeTab.value !== 'downloads') {
     musicPollingTimeout = setTimeout(runMusicPolling, 3000);
     return;
   }
@@ -122,7 +125,7 @@ const runMusicPolling = async () => {
 let podcastPollingTimeout: any = null;
 
 const runPodcastPolling = async () => {
-  if (!isAdmin.value || activeTab.value !== 'library') {
+  if (!isAdmin.value || activeTab.value !== 'downloads') {
     podcastPollingTimeout = setTimeout(runPodcastPolling, 3000);
     return;
   }
