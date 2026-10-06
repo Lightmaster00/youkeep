@@ -1,0 +1,97 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import Database from 'better-sqlite3';
+import { planTidy, nodePlannerFs } from '../../server/utils/videoTidy';
+import { buildVideoPaths } from '../../server/utils/videoPaths';
+import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
+
+let db: Database.Database;
+let dir: string;
+
+beforeEach(() => {
+  db = createTestDb();
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yk-plan-'));
+});
+afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+function write(rel: string, content = 'x') {
+  const full = path.join(dir, rel);
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, content);
+}
+
+function legacyRow(channelId: string, channelFolder: string, id: string, title: string) {
+  insertVideo(db, { id, channelId, title, localVideoPath: `/downloads/${channelFolder}/${id}.mp4`, localThumbnailPath: `/downloads/${channelFolder}/${id}.jpg` });
+}
+
+function tree(root: string): string[] {
+  return fs.readdirSync(root, { recursive: true }).map(String).sort();
+}
+
+describe('planTidy', () => {
+  it('counts every case without touching the disk', () => {
+    insertChannel(db, { id: 'c1', title: 'Chan' });
+    insertChannel(db, { id: 'c2', title: 'Dup', customSavePath: path.join(dir, 'Dup') });
+    insertChannel(db, { id: 'c3', title: 'Locked' });
+
+    const tidy = buildVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'Tidy', id: 'v-tidy' });
+    insertVideo(db, { id: 'v-tidy', channelId: 'c1', title: 'Tidy', localVideoPath: tidy.videoUrlFor('mp4') });
+    write(path.join('Chan', tidy.baseName, `${tidy.baseName}.mp4`));
+
+    legacyRow('c1', 'Chan', 'v-move', 'Move Me');
+    write('Chan/v-move.mp4'); write('Chan/v-move.jpg');
+    legacyRow('c1', 'Chan', 'v-missing', 'Gone');
+    legacyRow('c1', 'Chan', 'v-conflict', 'Conflict');
+    write('Chan/v-conflict.mp4'); write('Chan/Conflict [v-conflict]/foreign.txt');
+    insertVideo(db, { id: 'v-pending', channelId: 'c1', downloadStatus: 'pending' });
+    legacyRow('c2', 'Dup', 'd1', 'Dup Clip');
+    write('Dup/Dup/d1.mp4');
+    legacyRow('c3', 'Locked', 'v-locked', 'Locked Clip');
+    write('Locked/v-locked.mp4');
+
+    const locked = path.join(dir, 'Locked');
+    const plannerFs = { ...nodePlannerFs, accessSync: (p: string, mode?: number) => { if (p === locked) throw new Error('EACCES'); fs.accessSync(p, mode); } };
+    const before = tree(dir);
+
+    const plan = planTidy(db, { downloadsDir: dir, fs: plannerFs });
+
+    expect(tree(dir)).toEqual(before);
+    expect(plan.preview).toMatchObject({ total: 6, toMove: 2, alreadyTidy: 1, missingFiles: 1, conflicts: 1, notWritable: 1, duplicateFolders: 1 });
+    expect(plan.preview.samples).toEqual([
+      { id: 'v-move', title: 'Move Me', from: path.join(dir, 'Chan', 'v-move.mp4'), to: path.join(dir, 'Chan', 'Move Me [v-move]', 'Move Me [v-move].mp4') },
+      { id: 'd1', title: 'Dup Clip', from: path.join(dir, 'Dup', 'Dup', 'd1.mp4'), to: path.join(dir, 'Dup', 'Dup Clip [d1]', 'Dup Clip [d1].mp4') },
+    ]);
+    expect(plan.preview.channels).toEqual([
+      { channelId: 'c1', channel: 'Chan', toMove: 1 },
+      { channelId: 'c2', channel: 'Dup', toMove: 1 },
+    ]);
+    expect(plan.channelFixes).toEqual([{ channelId: 'c2', from: path.join(dir, 'Dup'), to: dir }]);
+  });
+
+  it('plans the video, its thumbnail and every subtitle under the new names and URLs', () => {
+    insertChannel(db, { id: 'c1', title: 'Chan' });
+    legacyRow('c1', 'Chan', 'v1', 'Ep #1: what?');
+    for (const f of ['v1.mp4', 'v1.jpg', 'v1.fr.vtt', 'v1.en-US.vtt', 'v10.mp4']) write(`Chan/${f}`);
+
+    const [item] = planTidy(db, { downloadsDir: dir }).items;
+
+    const base = 'Ep #1_ what_ [v1]';
+    expect(item!.toDir).toBe(path.join(dir, 'Chan', base));
+    expect(item!.moves.map((m) => path.basename(m.to)).sort()).toEqual([`${base}.en-US.vtt`, `${base}.fr.vtt`, `${base}.jpg`, `${base}.mp4`]);
+    const folder = encodeURIComponent(base);
+    expect(item!.newVideoUrl).toBe(`/downloads/Chan/${folder}/${folder}.mp4`);
+    expect(item!.newThumbUrl).toBe(`/downloads/Chan/${folder}/${folder}.jpg`);
+  });
+
+  it('never plans to overwrite a different file already at the destination', () => {
+    insertChannel(db, { id: 'c1', title: 'Chan' });
+    legacyRow('c1', 'Chan', 'v1', 'Clip');
+    write('Chan/v1.mp4', 'new'); write('Chan/Clip [v1]/Clip [v1].mp4', 'other bytes');
+
+    const plan = planTidy(db, { downloadsDir: dir });
+
+    expect(plan.preview).toMatchObject({ toMove: 0, conflicts: 1 });
+  });
+});
