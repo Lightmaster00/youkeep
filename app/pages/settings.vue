@@ -1,81 +1,47 @@
 <template>
   <div class="settings-container">
-    <h1 class="page-title text-gradient">Application Settings</h1>
+    <h1 class="page-title text-gradient">Settings</h1>
 
     <div class="settings-layout">
       <!-- Tabs Sidebar -->
       <div v-if="isAdmin" class="settings-tabs glass-panel">
-        <button
-          v-if="isAdmin && !currentUser?.mustChangePassword"
-          class="tab-btn"
-          :class="{ active: activeTab === 'stats' }"
-          @click="activeTab = 'stats'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-          <span>Dashboard</span>
-        </button>
+        <template v-if="showTabs">
+          <button class="tab-btn" :class="{ active: activeTab === 'overview' }" data-testid="settings-tab-overview" @click="selectTab('overview')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            <span>Overview</span>
+          </button>
 
-        <button
-          v-if="isAdmin && !currentUser?.mustChangePassword"
-          class="tab-btn"
-          :class="{ active: activeTab === 'downloads' }"
-          @click="activeTab = 'downloads'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-          <span>Downloads</span>
-          <span v-if="activeDownloadCount > 0" class="tab-badge">{{ activeDownloadCount }}</span>
-        </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'library' }" data-testid="settings-tab-library" @click="selectTab('library')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+            <span>Library</span>
+          </button>
 
-        <button
-          v-if="isAdmin && !currentUser?.mustChangePassword"
-          class="tab-btn"
-          :class="{ active: activeTab === 'music' }"
-          @click="activeTab = 'music'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
-          <span>Music</span>
-          <span v-if="musicActiveDownloadCount > 0" class="tab-badge">{{ musicActiveDownloadCount }}</span>
-        </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'downloads' }" data-testid="settings-tab-downloads" @click="selectTab('downloads')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Downloads</span>
+            <span v-if="downloadingTotal > 0" class="tab-badge" data-testid="downloads-tab-badge">{{ downloadingTotal }}</span>
+          </button>
 
-        <button
-          v-if="isAdmin && !currentUser?.mustChangePassword"
-          class="tab-btn"
-          :class="{ active: activeTab === 'podcasts' }"
-          @click="activeTab = 'podcasts'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-          <span>Podcasts</span>
-          <span v-if="podcastActiveDownloadCount > 0" class="tab-badge">{{ podcastActiveDownloadCount }}</span>
-        </button>
+          <button class="tab-btn" :class="{ active: activeTab === 'users' }" data-testid="settings-tab-users" @click="selectTab('users')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Users</span>
+          </button>
 
-        <button
-          v-if="isAdmin && !currentUser?.mustChangePassword"
-          class="tab-btn"
-          :class="{ active: activeTab === 'users' }"
-          @click="activeTab = 'users'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          <span>Users</span>
-        </button>
-
-        <button
-          v-if="isAdmin && !currentUser?.mustChangePassword"
-          class="tab-btn"
-          :class="{ active: activeTab === 'system' }"
-          @click="activeTab = 'system'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
-          <span>System</span>
-        </button>
-
+          <button class="tab-btn" :class="{ active: activeTab === 'system' }" data-testid="settings-tab-system" @click="selectTab('system')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
+            <span>System</span>
+          </button>
+        </template>
       </div>
 
       <!-- Tab Content Area -->
       <div class="settings-content">
-        <SettingsStatsTab v-if="activeTab === 'stats' && isAdmin" />
+        <SettingsStatsTab v-if="activeTab === 'overview' && isAdmin" />
+        <div v-if="activeTab === 'library' && isAdmin" class="tab-pane">
+          <SettingsMusicTab id="library-music" />
+          <SettingsPodcastsTab id="library-podcasts" />
+        </div>
         <SettingsDownloadsTab v-if="activeTab === 'downloads' && isAdmin" />
-        <SettingsMusicTab v-if="activeTab === 'music' && isAdmin" />
-        <SettingsPodcastsTab v-if="activeTab === 'podcasts' && isAdmin" />
         <SettingsSystemTab v-if="activeTab === 'system' && isAdmin" />
         <SettingsUsersTab v-if="activeTab === 'users' && isAdmin" />
       </div>
@@ -84,35 +50,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import { useMusicQueue } from '~/composables/useMusicQueue';
 import { usePodcastQueue } from '~/composables/usePodcastQueue';
+import { useActiveCounts } from '~/composables/useActiveCounts';
+import { normalizeSettingsTab, type SettingsTab, type LibrarySection } from '~/utils/settingsTabs';
 
 const { user: currentUser, isAdmin } = useAuth();
 const route = useRoute();
+const router = useRouter();
 
-const allowedTabs = ['stats', 'downloads', 'music', 'podcasts', 'users', 'system'];
-const queryTab = route.query.tab ? String(route.query.tab) : '';
-const initialTab = allowedTabs.includes(queryTab) ? queryTab : 'stats';
 if (!isAdmin.value) {
   navigateTo('/account');
 }
 
-const activeTab = ref(initialTab);
+const showTabs = computed(() => isAdmin.value && !currentUser.value?.mustChangePassword);
 
-watch(() => route.query.tab, (newTab) => {
-  if (newTab && allowedTabs.includes(String(newTab))) {
-    activeTab.value = String(newTab);
-  }
+const initial = normalizeSettingsTab(route.query);
+const activeTab = ref<SettingsTab>(initial.tab);
+const librarySection = ref<LibrarySection | null>(initial.section);
+
+// Legacy links (?tab=stats|music|podcasts) and unknown values are normalised
+// on load and on every query change.
+watch(() => [route.query.tab, route.query.section], () => {
+  const next = normalizeSettingsTab(route.query);
+  activeTab.value = next.tab;
+  librarySection.value = next.section;
 });
 
-const { activeDownloadCount, fetchQueue, fetchDiagnostics, stopSmoothProgressLoop } = useDownloadsQueue();
-const { musicQueue, musicActiveDownloadCount, fetchMusicQueue } = useMusicQueue();
-const { podcastQueue, podcastActiveDownloadCount, fetchPodcastQueue } = usePodcastQueue();
+function selectTab(tab: SettingsTab) {
+  activeTab.value = tab;
+  librarySection.value = null;
+  router.replace({ query: { ...route.query, tab, section: undefined } });
+}
 
-// Dynamic polling for queue and progress
+const { downloadingTotal, fetchActiveCounts } = useActiveCounts();
+let activeCountsTimer: ReturnType<typeof setInterval> | null = null;
+
+const { activeDownloadCount, fetchQueue, fetchDiagnostics, stopSmoothProgressLoop } = useDownloadsQueue();
+const { musicQueue, fetchMusicQueue } = useMusicQueue();
+const { podcastQueue, fetchPodcastQueue } = usePodcastQueue();
+
+// Dynamic polling for queue and progress (replaced by one loop in the Downloads tab in a later task)
 let pollingTimeout: any = null;
 
 const runPolling = async () => {
@@ -122,8 +103,6 @@ const runPolling = async () => {
   if (activeDownloadCount.value > 0) {
     await fetchDiagnostics();
   }
-
-  // If we have active downloads, poll faster (500ms) for high reactivity, otherwise poll every 3000ms
   const nextPollDelay = activeDownloadCount.value > 0 ? 500 : 3000;
   pollingTimeout = setTimeout(runPolling, nextPollDelay);
 };
@@ -131,31 +110,31 @@ const runPolling = async () => {
 let musicPollingTimeout: any = null;
 
 const runMusicPolling = async () => {
-  if (!isAdmin.value || activeTab.value !== 'music') {
+  if (!isAdmin.value || activeTab.value !== 'library') {
     musicPollingTimeout = setTimeout(runMusicPolling, 3000);
     return;
   }
   await fetchMusicQueue();
   const hasActiveMusicDownload = musicQueue.value.some(t => t.download_status === 'downloading');
-  const nextPollDelay = hasActiveMusicDownload ? 500 : 3000;
-  musicPollingTimeout = setTimeout(runMusicPolling, nextPollDelay);
+  musicPollingTimeout = setTimeout(runMusicPolling, hasActiveMusicDownload ? 500 : 3000);
 };
 
 let podcastPollingTimeout: any = null;
 
 const runPodcastPolling = async () => {
-  if (!isAdmin.value || activeTab.value !== 'podcasts') {
+  if (!isAdmin.value || activeTab.value !== 'library') {
     podcastPollingTimeout = setTimeout(runPodcastPolling, 3000);
     return;
   }
   await fetchPodcastQueue();
   const hasActivePodcastDownload = podcastQueue.value.some(e => e.download_status === 'downloading');
-  const nextPollDelay = hasActivePodcastDownload ? 500 : 3000;
-  podcastPollingTimeout = setTimeout(runPodcastPolling, nextPollDelay);
+  podcastPollingTimeout = setTimeout(runPodcastPolling, hasActivePodcastDownload ? 500 : 3000);
 };
 
 onMounted(() => {
   if (isAdmin.value) {
+    fetchActiveCounts();
+    activeCountsTimer = setInterval(fetchActiveCounts, 5000);
     runPolling();
     runMusicPolling();
     runPodcastPolling();
@@ -163,6 +142,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (activeCountsTimer) clearInterval(activeCountsTimer);
   if (pollingTimeout) clearTimeout(pollingTimeout);
   if (musicPollingTimeout) clearTimeout(musicPollingTimeout);
   if (podcastPollingTimeout) clearTimeout(podcastPollingTimeout);
