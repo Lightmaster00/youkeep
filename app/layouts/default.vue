@@ -354,19 +354,10 @@ let downloadCountInterval: any = null;
 const fetchActiveDownloads = async () => {
   if (!isAdmin.value) return;
   try {
-    const data = await $fetch<any>('/api/admin/downloader/queue');
-    const queue = data.queue || [];
-    activeDownloadCount.value = queue.length;
-    
-    // Find the video currently being downloaded
-    const downloadingVideo = queue.find((v: any) => v.download_status === 'downloading');
-    if (downloadingVideo) {
-      activeDownloadProgress.value = downloadingVideo.download_progress || 0;
-      activeDownloadSpeed.value = downloadingVideo.download_speed || null;
-    } else {
-      activeDownloadProgress.value = null;
-      activeDownloadSpeed.value = null;
-    }
+    const data = await $fetch<any>('/api/admin/downloader/active-counts');
+    activeDownloadCount.value = data.total || 0;
+    activeDownloadProgress.value = data.current?.kind ? (data.current.progress ?? 0) : null;
+    activeDownloadSpeed.value = data.current?.speed || null;
   } catch (e) {
     // Silently fail — not critical
   }
