@@ -96,8 +96,8 @@ describe('DisplayPrefsForm — home section', () => {
 
   it('gives each move button a row-specific aria-label', async () => {
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    expect(w.find('[data-testid="up-popular"]').attributes('aria-label')).toBe('Monter Populaires');
-    expect(w.find('[data-testid="down-popular"]').attributes('aria-label')).toBe('Descendre Populaires');
+    expect(w.find('[data-testid="up-popular"]').attributes('aria-label')).toBe('Move Popular up');
+    expect(w.find('[data-testid="down-popular"]').attributes('aria-label')).toBe('Move Popular down');
   });
 
   it('snaps the hero checkbox back after a failed save', async () => {
@@ -166,9 +166,9 @@ describe('DisplayPrefsForm — modes', () => {
     expect(opts.body).toEqual({ density: null });
   });
 
-  it('lists the ranking options in order with their French labels', async () => {
+  it('lists the ranking options in order', async () => {
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
     const texts = w.findAll('select[id$="-ranking"] option').map((o: any) => o.text());
-    expect(texts).toEqual(['Spectateurs locaux', 'Vues YouTube', 'Tendance 7 jours', 'Temps de visionnage']);
+    expect(texts).toEqual(['Local viewers', 'YouTube views', 'Trending (7 days)', 'Watch time']);
   });
 });

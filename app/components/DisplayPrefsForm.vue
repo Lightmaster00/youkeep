@@ -3,21 +3,21 @@
     <!-- Density -->
     <div class="pref-block">
       <div class="pref-head">
-        <label class="form-label" :for="`${uid}-density`">Densité des grilles</label>
-        <a v-if="isOverridden('density')" href="#" class="reset-link" @click.prevent="resetKey('density')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <label class="form-label" :for="`${uid}-density`">Grid density</label>
+        <a v-if="isOverridden('density')" href="#" class="reset-link" @click.prevent="resetKey('density')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <select :id="`${uid}-density`" class="form-input" :value="shown.density" :disabled="saving" @change="onDensityChange">
-        <option value="compact">Compacte (plus de colonnes)</option>
-        <option value="comfortable">Normale</option>
-        <option value="spacious">Large (moins de colonnes)</option>
+        <option value="compact">Compact (more columns)</option>
+        <option value="comfortable">Normal</option>
+        <option value="spacious">Spacious (fewer columns)</option>
       </select>
     </div>
 
     <!-- Navigation -->
     <div class="pref-block">
       <div class="pref-head">
-        <span class="form-label">Liens de navigation à masquer</span>
-        <a v-if="isOverridden('hiddenNavLinks')" href="#" class="reset-link" @click.prevent="resetKey('hiddenNavLinks')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <span class="form-label">Navigation links to hide</span>
+        <a v-if="isOverridden('hiddenNavLinks')" href="#" class="reset-link" @click.prevent="resetKey('hiddenNavLinks')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <label v-for="link in navOptions" :key="link.to" class="check-row">
         <input
@@ -28,17 +28,17 @@
         />
         <span>{{ link.label }}</span>
       </label>
-      <p class="pref-hint">L'accueil et les bibliothèques ne peuvent pas être masqués. Une page masquée reste accessible par son adresse.</p>
+      <p class="pref-hint">Home and the libraries can't be hidden. A hidden page can still be opened from its address.</p>
     </div>
 
     <!-- Landing space -->
     <div class="pref-block">
       <div class="pref-head">
-        <label class="form-label" :for="`${uid}-landing`">Espace affiché au démarrage</label>
-        <a v-if="isOverridden('landingSpace')" href="#" class="reset-link" @click.prevent="resetKey('landingSpace')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <label class="form-label" :for="`${uid}-landing`">Space shown at start</label>
+        <a v-if="isOverridden('landingSpace')" href="#" class="reset-link" @click.prevent="resetKey('landingSpace')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <select :id="`${uid}-landing`" class="form-input" :value="shown.landingSpace" :disabled="saving" @change="onLandingChange">
-        <option value="auto">Automatique (premier espace actif)</option>
+        <option value="auto">Automatic (first space that is on)</option>
         <option v-for="space in landingOptions" :key="space.id" :value="space.id">{{ space.label }}</option>
       </select>
     </div>
@@ -46,8 +46,8 @@
     <!-- Home page -->
     <div class="pref-block">
       <div class="pref-head">
-        <span class="form-label">Sections de l'accueil</span>
-        <a v-if="isOverridden('homeSections')" href="#" class="reset-link" @click.prevent="resetKey('homeSections')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <span class="form-label">Home sections</span>
+        <a v-if="isOverridden('homeSections')" href="#" class="reset-link" @click.prevent="resetKey('homeSections')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <div v-for="(row, index) in sectionRows" :key="row.id" class="section-row" :data-testid="`section-row-${row.id}`">
         <label class="check-row">
@@ -55,28 +55,28 @@
           <span>{{ SECTION_LABELS[row.id] }}</span>
         </label>
         <span class="move-buttons">
-          <button type="button" class="move-btn" :data-testid="`up-${row.id}`" :disabled="saving || !row.visible || index === 0" :aria-label="`Monter ${SECTION_LABELS[row.id]}`" @click="moveSection(row.id, -1)">↑</button>
-          <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" :aria-label="`Descendre ${SECTION_LABELS[row.id]}`" @click="moveSection(row.id, 1)">↓</button>
+          <button type="button" class="move-btn" :data-testid="`up-${row.id}`" :disabled="saving || !row.visible || index === 0" :aria-label="`Move ${SECTION_LABELS[row.id]} up`" @click="moveSection(row.id, -1)">↑</button>
+          <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" :aria-label="`Move ${SECTION_LABELS[row.id]} down`" @click="moveSection(row.id, 1)">↓</button>
         </span>
       </div>
-      <p class="pref-hint">« Suggéré pour toi » et « Par chaîne suivie » ne s'affichent que pour les comptes connectés.</p>
+      <p class="pref-hint">"Suggested for you" and "From channels you follow" only appear for signed-in accounts.</p>
     </div>
 
     <div class="pref-block">
       <div class="pref-head">
-        <span class="form-label">Bloc vedette</span>
-        <a v-if="isOverridden('homeHero')" href="#" class="reset-link" @click.prevent="resetKey('homeHero')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <span class="form-label">Featured block</span>
+        <a v-if="isOverridden('homeHero')" href="#" class="reset-link" @click.prevent="resetKey('homeHero')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <label class="check-row">
         <input type="checkbox" data-testid="hero-toggle" :checked="shown.homeHero" :disabled="saving" @change="onHeroChange" />
-        <span>Afficher le grand bloc en haut de l'accueil</span>
+        <span>Show the large block at the top of Home</span>
       </label>
     </div>
 
     <div class="pref-block">
       <div class="pref-head">
-        <label class="form-label" :for="`${uid}-ranking`">Classement de « Populaires »</label>
-        <a v-if="isOverridden('popularRanking')" href="#" class="reset-link" @click.prevent="resetKey('popularRanking')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <label class="form-label" :for="`${uid}-ranking`">How "Popular" is ranked</label>
+        <a v-if="isOverridden('popularRanking')" href="#" class="reset-link" @click.prevent="resetKey('popularRanking')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <select :id="`${uid}-ranking`" class="form-input" :value="shown.popularRanking" :disabled="saving" @change="onRankingChange">
         <option v-for="opt in RANKING_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
@@ -85,8 +85,8 @@
 
     <div class="pref-block">
       <div class="pref-head">
-        <label class="form-label" :for="`${uid}-rowsize`">Vidéos par rangée</label>
-        <a v-if="isOverridden('rowSize')" href="#" class="reset-link" @click.prevent="resetKey('rowSize')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <label class="form-label" :for="`${uid}-rowsize`">Videos per row</label>
+        <a v-if="isOverridden('rowSize')" href="#" class="reset-link" @click.prevent="resetKey('rowSize')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <select :id="`${uid}-rowsize`" class="form-input" :value="String(shown.rowSize)" :disabled="saving" @change="onNumberChange('rowSize', $event)">
         <option v-for="n in ROW_SIZES" :key="n" :value="String(n)">{{ n }}</option>
@@ -95,8 +95,8 @@
 
     <div class="pref-block">
       <div class="pref-head">
-        <label class="form-label" :for="`${uid}-subchannels`">Chaînes suivies affichées</label>
-        <a v-if="isOverridden('subscriptionChannels')" href="#" class="reset-link" @click.prevent="resetKey('subscriptionChannels')">Rétablir le défaut{{ mode === 'user' ? " de l'instance" : '' }}</a>
+        <label class="form-label" :for="`${uid}-subchannels`">Followed channels shown</label>
+        <a v-if="isOverridden('subscriptionChannels')" href="#" class="reset-link" @click.prevent="resetKey('subscriptionChannels')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <select :id="`${uid}-subchannels`" class="form-input" :value="String(shown.subscriptionChannels)" :disabled="saving" @change="onNumberChange('subscriptionChannels', $event)">
         <option v-for="n in SUBSCRIPTION_CHANNEL_COUNTS" :key="n" :value="String(n)">{{ n }}</option>
@@ -132,12 +132,12 @@ const isOverridden = (key: PrefKey): boolean => {
 
 const navOptions = [
   { to: '/shorts', label: 'Shorts' },
-  { to: '/channels', label: 'Chaînes' },
-  { to: '/subscriptions', label: 'Abonnements' },
+  { to: '/channels', label: 'Channels' },
+  { to: '/subscriptions', label: 'Subscriptions' },
   { to: '/playlists', label: 'Playlists' },
 ];
 
-const SPACE_LABELS: Record<string, string> = { video: 'Vidéo', music: 'Musique', podcasts: 'Podcasts' };
+const SPACE_LABELS: Record<string, string> = { video: 'Videos', music: 'Music', podcasts: 'Podcasts' };
 const landingOptions = computed(() =>
   enabledModules.value.map((id) => ({ id, label: SPACE_LABELS[id] ?? id }))
 );
@@ -153,7 +153,7 @@ async function commit(partial: Record<string, unknown>, resync: () => void) {
   try {
     await save(partial);
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || "Échec de l'enregistrement de l'affichage.");
+    toast.error(err?.data?.statusMessage || 'Could not save the display settings.');
     await refresh();
   } finally {
     saving.value = false;
@@ -182,16 +182,16 @@ function onNavChange(to: string, event: Event) {
 }
 
 const SECTION_LABELS: Record<HomeSectionId, string> = {
-  recent: 'Ajoutés récemment',
-  popular: 'Populaires',
-  suggested: 'Suggéré pour toi',
-  subscriptions: 'Par chaîne suivie',
+  recent: 'Recently added',
+  popular: 'Popular',
+  suggested: 'Suggested for you',
+  subscriptions: 'From channels you follow',
 };
 const RANKING_OPTIONS = [
-  { value: 'localViewers', label: 'Spectateurs locaux' },
-  { value: 'youtubeViews', label: 'Vues YouTube' },
-  { value: 'trending7d', label: 'Tendance 7 jours' },
-  { value: 'watchTime', label: 'Temps de visionnage' },
+  { value: 'localViewers', label: 'Local viewers' },
+  { value: 'youtubeViews', label: 'YouTube views' },
+  { value: 'trending7d', label: 'Trending (7 days)' },
+  { value: 'watchTime', label: 'Watch time' },
 ];
 
 // Visible sections in their configured order, then the hidden ones.

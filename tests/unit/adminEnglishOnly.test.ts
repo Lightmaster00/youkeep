@@ -4,8 +4,6 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // The admin screens are English only (spec 2026-10-06-admin-settings-reorg).
-// DisplayPrefsForm.vue is deliberately not scanned: it is shared with the
-// non-admin account page and is translated with that page (sub-project 4).
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 function filesUnder(dir: string, ext: string): string[] {
@@ -19,6 +17,8 @@ function filesUnder(dir: string, ext: string): string[] {
 const FILES = [
   ...filesUnder(join(ROOT, 'app/components/settings'), '.vue'),
   join(ROOT, 'app/pages/settings.vue'),
+  // Rendered in System > Default display.
+  join(ROOT, 'app/components/DisplayPrefsForm.vue'),
   // Admin API routes: their messages are shown in admin toasts.
   ...filesUnder(join(ROOT, 'server/api/admin'), '.ts'),
 ];
