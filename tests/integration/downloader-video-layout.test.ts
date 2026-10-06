@@ -6,7 +6,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { cleanupPartialFiles } from '../../server/utils/downloader';
+import { cleanupPartialFiles, cancelDownload, cleanupAfterFailedExit, activeProcesses } from '../../server/utils/downloader';
 import { buildVideoPaths, locateDownloadedFiles, resolveVideoPaths } from '../../server/utils/videoPaths';
 import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
 
@@ -93,5 +93,46 @@ describe('downloader, one folder per video', () => {
 
     expect(fs.existsSync(old)).toBe(false);
     expect(fs.readdirSync(chan)).toEqual(['abcd.f137.mp4.part']);
+  });
+
+  it('a pause keeps partial files through the process exit; a later failure and a cancel still clean up', () => {
+    insertVideo(db, { id: 'abc', channelId: 'c1', title: 'Hello World', downloadStatus: 'downloading' });
+    db.prepare('UPDATE videos SET download_progress = 60 WHERE id = ?').run('abc');
+    const p = buildVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'Hello World', id: 'abc' });
+    const partial = path.join(p.dir, `${p.baseName}.f137.mp4.part`);
+    const legacyFragment = path.join(dir, 'Chan', 'abc.f140.m4a.part');
+    const seedPartials = () => {
+      fs.mkdirSync(p.dir, { recursive: true });
+      fs.writeFileSync(partial, 'x');
+      fs.writeFileSync(legacyFragment, 'x');
+    };
+    const fakeChild = () => {
+      const child = { kill: vi.fn() };
+      activeProcesses.set('abc', child);
+      return child;
+    };
+
+    // Pause (what pause.post.ts does), then yt-dlp exits after the SIGKILL.
+    seedPartials();
+    const paused = fakeChild();
+    cancelDownload('abc', 'pending', true);
+    cleanupAfterFailedExit('abc', 'c1');
+    expect(paused.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(fs.existsSync(partial)).toBe(true);
+    expect(fs.existsSync(legacyFragment)).toBe(true);
+    expect(db.prepare('SELECT download_status, download_progress FROM videos WHERE id = ?').get('abc')).toEqual({ download_status: 'pending', download_progress: 60 });
+
+    // The resumed attempt then fails for real: its files are cleaned.
+    cleanupAfterFailedExit('abc', 'c1');
+    expect(fs.existsSync(p.dir)).toBe(false);
+    expect(fs.existsSync(legacyFragment)).toBe(false);
+
+    // A real cancel removes them too, including after the process exit.
+    seedPartials();
+    fakeChild();
+    cancelDownload('abc');
+    cleanupAfterFailedExit('abc', 'c1');
+    expect(fs.existsSync(p.dir)).toBe(false);
+    expect(fs.existsSync(legacyFragment)).toBe(false);
   });
 });

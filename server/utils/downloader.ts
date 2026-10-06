@@ -72,12 +72,14 @@ const G_PROCESSING = Symbol.for('YouKeep.isProcessing');
 const G_SHOULD_RUN = Symbol.for('YouKeep.workerShouldRun');
 const G_PROCESSES = Symbol.for('YouKeep.activeProcesses');
 const G_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeDownloadCount');
+const G_KEEP_FILES_ON_EXIT = Symbol.for('YouKeep.keepFilesOnExit');
 
 if (!(G_CRON in _g)) _g[G_CRON] = null;
 if (!(G_PROCESSING in _g)) _g[G_PROCESSING] = false;
 if (!(G_SHOULD_RUN in _g)) _g[G_SHOULD_RUN] = false;
 if (!(G_PROCESSES in _g)) _g[G_PROCESSES] = new Map<string, any>();
 if (!(G_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_ACTIVE_DOWNLOAD_COUNT] = 0;
+if (!(G_KEEP_FILES_ON_EXIT in _g)) _g[G_KEEP_FILES_ON_EXIT] = new Set<string>();
 
 function getActiveCronJob(): Cron | null { return _g[G_CRON]; }
 function setActiveCronJob(val: Cron | null) { _g[G_CRON] = val; }
@@ -108,6 +110,18 @@ function getWorkerShouldRun(): boolean { return _g[G_SHOULD_RUN]; }
 function setWorkerShouldRun(val: boolean) { _g[G_SHOULD_RUN] = val; }
 
 export const activeProcesses: Map<string, any> = _g[G_PROCESSES];
+// Videos whose yt-dlp process was killed by a pause (cancelDownload with
+// keepProgressAndFiles): their partial files must survive the process exit.
+const keepFilesOnExit: Set<string> = _g[G_KEEP_FILES_ON_EXIT];
+
+/**
+ * Called when a download's yt-dlp process exits unsuccessfully: removes its
+ * partial files, unless the exit comes from a pause that keeps them for resume.
+ */
+export function cleanupAfterFailedExit(videoId: string, channelId: string): void {
+  if (keepFilesOnExit.delete(videoId)) return;
+  cleanupPartialFiles(videoId, channelId);
+}
 
 export function getActiveDownloadCount(): number { return _g[G_ACTIVE_DOWNLOAD_COUNT]; }
 function incrementActiveDownloadCount() { _g[G_ACTIVE_DOWNLOAD_COUNT]++; }
@@ -756,6 +770,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     addLog(`Lancement de la commande de téléchargement (ffmpeg disponible: ${ffmpegAvailable}) : ${ytdlPath} ${args.join(' ')}`);
     const child = spawn(ytdlPath, args, { env });
     activeProcesses.set(videoId, child);
+    keepFilesOnExit.delete(videoId); // a fresh attempt: no pause pending for it
 
     // Start parallel comment extraction in parallel background thread
     const commentsPromise = extractCommentsParallel(videoId, targetVideoUrl, ytdlPath, env);
@@ -994,7 +1009,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
         }
       } else {
         const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
-        cleanupPartialFiles(videoId, channelId);
+        cleanupAfterFailedExit(videoId, channelId);
         settle(() => reject(new Error(errorMsg)));
       }
     });
@@ -1012,6 +1027,9 @@ export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pendin
   const db = getDb();
   
   if (child) {
+    // A pause keeps the partial files: the process's exit must not remove them.
+    if (keepProgressAndFiles) keepFilesOnExit.add(videoId);
+    else keepFilesOnExit.delete(videoId);
     try {
       child.kill('SIGKILL');
     } catch (e) {}

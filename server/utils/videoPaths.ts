@@ -40,10 +40,18 @@ export function videoBaseName(title: string | null | undefined, id: string): str
   return `${name}${suffix}`;
 }
 
-// A channel folder is one path segment: separators are replaced like in titles.
+// A channel folder is one path segment. It must stay byte-for-byte what
+// sanitizeFolderName produced (channel delete and library wipe remove
+// `<base>/<sanitizeFolderName(title)>`), so only separators, control
+// characters and the degenerate '', '.', '..' are replaced.
 function channelSegment(channelFolder: string): string {
-  const cleaned = cleanName(channelFolder ?? '');
+  const cleaned = (channelFolder ?? '').replace(/[\\/\u0000-\u001f\u007f]/g, '_');
   return !cleaned || cleaned === '.' || cleaned === '..' ? '_' : cleaned;
+}
+
+// encodeURIComponent leaves ! ' ( ) * as is; they break unquoted CSS url(...).
+function encodeSegment(value: string): string {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 export function videoFolderName(title: string | null | undefined, id: string): string {
@@ -71,8 +79,8 @@ export function buildVideoPaths(opts: { baseDir: string; channelFolder: string; 
   const baseName = opts.folderName ?? videoBaseName(opts.title, opts.id);
   let dir = path.join(opts.baseDir, channelFolder, baseName);
   if (!isContained(opts.baseDir, dir)) dir = path.join(opts.baseDir, '_', baseName);
-  const urlDir = `/downloads/${encodeURIComponent(channelFolder)}/${encodeURIComponent(baseName)}`;
-  const fileUrl = (fileName: string) => `${urlDir}/${encodeURIComponent(fileName)}`;
+  const urlDir = `/downloads/${encodeSegment(channelFolder)}/${encodeSegment(baseName)}`;
+  const fileUrl = (fileName: string) => `${urlDir}/${encodeSegment(fileName)}`;
   return {
     dir,
     baseName,

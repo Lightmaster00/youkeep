@@ -104,6 +104,13 @@ describe('GET /downloads/<channel>/<Title [id]>/<file>', () => {
     expect(event.node.res.statusCode).toBe(200);
     expect(p.baseName).toBe('Episode #3_ 100% done_ [v1]');
     await expect(handler(eventRaw(`My Chan/${p.baseName.replace(/%/g, '%25')}/..%2Fsecret.txt`))).rejects.toMatchObject({ statusCode: 400 });
+
+    // ' ( ) ! * are percent-encoded (unquoted CSS url() needs it) and still served.
+    const q = seed({ id: 'v2', channelId: 'c2', channelTitle: 'My Chan', title: "Don't Stop (Official Video)!*", baseDir: dir });
+    expect(q.videoUrlFor('mp4')).not.toMatch(/[!'()*]/);
+    const served = eventFor(q.videoUrlFor('mp4'));
+    closeIfStream(await handler(served));
+    expect(served.node.res.statusCode).toBe(200);
   });
 
   it('honours share tokens and does not reveal what exists to guests', async () => {

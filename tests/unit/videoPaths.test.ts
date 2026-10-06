@@ -3,6 +3,7 @@ import path from 'path';
 import {
   videoBaseName, buildVideoPaths, isContained, idFromVideoFolder, isNewLayoutUrl, decodeUrlSegments, candidateVideoDirs, VIDEO_BASENAME_MAX_BYTES,
 } from '../../server/utils/videoPaths';
+import { sanitizeFolderName } from '../../server/utils/downloader';
 
 const bytes = (s: string) => Buffer.byteLength(s, 'utf8');
 
@@ -39,6 +40,9 @@ describe('buildVideoPaths', () => {
     expect(p.baseName).toBe('Ep #3_ 100% [live] [id1]');
     expect(p.dir).toBe(path.join('/data/videos', 'My Chan', 'Ep #3_ 100% [live] [id1]'));
     expect(p.outputTemplate).toBe(path.join('/data/videos', 'My Chan', 'Ep #3_ 100%% [live] [id1]', 'Ep #3_ 100%% [live] [id1]') + '.%(ext)s');
+    // A % in the base folder or the channel name is escaped too.
+    const pct = buildVideoPaths({ baseDir: '/data/50% off', channelFolder: '100% Chan', title: 'T', id: 'i' });
+    expect(pct.outputTemplate).toBe(path.join('/data/50%% off', '100%% Chan', 'T [i]', 'T [i]') + '.%(ext)s');
     const folder = 'Ep%20%233_%20100%25%20%5Blive%5D%20%5Bid1%5D';
     expect(p.videoUrlFor('mp4')).toBe(`/downloads/My%20Chan/${folder}/${folder}.mp4`);
     expect(p.thumbUrlFor('jpg')).toBe(`/downloads/My%20Chan/${folder}/${folder}.jpg`);
@@ -46,6 +50,14 @@ describe('buildVideoPaths', () => {
     expect(isNewLayoutUrl(p.videoUrlFor('mp4'), 'other')).toBe(false);
     expect(isNewLayoutUrl('/downloads/My Chan/id1.mp4', 'id1')).toBe(false);
     expect(isNewLayoutUrl(null, 'id1')).toBe(false);
+  });
+
+  it('uses exactly the channel folder that channel delete and library wipe remove', () => {
+    for (const title of ['Vsauce.', 'A  B', '.hidden', 'Chan', 'é/ü', ' x ']) {
+      const p = buildVideoPaths({ baseDir: '/data/videos', channelFolder: sanitizeFolderName(title), title: 'T', id: 'i' });
+      expect(path.basename(path.dirname(p.dir))).toBe(sanitizeFolderName(title));
+      expect(isContained('/data/videos', p.dir)).toBe(true);
+    }
   });
 
   it('rejects unsafe or malformed URL segments', () => {
