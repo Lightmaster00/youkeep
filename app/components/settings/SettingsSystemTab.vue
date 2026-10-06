@@ -509,5 +509,6 @@ onMounted(() => {
   refreshModules();
   fetchSearchPlatforms();
   fetchContentSearchMode();
+  fetchDiagnostics();
 });
 </script>

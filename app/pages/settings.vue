@@ -38,12 +38,7 @@
       <div class="settings-content">
         <SettingsStatsTab v-if="activeTab === 'overview' && isAdmin" />
         <LibraryTab v-if="activeTab === 'library' && isAdmin" :section="librarySection" />
-        <!-- Interim until the unified Downloads tab lands: the old per-type tabs, stacked. -->
-        <div v-if="activeTab === 'downloads' && isAdmin" class="tab-pane">
-          <SettingsDownloadsTab />
-          <SettingsMusicTab />
-          <SettingsPodcastsTab />
-        </div>
+        <DownloadsTab v-if="activeTab === 'downloads' && isAdmin" />
         <SettingsSystemTab v-if="activeTab === 'system' && isAdmin" />
         <SettingsUsersTab v-if="activeTab === 'users' && isAdmin" />
       </div>
@@ -53,13 +48,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import LibraryTab from '~/components/settings/LibraryTab.vue';
 import { useAuth } from '~/composables/useAuth';
-import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
-import { useMusicQueue } from '~/composables/useMusicQueue';
-import { usePodcastQueue } from '~/composables/usePodcastQueue';
 import { useActiveCounts } from '~/composables/useActiveCounts';
 import { normalizeSettingsTab, type SettingsTab, type LibrarySection } from '~/utils/settingsTabs';
+import LibraryTab from '~/components/settings/LibraryTab.vue';
+import DownloadsTab from '~/components/settings/DownloadsTab.vue';
 
 const { user: currentUser, isAdmin } = useAuth();
 const route = useRoute();
@@ -89,67 +82,20 @@ function selectTab(tab: SettingsTab) {
   router.replace({ query: { ...route.query, tab, section: undefined } });
 }
 
+// Badge on the Downloads tab and the Overview Activity card. The queue itself
+// is polled only by the Downloads tab (one loop, see useAllDownloads).
 const { downloadingTotal, fetchActiveCounts } = useActiveCounts();
 let activeCountsTimer: ReturnType<typeof setInterval> | null = null;
-
-const { activeDownloadCount, fetchQueue, fetchDiagnostics, stopSmoothProgressLoop } = useDownloadsQueue();
-const { musicQueue, fetchMusicQueue } = useMusicQueue();
-const { podcastQueue, fetchPodcastQueue } = usePodcastQueue();
-
-// Dynamic polling for queue and progress (replaced by one loop in the Downloads tab in a later task)
-let pollingTimeout: any = null;
-
-const runPolling = async () => {
-  if (!isAdmin.value) return;
-  await fetchQueue();
-  // Only poll diagnostics when downloads are active
-  if (activeDownloadCount.value > 0) {
-    await fetchDiagnostics();
-  }
-  const nextPollDelay = activeDownloadCount.value > 0 ? 500 : 3000;
-  pollingTimeout = setTimeout(runPolling, nextPollDelay);
-};
-
-let musicPollingTimeout: any = null;
-
-const runMusicPolling = async () => {
-  if (!isAdmin.value || activeTab.value !== 'downloads') {
-    musicPollingTimeout = setTimeout(runMusicPolling, 3000);
-    return;
-  }
-  await fetchMusicQueue();
-  const hasActiveMusicDownload = musicQueue.value.some(t => t.download_status === 'downloading');
-  musicPollingTimeout = setTimeout(runMusicPolling, hasActiveMusicDownload ? 500 : 3000);
-};
-
-let podcastPollingTimeout: any = null;
-
-const runPodcastPolling = async () => {
-  if (!isAdmin.value || activeTab.value !== 'downloads') {
-    podcastPollingTimeout = setTimeout(runPodcastPolling, 3000);
-    return;
-  }
-  await fetchPodcastQueue();
-  const hasActivePodcastDownload = podcastQueue.value.some(e => e.download_status === 'downloading');
-  podcastPollingTimeout = setTimeout(runPodcastPolling, hasActivePodcastDownload ? 500 : 3000);
-};
 
 onMounted(() => {
   if (isAdmin.value) {
     fetchActiveCounts();
     activeCountsTimer = setInterval(fetchActiveCounts, 5000);
-    runPolling();
-    runMusicPolling();
-    runPodcastPolling();
   }
 });
 
 onUnmounted(() => {
   if (activeCountsTimer) clearInterval(activeCountsTimer);
-  if (pollingTimeout) clearTimeout(pollingTimeout);
-  if (musicPollingTimeout) clearTimeout(musicPollingTimeout);
-  if (podcastPollingTimeout) clearTimeout(podcastPollingTimeout);
-  stopSmoothProgressLoop();
 });
 </script>
 
