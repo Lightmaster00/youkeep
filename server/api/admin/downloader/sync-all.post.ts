@@ -7,11 +7,11 @@ export default defineEventHandler(async (event) => {
   const syncSetting = db.prepare("SELECT value FROM settings WHERE key = 'sync_all_active'").get() as { value: string } | undefined;
   
   if (syncSetting?.value === '1') {
-    return { success: false, message: 'La mise à jour globale est déjà en cours.' };
+    return { success: false, message: 'A sync of all channels is already running.' };
   }
 
   // Trigger asynchronously
   syncAllChannels();
 
-  return { success: true, message: 'Mise à jour globale de toutes les chaînes démarrée.' };
+  return { success: true, message: 'Sync of all channels started.' };
 });

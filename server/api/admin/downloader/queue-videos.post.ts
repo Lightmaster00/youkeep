@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   if (!Array.isArray(videoIds) || videoIds.length === 0) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Une liste d\'identifiants de vidéos est requise.'
+      statusMessage: 'A list of video IDs is required.'
     });
   }
 

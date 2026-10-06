@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const { videoId } = body || {};
 
   if (!videoId) {
-    throw createError({ statusCode: 400, statusMessage: 'ID de vidéo requis pour le test.' });
+    throw createError({ statusCode: 400, statusMessage: 'A video ID is required for the test.' });
   }
 
   const ytdlPath = await getYtdlPath();
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
   } catch (err: any) {
     throw createError({
       statusCode: 500,
-      statusMessage: `Échec du test yt-dlp : ${err.message || err}`
+      statusMessage: `yt-dlp test failed: ${err.message || err}`
     });
   }
 });

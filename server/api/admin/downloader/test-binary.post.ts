@@ -27,7 +27,7 @@ export default defineEventHandler(async (event) => {
   } catch (err: any) {
     throw createError({
       statusCode: 500,
-      statusMessage: `Impossible d'exécuter yt-dlp : ${err.message || err}`
+      statusMessage: `Could not run yt-dlp: ${err.message || err}`
     });
   }
 });

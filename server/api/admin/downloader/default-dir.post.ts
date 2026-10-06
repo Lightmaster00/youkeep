@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     if (!path.isAbsolute(trimmed)) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Le chemin doit être un chemin absolu (ex: /var/nas/youkeep).'
+        statusMessage: 'The path must be an absolute path (e.g. /var/nas/youkeep).'
       });
     }
 

@@ -7,11 +7,11 @@ export default defineEventHandler(async (event) => {
   const { visibility } = body || {};
 
   if (!channelId) {
-    throw createError({ statusCode: 400, statusMessage: 'ID de chaîne requis.' });
+    throw createError({ statusCode: 400, statusMessage: 'A channel ID is required.' });
   }
 
   if (!visibility || !['public', 'private', 'ultra_private'].includes(visibility)) {
-    throw createError({ statusCode: 400, statusMessage: 'Niveau de visibilité invalide.' });
+    throw createError({ statusCode: 400, statusMessage: 'Invalid visibility level.' });
   }
 
   const db = getDb();

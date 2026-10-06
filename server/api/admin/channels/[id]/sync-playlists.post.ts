@@ -17,5 +17,5 @@ export default defineEventHandler(async (event) => {
     console.error(`Error during background playlists sync for channel ${channelId}:`, err);
   });
 
-  return { success: true, message: 'La synchronisation des playlists a démarré.' };
+  return { success: true, message: 'Playlist sync started.' };
 });
