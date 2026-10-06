@@ -75,7 +75,7 @@ describe('DownloadTypeCard', () => {
     failSave = true;
     const w = await mountCard('music', st());
     const input = w.find('[data-testid="concurrency-input"]');
-    await input.setValue('50');
+    await input.setValue('9');
     await w.find('[data-testid="concurrency-save"]').trigger('click');
     await flushPromises();
     expect(useToast().toasts.value.map((t) => t.message)).toContain('Must be between 1 and 10');
@@ -111,4 +111,106 @@ describe('DownloadTypeCard', () => {
     await flushPromises();
     expect(posts('/api/admin/downloader/clear-queue')).toHaveLength(1);
   });
+
+  it.each(['', '0', '50', '3.5'])('rejects the invalid value "%s" without any request', async (bad) => {
+    const w = await mountCard('music', st());
+    const input = w.find('[data-testid="concurrency-input"]');
+    await input.setValue(bad);
+    await w.find('[data-testid="concurrency-save"]').trigger('click');
+    await flushPromises();
+    expect(posts('/api/admin/music/concurrency')).toHaveLength(0);
+    expect(useToast().toasts.value.map((x) => x.message)).toContain('Enter a whole number from 1 to 10.');
+    expect((input.element as HTMLInputElement).value).toBe('3');
+  });
+
+  it('disables Save while the request is pending', async () => {
+    let release!: () => void;
+    fetchMock.mockImplementation(async (url: string, opts?: any) => {
+      if (url.endsWith('/concurrency') && !opts?.method) return { maxConcurrentDownloads: 3 };
+      await new Promise<void>((r) => { release = r; });
+      return { success: true };
+    });
+    const w = await mountCard('video', st());
+    await w.find('[data-testid="concurrency-input"]').setValue('4');
+    await w.find('[data-testid="concurrency-save"]').trigger('click');
+    await flushPromises();
+    expect(w.find('[data-testid="concurrency-save"]').attributes('disabled')).toBeDefined();
+    release();
+    await flushPromises();
+    expect(w.find('[data-testid="concurrency-save"]').attributes('disabled')).toBeUndefined();
+  });
+
+  it('after a failed save and a failed re-read, shows the last good value', async () => {
+    const w = await mountCard('music', st());
+    const input = w.find('[data-testid="concurrency-input"]');
+    fetchMock.mockImplementation(async (url: string, opts?: any) => {
+      if (opts?.method === 'POST') throw Object.assign(new Error('x'), { data: { statusMessage: 'nope' } });
+      throw new Error('offline');
+    });
+    await input.setValue('7');
+    await w.find('[data-testid="concurrency-save"]').trigger('click');
+    await flushPromises();
+    expect((input.element as HTMLInputElement).value).toBe('3');
+  });
+
+  it('after a successful save, shows the value re-read from the server', async () => {
+    const w = await mountCard('music', st());
+    const input = w.find('[data-testid="concurrency-input"]');
+    fetchMock.mockImplementation(async (url: string, opts?: any) => {
+      if (opts?.method === 'POST') return { success: true };
+      return { maxConcurrentDownloads: 6 };
+    });
+    await input.setValue('5');
+    await w.find('[data-testid="concurrency-save"]').trigger('click');
+    await flushPromises();
+    expect((input.element as HTMLInputElement).value).toBe('6');
+  });
+
+  it('a failed pause still emits changed and keeps the displayed state', async () => {
+    const w = await mountCard('music', st());
+    fetchMock.mockImplementation(async (url: string, opts?: any) => {
+      if (opts?.method === 'POST') throw Object.assign(new Error('x'), { data: { statusMessage: 'denied' } });
+      return { maxConcurrentDownloads: 3 };
+    });
+    await w.find('[data-testid="pause-toggle"]').trigger('click');
+    await flushPromises();
+    expect(useToast().toasts.value.map((x) => x.message)).toContain('denied');
+    expect(w.emitted('changed')).toHaveLength(1);
+    expect(w.find('[data-testid="type-card-state"]').text()).toBe('Active');
+  });
+
+  it('uses the pill wording in pause toasts', async () => {
+    const w = await mountCard('video', st());
+    await w.find('[data-testid="pause-toggle"]').trigger('click');
+    await flushPromises();
+    expect(useToast().toasts.value.map((x) => x.message)).toContain('Video downloads paused.');
+  });
+
+  it('a double click on Clear queue sends one request', async () => {
+    let release!: () => void;
+    fetchMock.mockImplementation(async (url: string, opts?: any) => {
+      if (url.endsWith('/concurrency') && !opts?.method) return { maxConcurrentDownloads: 3 };
+      await new Promise<void>((r) => { release = r; });
+      return { success: true };
+    });
+    const w = await mountCard('video', st({ total: 3 }));
+    await w.find('[data-testid="clear-queue"]').trigger('click');
+    await w.find('[data-testid="clear-queue"]').trigger('click');
+    await flushPromises();
+    release();
+    await flushPromises();
+    expect(posts('/api/admin/downloader/clear-queue')).toHaveLength(1);
+  });
+
+  it.each([['music', '/api/admin/music'], ['podcast', '/api/admin/podcasts'], ['video', '/api/admin/downloader']] as const)(
+    'uses the %s concurrency and retry endpoints', async (kind, base) => {
+      const w = await mountCard(kind, st({ failedCount: 1, total: 1 }));
+      expect(fetchMock.mock.calls.some(([u, o]) => u === `${base}/concurrency` && !o?.method)).toBe(true);
+      await w.find('[data-testid="concurrency-input"]').setValue('4');
+      await w.find('[data-testid="concurrency-save"]').trigger('click');
+      await w.find('[data-testid="retry-failed"]').trigger('click');
+      await flushPromises();
+      expect(posts(`${base}/concurrency`)).toHaveLength(1);
+      expect(posts(`${base}/retry-failed`)).toHaveLength(1);
+    });
 });

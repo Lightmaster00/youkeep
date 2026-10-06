@@ -42,39 +42,53 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
-import { KIND_LABELS, KIND_API_BASE, typeSummary, type DownloadKind, type TypeQueueState } from '~/utils/allDownloads';
+import { KIND_LABELS, KIND_PILL, KIND_API_BASE, typeSummary, type DownloadKind, type TypeQueueState } from '~/utils/allDownloads';
 
 const props = defineProps<{ kind: DownloadKind; state: TypeQueueState }>();
 const emit = defineEmits<{ changed: [] }>();
 
 const toast = useToast();
+// Mirrors MAX_CONCURRENT_DOWNLOADS_CEILING in server/utils/concurrency.ts (server-only, not importable here).
+const MAX_CONCURRENT = 10;
+
 const base = KIND_API_BASE[props.kind];
 const label = KIND_LABELS[props.kind];
+const noun = KIND_PILL[props.kind];
 
 const summary = computed(() => typeSummary(props.state));
 const toggling = ref(false);
-const concurrency = ref(2);
+const concurrency = ref<number | string>(2);
+const lastServerConcurrency = ref(2);
 const savingConcurrency = ref(false);
 const retrying = ref(false);
+const clearing = ref(false);
 
 async function fetchConcurrency() {
   try {
     const data = await $fetch<{ maxConcurrentDownloads?: number }>(`${base}/concurrency`);
-    concurrency.value = data?.maxConcurrentDownloads ?? 2;
+    lastServerConcurrency.value = data?.maxConcurrentDownloads ?? 2;
   } catch (err) {
     console.error(`Failed to fetch ${props.kind} concurrency:`, err);
   }
+  // On a failed read this restores the last known good server value.
+  concurrency.value = lastServerConcurrency.value;
 }
 
 async function saveConcurrency() {
+  const v = concurrency.value;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > MAX_CONCURRENT) {
+    toast.error(`Enter a whole number from 1 to ${MAX_CONCURRENT}.`);
+    concurrency.value = lastServerConcurrency.value;
+    return;
+  }
   savingConcurrency.value = true;
   try {
-    await $fetch(`${base}/concurrency`, { method: 'POST', body: { maxConcurrentDownloads: concurrency.value } });
+    await $fetch(`${base}/concurrency`, { method: 'POST', body: { maxConcurrentDownloads: v } });
     toast.success(`${label}: simultaneous downloads saved.`);
   } catch (err: any) {
     toast.error(err?.data?.statusMessage || 'Could not save the number of simultaneous downloads.');
-    await fetchConcurrency();
   } finally {
+    await fetchConcurrency();
     savingConcurrency.value = false;
   }
 }
@@ -84,7 +98,7 @@ async function togglePause() {
   const resuming = props.state.isPaused;
   try {
     await $fetch(`${base}/${resuming ? 'resume' : 'pause'}`, { method: 'POST' });
-    toast.success(resuming ? `${label} downloads resumed.` : `${label} downloads paused.`);
+    toast.success(resuming ? `${noun} downloads resumed.` : `${noun} downloads paused.`);
   } catch (err: any) {
     toast.error(err?.data?.statusMessage || 'Could not change the download state.');
   } finally {
@@ -107,13 +121,16 @@ async function retryFailed() {
 }
 
 async function clearQueue() {
+  if (clearing.value) return;
   if (!confirm('Remove every queued, downloading and failed video from the queue? Videos already downloaded are kept.')) return;
+  clearing.value = true;
   try {
     await $fetch('/api/admin/downloader/clear-queue', { method: 'POST' });
     toast.success('Video queue cleared.');
   } catch (err: any) {
     toast.error(err?.data?.statusMessage || 'Could not clear the queue.');
   } finally {
+    clearing.value = false;
     emit('changed');
   }
 }
