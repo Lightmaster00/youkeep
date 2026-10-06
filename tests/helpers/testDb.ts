@@ -72,6 +72,7 @@ export function createTestDb(): Database.Database {
       download_eta TEXT,
       retry_count INTEGER DEFAULT 0,
       last_error TEXT,
+      priority INTEGER DEFAULT 0,
       local_video_path TEXT,
       local_thumbnail_path TEXT,
       created_at INTEGER NOT NULL,

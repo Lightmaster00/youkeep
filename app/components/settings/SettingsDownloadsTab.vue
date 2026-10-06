@@ -46,7 +46,7 @@
           <span>Retry {{ failedCount }} Failed</span>
         </button>
 
-        <button v-if="queue.length > 0" @click="handleClearQueue" class="btn btn-danger-outline btn-clean">
+        <button v-if="queueTotal > 0" @click="handleClearQueue" class="btn btn-danger-outline btn-clean">
           Clear Queue
         </button>
       </div>
@@ -239,6 +239,9 @@
               {{ isPaused ? 'Suspended' : 'Active' }}
             </span>
           </div>
+          <p v-if="queueTotal > queue.length" class="queue-truncated-notice" style="margin: 0 0 10px; font-size: 12px; color: var(--text-secondary);">
+            Affichage des {{ queue.length }} premiers téléchargements sur {{ queueTotal }}.
+          </p>
 
           <div v-if="queue.length === 0" class="queue-empty-state">
             <div class="empty-icon-cloud">
@@ -383,7 +386,7 @@ import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import { useAdminChannels } from '~/composables/useAdminChannels';
 
 const toast = useToast();
-const { queue, failedCount, isPaused, smoothProgress, fetchQueue } = useDownloadsQueue();
+const { queue, queueTotal, failedCount, isPaused, smoothProgress, fetchQueue } = useDownloadsQueue();
 const { refreshStats } = await useAdminChannels();
 
 const syncingAll = ref(false);

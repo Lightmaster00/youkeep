@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
       v.priority DESC,
       CASE WHEN v.download_progress > 0 THEN 0 ELSE 1 END,
       v.created_at ASC
+    LIMIT 100
   `).all();
 
   const history = db.prepare(`
@@ -48,5 +49,8 @@ export default defineEventHandler(async (event) => {
   const failedRow = db.prepare(`SELECT COUNT(*) as count FROM videos WHERE download_status = 'failed'`).get() as { count: number };
   const failedCount = failedRow?.count || 0;
 
-  return { queue, history, isPaused, failedCount };
+  const totalRow = db.prepare(`SELECT COUNT(*) as count FROM videos WHERE download_status IN ('downloading', 'pending', 'failed')`).get() as { count: number };
+  const queueTotal = totalRow?.count || 0;
+
+  return { queue, queueTotal, history, isPaused, failedCount };
 });

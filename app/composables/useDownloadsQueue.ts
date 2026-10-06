@@ -3,6 +3,7 @@ let animationFrameId: any = null;
 
 export function useDownloadsQueue() {
   const queue = useState<any[]>('settings_downloads_queue', () => []);
+  const queueTotal = useState<number>('settings_downloads_queue_total', () => 0);
   const failedCount = useState<number>('settings_downloads_failed_count', () => 0);
   const isPaused = useState<boolean>('settings_downloads_is_paused', () => false);
   const smoothProgress = useState<Record<string, number>>('settings_downloads_smooth_progress', () => ({}));
@@ -95,6 +96,7 @@ export function useDownloadsQueue() {
     try {
       const data = await $fetch<any>('/api/admin/downloader/queue');
       queue.value = data.queue || [];
+      queueTotal.value = typeof data.queueTotal === 'number' ? data.queueTotal : queue.value.length;
       failedCount.value = data.failedCount || 0;
       isPaused.value = data.isPaused || false;
     } catch (err) {
@@ -113,7 +115,7 @@ export function useDownloadsQueue() {
   };
 
   return {
-    queue, failedCount, isPaused, smoothProgress, activeDownloadCount,
+    queue, queueTotal, failedCount, isPaused, smoothProgress, activeDownloadCount,
     diagnosticLogs, diagnosticYtdlPath,
     fetchQueue, fetchDiagnostics, stopSmoothProgressLoop,
   };
