@@ -39,6 +39,12 @@ export function videoBaseName(title: string | null | undefined, id: string): str
   return `${name}${suffix}`;
 }
 
+// A channel folder is one path segment: separators are replaced like in titles.
+function channelSegment(channelFolder: string): string {
+  const cleaned = cleanName(channelFolder ?? '');
+  return !cleaned || cleaned === '.' || cleaned === '..' ? '_' : cleaned;
+}
+
 export function videoFolderName(title: string | null | undefined, id: string): string {
   return videoBaseName(title, id);
 }
@@ -59,9 +65,10 @@ export interface VideoPaths {
 }
 
 export function buildVideoPaths(opts: { baseDir: string; channelFolder: string; title: string | null | undefined; id: string }): VideoPaths {
-  const channelFolder = !opts.channelFolder || opts.channelFolder === '.' || opts.channelFolder === '..' ? '_' : opts.channelFolder;
+  const channelFolder = channelSegment(opts.channelFolder);
   const baseName = videoBaseName(opts.title, opts.id);
-  const dir = path.join(opts.baseDir, channelFolder, baseName);
+  let dir = path.join(opts.baseDir, channelFolder, baseName);
+  if (!isContained(opts.baseDir, dir)) dir = path.join(opts.baseDir, '_', baseName);
   const urlDir = `/downloads/${encodeURIComponent(channelFolder)}/${encodeURIComponent(baseName)}`;
   const fileUrl = (fileName: string) => `${urlDir}/${encodeURIComponent(fileName)}`;
   return {
@@ -103,13 +110,16 @@ export function storedUrlSegments(url: string | null | undefined): [string, stri
 
 /** The id between the last brackets of a video folder name (`<Title> [<id>]`). */
 export function idFromVideoFolder(folder: string): string | null {
-  const match = folder.match(/\[([^[\]]+)\]$/);
-  return match ? match[1]! : null;
+  // Only the LAST `[...]` group counts; the id itself may contain brackets.
+  if (!folder.endsWith(']')) return null;
+  const start = folder.lastIndexOf(' [');
+  const id = start >= 0 ? folder.slice(start + 2, -1) : folder.startsWith('[') ? folder.slice(1, -1) : '';
+  return id || null;
 }
 
 export function isNewLayoutUrl(url: string | null | undefined, id: string): boolean {
   const segments = storedUrlSegments(url);
-  return !!segments && segments[1].endsWith(`[${id}]`);
+  return !!segments && segments[1].endsWith(`[${cleanName(id) || '_'}]`);
 }
 
 /** Base folder used to READ a channel's files (same rule the file route has always used). */
@@ -124,8 +134,9 @@ export function channelReadBaseDir(customSavePath: string | null | undefined, do
  */
 export function candidateVideoDirs(baseDir: string, channelFolder: string, videoFolder: string): string[] {
   const resolvedBase = path.resolve(baseDir);
-  const dirs = [path.resolve(resolvedBase, channelFolder, videoFolder)];
-  if (path.basename(resolvedBase) === channelFolder) dirs.push(path.resolve(resolvedBase, videoFolder));
+  const channel = channelSegment(channelFolder);
+  const dirs = [path.resolve(resolvedBase, channel, videoFolder)];
+  if (path.basename(resolvedBase) === channel) dirs.push(path.resolve(resolvedBase, videoFolder));
   return dirs;
 }
 

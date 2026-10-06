@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import path from 'path';
 import {
-  videoBaseName, buildVideoPaths, isNewLayoutUrl, decodeUrlSegments, candidateVideoDirs, VIDEO_BASENAME_MAX_BYTES,
+  videoBaseName, buildVideoPaths, isContained, idFromVideoFolder, isNewLayoutUrl, decodeUrlSegments, candidateVideoDirs, VIDEO_BASENAME_MAX_BYTES,
 } from '../../server/utils/videoPaths';
 
 const bytes = (s: string) => Buffer.byteLength(s, 'utf8');
@@ -25,7 +25,10 @@ describe('videoBaseName', () => {
       expect(name.endsWith(` [${id}]`)).toBe(true);
       // A split surrogate pair would not survive a UTF-8 round trip.
       expect(Buffer.from(name, 'utf8').toString('utf8')).toBe(name);
+      expect(name).not.toContain('\uFFFD');
     }
+    // 106-byte budget: 'ab' (2) + 26 emoji (104) fits exactly, a 27th would not.
+    expect(videoBaseName('ab' + '😀'.repeat(100), id)).toBe(`ab${'😀'.repeat(26)} [${id}]`);
     expect(bytes(videoBaseName('é'.repeat(300), id))).toBe(120);
   });
 });
@@ -55,5 +58,34 @@ describe('buildVideoPaths', () => {
   it('also looks directly in the base folder when it is named like the channel (doubled folder)', () => {
     expect(candidateVideoDirs('/m/Dup', 'Dup', 'T [1]')).toEqual([path.resolve('/m/Dup/Dup/T [1]'), path.resolve('/m/Dup/T [1]')]);
     expect(candidateVideoDirs('/m/videos', 'Dup', 'T [1]')).toEqual([path.resolve('/m/videos/Dup/T [1]')]);
+  });
+
+  it('keeps the disk folder inside the base folder whatever the channel folder contains', () => {
+    for (const channelFolder of ['a/../b', '../x', 'x/y', '..', '']) {
+      const p = buildVideoPaths({ baseDir: '/data/videos', channelFolder, title: 'T', id: 'i' });
+      expect(isContained('/data/videos', p.dir)).toBe(true);
+      expect(path.dirname(path.dirname(p.dir))).toBe(path.resolve('/data/videos'));
+      expect(candidateVideoDirs('/data/videos', channelFolder, p.baseName).every((d) => isContained('/data/videos', d))).toBe(true);
+      expect(p.urlDir.split('/')).toHaveLength(4);
+      expect(decodeURIComponent(p.urlDir.split('/')[2]!)).toBe(path.basename(path.dirname(p.dir)));
+    }
+  });
+
+  it('matches ids that are cleaned or contain brackets', () => {
+    const p = buildVideoPaths({ baseDir: '/b', channelFolder: 'C', title: 'T', id: 'a/b[c]' });
+    expect(isNewLayoutUrl(p.videoUrlFor('mp4'), 'a/b[c]')).toBe(true);
+    expect(idFromVideoFolder(p.baseName)).toBe('a_b[c]');
+    expect(idFromVideoFolder('T [x]')).toBe('x');
+    expect(idFromVideoFolder('no id')).toBeNull();
+  });
+});
+
+describe('isContained', () => {
+  it('only accepts strictly nested paths', () => {
+    expect(isContained('/a', '/a/b/c')).toBe(true);
+    expect(isContained('/a', '/a/..b')).toBe(true);
+    expect(isContained('/a', '/a')).toBe(false);
+    expect(isContained('/a', '/a/../b')).toBe(false);
+    expect(isContained('/a', '/ab')).toBe(false);
   });
 });
