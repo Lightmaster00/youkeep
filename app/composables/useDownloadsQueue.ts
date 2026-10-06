@@ -6,6 +6,7 @@ export function useDownloadsQueue() {
   const queueTotal = useState<number>('settings_downloads_queue_total', () => 0);
   const failedCount = useState<number>('settings_downloads_failed_count', () => 0);
   const isPaused = useState<boolean>('settings_downloads_is_paused', () => false);
+  const queueError = useState<boolean>('settings_downloads_queue_error', () => false);
   const smoothProgress = useState<Record<string, number>>('settings_downloads_smooth_progress', () => ({}));
   const progressRates = useState<Record<string, number>>('settings_downloads_progress_rates', () => ({}));
   const diagnosticLogs = useState<string[]>('settings_downloads_diagnostic_logs', () => []);
@@ -99,7 +100,9 @@ export function useDownloadsQueue() {
       queueTotal.value = typeof data.queueTotal === 'number' ? data.queueTotal : queue.value.length;
       failedCount.value = data.failedCount || 0;
       isPaused.value = data.isPaused || false;
+      queueError.value = false;
     } catch (err) {
+      queueError.value = true;
       console.error('Failed to fetch downloader queue:', err);
     }
   };
@@ -115,7 +118,7 @@ export function useDownloadsQueue() {
   };
 
   return {
-    queue, queueTotal, failedCount, isPaused, smoothProgress, activeDownloadCount,
+    queue, queueTotal, failedCount, isPaused, queueError, smoothProgress, activeDownloadCount,
     diagnosticLogs, diagnosticYtdlPath,
     fetchQueue, fetchDiagnostics, stopSmoothProgressLoop,
   };

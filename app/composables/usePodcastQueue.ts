@@ -1,5 +1,7 @@
 export function usePodcastQueue() {
   const podcastQueue = useState<any[]>('settings_podcast_queue', () => []);
+  const podcastQueueTotal = useState<number>('settings_podcast_queue_total', () => 0);
+  const podcastQueueError = useState<boolean>('settings_podcast_queue_error', () => false);
   const podcastHistory = useState<any[]>('settings_podcast_history', () => []);
   const podcastShows = useState<any[]>('settings_podcast_shows', () => []);
   const podcastIsPaused = useState<boolean>('settings_podcast_is_paused', () => false);
@@ -13,17 +15,20 @@ export function usePodcastQueue() {
     try {
       const data = await $fetch<any>('/api/admin/podcasts/queue');
       podcastQueue.value = data.queue || [];
+      podcastQueueTotal.value = typeof data.queueTotal === 'number' ? data.queueTotal : podcastQueue.value.length;
       podcastHistory.value = data.history || [];
       podcastShows.value = data.shows || [];
       podcastIsPaused.value = data.isPaused || false;
       podcastFailedCount.value = data.failedCount || 0;
+      podcastQueueError.value = false;
     } catch (err) {
+      podcastQueueError.value = true;
       console.error('Failed to fetch podcast queue:', err);
     }
   };
 
   return {
-    podcastQueue, podcastHistory, podcastShows, podcastIsPaused, podcastFailedCount, podcastActiveDownloadCount,
+    podcastQueue, podcastQueueTotal, podcastQueueError, podcastHistory, podcastShows, podcastIsPaused, podcastFailedCount, podcastActiveDownloadCount,
     fetchPodcastQueue,
   };
 }
