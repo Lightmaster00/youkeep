@@ -383,8 +383,7 @@ const selectMusicArtistCandidate = async (channel: any) => {
     return;
   }
   musicArtistInput.value = url;
-  musicArtistSearchResults.value = [];
-  await handleAddMusicArtist();
+  if (await handleAddMusicArtist()) musicArtistSearchResults.value = [];
 };
 
 const toggleMusicPause = async () => {
@@ -482,7 +481,7 @@ const handleSaveMusicSchedule = async () => {
 
 const handleAddMusicArtist = async () => {
   const url = musicArtistInput.value.trim();
-  if (!url) return;
+  if (!url) return false;
 
   addingMusicArtist.value = true;
   musicIngestMessage.value = '';
@@ -500,10 +499,12 @@ const handleAddMusicArtist = async () => {
     musicArtistInput.value = '';
     toast.success('Artist added.');
     fetchMusicQueue();
+    return true;
   } catch (err: any) {
     musicIngestSuccess.value = false;
     musicIngestMessage.value = err.data?.statusMessage || 'Failed to add artist.';
     toast.error('Error adding artist.');
+    return false;
   } finally {
     addingMusicArtist.value = false;
   }

@@ -345,8 +345,7 @@ const selectPodcastShowCandidate = async (show: any) => {
     return;
   }
   podcastFeedInput.value = show.feedUrl;
-  podcastShowSearchResults.value = [];
-  await handleAddPodcastShow();
+  if (await handleAddPodcastShow()) podcastShowSearchResults.value = [];
 };
 
 const togglePodcastPause = async () => {
@@ -446,7 +445,7 @@ const handleSavePodcastSchedule = async () => {
 
 const handleAddPodcastShow = async () => {
   const feedUrl = podcastFeedInput.value.trim();
-  if (!feedUrl) return;
+  if (!feedUrl) return false;
 
   addingPodcastShow.value = true;
   podcastIngestMessage.value = '';
@@ -464,12 +463,14 @@ const handleAddPodcastShow = async () => {
     podcastFeedInput.value = '';
     toast.success('Podcast added.');
     fetchPodcastQueue();
+    return true;
   } catch (err: any) {
     // ingest.post.ts deliberately returns a single generic message for every
     // failure (sub-project 2's error-message-leakage fix) — surface it as-is.
     podcastIngestSuccess.value = false;
     podcastIngestMessage.value = err.data?.statusMessage || 'Failed to add podcast.';
     toast.error('Error adding podcast.');
+    return false;
   } finally {
     addingPodcastShow.value = false;
   }
