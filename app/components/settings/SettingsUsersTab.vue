@@ -75,7 +75,8 @@
 
               <!-- Channels list (only if NOT full access) -->
               <div v-if="!fullChannelAccess" class="perm-col mt-2">
-                <span class="perm-label">Ultra-private channels this user can see:</span>
+                <span class="perm-label">Channels this user can access:</span>
+                <span class="section-desc">Grants access to private and ultra-private channels.</span>
                 <div class="checklist-container-premium mt-2">
                   <label v-for="ch in channels" :key="ch.id" class="check-item-premium">
                     <input type="checkbox" v-model="userForm.channelAccess" :value="ch.id" />

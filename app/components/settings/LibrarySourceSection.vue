@@ -111,6 +111,7 @@
           @click="onSyncAll"
         >{{ syncingAll ? 'Starting...' : 'Sync all' }}</button>
       </div>
+      <p class="section-desc" data-testid="sync-all-hint">Also resumes paused sources.</p>
 
       <p v-if="!loaded" class="section-desc mt-2" data-testid="following-loading">Loading…</p>
       <p v-else-if="listError" class="settings-error-msg mt-2" data-testid="following-error">Couldn't load the list. Reload the page to try again.</p>

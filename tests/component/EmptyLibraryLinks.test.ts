@@ -30,3 +30,12 @@ describe('empty-library calls to action', () => {
     expect(block).toContain(`'Add channels'`);
   });
 });
+
+describe('channel links on the home page', () => {
+  it('use the channelId query the channels page reads, never ?id=', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('app/pages/index.vue', 'utf8');
+    expect(src).not.toContain('/channels?id=');
+    expect(src.match(/\/channels\?channelId=/g)?.length).toBe(2);
+  });
+});

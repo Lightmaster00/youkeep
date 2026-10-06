@@ -268,6 +268,11 @@ describe('LibrarySourceSection — Following list', () => {
     expect(toastMessages()).toContain('Sync started for Artist Two.');
   });
 
+  it('says that Sync all also resumes paused sources', async () => {
+    const w = await mountMusic();
+    expect(w.find('[data-testid="sync-all-hint"]').text()).toBe('Also resumes paused sources.');
+  });
+
   it('Sync all calls the section route and reports a sync already running', async () => {
     const w = await mountMusic();
     await w.find('[data-testid="sync-all"]').trigger('click');

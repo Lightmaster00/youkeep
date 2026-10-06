@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Channel not found.' });
   }
 
-  // Vérifier les droits d'accès
+  // Check access rights
   const hasAccess = await canAccessChannel(channelId, event);
   if (!hasAccess) {
     throw createError({

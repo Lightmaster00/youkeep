@@ -19,6 +19,14 @@ const FILES = [
   join(ROOT, 'app/pages/settings.vue'),
   // Rendered in System > Default display.
   join(ROOT, 'app/components/DisplayPrefsForm.vue'),
+  // Admin copy kept in shared utils/composables.
+  join(ROOT, 'app/utils/librarySources.ts'),
+  join(ROOT, 'app/utils/allDownloads.ts'),
+  join(ROOT, 'app/utils/schedulePresets.ts'),
+  join(ROOT, 'app/utils/settingsTabs.ts'),
+  join(ROOT, 'app/composables/useAllDownloads.ts'),
+  join(ROOT, 'app/composables/useActiveCounts.ts'),
+  join(ROOT, 'server/api/channels/[id].get.ts'),
   // Admin API routes: their messages are shown in admin toasts.
   ...filesUnder(join(ROOT, 'server/api/admin'), '.ts'),
 ];

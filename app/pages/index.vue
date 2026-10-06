@@ -36,7 +36,7 @@
           <NuxtLink 
             v-for="channel in searchedChannels.slice(0, 6)" 
             :key="channel.id" 
-            :to="`/channels?id=${channel.id}`"
+            :to="`/channels?channelId=${channel.id}`"
             class="search-channel-pill"
           >
             <img :src="channel.avatar_url || fallbackAvatar" @error="handleAvatarError" class="pill-avatar" alt="" />
@@ -121,7 +121,7 @@
           <div v-for="channelRow in section.channels" :key="channelRow.channelId" class="content-row">
             <div class="row-header">
               <h3 class="row-title">{{ channelRow.channelTitle }}</h3>
-              <NuxtLink :to="`/channels?id=${channelRow.channelId}`" class="see-all-link">See all →</NuxtLink>
+              <NuxtLink :to="`/channels?channelId=${channelRow.channelId}`" class="see-all-link">See all →</NuxtLink>
             </div>
             <div class="scroll-row">
               <div class="scroll-track">

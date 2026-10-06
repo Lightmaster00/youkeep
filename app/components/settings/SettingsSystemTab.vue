@@ -360,9 +360,8 @@ async function pollWipeStatus() {
       return;
     }
   } catch (e) {
-    // Keep polling even on a transient fetch error — matches this app's
-    // existing queue-polling resilience (runPolling in settings.vue never
-    // stops on a single failed fetch either).
+    // Keep polling even on a transient fetch error: a single failed request
+    // must not leave the wipe progress frozen.
   }
   wipePollTimeout = setTimeout(pollWipeStatus, 1000);
 }
