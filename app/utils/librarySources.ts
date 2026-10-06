@@ -208,3 +208,61 @@ export const podcastsSource: LibrarySourceConfig = {
   visibilityUrl: null,
   hasVideoOptions: false,
 };
+
+export function channelSavePath(folder: string, title: string): string | null {
+  const base = folder.trim();
+  const name = title.replace(/[\\/:*?"<>|]/g, '_').trim();
+  if (!base || !name) return null;
+  return `${base}/${name}`.replace(/\/+/g, '/');
+}
+
+export const videosSource: LibrarySourceConfig = {
+  kind: 'videos',
+  title: 'Videos',
+  description: 'Follow YouTube channels. New videos are downloaded automatically.',
+  searchPlaceholder: 'Channel name, YouTube URL or @handle',
+  searchEndpoint: '/api/admin/downloader/search-channels',
+  readSearchResults: (data) => (Array.isArray(data?.channels) ? data.channels : []),
+  toResultView: channelResultView,
+  followTarget: (raw) => youtubeChannelUrl(raw, 'id'),
+  directTarget: youtubeDirectTarget,
+  noTargetMessage: "This result has no channel address, so it can't be followed.",
+  noResultsMessage: 'No channels found for this search.',
+  ingestEndpoint: '/api/admin/downloader/ingest',
+  buildIngestBody: (target, options, raw) => {
+    const savePath = raw?.title ? channelSavePath(options.saveFolder, String(raw.title)) : null;
+    return {
+      url: target,
+      download_videos: options.downloadVideos,
+      download_shorts: options.downloadShorts,
+      download_lives: options.downloadLives,
+      ...(options.dateAfter ? { date_after: options.dateAfter.replace(/-/g, '') } : {}),
+      sync_status: options.autoSync ? 'downloading' : 'paused',
+      visibility: options.visibility || 'public',
+      ...(savePath ? { custom_save_path: savePath } : {}),
+    };
+  },
+  listEndpoint: '/api/channels',
+  readFollowing: (data) => (Array.isArray(data?.channels) ? data.channels : []).map((c: any) => ({
+    id: String(c.id),
+    name: String(c.title ?? ''),
+    imageUrl: c.avatar_url || '',
+    countLabel: plural(Number(c.completed_count) || 0, 'video'),
+    syncActive: c.sync_status === 'downloading',
+    visibility: String(c.visibility || 'public'),
+    href: `/channels?id=${enc(String(c.id))}`,
+  })),
+  emptyFollowingMessage: "You're not following any channel yet.",
+  pauseUrl: (id) => `/api/admin/channels/${enc(id)}/pause`,
+  syncUrl: (id) => `/api/admin/channels/${enc(id)}/sync`,
+  syncAllEndpoint: '/api/admin/downloader/sync-all',
+  syncAllStartedMessage: 'Sync started for every followed channel.',
+  visibilityUrl: (id) => `/api/admin/channels/${enc(id)}/visibility`,
+  hasVideoOptions: true,
+};
+
+export const LIBRARY_SOURCES: Record<SourceKind, LibrarySourceConfig> = {
+  videos: videosSource,
+  music: musicSource,
+  podcasts: podcastsSource,
+};

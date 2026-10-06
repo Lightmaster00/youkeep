@@ -70,6 +70,30 @@
             <option value="ultra_private">Ultra private (admins and chosen users)</option>
           </select>
         </div>
+        <template v-if="config.hasVideoOptions">
+          <div class="form-group">
+            <span class="form-label">Download</span>
+            <div class="follow-options-checks">
+              <label class="checkbox-container"><input v-model="options.downloadVideos" type="checkbox" data-testid="option-videos" /><span class="checkmark"></span>Videos</label>
+              <label class="checkbox-container"><input v-model="options.downloadShorts" type="checkbox" data-testid="option-shorts" /><span class="checkmark"></span>Shorts</label>
+              <label class="checkbox-container"><input v-model="options.downloadLives" type="checkbox" data-testid="option-lives" /><span class="checkmark"></span>Live recordings</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="follow-date-after">Only videos published after (optional)</label>
+            <input id="follow-date-after" v-model="options.dateAfter" type="date" class="form-input" data-testid="option-date-after" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="follow-save-folder">Save folder</label>
+            <div class="input-action-row">
+              <input id="follow-save-folder" v-model="options.saveFolder" type="text" class="form-input" data-testid="option-save-folder" />
+              <button type="button" class="btn btn-secondary-dark btn-sm" :disabled="savingDefaultFolder" data-testid="save-default-folder" @click="saveDefaultFolder">
+                {{ savingDefaultFolder ? 'Saving...' : 'Save as default' }}
+              </button>
+            </div>
+            <p class="section-desc">Each new channel gets its own folder inside this one.</p>
+          </div>
+        </template>
       </div>
     </details>
 
@@ -118,18 +142,46 @@
             :data-testid="`sync-now-${row.id}`"
             @click="onSyncNow(row)"
           >Sync now</button>
-          <span class="badge visibility-badge" :data-testid="`visibility-${row.id}`">{{ visibilityLabel(row.visibility) }}</span>
+          <select
+            v-if="config.visibilityUrl"
+            class="form-select following-visibility"
+            :value="row.visibility"
+            :disabled="isBusy(row.id)"
+            :data-testid="`visibility-${row.id}`"
+            @change="onVisibilityChange(row, $event)"
+          >
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+            <option value="ultra_private">Ultra private</option>
+          </select>
+          <span v-else class="badge visibility-badge" :data-testid="`visibility-${row.id}`">{{ visibilityLabel(row.visibility) }}</span>
+          <button
+            v-if="config.hasVideoOptions"
+            type="button"
+            class="btn btn-secondary-dark btn-xs"
+            :data-testid="`edit-options-${row.id}`"
+            @click="editingRow = row"
+          >Edit options</button>
         </li>
       </ul>
     </div>
+
+    <ChannelOptionsModal
+      v-if="config.hasVideoOptions"
+      :channel-id="editingRow?.id ?? null"
+      :channel-name="editingRow?.name ?? ''"
+      @close="editingRow = null"
+      @saved="loadFollowing"
+    />
   </details>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
+import ChannelOptionsModal from '~/components/settings/ChannelOptionsModal.vue';
 import {
-  defaultFollowOptions, visibilityLabel,
+  DEFAULT_SAVE_FOLDER, defaultFollowOptions, visibilityLabel,
   type FollowedSource, type FollowOptions, type LibrarySourceConfig,
 } from '~/utils/librarySources';
 
@@ -148,6 +200,58 @@ const busyRows = reactive(new Set<string>());
 const loaded = ref(false);
 const isBusy = (id: string) => busyRows.has(id);
 const syncingAll = ref(false);
+const editingRow = ref<FollowedSource | null>(null);
+const savingDefaultFolder = ref(false);
+
+async function loadDefaultFolder() {
+  try {
+    const data = await $fetch<{ path?: string }>('/api/admin/downloader/default-dir');
+    options.saveFolder = data?.path || DEFAULT_SAVE_FOLDER;
+  } catch {
+    options.saveFolder = DEFAULT_SAVE_FOLDER;
+  }
+}
+
+async function saveDefaultFolder() {
+  const path = options.saveFolder.trim();
+  if (!path) {
+    toast.error('Enter a folder first.');
+    return;
+  }
+  savingDefaultFolder.value = true;
+  try {
+    await $fetch('/api/admin/downloader/default-dir', { method: 'POST', body: { path } });
+    toast.success('Default save folder updated.');
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Could not save the default folder.');
+    await loadDefaultFolder();
+  } finally {
+    savingDefaultFolder.value = false;
+  }
+}
+
+async function onVisibilityChange(row: FollowedSource, event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const visibility = select.value;
+  const url = props.config.visibilityUrl;
+  if (!url) return;
+  if (busyRows.has(row.id)) {
+    select.value = rowAfterReload(row).visibility;
+    return;
+  }
+  busyRows.add(row.id);
+  try {
+    await $fetch(url(row.id), { method: 'PUT', body: { visibility } });
+    toast.success(`${row.name} is now ${visibilityLabel(visibility).toLowerCase()}.`);
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Could not change the visibility.');
+  } finally {
+    await loadFollowing();
+    // One-way binding: put the select back to what the server kept.
+    select.value = rowAfterReload(row).visibility;
+    busyRows.delete(row.id);
+  }
+}
 
 const resultViews = computed(() => results.value.map((raw) => props.config.toResultView(raw)));
 const submitLabel = computed(() => {
@@ -283,6 +387,7 @@ async function onSyncAll() {
 
 onMounted(() => {
   loadFollowing();
+  if (props.config.hasVideoOptions) loadDefaultFolder();
 });
 
 defineExpose({ loadFollowing });
@@ -303,4 +408,6 @@ defineExpose({ loadFollowing });
 .following-name:hover { text-decoration: underline; }
 .following-sync { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
 .visibility-badge { font-size: 12px; }
+.follow-options-checks { display: flex; gap: 16px; flex-wrap: wrap; }
+.following-visibility { width: auto; min-width: 120px; }
 </style>
