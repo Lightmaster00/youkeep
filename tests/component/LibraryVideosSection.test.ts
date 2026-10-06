@@ -77,7 +77,7 @@ describe('LibrarySourceSection — Videos', () => {
       download_lives: false,
       sync_status: 'downloading',
       visibility: 'public',
-      custom_save_path: '/data/videos/My Channel',
+      custom_save_path: '/data/videos',
     });
     expect(w.find('[data-testid="follow-result-0"]').exists()).toBe(false);
   });
@@ -103,7 +103,7 @@ describe('LibrarySourceSection — Videos', () => {
       date_after: '20240131',
       sync_status: 'paused',
       visibility: 'private',
-      custom_save_path: '/mnt/yt/My Channel',
+      custom_save_path: '/mnt/yt',
     });
   });
 

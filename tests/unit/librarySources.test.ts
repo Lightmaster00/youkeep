@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   musicSource, podcastsSource, defaultFollowOptions, youtubeChannelUrl, youtubeDirectTarget,
-  feedDirectTarget, visibilityLabel, plural, videosSource, channelSavePath,
+  feedDirectTarget, visibilityLabel, plural, videosSource,
 } from '../../app/utils/librarySources';
 
 describe('youtubeChannelUrl', () => {
@@ -97,15 +97,6 @@ describe('helpers', () => {
   });
 });
 
-describe('channelSavePath', () => {
-  it('joins the folder and a cleaned channel title', () => {
-    expect(channelSavePath('/data/videos', 'My Channel')).toBe('/data/videos/My Channel');
-    expect(channelSavePath('/data/videos/', 'A/B: C?')).toBe('/data/videos/A_B_ C_');
-    expect(channelSavePath('', 'X')).toBeNull();
-    expect(channelSavePath('/d', '  ')).toBeNull();
-  });
-});
-
 describe('videosSource', () => {
   const raw = { id: 'UC1', handle: '/@chan', title: 'My Channel' };
 
@@ -122,12 +113,12 @@ describe('videosSource', () => {
       download_lives: false,
       sync_status: 'downloading',
       visibility: 'public',
-      custom_save_path: '/data/videos/My Channel',
+      custom_save_path: '/data/videos',
     });
   });
 
-  it('passes every option and omits the folder for a pasted URL', () => {
-    const o = { ...defaultFollowOptions('videos'), autoSync: false, visibility: 'ultra_private' as const, downloadShorts: true, downloadLives: true, dateAfter: '2024-01-31' };
+  it('passes every option, and the chosen folder as is, for a pasted URL', () => {
+    const o = { ...defaultFollowOptions('videos'), autoSync: false, visibility: 'ultra_private' as const, downloadShorts: true, downloadLives: true, dateAfter: '2024-01-31', saveFolder: ' /mnt/yt ' };
     expect(videosSource.buildIngestBody('https://www.youtube.com/@x', o, null)).toEqual({
       url: 'https://www.youtube.com/@x',
       download_videos: true,
@@ -136,7 +127,9 @@ describe('videosSource', () => {
       date_after: '20240131',
       sync_status: 'paused',
       visibility: 'ultra_private',
+      custom_save_path: '/mnt/yt',
     });
+    expect(videosSource.buildIngestBody('https://www.youtube.com/@x', { ...o, saveFolder: '  ' }, null)).not.toHaveProperty('custom_save_path');
   });
 
   it('maps channels from /api/channels', () => {

@@ -209,13 +209,6 @@ export const podcastsSource: LibrarySourceConfig = {
   hasVideoOptions: false,
 };
 
-export function channelSavePath(folder: string, title: string): string | null {
-  const base = folder.trim();
-  const name = title.replace(/[\\/:*?"<>|]/g, '_').trim();
-  if (!base || !name) return null;
-  return `${base}/${name}`.replace(/\/+/g, '/');
-}
-
 export const videosSource: LibrarySourceConfig = {
   kind: 'videos',
   title: 'Videos',
@@ -229,8 +222,10 @@ export const videosSource: LibrarySourceConfig = {
   noTargetMessage: "This result has no channel address, so it can't be followed.",
   noResultsMessage: 'No channels found for this search.',
   ingestEndpoint: '/api/admin/downloader/ingest',
-  buildIngestBody: (target, options, raw) => {
-    const savePath = raw?.title ? channelSavePath(options.saveFolder, String(raw.title)) : null;
+  buildIngestBody: (target, options) => {
+    // The base folder only: the downloader adds the channel folder and one
+    // folder per video inside it.
+    const savePath = options.saveFolder.trim();
     return {
       url: target,
       download_videos: options.downloadVideos,

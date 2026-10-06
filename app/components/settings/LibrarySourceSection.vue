@@ -94,7 +94,7 @@
                 {{ savingDefaultFolder ? 'Saving...' : 'Save as default' }}
               </button>
             </div>
-            <p class="section-desc">Each new channel gets its own folder inside this one.</p>
+            <p class="section-desc">YouKeep adds a folder per channel and per video inside this folder.</p>
           </div>
         </template>
       </div>

@@ -19,6 +19,7 @@
       <div class="form-group">
         <label class="form-label" for="channel-opt-folder">Save folder (leave empty for the default)</label>
         <input id="channel-opt-folder" v-model="form.customSavePath" type="text" class="form-input" data-testid="opt-folder" />
+        <p class="section-desc">YouKeep adds a folder per channel and per video inside this folder.</p>
       </div>
 
       <div class="channel-options-actions">
