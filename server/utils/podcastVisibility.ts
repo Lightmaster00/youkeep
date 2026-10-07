@@ -1,6 +1,6 @@
-export interface SessionForVisibility {
-  role: 'admin' | 'user';
-}
+// One shared session type for both visibility rules (a second export of the
+// same name would make the server auto-import ambiguous).
+import type { SessionForVisibility } from './musicVisibility';
 
 // The three-tier visibility rule used everywhere Podcast mode filters a list
 // of shows/episodes by who's allowed to see them: guest sees only `public`;
