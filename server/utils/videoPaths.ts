@@ -53,6 +53,17 @@ function channelSegment(channelFolder: string): string {
 }
 
 /**
+ * The folder `<base>/<folder>` holding a video channel's video folders, exactly
+ * as the downloader names it (buildVideoPaths): the channel title as
+ * sanitizeFolderName makes it (the id when there is no title), with a title
+ * that cannot be a folder name ('..', '.', blank) becoming '_'. Download,
+ * cleanup, delete and wipe all use it, so they always agree.
+ */
+export function videoChannelFolder(title: string | null | undefined, id: string): string {
+  return channelSegment(sanitizeFolderName(title || id));
+}
+
+/**
  * The folder `<base>/<folder>` of a music artist or podcast show, used to
  * download, serve, clean up and delete its files. It is the name as
  * sanitizeFolderName has always made it, unchanged for every name that is a
@@ -568,8 +579,11 @@ export function prepareChannelFilesRemoval(
   const channel = db.prepare('SELECT title FROM channels WHERE id = ?').get(channelId) as { title: string | null } | undefined;
   const baseDir = path.resolve(opts.baseDir);
   const downloadsDir = opts.downloadsDir ?? getDownloadsDir();
-  const channelFolder = sanitizeFolderName(channel?.title || channelId);
-  const channelDir = path.resolve(baseDir, channelFolder);
+  const channelDir = path.resolve(baseDir, videoChannelFolder(channel?.title, channelId));
+  // Where downloads made before one folder per video put their flat <id>.* files;
+  // only differs from channelDir for a name with control characters, or one that is
+  // no folder at all ('..': then it is not inside the base and never touched).
+  const legacyDir = path.resolve(baseDir, sanitizeFolderName(channel?.title || channelId));
   const rows = db.prepare('SELECT id, channel_id, title, local_video_path FROM videos WHERE channel_id = ?').all(channelId) as
     { id: string; channel_id: string; title: string | null; local_video_path: string | null }[];
   const locations = rows.map((row) => resolveStoredPath(db, row, { downloadsDir }));
@@ -588,22 +602,42 @@ export function prepareChannelFilesRemoval(
       { id: string; title: string | null; custom_save_path: string | null }[];
     for (const other of others) {
       if (opts.excludeChannelIds?.has(other.id)) continue;
-      const folder = sanitizeFolderName(other.title || other.id);
+      // Its video folder and its legacy flat-file folder.
+      const folders = [videoChannelFolder(other.title, other.id), sanitizeFolderName(other.title || other.id)];
       // Where it reads (its save folder) and where the downloader writes when that
       // folder is not writable (the default folder). Not resolveChannelBaseDir:
       // it creates missing folders.
       const bases = [channelReadBaseDir(other.custom_save_path, downloadsDir), downloadsDir];
-      if (bases.some((base) => sameOrInsideFolder(channelDir, base) || sameOrInsideFolder(channelDir, path.join(base, folder)))) {
+      if (bases.some((base) => sameOrInsideFolder(channelDir, base) || folders.some((folder) => sameOrInsideFolder(channelDir, path.join(base, folder))))) {
         return `channel "${other.title || other.id}" keeps its files there`;
       }
     }
     return null;
   };
 
+  /** This channel's own legacy `<id>.*` files in `folder`, then the folder if it is then empty. */
+  const removeOwnLegacyFiles = (folder: string): void => {
+    for (const entry of fs.readdirSync(folder)) {
+      const id = entry.slice(0, Math.max(0, entry.indexOf('.')));
+      const file = path.join(folder, entry);
+      if (ids.has(id) && isVideoArtifactName(id, entry) && isRegularFile(file)) {
+        try { fs.unlinkSync(file); } catch (err) { console.error(`Failed to delete video file ${file}:`, err); }
+      }
+    }
+    fs.rmdirSync(folder); // only when nothing else is left in it
+  };
+
   return {
     channelDir,
     remove() {
       for (const loc of elsewhere) removeVideoFiles(loc);
+      if (legacyDir !== channelDir && path.dirname(legacyDir) === baseDir && fs.existsSync(legacyDir)) {
+        try {
+          removeOwnLegacyFiles(legacyDir);
+        } catch (err: any) {
+          if (err?.code !== 'ENOTEMPTY' && err?.code !== 'EEXIST') console.error(`Failed to clean legacy channel directory ${legacyDir}:`, err);
+        }
+      }
       if (!isContained(baseDir, channelDir)) {
         const skippedReason = `the channel folder ${channelDir} is not inside its base folder ${baseDir}`;
         console.error(`Channel ${channelId}: files left in place because ${skippedReason}.`);
@@ -615,14 +649,7 @@ export function prepareChannelFilesRemoval(
         // Only this channel's own files: its video folders, then its legacy <id>.* files.
         for (const loc of locations) if (loc.layout === 'new') removeVideoFiles(loc);
         try {
-          for (const entry of fs.readdirSync(channelDir)) {
-            const id = entry.slice(0, Math.max(0, entry.indexOf('.')));
-            const file = path.join(channelDir, entry);
-            if (ids.has(id) && isVideoArtifactName(id, entry) && isRegularFile(file)) {
-              try { fs.unlinkSync(file); } catch (err) { console.error(`Failed to delete video file ${file}:`, err); }
-            }
-          }
-          fs.rmdirSync(channelDir); // only when nothing else is left in it
+          removeOwnLegacyFiles(channelDir);
           return { removedChannelDir: true, skippedReason: null };
         } catch (err: any) {
           if (err?.code !== 'ENOTEMPTY' && err?.code !== 'EEXIST') console.error(`Failed to clean channel directory ${channelDir}:`, err);

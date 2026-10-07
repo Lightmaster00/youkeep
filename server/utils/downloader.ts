@@ -10,7 +10,7 @@ import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlock
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, type VideoPaths } from './videoPaths';
+import { isContained, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, type VideoPaths } from './videoPaths';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -43,19 +43,23 @@ export function cleanupPartialFiles(videoId: string, channelId: string): void {
   const partFile = path.join(channelDir, `${videoId}.mp4.part`);
   const ytdlPartFile = path.join(channelDir, `${videoId}.mp4.ytdl`);
 
-  // Legacy per-format partials (e.g. <id>.f137.mp4.part, <id>.f140.m4a.ytdl).
-  let legacyFragments: string[] = [];
-  try {
-    legacyFragments = fs.readdirSync(channelDir)
-      .filter(f => f.startsWith(`${videoId}.f`) && (f.endsWith('.part') || f.endsWith('.ytdl')))
-      .map(f => path.join(channelDir, f));
-  } catch (e) {}
+  // Legacy flat files: only from a channel folder strictly inside the base
+  // (a title like '..' would otherwise point at the folder above it).
+  if (isContained(basePath, channelDir)) {
+    // Legacy per-format partials (e.g. <id>.f137.mp4.part, <id>.f140.m4a.ytdl).
+    let legacyFragments: string[] = [];
+    try {
+      legacyFragments = fs.readdirSync(channelDir)
+        .filter(f => f.startsWith(`${videoId}.f`) && (f.endsWith('.part') || f.endsWith('.ytdl')))
+        .map(f => path.join(channelDir, f));
+    } catch (e) {}
 
-  [mp4File, jpgFile, partFile, ytdlPartFile, ...legacyFragments].forEach(f => {
-    if (fs.existsSync(f)) {
-      try { fs.unlinkSync(f); } catch (e) {}
-    }
-  });
+    [mp4File, jpgFile, partFile, ytdlPartFile, ...legacyFragments].forEach(f => {
+      if (fs.existsSync(f)) {
+        try { fs.unlinkSync(f); } catch (e) {}
+      }
+    });
+  }
 
   // The video's own folder: the one already on disk for this id (even if the
   // title changed since), else the one named from the current title.

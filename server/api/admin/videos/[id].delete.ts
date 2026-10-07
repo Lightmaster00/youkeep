@@ -1,7 +1,7 @@
 import { defineEventHandler, createError } from 'h3';
 import fs from 'fs';
 import path from 'path';
-import { removeVideoFiles, resolveStoredPath } from '../../../utils/videoPaths';
+import { isContained, removeVideoFiles, resolveStoredPath, videoChannelFolder } from '../../../utils/videoPaths';
 import { isTidyRunning } from '../../../utils/videoTidy';
 
 export default defineEventHandler(async (event) => {
@@ -41,7 +41,10 @@ export default defineEventHandler(async (event) => {
   // under the base the downloader wrote it to (see channelBaseDirs).
   const location = resolveStoredPath(db, video, { downloadsDir: getDownloadsDir() });
   const basePath = location.baseDir;
-  const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || video.channel_id));
+  // The folder holding its video folders (named like the downloader does) and,
+  // for downloads made before one folder per video, its flat <id>.* files.
+  const channelDir = path.resolve(basePath, videoChannelFolder(channel?.title, video.channel_id));
+  const legacyDir = path.resolve(basePath, sanitizeFolderName(channel?.title || video.channel_id));
 
   // 2. Kill the download if it's running
   cancelDownload(videoId);
@@ -72,15 +75,17 @@ export default defineEventHandler(async (event) => {
   }
 
   // 4. Remove local files from disk (any container extension, thumbnail,
-  // subtitles, metadata, and partial-download leftovers)
+  // subtitles, metadata, and partial-download leftovers), only from a folder
+  // strictly inside the base (a title like '..' points at the folder above it).
+  if (!isContained(basePath, legacyDir)) return { success: true };
   const videoExtensions = ['mp4', 'webm', 'mkv', '3gp', 'flv'];
   const filesToRemove = [
-    ...videoExtensions.map(ext => path.join(channelDir, `${videoId}.${ext}`)),
-    ...videoExtensions.map(ext => path.join(channelDir, `${videoId}.${ext}.part`)),
-    ...videoExtensions.map(ext => path.join(channelDir, `${videoId}.${ext}.ytdl`)),
-    path.join(channelDir, `${videoId}.jpg`),
-    path.join(channelDir, `${videoId}.vtt`),
-    path.join(channelDir, `${videoId}.info.json`),
+    ...videoExtensions.map(ext => path.join(legacyDir, `${videoId}.${ext}`)),
+    ...videoExtensions.map(ext => path.join(legacyDir, `${videoId}.${ext}.part`)),
+    ...videoExtensions.map(ext => path.join(legacyDir, `${videoId}.${ext}.ytdl`)),
+    path.join(legacyDir, `${videoId}.jpg`),
+    path.join(legacyDir, `${videoId}.vtt`),
+    path.join(legacyDir, `${videoId}.info.json`),
   ];
 
   filesToRemove.forEach(f => {

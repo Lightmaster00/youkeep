@@ -72,8 +72,10 @@ describe('removing a channel\'s files', () => {
     ['..', '.', ' '].forEach((title, i) => insertChannel(db, { id: `t${i}`, title, customSavePath: base }));
 
     for (const id of ['t0', 't1', 't2']) {
+      // Their folder is the downloader's <base>/_ (not there: nothing to remove), never the base or above.
       const removal = prepareChannelFilesRemoval(db, id, { baseDir: base, downloadsDir: dir });
-      expect(removal.remove()).toMatchObject({ removedChannelDir: false, skippedReason: expect.stringContaining('not inside') });
+      expect(removal.channelDir).toBe(path.join(base, '_'));
+      expect(removal.remove()).toEqual({ removedChannelDir: false, skippedReason: null });
     }
     await deleteChannel(mockEvent('', { method: 'DELETE', params: { id: 't0' } }));
     expect(startLibraryWipe()).toEqual({ started: true });
