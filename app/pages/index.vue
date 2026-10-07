@@ -20,8 +20,8 @@
     <!-- Empty library -->
     <EmptyState
       v-else-if="!featuredLarge && feedSections.length === 0 && !searchQuery"
-      title="No videos found"
-      description="Your archive is empty. Log in as administrator to add channels or videos."
+      title="Nothing here yet"
+      description="Your archive is empty. Log in as administrator to add channels, music or podcasts."
       icon="video"
       :action-text="isAdmin ? 'Add channels' : undefined"
       action-route="/settings?tab=library&section=videos"
@@ -117,6 +117,8 @@
           </div>
         </div>
 
+        <HomeMediaRow v-else-if="section.tracks || section.episodes" :section="section" />
+
         <template v-else-if="section.channels">
           <div v-for="channelRow in section.channels" :key="channelRow.channelId" class="content-row">
             <div class="row-header">
@@ -148,7 +150,8 @@ import { isHomeFullyHidden } from '~/utils/displayPrefs';
 const auth = useAuth();
 const { isAdmin } = auth;
 const { effective: displayPrefs } = useDisplayPrefs();
-const homeFullyHidden = computed(() => isHomeFullyHidden(displayPrefs.value, auth.isLoggedIn.value));
+const { enabledModules } = useModules();
+const homeFullyHidden = computed(() => isHomeFullyHidden(displayPrefs.value, auth.isLoggedIn.value, enabledModules.value));
 
 // A guest cannot change preferences: the admin hid everything, so say that instead.
 const emptyHomeCopy = computed(() => auth.isLoggedIn.value

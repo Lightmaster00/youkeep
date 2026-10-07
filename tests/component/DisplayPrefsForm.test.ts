@@ -20,7 +20,33 @@ describe('DisplayPrefsForm — home section', () => {
   it('lists visible sections in order, then hidden ones', async () => {
     useState<any>('display_prefs').value = buildView({}, { homeSections: ['popular', 'recent'] });
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    expect(rowOrder(w)).toEqual(['popular', 'recent', 'suggested', 'subscriptions']);
+    expect(rowOrder(w)).toEqual(['popular', 'recent', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes']);
+  });
+
+  it('lists the music and podcast rows unticked by default, with English labels', async () => {
+    useState<any>('modules').value = { video: true, music: true, podcasts: true };
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
+    const row = (id: string) => w.find(`[data-testid="section-row-${id}"]`);
+    expect(row('recentMusic').text()).toContain('Recently added music');
+    expect(row('newEpisodes').text()).toContain('New podcast episodes');
+    expect((row('recentMusic').find('input').element as HTMLInputElement).checked).toBe(false);
+    expect((row('newEpisodes').find('input').element as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('opts in to a music row by appending it to the stored order', async () => {
+    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic'] }));
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
+    await w.find('[data-testid="section-row-recentMusic"] input[type="checkbox"]').setValue(true);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic'] });
+  });
+
+  it('marks the row of a module that is off', async () => {
+    useState<any>('modules').value = { video: true, music: false, podcasts: true };
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'admin' } });
+    expect(w.find('[data-testid="section-row-recentMusic"]').text()).toContain('module off');
+    expect(w.find('[data-testid="section-row-newEpisodes"]').text()).not.toContain('module off');
+    useState<any>('modules').value = { video: true, music: true, podcasts: true };
   });
 
   it('sends the swapped array when ↓ is clicked', async () => {
@@ -60,7 +86,7 @@ describe('DisplayPrefsForm — home section', () => {
     expect(dis('up-popular')).toBe(true);
     expect(dis('down-popular')).toBe(false);
     expect(dis('up-recent')).toBe(false);
-    for (const id of ['suggested', 'subscriptions']) {
+    for (const id of ['suggested', 'subscriptions', 'recentMusic', 'newEpisodes']) {
       expect(dis(`up-${id}`)).toBe(true);
       expect(dis(`down-${id}`)).toBe(true);
     }

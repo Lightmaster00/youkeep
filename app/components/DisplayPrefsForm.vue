@@ -52,14 +52,14 @@
       <div v-for="(row, index) in sectionRows" :key="row.id" class="section-row" :data-testid="`section-row-${row.id}`">
         <label class="check-row">
           <input type="checkbox" :checked="row.visible" :disabled="saving" @change="onSectionToggle(row.id, $event)" />
-          <span>{{ SECTION_LABELS[row.id] }}</span>
+          <span>{{ SECTION_LABELS[row.id] }}<span v-if="row.moduleOff" class="pref-off"> (module off)</span></span>
         </label>
         <span class="move-buttons">
           <button type="button" class="move-btn" :data-testid="`up-${row.id}`" :disabled="saving || !row.visible || index === 0" :aria-label="`Move ${SECTION_LABELS[row.id]} up`" @click="moveSection(row.id, -1)">↑</button>
           <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" :aria-label="`Move ${SECTION_LABELS[row.id]} down`" @click="moveSection(row.id, 1)">↓</button>
         </span>
       </div>
-      <p class="pref-hint">"Suggested for you" and "From channels you follow" only appear for signed-in accounts.</p>
+      <p class="pref-hint">"Suggested for you" and "From channels you follow" only appear for signed-in accounts. Music and podcast rows only appear while their module is on.</p>
     </div>
 
     <div class="pref-block">
@@ -85,7 +85,7 @@
 
     <div class="pref-block">
       <div class="pref-head">
-        <label class="form-label" :for="`${uid}-rowsize`">Videos per row</label>
+        <label class="form-label" :for="`${uid}-rowsize`">Items per row</label>
         <a v-if="isOverridden('rowSize')" href="#" class="reset-link" @click.prevent="resetKey('rowSize')">{{ mode === 'user' ? 'Use the server default' : 'Reset to default' }}</a>
       </div>
       <select :id="`${uid}-rowsize`" class="form-input" :value="String(shown.rowSize)" :disabled="saving" @change="onNumberChange('rowSize', $event)">
@@ -108,7 +108,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useToast } from '~/composables/useToast';
-import { HOME_SECTION_IDS, ROW_SIZES, SUBSCRIPTION_CHANNEL_COUNTS } from '#shared/displayPrefs';
+import { HOME_SECTION_IDS, MEDIA_HOME_SECTION_MODULE, ROW_SIZES, SUBSCRIPTION_CHANNEL_COUNTS } from '#shared/displayPrefs';
 import type { DisplayPrefs, HomeSectionId, PrefKey } from '#shared/displayPrefs';
 
 const props = defineProps<{ mode: 'user' | 'admin' }>();
@@ -186,6 +186,8 @@ const SECTION_LABELS: Record<HomeSectionId, string> = {
   popular: 'Popular',
   suggested: 'Suggested for you',
   subscriptions: 'From channels you follow',
+  recentMusic: 'Recently added music',
+  newEpisodes: 'New podcast episodes',
 };
 const RANKING_OPTIONS = [
   { value: 'localViewers', label: 'Local viewers' },
@@ -198,9 +200,13 @@ const RANKING_OPTIONS = [
 const sectionRows = computed(() => {
   const visible = shown.value.homeSections;
   const hidden = HOME_SECTION_IDS.filter((id) => !visible.includes(id));
+  const moduleOff = (id: HomeSectionId) => {
+    const module = MEDIA_HOME_SECTION_MODULE[id];
+    return !!module && !enabledModules.value.includes(module);
+  };
   return [
-    ...visible.map((id) => ({ id, visible: true })),
-    ...hidden.map((id) => ({ id, visible: false })),
+    ...visible.map((id) => ({ id, visible: true, moduleOff: moduleOff(id) })),
+    ...hidden.map((id) => ({ id, visible: false, moduleOff: moduleOff(id) })),
   ];
 });
 const visibleCount = computed(() => shown.value.homeSections.length);
@@ -272,6 +278,11 @@ async function resetKey(key: PrefKey) {
   align-items: center;
   gap: 10px;
   cursor: pointer;
+}
+
+.pref-off {
+  color: var(--text-secondary);
+  font-size: 12.5px;
 }
 
 .pref-hint {
