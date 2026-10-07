@@ -37,8 +37,10 @@ export function queryRecentTracks(
   return { items, total };
 }
 
-// pub_date is the raw RSS date string, so it cannot be ordered in SQL; episodes
-// are ordered by ingestion time, like a show's own episode list.
+// Ordered by real publish date (pub_ts, parsed from the RSS pub_date), falling
+// back to ingestion time when the date is missing or unparsable, so a show
+// added later with a long back catalogue does not outrank newer episodes.
+// id is the final tiebreak so pages never overlap or skip rows.
 export function queryRecentEpisodes(
   db: Database.Database,
   session: SessionForVisibility | null,
@@ -54,10 +56,7 @@ export function queryRecentEpisodes(
     FROM podcast_episodes e
     JOIN podcast_shows s ON e.show_id = s.id
     WHERE ${where}
-    ORDER BY e.created_at DESC,
-             (e.season_number IS NULL) ASC, e.season_number DESC,
-             (e.episode_number IS NULL) ASC, e.episode_number DESC,
-             e.id DESC
+    ORDER BY COALESCE(e.pub_ts, e.created_at) DESC, e.id DESC
     LIMIT ? OFFSET ?
   `).all(Math.trunc(limit), Math.trunc(offset));
   const total = (db.prepare(`

@@ -212,6 +212,7 @@ export function createTestDb(): Database.Database {
       episode_number INTEGER,
       season_number INTEGER,
       pub_date TEXT,
+      pub_ts INTEGER,
       download_status TEXT DEFAULT 'pending',
       download_progress INTEGER DEFAULT 0,
       download_speed TEXT,
@@ -472,10 +473,12 @@ export function insertPodcastEpisode(db: Database.Database, opts: {
   downloadStatus?: string;
   localFilePath?: string | null;
   createdAt?: number;
+  pubDate?: string | null;
+  pubTs?: number | null;
 }) {
   db.prepare(`
-    INSERT INTO podcast_episodes (id, show_id, title, audio_url, download_status, local_file_path, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO podcast_episodes (id, show_id, title, audio_url, download_status, local_file_path, created_at, pub_date, pub_ts)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.showId,
@@ -483,7 +486,9 @@ export function insertPodcastEpisode(db: Database.Database, opts: {
     opts.audioUrl ?? `https://example.com/audio/${opts.id}.mp3`,
     opts.downloadStatus ?? 'completed',
     opts.localFilePath ?? null,
-    opts.createdAt ?? Date.now()
+    opts.createdAt ?? Date.now(),
+    opts.pubDate ?? null,
+    opts.pubTs ?? null
   );
 }
 

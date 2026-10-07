@@ -6,6 +6,7 @@ import { pipeline } from 'stream/promises';
 import Parser from 'rss-parser';
 import { Cron } from 'croner';
 import { getDb } from './db';
+import { parsePubTs } from './podcastPubDate';
 import { getDataDir } from './dataDir';
 import { addLog, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
@@ -301,8 +302,8 @@ export async function ingestPodcastFeed(
 
   const items: any[] = Array.isArray(feed.items) ? feed.items : [];
   const upsertEpisode = db.prepare(`
-    INSERT INTO podcast_episodes (id, show_id, title, description, audio_url, duration, episode_number, season_number, pub_date, download_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    INSERT INTO podcast_episodes (id, show_id, title, description, audio_url, duration, episode_number, season_number, pub_date, pub_ts, download_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
     ON CONFLICT(id) DO UPDATE SET
       title = excluded.title,
       description = excluded.description,
@@ -310,7 +311,8 @@ export async function ingestPodcastFeed(
       duration = COALESCE(excluded.duration, duration),
       episode_number = COALESCE(excluded.episode_number, episode_number),
       season_number = COALESCE(excluded.season_number, season_number),
-      pub_date = COALESCE(excluded.pub_date, pub_date)
+      pub_date = COALESCE(excluded.pub_date, pub_date),
+      pub_ts = CASE WHEN excluded.pub_date IS NULL THEN pub_ts ELSE excluded.pub_ts END
   `);
   const checkExists = db.prepare('SELECT 1 FROM podcast_episodes WHERE id = ?');
 
@@ -345,6 +347,7 @@ export async function ingestPodcastFeed(
       episodeNumber,
       seasonNumber,
       item.pubDate || null,
+      parsePubTs(item.pubDate),
       Date.now()
     );
 
