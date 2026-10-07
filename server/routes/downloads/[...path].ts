@@ -12,7 +12,6 @@ export default defineEventHandler(async (event) => {
   // Resolve absolute path and prevent directory traversal
   const downloadsDir = getDownloadsDir();
   let absolutePath = path.resolve(downloadsDir, filePath);
-  let matchedVideoId: string | undefined;
 
   const parts = filePath.split('/');
   if (parts.length === 3) {
@@ -48,7 +47,6 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 403, statusMessage: 'Access denied' });
     }
     absolutePath = candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
-    matchedVideoId = video.id;
   } else {
     if (parts.length < 2) {
       throw createError({ statusCode: 400, statusMessage: 'Invalid file path' });
@@ -70,7 +68,15 @@ export default defineEventHandler(async (event) => {
       // path segment as a channel id directly (e.g. avatar/before video is ingested)
       const video = db.prepare('SELECT id, channel_id FROM videos WHERE id = ?').get(videoId) as { id: string; channel_id: string } | undefined;
       const channelId = video ? video.channel_id : (parts[0] || '');
-      if (video) matchedVideoId = video.id;
+      if (video) {
+        // Authorise before probing the disk: denied and nonexistent must be
+        // indistinguishable (404), so legacy sidecars cannot be probed either.
+        const query = getQuery(event);
+        const token = query.token ? String(query.token) : undefined;
+        if (!(await canAccessVideo(video.id, event, token))) {
+          throw createError({ statusCode: 404, statusMessage: 'File not found' });
+        }
+      }
 
       const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
       if (channel) {
@@ -105,18 +111,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'File not found' });
   }
 
-  // Vérification de sécurité: toute ressource rattachée à une vidéo connue
-  // (fichier vidéo, miniature, sous-titres, ...) respecte les mêmes règles
-  // de visibilité que la vidéo elle-même — pas seulement les extensions vidéo.
-  if (matchedVideoId) {
-    const query = getQuery(event);
-    const token = query.token ? String(query.token) : undefined;
-    const hasAccess = await canAccessVideo(matchedVideoId, event, token);
-    if (!hasAccess) {
-      throw createError({ statusCode: 403, statusMessage: 'Access denied. This content is restricted.' });
-    }
-  }
-
+  // Every file tied to a known video (video, thumbnail, subtitles, ...) was
+  // authorised above, before any disk probe, with the video's own visibility rules.
   const stat = fs.statSync(absolutePath);
   const fileSize = stat.size;
   const range = event.node.req.headers.range;

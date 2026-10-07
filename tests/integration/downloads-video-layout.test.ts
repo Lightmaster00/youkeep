@@ -168,4 +168,21 @@ describe('traversal and legacy paths', () => {
     await expect(handler(eventFor('/downloads/Old%20Chan/..'))).rejects.toMatchObject({ statusCode: 400 });
     await expect(handler(eventFor('/downloads/a/b/c/d.mp4'))).rejects.toMatchObject({ statusCode: 400 });
   });
+
+  it('a legacy file of a video the request may not see: existing and missing sidecars give the same 404', async () => {
+    insertChannel(db, { id: 'c9', title: 'Old Chan', visibility: 'private' });
+    insertVideo(db, { id: 'old1', channelId: 'c9', visibility: 'private', localVideoPath: '/downloads/Old%20Chan/old1.mp4' });
+    fs.mkdirSync(path.join(dir, 'Old Chan'), { recursive: true });
+    for (const f of ['old1.mp4', 'old1.info.json', 'old1.fr.vtt']) fs.writeFileSync(path.join(dir, 'Old Chan', f), 'x');
+    const status = async (url: string) => {
+      try { closeIfStream(await handler(eventFor(url))); return 200; } catch (e: any) { return e.statusCode; }
+    };
+    expect(await status('/downloads/Old%20Chan/old1.mp4')).toBe(404);
+    expect(await status('/downloads/Old%20Chan/old1.info.json')).toBe(404);
+    expect(await status('/downloads/Old%20Chan/old1.fr.vtt')).toBe(404);
+    expect(await status('/downloads/Old%20Chan/old1.description')).toBe(404);
+    expect(await status('/downloads/Old%20Chan/old1.de.vtt')).toBe(404);
+    // Unrelated channel-id path for the same id: same answer.
+    expect(await status('/downloads/c9/old1.info.json')).toBe(404);
+  });
 });

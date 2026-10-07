@@ -90,7 +90,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     expect(result).toBeTruthy();
   });
 
-  it('still returns 403 for a private channel without access (regression)', async () => {
+  it('still refuses a private channel without access, as a 404 that does not reveal the file exists (regression)', async () => {
     const privateChannelId = 'cache-control-private-channel';
     insertChannel(db, { id: privateChannelId, visibility: 'private' });
     const privateDir = path.join(getDownloadsDir(), sanitizeFolderName(`Channel ${privateChannelId}`));
@@ -99,7 +99,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
     insertVideo(db, { id: 'v5', channelId: privateChannelId, visibility: 'private', downloadStatus: 'completed' });
 
     try {
-      await expect(handler(mockEvent(undefined, { path: `/downloads/${privateChannelId}/v5.mp4`, params: { path: `${privateChannelId}/v5.mp4` } }))).rejects.toMatchObject({ statusCode: 403 });
+      await expect(handler(mockEvent(undefined, { path: `/downloads/${privateChannelId}/v5.mp4`, params: { path: `${privateChannelId}/v5.mp4` } }))).rejects.toMatchObject({ statusCode: 404 });
     } finally {
       fs.rmSync(privateDir, { recursive: true, force: true });
     }
