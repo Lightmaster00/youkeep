@@ -15,6 +15,7 @@
         :key="episode.id"
         :episode="episode"
         :active="currentEpisode?.id === episode.id"
+        show-actions
         @play="playEpisode"
       />
     </div>

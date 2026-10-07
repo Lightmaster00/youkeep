@@ -46,19 +46,7 @@
         />
 
         <div v-else class="show-grid">
-          <div
-            v-for="s in shows"
-            :key="s.id"
-            class="show-card"
-            @click="router.push({ path: '/podcasts', query: { showId: s.id } })"
-          >
-            <img :src="s.cover_url || fallbackCover" @error="handleCoverError" class="show-card-cover" alt="" />
-            <div class="show-card-body">
-              <h3 class="show-card-title">{{ s.title }}</h3>
-              <p class="show-card-meta">{{ s.episode_count }} episode(s)</p>
-              <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(s.visibility)">{{ formatVisibility(s.visibility) }}</span>
-            </div>
-          </div>
+          <PodcastShowCard v-for="s in shows" :key="s.id" :show="s" :show-visibility="isAdmin" />
         </div>
       </template>
     </div>
@@ -80,6 +68,7 @@
             <div class="title-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
               <h1 class="show-detail-title">{{ show.title }}</h1>
               <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(show.visibility)">{{ formatVisibility(show.visibility) }}</span>
+              <ShowFollowButton :show-id="show.id" :show-title="show.title" />
             </div>
             <p v-if="show.author" class="show-detail-author">{{ show.author }}</p>
             <p v-if="show.description" class="show-detail-desc">{{ show.description }}</p>
@@ -94,30 +83,14 @@
         />
 
         <div v-else class="episode-list">
-          <div v-for="ep in episodes" :key="ep.id" class="episode-row">
-            <div class="episode-main">
-              <h4 class="episode-title">{{ ep.title }}</h4>
-              <p class="episode-meta">
-                <span v-if="ep.season_number">S{{ ep.season_number }}</span>
-                <span v-if="ep.episode_number">E{{ ep.episode_number }}</span>
-                <span v-if="ep.pub_date">{{ formatPubDate(ep.pub_date) }}</span>
-                <span>{{ formatDuration(ep.duration) }}</span>
-              </p>
-            </div>
-            <button
-              v-if="ep.download_status === 'completed' && ep.local_file_path"
-              @click.stop="playEpisode(ep)"
-              class="episode-play-btn"
-              title="Play episode"
-              aria-label="Play episode"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            </button>
-            <span class="badge" :class="getStatusBadgeClass(ep.download_status)">{{ formatStatus(ep.download_status) }}</span>
-            <button v-if="isAdmin" @click.stop="openEpisodeEdit(ep)" class="edit-btn" title="Edit">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-            </button>
-          </div>
+          <PodcastEpisodeRow
+            v-for="ep in episodes"
+            :key="ep.id"
+            :episode="ep"
+            :can-edit="isAdmin"
+            @play="playEpisode"
+            @edit="openEpisodeEdit"
+          />
 
           <div v-if="episodesLoading" class="podcast-loading">Loading...</div>
           <div v-if="episodesError" class="podcast-error">
@@ -371,45 +344,6 @@ const handleCoverError = (event: Event) => {
   }
 };
 
-const formatDuration = (seconds: number | null): string => {
-  if (!seconds) return '--:--';
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
-
-// pub_date is the raw RSS date string (TEXT), so it may be unparseable —
-// fall back to showing it verbatim rather than "Invalid Date".
-const formatPubDate = (raw: string | null): string => {
-  if (!raw) return '';
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-};
-
-const formatStatus = (status: string): string => {
-  switch (status) {
-    case 'completed': return 'Downloaded';
-    case 'downloading': return 'In progress';
-    case 'pending': return 'Queued';
-    case 'failed': return 'Failed';
-    default: return status || 'Queued';
-  }
-};
-
-const getStatusBadgeClass = (status: string): string => {
-  switch (status) {
-    case 'completed': return 'badge-completed';
-    case 'downloading': return 'badge-downloading';
-    case 'failed': return 'badge-failed';
-    default: return 'badge-pending';
-  }
-};
-
 const formatVisibility = (vis: string): string => {
   switch (vis) {
     case 'public': return 'Public';
@@ -459,45 +393,6 @@ const getVisBadgeClass = (vis: string): string => {
      width where 220px fits. */
   grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
   gap: 20px;
-}
-
-.show-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 20px;
-  border-radius: var(--border-radius-lg);
-  cursor: pointer;
-  border: 1px solid var(--border-color);
-  background: rgba(17, 17, 34, 0.4);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.show-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(139, 92, 246, 0.3);
-  box-shadow: 0 12px 32px rgba(139, 92, 246, 0.15);
-}
-
-.show-card-cover {
-  width: 120px;
-  height: 120px;
-  border-radius: var(--border-radius-md);
-  object-fit: cover;
-  margin-bottom: 12px;
-}
-
-.show-card-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.show-card-meta {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
 }
 
 .back-btn {
@@ -555,44 +450,6 @@ const getVisBadgeClass = (vis: string): string => {
   padding: 8px 16px 16px;
 }
 
-.episode-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 14px;
-  /* .episode-main already has min-width: 0 (line 467-470), but the play
-     button, the status badge, and (for an admin) the edit button are all
-     effectively fixed-size and their combined width can still exceed the
-     row's content box at a 320px viewport. overflow-x: auto makes any
-     excess reachable by scrolling the row instead of leaving it clipped
-     by an ancestor's overflow: hidden. */
-  overflow-x: auto;
-}
-
-.episode-row:last-child {
-  border-bottom: none;
-}
-
-.episode-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.episode-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.episode-meta {
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
-
 .episode-search-results {
   display: flex;
   flex-direction: column;
@@ -623,40 +480,4 @@ const getVisBadgeClass = (vis: string): string => {
   margin-top: 12px;
 }
 
-.edit-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  transition: color 0.2s;
-  flex-shrink: 0;
-}
-
-.edit-btn:hover {
-  color: var(--text-primary);
-}
-
-.episode-play-btn {
-  background: none;
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  width: 26px;
-  height: 26px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  transition: color 0.2s, border-color 0.2s;
-  flex-shrink: 0;
-}
-
-.episode-play-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--accent-primary);
-}
 </style>
