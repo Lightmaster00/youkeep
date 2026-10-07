@@ -236,12 +236,13 @@ describe('runTidy safety guards', () => {
     expect(fs.readFileSync(path.join(dir, 'hard.dst'), 'utf8')).toBe('same');
   });
 
-  it('across devices: flushes the copy, renames it into place, flushes the folder, verifies, and only then removes the source', async () => {
+  it('across devices: flushes the new folder entry and the copy, renames it into place, flushes the folder, verifies, and only then removes the source', async () => {
     legacy('v1', 'Order', ['.mp4']);
     const calls: string[] = [];
     const rel = (p: string) => path.relative(dir, p);
     const base = crossDeviceFs();
     const recording = crossDeviceFs({
+      mkdir: async (p, o) => { calls.push(`mkdir ${rel(p)}`); return fs.promises.mkdir(p, o); },
       copyFile: async (a, b) => { calls.push(`copy ${rel(b)}`); await base.copyFile(a, b); },
       fsyncFile: async (p) => { calls.push(`fsync ${rel(p)}`); },
       rename: async (a, b) => { calls.push(`rename ${rel(a)} -> ${rel(b)}`); await base.rename(a, b); },
@@ -254,8 +255,12 @@ describe('runTidy safety guards', () => {
 
     expect(status).toMatchObject({ moved: 1, errors: 0 });
     const to = path.join('Chan', 'Order [v1]', 'Order [v1].mp4');
-    const tail = calls.slice(calls.indexOf(`copy ${to}.tidy-part`));
+    const tail = calls.slice(calls.indexOf(`mkdir ${path.dirname(to)}`));
     expect(tail.slice(0, tail.indexOf(`unlink ${path.join('Chan', 'v1.mp4')}`) + 1).filter((c) => !c.startsWith('lstat') || c === `lstat ${to}`)).toEqual([
+      `mkdir ${path.dirname(to)}`,
+      `fsyncDir Chan`,
+      `lstat ${to}`,
+      `rename ${path.join('Chan', 'v1.mp4')} -> ${to}`, // fails with EXDEV
       `copy ${to}.tidy-part`,
       `fsync ${to}.tidy-part`,
       `lstat ${to}`,
@@ -289,6 +294,52 @@ describe('runTidy safety guards', () => {
     expect(fs.readFileSync(chan('v1.mp4'), 'utf8')).toBe('v1.mp4');
     expect(fs.readFileSync(chan('v2.mp4'), 'utf8')).toBe('v2.mp4');
     expect(fs.existsSync(chan('Shrunk [v2]'))).toBe(false);
+  });
+
+  it('treats a filesystem that cannot fsync folders (ENOSYS) as unsupported, not as a failure', async () => {
+    legacy('v1', 'Nosys', ['.mp4']);
+    const fsp = crossDeviceFs({ fsyncDir: async () => { throw Object.assign(new Error('function not implemented'), { code: 'ENOSYS' }); } });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ moved: 1, errors: 0 });
+    expect(fs.existsSync(chan('v1.mp4'))).toBe(false);
+  });
+
+  it('across devices: a placed destination that is not a regular file is refused and the source kept', async () => {
+    legacy('v1', 'Swap', ['.mp4']); // 'v1.mp4' is 6 bytes, like the link target 'x.real'
+    const exdev = crossDeviceFs();
+    const fsp = crossDeviceFs({
+      rename: async (a, b) => {
+        await exdev.rename(a, b);
+        if (a.endsWith('.tidy-part')) {
+          fs.renameSync(b, path.join(path.dirname(b), 'x.real'));
+          fs.symlinkSync('x.real', b);
+        }
+      },
+    });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ moved: 0, errors: 1 });
+    expect(fs.readFileSync(chan('v1.mp4'), 'utf8')).toBe('v1.mp4');
+    expect(fs.existsSync(chan('Swap [v1]', 'Swap [v1].mp4'))).toBe(false);
+  });
+
+  it('never removes a stale partial copy that is a folder or a symlink', async () => {
+    legacy('v1', 'Odd', ['.mp4', '.jpg']);
+    // The symlink sits on the first planned move so a missing check is not hidden by the folder failing first.
+    fs.mkdirSync(chan('Odd [v1]', 'Odd [v1].jpg.tidy-part'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'target'), 'precious');
+    fs.symlinkSync(path.join(dir, 'target'), chan('Odd [v1]', 'Odd [v1].mp4.tidy-part'));
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: crossDeviceFs() });
+
+    expect(status).toMatchObject({ moved: 0, errors: 1 });
+    expect(fs.statSync(chan('Odd [v1]', 'Odd [v1].jpg.tidy-part')).isDirectory()).toBe(true);
+    expect(fs.lstatSync(chan('Odd [v1]', 'Odd [v1].mp4.tidy-part')).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(path.join(dir, 'target'), 'utf8')).toBe('precious');
+    expect(fs.readdirSync(chan()).sort()).toEqual(['Odd [v1]', 'v1.jpg', 'v1.mp4']);
   });
 
   it('clears a stale partial copy only in the folder being written and only while its source exists', async () => {
@@ -441,6 +492,20 @@ describe('doubled channel folder repair guards', () => {
 });
 
 describe('planTidyAsync', () => {
+  it('lets other work run while it plans', async () => {
+    for (let i = 0; i < 100; i++) insertVideo(db, { id: `m${i}`, channelId: 'c1', title: `M${i}`, localVideoPath: `/downloads/Chan/m${i}.mp4`, localThumbnailPath: null });
+    let ticks = 0;
+    let running = true;
+    const tick = () => { if (running) { ticks++; setImmediate(tick); } };
+    setImmediate(tick);
+
+    const plan = await planTidyAsync(db, { downloadsDir: dir });
+    running = false;
+
+    expect(plan.preview.missingFiles).toBe(100);
+    expect(ticks).toBeGreaterThan(5);
+  });
+
   it('gives the same plan as planTidy and never plans a temporary partial copy', async () => {
     legacy('v1', 'Alpha');
     legacy('v2', 'Beta', ['.mp4']);

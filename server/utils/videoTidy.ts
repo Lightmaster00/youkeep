@@ -481,22 +481,23 @@ async function nodeFsyncFile(p: string): Promise<void> {
 }
 
 // Folders cannot be opened or fsynced on every platform/filesystem: that is not an error.
-const DIR_FSYNC_UNSUPPORTED = new Set(['EISDIR', 'EINVAL', 'ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EACCES', 'EBADF']);
+const DIR_FSYNC_UNSUPPORTED = new Set(['EISDIR', 'EINVAL', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EPERM', 'EACCES', 'EBADF']);
 
 async function nodeFsyncDir(p: string): Promise<void> {
-  let handle: fs.promises.FileHandle;
-  try {
-    handle = await fs.promises.open(p, 'r');
-  } catch (err: any) {
-    if (DIR_FSYNC_UNSUPPORTED.has(err?.code)) return;
-    throw err;
-  }
+  const handle = await fs.promises.open(p, 'r');
   try {
     await handle.sync();
-  } catch (err: any) {
-    if (!DIR_FSYNC_UNSUPPORTED.has(err?.code)) throw err;
   } finally {
     await handle.close();
+  }
+}
+
+/** Flushes a folder's entries; a filesystem that cannot fsync folders is not an error. */
+async function syncDir(fsp: RunnerFs, p: string): Promise<void> {
+  try {
+    await (fsp.fsyncDir ?? nodeFsyncDir)(p);
+  } catch (err: any) {
+    if (!DIR_FSYNC_UNSUPPORTED.has(err?.code)) throw err;
   }
 }
 
@@ -610,7 +611,7 @@ export async function moveFileVerified(fsp: RunnerFs, from: string, to: string):
   }
   try {
     // The rename must be durable before the source on the other filesystem goes away.
-    await (fsp.fsyncDir ?? nodeFsyncDir)(path.dirname(to));
+    await syncDir(fsp, path.dirname(to));
     const placed = await lstatOrNull(fsp, to);
     if (!placed || !placed.isFile() || placed.size !== source.size) throw new Error(`The copy of ${from} could not be verified.`);
   } catch (err) {
@@ -646,7 +647,11 @@ async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs,
   const createdDir = !(await statOrNull(fsp, item.toDir));
   const done: TidyMove[] = [];
   try {
-    if (createdDir) await fsp.mkdir(item.toDir, { recursive: true });
+    if (createdDir) {
+      await fsp.mkdir(item.toDir, { recursive: true });
+      // Make the new folder's entry durable before any source can be removed into it.
+      await syncDir(fsp, path.dirname(item.toDir));
+    }
     else await clearStalePartials(fsp, item);
     for (const move of item.moves) {
       await moveFileVerified(fsp, move.from, move.to);
