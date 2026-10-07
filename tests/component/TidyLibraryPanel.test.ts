@@ -140,8 +140,41 @@ describe('TidyLibraryPanel', () => {
     statusReplies = [{ ...STATUS, state: 'running', processed: 2, total: 5 }];
     await w.find('[data-testid="tidy-start"]').trigger('click');
     await flushPromises();
-    expect(w.find('[data-testid="tidy-error"]').text()).toContain('already in progress');
+    // The refusal is replaced by the progress of the run already going on.
+    expect(w.find('[data-testid="tidy-error"]').exists()).toBe(false);
     expect(w.find('[data-testid="tidy-progress"]').text()).toContain('2 of 5');
+    w.unmount();
+  });
+
+  it('shows "Preparing..." before the plan is ready, then the next step of the report', async () => {
+    vi.useFakeTimers();
+    statusReplies = [
+      { ...STATUS, state: 'running', processed: 0, total: 0 },
+      { ...STATUS, state: 'done', processed: 1, total: 1, moved: 1, channelProblems: [{ channelId: 'c2', channel: 'Dup', message: 'Its doubled folder was not repaired: a video is missing.' }], nextStep: '1 channel(s) could not be repaired yet: run tidying again after fixing the problems listed above.' },
+    ];
+    const w = await mountPanel();
+    expect(w.find('[data-testid="tidy-progress"]').text()).toContain('Preparing...');
+    await vi.advanceTimersByTimeAsync(1000);
+    await flushPromises();
+    expect(w.find('[data-testid="tidy-channel-problems"]').text()).toContain('Dup: Its doubled folder was not repaired');
+    expect(w.find('[data-testid="tidy-next-step"]').text()).toContain('could not be repaired yet');
+    w.unmount();
+  });
+
+  it('stops polling after repeated 401/403 answers and says why', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url !== '/api/admin/library/tidy/status') return {};
+      calls++;
+      if (calls === 1) return { ...STATUS, state: 'running', processed: 1, total: 4 };
+      throw { statusCode: 401 };
+    });
+    const w = await mountPanel();
+    await vi.advanceTimersByTimeAsync(10000);
+    await flushPromises();
+    expect(calls).toBe(4); // the first answer, then three refusals
+    expect(w.find('[data-testid="tidy-error"]').text()).toContain('no longer signed in');
     w.unmount();
   });
 });

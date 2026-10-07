@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { cancelTidyRun, getTidyStatus, isTidyRunning, moveFileVerified, planTidy, planTidyAsync, runTidy, startTidyRun, type RunnerFs } from '../../server/utils/videoTidy';
+import { cancelTidyRun, getTidyStatus, isTidyRunning, moveFileVerified, nodePlannerFs, planTidy, planTidyAsync, previewTidy, runTidy, startTidyRun, type RunnerFs } from '../../server/utils/videoTidy';
 import { resolveStoredPath } from '../../server/utils/videoPaths';
 import { createTestDb, insertChannel, insertVideo, mockEvent } from '../helpers/testDb';
 
@@ -462,6 +462,9 @@ describe('doubled channel folder repair guards', () => {
 
     expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
     expect(savePath()).toBe(custom());
+    // The report says which channel was not repaired, why, and what to do next.
+    expect(status.channelProblems).toEqual([{ channelId: 'c2', channel: 'Dup', message: expect.stringContaining('still in the old layout') }]);
+    expect(status.nextStep).toContain('1 channel(s) could not be repaired yet');
   });
 
   it('keeps the save path while a video of the channel is downloading', async () => {
@@ -556,7 +559,7 @@ describe('doubled-looking folders that must not be repaired', () => {
     const { default: deleteChannel } = await import('../../server/api/admin/channels/[id].delete');
     const downloader = await import('../../server/utils/downloader');
     Object.assign(globalThis as any, {
-      getDb: () => db, requireAdmin: async () => ({}), cancelDownload: () => {},
+      getDb: () => db, requireAdmin: async () => ({}), cancelDownload: () => {}, getDownloadsDir: () => dir,
       resolveChannelBaseDir: downloader.resolveChannelBaseDir, sanitizeFolderName: downloader.sanitizeFolderName,
     });
     await deleteChannel(mockEvent('', { method: 'DELETE', params: { id: 'yt' } }));
@@ -613,5 +616,48 @@ describe('doubled-looking folders that must not be repaired', () => {
 
     expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
     expect(savePathOf('c2')).toBe(custom);
+  });
+});
+
+describe('preview robustness', () => {
+  it('counts videos in an unreadable folder as problems without failing the preview or the run', async () => {
+    legacy('v1', 'Fine', ['.mp4']);
+    insertChannel(db, { id: 'c9', title: 'Locked' });
+    insertVideo(db, { id: 'k1', channelId: 'c9', title: 'K', localVideoPath: '/downloads/Locked/k1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(dir, 'Locked'));
+    fs.writeFileSync(path.join(dir, 'Locked', 'k1.mp4'), 'k1');
+    const locked = path.join(dir, 'Locked');
+    const plannerFs = {
+      ...nodePlannerFs,
+      readdirSync: (p: string) => {
+        if (p === locked) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        return fs.readdirSync(p);
+      },
+    };
+
+    const preview = planTidy(db, { downloadsDir: dir, fs: plannerFs }).preview;
+    expect(preview).toMatchObject({ toMove: 1, notWritable: 1, problems: [{ id: 'k1', reason: expect.stringContaining('EACCES') }] });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp, plannerFs });
+    expect(status).toMatchObject({ state: 'done', moved: 1, errors: 0 });
+  });
+
+  it('shares one preview computation between concurrent requests', async () => {
+    legacy('v1', 'One', ['.mp4']);
+    const first = previewTidy(db, { downloadsDir: dir });
+    const second = previewTidy(db, { downloadsDir: dir });
+    expect(await second).toBe(await first);
+    expect(await previewTidy(db, { downloadsDir: dir })).not.toBe(await first); // a later request computes afresh
+  });
+
+  it('tells what to do next after a cancelled run', async () => {
+    legacy('v1', 'One', ['.mp4']);
+    legacy('v2', 'Two', ['.mp4']);
+    const cancelling: RunnerFs = { ...realFsp, rename: async (a, b) => { cancelTidyRun(); await fs.promises.rename(a, b); } };
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: cancelling });
+
+    expect(status.state).toBe('cancelled');
+    expect(status.nextStep).toContain('run it again');
   });
 });

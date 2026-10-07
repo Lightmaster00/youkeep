@@ -54,6 +54,8 @@ export interface TidyPreview {
   duplicateFolders: number;
   /** Channels whose save path ends with their own folder name but is NOT a doubled folder to repair. */
   channelNotes: { channelId: string; channel: string; note: string }[];
+  /** Videos that could not be checked (e.g. an unreadable folder), counted in notWritable. */
+  problems: { id: string; title: string; reason: string }[];
   samples: { id: string; title: string; from: string; to: string }[];
   channels: { channelId: string; channel: string; toMove: number }[];
 }
@@ -380,7 +382,7 @@ function* planTidySteps(db: Database.Database, opts: { downloadsDir: string; fs?
 
   const preview: TidyPreview = {
     total: rows.length, toMove: 0, alreadyTidy: 0, conflicts: 0, missingFiles: 0, notWritable: 0, duplicateFolders: 0,
-    channelNotes: [], samples: [], channels: [],
+    channelNotes: [], problems: [], samples: [], channels: [],
   };
   const items: TidyPlanItem[] = [];
   const perChannel = new Map<string, { channelId: string; channel: string; toMove: number }>();
@@ -402,7 +404,16 @@ function* planTidySteps(db: Database.Database, opts: { downloadsDir: string; fs?
       repairableByChannel.set(row.channelId, repairable);
     }
 
-    const result = classify(row, opts.downloadsDir, fsx, repairable);
+    let result: Classified;
+    try {
+      result = classify(row, opts.downloadsDir, fsx, repairable);
+    } catch (err: any) {
+      // One unreadable folder must not fail the whole preview or run.
+      result = { status: 'notWritable' };
+      if (preview.problems.length < SAMPLE_LIMIT * 2) {
+        preview.problems.push({ id: row.id, title: row.title, reason: `Its folder could not be read (${err?.code || err?.message || String(err)}).` });
+      }
+    }
     if (result.status === 'tidy') preview.alreadyTidy++;
     else if (result.status === 'missing') preview.missingFiles++;
     else if (result.status === 'conflict') preview.conflicts++;
@@ -467,6 +478,10 @@ export interface TidyStatus {
   lastError: string | null;
   errorDetails: { id: string; title: string; message: string }[];
   channelsFixed: number;
+  /** Doubled channel folders planned for repair but not repaired by this run, with why. */
+  channelProblems: { channelId: string; channel: string; message: string }[];
+  /** What to do next, when the run did not finish everything. */
+  nextStep: string | null;
 }
 
 export interface RunnerFs {
@@ -513,18 +528,34 @@ const G_TIDY_CANCEL = Symbol.for('YouKeep.videoTidyCancel');
 const _g = globalThis as any;
 
 function idleStatus(): TidyStatus {
-  return { state: 'idle', processed: 0, total: 0, moved: 0, skipped: 0, errors: 0, lastError: null, errorDetails: [], channelsFixed: 0 };
+  return { state: 'idle', processed: 0, total: 0, moved: 0, skipped: 0, errors: 0, lastError: null, errorDetails: [], channelsFixed: 0, channelProblems: [], nextStep: null };
 }
 if (!_g[G_TIDY_STATUS]) _g[G_TIDY_STATUS] = idleStatus();
 if (_g[G_TIDY_CANCEL] === undefined) _g[G_TIDY_CANCEL] = false;
 
 export function getTidyStatus(): TidyStatus {
   const status = _g[G_TIDY_STATUS] as TidyStatus;
-  return { ...status, errorDetails: [...status.errorDetails] };
+  return { ...status, errorDetails: [...status.errorDetails], channelProblems: [...status.channelProblems] };
 }
 
 export function isTidyRunning(): boolean {
   return (_g[G_TIDY_STATUS] as TidyStatus).state === 'running';
+}
+
+const G_TIDY_PREVIEW = Symbol.for('YouKeep.videoTidyPreview');
+
+/**
+ * The preview, single-flight: a second request while one is being computed
+ * gets the same answer instead of probing the whole library again.
+ */
+export function previewTidy(db: Database.Database, opts: { downloadsDir: string; fs?: PlannerFs }): Promise<TidyPreview> {
+  const inflight = _g[G_TIDY_PREVIEW] as Promise<TidyPreview> | null | undefined;
+  if (inflight) return inflight;
+  const pending = planTidyAsync(db, opts)
+    .then((plan) => plan.preview)
+    .finally(() => { _g[G_TIDY_PREVIEW] = null; });
+  _g[G_TIDY_PREVIEW] = pending;
+  return pending;
 }
 
 /** Asks the running tidy to stop after the current video. */
@@ -769,7 +800,7 @@ function channelRowsReady(rows: FixRow[], channelFolder: string): boolean {
  * is taken in one transaction that re-reads the rows (unchanged since the
  * probes) and compare-and-sets the old custom_save_path.
  */
-async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs, downloadsDir: string): Promise<boolean> {
+async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs, downloadsDir: string): Promise<string | null> {
   const base = path.resolve(fix.from);
   const channelFolder = path.basename(base);
   const readRows = () => db.prepare('SELECT id, download_status AS status, local_video_path AS url FROM videos WHERE channel_id = ? ORDER BY id')
@@ -779,18 +810,33 @@ async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: 
     const r = rows[i]!;
     if (r.url && isNewLayoutUrl(r.url, r.id)) {
       const [, videoFolder, fileName] = storedUrlSegments(r.url)!;
-      if (!fsx.existsSync(path.join(base, videoFolder, fileName))) return false;
+      if (!fsx.existsSync(path.join(base, videoFolder, fileName))) return 'a video is not in its final folder yet';
     }
     if ((i + 1) % 25 === 0) await yieldToEventLoop();
   }
-  return db.transaction(() => {
+  return db.transaction((): string | null => {
     const now = readRows();
     const unchanged = now.length === rows.length && now.every((r, i) => r.id === rows[i]!.id && r.url === rows[i]!.url);
-    if (!unchanged || !channelRowsReady(now, channelFolder)) return false;
+    if (!unchanged) return 'its videos changed during the run';
+    if (!channelRowsReady(now, channelFolder)) return 'some of its videos are still in the old layout (see the problems above) or downloading';
     // Still this channel's folder alone (nothing shared or foreign appeared since the plan)?
-    if (doubledRepairBlocker(db, fix.channelId, fix.from, downloadsDir, fsx) !== null) return false;
-    return db.prepare('UPDATE channels SET custom_save_path = ? WHERE id = ? AND custom_save_path = ?').run(fix.to, fix.channelId, fix.from).changes === 1;
+    const blocker = doubledRepairBlocker(db, fix.channelId, fix.from, downloadsDir, fsx);
+    if (blocker !== null) return `its folder can no longer be repaired: ${blocker}`;
+    const changed = db.prepare('UPDATE channels SET custom_save_path = ? WHERE id = ? AND custom_save_path = ?').run(fix.to, fix.channelId, fix.from).changes === 1;
+    return changed ? null : 'its save folder was changed meanwhile';
   })();
+}
+
+/** What the admin should do after a run that did not finish everything (null when nothing is left). */
+function nextStepFor(status: TidyStatus): string | null {
+  const steps: string[] = [];
+  if (status.state === 'cancelled') steps.push('Tidying was cancelled: run it again to move the remaining videos.');
+  if (status.state === 'failed') steps.push('Tidying stopped because of an error: check the server log, then run it again (videos already moved stay moved).');
+  if (status.errors > 0) steps.push(`${status.errors} video(s) were left in place: fix the problems listed above, then run tidying again.`);
+  if (status.channelProblems.length > 0 && status.state !== 'cancelled') {
+    steps.push(`${status.channelProblems.length} channel(s) could not be repaired yet: run tidying again after fixing the problems listed above.`);
+  }
+  return steps.length ? steps.join(' ') : null;
 }
 
 /** Runs one tidy pass. Callers wanting a background run use startTidyRun (one at a time). */
@@ -829,14 +875,25 @@ export async function runTidy(deps: TidyRunDeps): Promise<TidyStatus> {
     }
     if (status.state === 'running') {
       for (const fix of plan.channelFixes) {
-        if (await applyChannelFix(deps.db, fix, plannerFs, deps.downloadsDir)) status.channelsFixed++;
+        const problem = await applyChannelFix(deps.db, fix, plannerFs, deps.downloadsDir);
+        if (problem === null) status.channelsFixed++;
+        else {
+          const channel = deps.db.prepare('SELECT title FROM channels WHERE id = ?').get(fix.channelId) as { title: string | null } | undefined;
+          status.channelProblems.push({ channelId: fix.channelId, channel: channel?.title || fix.channelId, message: `Its doubled folder was not repaired: ${problem}.` });
+        }
       }
       status.state = 'done';
+    } else if (plan.channelFixes.length) {
+      for (const fix of plan.channelFixes) {
+        const channel = deps.db.prepare('SELECT title FROM channels WHERE id = ?').get(fix.channelId) as { title: string | null } | undefined;
+        status.channelProblems.push({ channelId: fix.channelId, channel: channel?.title || fix.channelId, message: 'Its doubled folder was not repaired: the run was cancelled.' });
+      }
     }
   } catch (err: any) {
     status.state = 'failed';
     status.lastError = err?.message || String(err);
   } finally {
+    status.nextStep = nextStepFor(status);
     _g[G_TIDY_CANCEL] = false;
   }
   return getTidyStatus();

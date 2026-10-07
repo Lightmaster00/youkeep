@@ -372,3 +372,52 @@ export function listSubtitleFiles(loc: StoredVideoLocation): { code: string; fil
     }))
     .filter((sub) => sub.code.length > 0);
 }
+
+/**
+ * Prepares removing a channel's files from disk. Call it BEFORE the channel's
+ * rows are deleted (it reads them), then call `remove()` afterwards.
+ * - Removes `<base>/<Channel>` recursively, but only when that folder is
+ *   strictly inside the base folder: a title like `..`, `.` or blank never
+ *   points the removal at the base folder or above it.
+ * - Also removes the videos a partly repaired doubled channel folder already
+ *   moved up to `<base>/<Title> [<id>]` (outside `<base>/<Channel>`), with the
+ *   same rules as deleting one video: only its own files, then its folder if
+ *   empty; never anything else in the base folder.
+ */
+export function prepareChannelFilesRemoval(
+  db: Database.Database,
+  channelId: string,
+  opts: { baseDir: string; downloadsDir?: string },
+): { channelDir: string; remove(): { removedChannelDir: boolean; skippedReason: string | null } } {
+  const channel = db.prepare('SELECT title FROM channels WHERE id = ?').get(channelId) as { title: string | null } | undefined;
+  const baseDir = path.resolve(opts.baseDir);
+  const channelFolder = sanitizeFolderName(channel?.title || channelId);
+  const channelDir = path.resolve(baseDir, channelFolder);
+  const rows = db.prepare('SELECT id, channel_id, title, local_video_path FROM videos WHERE channel_id = ?').all(channelId) as
+    { id: string; channel_id: string; title: string | null; local_video_path: string | null }[];
+  const movedUp: StoredVideoLocation[] = [];
+  for (const row of rows) {
+    if (!row.local_video_path || !isNewLayoutUrl(row.local_video_path, row.id)) continue;
+    const loc = resolveStoredPath(db, row, { downloadsDir: opts.downloadsDir });
+    if (path.dirname(loc.dir) === loc.baseDir && path.basename(loc.baseDir) === channelFolder) movedUp.push(loc);
+  }
+  return {
+    channelDir,
+    remove() {
+      for (const loc of movedUp) removeVideoFiles(loc);
+      if (!isContained(baseDir, channelDir)) {
+        const skippedReason = `the channel folder ${channelDir} is not inside its base folder ${baseDir}`;
+        console.error(`Channel ${channelId}: files left in place because ${skippedReason}.`);
+        return { removedChannelDir: false, skippedReason };
+      }
+      if (!fs.existsSync(channelDir)) return { removedChannelDir: false, skippedReason: null };
+      try {
+        fs.rmSync(channelDir, { recursive: true, force: true });
+        return { removedChannelDir: true, skippedReason: null };
+      } catch (err) {
+        console.error(`Failed to delete channel directory ${channelDir}:`, err);
+        return { removedChannelDir: false, skippedReason: null };
+      }
+    },
+  };
+}

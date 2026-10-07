@@ -2,6 +2,7 @@ import { defineEventHandler, createError } from 'h3';
 import fs from 'fs';
 import path from 'path';
 import { removeVideoFiles, resolveStoredPath } from '../../../utils/videoPaths';
+import { isTidyRunning } from '../../../utils/videoTidy';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -9,6 +10,9 @@ export default defineEventHandler(async (event) => {
 
   if (!videoId) {
     throw createError({ statusCode: 400, statusMessage: 'Video ID is required.' });
+  }
+  if (isTidyRunning()) {
+    throw createError({ statusCode: 409, statusMessage: 'Library files are being tidied. Try again when it has finished.' });
   }
 
   const db = getDb();

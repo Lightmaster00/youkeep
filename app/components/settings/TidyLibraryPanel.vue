@@ -12,7 +12,8 @@
       <div class="tidy-bar" role="progressbar" :aria-valuenow="progressPercent" aria-valuemin="0" aria-valuemax="100">
         <div class="tidy-bar-fill" :style="{ width: `${progressPercent}%` }"></div>
       </div>
-      <p class="section-desc">{{ status.processed }} of {{ status.total }} videos processed, {{ status.moved }} moved.</p>
+      <p v-if="status.total === 0" class="section-desc">Preparing...</p>
+      <p v-else class="section-desc">{{ status.processed }} of {{ status.total }} videos processed, {{ status.moved }} moved.</p>
       <button type="button" class="btn btn-secondary-dark" :disabled="cancelling" data-testid="tidy-cancel" @click="cancelRun">
         {{ cancelling ? 'Cancelling...' : 'Cancel' }}
       </button>
@@ -27,6 +28,10 @@
       <ul v-if="report.errorDetails.length" class="tidy-list">
         <li v-for="item in report.errorDetails" :key="item.id">"{{ item.title }}": {{ item.message }}</li>
       </ul>
+      <ul v-if="report.channelProblems?.length" class="tidy-list" data-testid="tidy-channel-problems">
+        <li v-for="item in report.channelProblems" :key="item.channelId">{{ item.channel }}: {{ item.message }}</li>
+      </ul>
+      <p v-if="report.nextStep" class="section-desc" data-testid="tidy-next-step">{{ report.nextStep }}</p>
       <button type="button" class="btn btn-secondary-dark" data-testid="tidy-done" @click="report = null">Done</button>
     </div>
 
@@ -37,6 +42,9 @@
           Left as they are: {{ preview.conflicts }} name conflict(s), {{ preview.missingFiles }} missing file(s),
           {{ preview.notWritable }} in folders YouKeep cannot write to.
         </p>
+        <ul v-if="preview.problems?.length" class="tidy-list" data-testid="tidy-problems">
+          <li v-for="item in preview.problems" :key="item.id">"{{ item.title }}": {{ item.reason }}</li>
+        </ul>
         <p v-if="preview.duplicateFolders" class="section-desc">
           {{ preview.duplicateFolders }} channel(s) saved in a doubled folder (like "Channel/Channel") will be repaired.
         </p>
@@ -70,6 +78,7 @@ interface TidyPreview {
   samples: { id: string; title: string; from: string; to: string }[];
   channels: { channelId: string; channel: string; toMove: number }[];
   channelNotes?: { channelId: string; channel: string; note: string }[];
+  problems?: { id: string; title: string; reason: string }[];
 }
 interface TidyStatus {
   state: 'idle' | 'running' | 'done' | 'failed' | 'cancelled';
@@ -77,7 +86,12 @@ interface TidyStatus {
   lastError: string | null;
   errorDetails: { id: string; title: string; message: string }[];
   channelsFixed: number;
+  channelProblems?: { channelId: string; channel: string; message: string }[];
+  nextStep?: string | null;
 }
+
+/** Consecutive 401/403 answers after which polling stops (the session is gone). */
+const AUTH_FAILURE_LIMIT = 3;
 
 const preview = ref<TidyPreview | null>(null);
 const status = ref<TidyStatus | null>(null);
@@ -87,6 +101,7 @@ const starting = ref(false);
 const cancelling = ref(false);
 const errorMessage = ref('');
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let authFailures = 0;
 let unmounted = false;
 
 function schedulePoll() {
@@ -131,8 +146,10 @@ async function pollStatus() {
   pollTimer = null;
   try {
     const s = await $fetch<TidyStatus>('/api/admin/library/tidy/status');
+    authFailures = 0;
     if (s?.state === 'running') {
       status.value = s;
+      errorMessage.value = ''; // e.g. the "already running" refusal: the progress now explains it
       schedulePoll();
       return;
     }
@@ -142,7 +159,16 @@ async function pollStatus() {
       report.value = s;
       preview.value = null; // stale once files have moved
     }
-  } catch {
+  } catch (err: any) {
+    const code = err?.statusCode ?? err?.status ?? err?.response?.status;
+    if (code === 401 || code === 403) {
+      authFailures++;
+      if (authFailures >= AUTH_FAILURE_LIMIT) {
+        status.value = null;
+        errorMessage.value = 'You are no longer signed in as an administrator. Reload the page to follow the tidying.';
+        return;
+      }
+    }
     // A single failed request must not freeze the progress view.
     schedulePoll();
   }

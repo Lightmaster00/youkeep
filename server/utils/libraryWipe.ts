@@ -1,6 +1,5 @@
-import path from 'path';
-import fs from 'fs';
 import { isTidyRunning } from './videoTidy';
+import { prepareChannelFilesRemoval } from './videoPaths';
 
 export type WipeItemType = 'channel' | 'artist' | 'show';
 
@@ -183,6 +182,10 @@ function deleteChannelForWipe(channelId: string, title: string): WipeOutcome {
       title: string;
       custom_save_path: string | null;
     } | undefined;
+    // Resolved before the rows are deleted (it reads the videos' stored paths).
+    const files = channel
+      ? prepareChannelFilesRemoval(db, channelId, { baseDir: resolveChannelBaseDir(channel.custom_save_path), downloadsDir: getDownloadsDir() })
+      : null;
 
     for (const v of videos) {
       cancelDownload(v.id);
@@ -193,22 +196,13 @@ function deleteChannelForWipe(channelId: string, title: string): WipeOutcome {
       return { type: 'channel', id: channelId, name: title, error: 'Channel not found.' };
     }
 
-    const basePath = resolveChannelBaseDir(channel?.custom_save_path);
-    const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || channelId));
-    if (fs.existsSync(channelDir)) {
-      // Own try/catch, deliberately not re-thrown into the outer catch below:
-      // the DB row is already deleted at this point (the real "this content
-      // is gone" signal), so a directory-removal failure is logged but must
-      // not turn this into a reported failure — matches the fix Task 1's
-      // review required for deleteMusicArtist, and the convention
-      // deletePodcastShow already followed correctly from the start.
-      try {
-        fs.rmSync(channelDir, { recursive: true, force: true });
-      } catch (fsErr: any) {
-        console.error(`Failed to delete channel directory ${channelDir}:`, fsErr);
-      }
-    } else {
-      console.warn(`Wipe: channel directory not found, skipping fs removal: ${channelDir} (channel "${channel?.title}", ${videos.length} video(s), custom_save_path=${channel?.custom_save_path ?? 'none'})`);
+    // Never re-thrown: the DB row is already deleted at this point (the real
+    // "this content is gone" signal), so a directory-removal failure is logged
+    // (inside remove()) but is not a reported failure. The channel folder is
+    // only removed when it is strictly inside its base folder.
+    const removal = files?.remove();
+    if (removal && !removal.removedChannelDir && !removal.skippedReason) {
+      console.warn(`Wipe: channel directory not found or not removed: ${files!.channelDir} (channel "${channel?.title}", ${videos.length} video(s), custom_save_path=${channel?.custom_save_path ?? 'none'})`);
     }
 
     return { type: 'channel', id: channelId, name: title };
