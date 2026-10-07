@@ -10,7 +10,7 @@ import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlock
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { isContained, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, type VideoPaths } from './videoPaths';
+import { channelBaseDirs, isContained, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -63,11 +63,21 @@ export function cleanupPartialFiles(videoId: string, channelId: string): void {
 
   // The video's own folder: the one already on disk for this id (even if the
   // title changed since), else the one named from the current title.
-  const video = db.prepare('SELECT title FROM videos WHERE id = ?').get(videoId) as { title: string } | undefined;
+  const video = db.prepare('SELECT title, local_video_path FROM videos WHERE id = ?').get(videoId) as { title: string; local_video_path: string | null } | undefined;
   const paths = resolveVideoPaths({ baseDir: basePath, channelFolder, title: video?.title, id: videoId });
   try {
     removeVideoFiles({ layout: 'new', baseDir: basePath, dir: paths.dir, baseName: paths.baseName, urlDir: paths.urlDir, videoFile: null });
   } catch (e) {}
+
+  // Leftovers of earlier attempts under the other base the downloader may have
+  // written to (the save folder changed writability, see channelBaseDirs). The
+  // video's stored file there, if any, is its finished copy and stays.
+  const others = channelBaseDirs(channel?.custom_save_path, getDownloadsDir())
+    .filter((base) => base !== path.resolve(basePath));
+  if (others.length > 0) {
+    const keepFiles = video?.local_video_path ? storedFileCandidates(others, channelFolder, video.local_video_path) : [];
+    removeVideoLeftovers({ bases: others, channelFolder, id: videoId, keepFiles });
+  }
 }
 
 // Define global-backed state to survive development HMR module hot reloads

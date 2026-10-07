@@ -352,6 +352,64 @@ export function removeVideoFiles(loc: StoredVideoLocation): { removed: number; f
   return result;
 }
 
+/** Every place under `bases` a stored video path (new layout or legacy) may point at. */
+export function storedFileCandidates(bases: string[], channelFolder: string, storedUrl: string): string[] {
+  const segments = storedUrlSegments(storedUrl);
+  if (segments) {
+    const [channelSegmentName, videoFolder, fileName] = segments;
+    return bases.flatMap((base) => candidateVideoDirs(base, channelSegmentName, videoFolder).map((dir) => path.join(dir, fileName)));
+  }
+  return bases.map((base) => path.resolve(base, channelFolder, path.posix.basename(storedUrl)));
+}
+
+/**
+ * Removes one video's own download leftovers under each folder of `bases`
+ * (see channelBaseDirs: the downloader may have written to more than one):
+ * - its video folder `<Title> [<id>]` in the channel folder (and directly in
+ *   the base, for a save folder ending in the channel folder name), with the
+ *   rules of removeVideoFiles (known artifacts only, regular files only, the
+ *   folder itself only when nothing else is left in it);
+ * - its legacy flat files in the channel folder: `<id>.mp4`, `<id>.jpg`,
+ *   `<id>.mp4.part`, `<id>.mp4.ytdl` and per-format `<id>.f*.part|.ytdl`.
+ * Only folders strictly inside their base, only regular files. A video folder
+ * holding one of `keepFiles` (absolute paths) is left whole, and a legacy file
+ * listed there stays. Never throws.
+ */
+export function removeVideoLeftovers(opts: { bases: string[]; channelFolder: string; id: string; keepFiles?: string[] }): void {
+  const keep = new Set((opts.keepFiles ?? []).map((file) => path.resolve(file)));
+  for (const rawBase of opts.bases) {
+    const base = path.resolve(rawBase);
+    const channel = channelSegment(opts.channelFolder);
+    const searchDirs = [path.join(base, channel)];
+    if (path.basename(base) === channel) searchDirs.push(base);
+    for (const searchDir of searchDirs) {
+      const folder = findExistingVideoDir(searchDir, opts.id);
+      if (!folder) continue;
+      const dir = path.join(searchDir, folder);
+      if (!isContained(base, dir) || [...keep].some((file) => path.dirname(file) === dir)) continue;
+      try {
+        removeVideoFiles({ layout: 'new', baseDir: base, dir, baseName: folder, urlDir: '', videoFile: null });
+      } catch {}
+    }
+    const legacyDir = path.join(base, opts.channelFolder);
+    if (!isContained(base, legacyDir)) continue;
+    let entries: string[] = [];
+    try {
+      entries = fs.readdirSync(legacyDir);
+    } catch {
+      continue;
+    }
+    const exact = new Set(['mp4', 'jpg', 'mp4.part', 'mp4.ytdl'].map((ext) => `${opts.id}.${ext}`));
+    for (const entry of entries) {
+      const fragment = entry.startsWith(`${opts.id}.f`) && (entry.endsWith('.part') || entry.endsWith('.ytdl'));
+      if (!exact.has(entry) && !fragment) continue;
+      const file = path.join(legacyDir, entry);
+      if (keep.has(file) || !isRegularFile(file)) continue;
+      try { fs.unlinkSync(file); } catch {}
+    }
+  }
+}
+
 /**
  * Name of a video folder already on disk in `channelDir` for this id (its
  * `[<id>]` suffix matches), or null. Several matches: the first, in name order,

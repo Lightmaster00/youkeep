@@ -1,7 +1,7 @@
 import { defineEventHandler, createError } from 'h3';
 import fs from 'fs';
 import path from 'path';
-import { isContained, removeVideoFiles, resolveStoredPath, videoChannelFolder } from '../../../utils/videoPaths';
+import { channelBaseDirs, isContained, removeVideoFiles, removeVideoLeftovers, resolveStoredPath, videoChannelFolder } from '../../../utils/videoPaths';
 import { isTidyRunning } from '../../../utils/videoTidy';
 
 export default defineEventHandler(async (event) => {
@@ -51,6 +51,14 @@ export default defineEventHandler(async (event) => {
 
   // 3. Delete from database
   db.prepare('DELETE FROM videos WHERE id = ?').run(videoId);
+
+  // Leftovers of earlier attempts under the other base the downloader may have
+  // written to (the save folder changed writability, see channelBaseDirs): only
+  // this video's own folder and flat partial files there. Its location's base
+  // is handled below.
+  const otherBases = channelBaseDirs(channel?.custom_save_path, getDownloadsDir())
+    .filter((base) => base !== path.resolve(basePath));
+  removeVideoLeftovers({ bases: otherBases, channelFolder: sanitizeFolderName(channel?.title || video.channel_id), id: videoId });
 
   if (location.layout === 'new') {
     let warning: string | undefined;
