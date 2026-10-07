@@ -13,7 +13,7 @@
   <Category>MediaServer:Video MediaServer:Music MediaServer:Other Downloaders:</Category>
   <WebUI>http://[IP]:[PORT:3000]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/Lightmaster00/youkeep/main/unraid/youkeep.xml</TemplateURL>
-  <Icon>https://raw.githubusercontent.com/Lightmaster00/youkeep/main/public/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/Lightmaster00/youkeep/main/unraid/youkeep-icon.png</Icon>
   <ExtraParams>--restart=unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>
