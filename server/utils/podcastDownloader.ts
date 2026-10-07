@@ -9,6 +9,7 @@ import { getDb } from './db';
 import { addLog, sanitizeFolderName, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
+import { isContained, removeEntityFolder } from './videoPaths';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -92,7 +93,8 @@ export function cleanupPartialPodcastFiles(episodeId: string, showId: string, op
   const basePath = getPodcastDownloadsDir();
   const showDir = path.join(basePath, sanitizeFolderName(show?.title || showId));
 
-  if (!fs.existsSync(showDir)) return;
+  // A name like '..', '.' or blank must never point at the base folder or above.
+  if (!isContained(basePath, showDir) || !fs.existsSync(showDir)) return;
 
   const prefix = `${episodeId}.`;
   let entries: string[];
@@ -118,7 +120,7 @@ export function cleanupPartialPodcastFiles(episodeId: string, showId: string, op
   }
 }
 
-export function deletePodcastShow(showId: string): { success: true } | { success: false; error: string } {
+export function deletePodcastShow(showId: string, opts: { baseDir?: string } = {}): { success: true } | { success: false; error: string } {
   const db = getDb();
 
   const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
@@ -146,16 +148,16 @@ export function deletePodcastShow(showId: string): { success: true } | { success
   // established convention in channels/[id].delete.ts (confirmed during
   // Task 1's review: reporting failure here would misleadingly tell the
   // wipe-all report that already-deleted content needs retrying).
-  const showDir = path.join(getPodcastDownloadsDir(), sanitizeFolderName(show.title || showId));
-  if (fs.existsSync(showDir)) {
-    try {
-      fs.rmSync(showDir, { recursive: true, force: true });
-    } catch (err: any) {
-      console.error(`Failed to delete show directory ${showDir}:`, err);
-    }
-  } else {
-    console.warn(`Wipe: show directory not found, skipping fs removal: ${showDir} (show "${show.title}", ${episodes.length} episode(s))`);
-  }
+  // Never the base folder or above (a title like '..'), and only this show's
+  // own files when another show shares the folder.
+  const others = db.prepare('SELECT id, title FROM podcast_shows').all() as { id: string; title: string }[];
+  removeEntityFolder({
+    baseDir: opts.baseDir ?? getPodcastDownloadsDir(),
+    folder: sanitizeFolderName(show.title || showId),
+    ownIds: episodes.map((e) => e.id),
+    otherFolders: others.map((o) => sanitizeFolderName(o.title || o.id)),
+    label: `Show "${show.title}"`,
+  });
 
   return { success: true };
 }

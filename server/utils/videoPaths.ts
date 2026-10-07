@@ -425,6 +425,56 @@ function sameOrInsideFolder(parent: string, child: string): boolean {
 }
 
 /**
+ * Removes a music artist's or podcast show's folder `<base>/<folder>`, whose
+ * files are named `<item id>.<ext>`. Same rules as removing a channel folder:
+ * - the folder is only ever touched when it is strictly inside `baseDir`: a
+ *   name like `..`, `.` or blank never points at the base folder or above;
+ * - when another entity's folder name (`otherFolders`) is the same folder
+ *   (same name, or differing only by case), only this entity's own files
+ *   (`<id>.*` regular files for `ownIds`) are removed, and the folder itself
+ *   only when it is then empty.
+ * Never throws: failures are logged.
+ */
+export function removeEntityFolder(opts: { baseDir: string; folder: string; ownIds: string[]; otherFolders: string[]; label: string }): { removedDir: boolean; skippedReason: string | null } {
+  const baseDir = path.resolve(opts.baseDir);
+  const dir = path.resolve(baseDir, opts.folder);
+  if (!isContained(baseDir, dir) || path.dirname(dir) !== baseDir) {
+    const skippedReason = `the folder ${dir} is not inside ${baseDir}`;
+    console.error(`${opts.label}: files left in place because ${skippedReason}.`);
+    return { removedDir: false, skippedReason };
+  }
+  if (!fs.existsSync(dir)) {
+    console.warn(`${opts.label}: folder not found, skipping file removal: ${dir}`);
+    return { removedDir: false, skippedReason: null };
+  }
+  const shared = opts.otherFolders.some((other) => comparablePath(path.resolve(baseDir, other)) === comparablePath(dir));
+  if (!shared) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return { removedDir: true, skippedReason: null };
+    } catch (err) {
+      console.error(`${opts.label}: failed to delete folder ${dir}:`, err);
+      return { removedDir: false, skippedReason: null };
+    }
+  }
+  const ids = new Set(opts.ownIds);
+  try {
+    for (const entry of fs.readdirSync(dir)) {
+      const id = entry.slice(0, Math.max(0, entry.indexOf('.')));
+      const file = path.join(dir, entry);
+      if (ids.has(id) && isRegularFile(file)) {
+        try { fs.unlinkSync(file); } catch (err) { console.error(`${opts.label}: failed to delete file ${file}:`, err); }
+      }
+    }
+    fs.rmdirSync(dir); // only when nothing else is left in it
+    return { removedDir: true, skippedReason: null };
+  } catch (err: any) {
+    if (err?.code !== 'ENOTEMPTY' && err?.code !== 'EEXIST') console.error(`${opts.label}: failed to clean folder ${dir}:`, err);
+    return { removedDir: false, skippedReason: 'the folder holds another entity\'s files' };
+  }
+}
+
+/**
  * Prepares removing a channel's files from disk. Call it BEFORE the channel's
  * rows are deleted (it reads them), then call `remove()` afterwards.
  * - `<base>/<Channel>` is only ever touched when it is strictly inside the base

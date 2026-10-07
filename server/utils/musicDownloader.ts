@@ -8,6 +8,7 @@ import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
+import { isContained, removeEntityFolder } from './videoPaths';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -90,7 +91,8 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts
   const basePath = getMusicDownloadsDir();
   const artistDir = path.join(basePath, sanitizeFolderName(artist?.name || artistId));
 
-  if (!fs.existsSync(artistDir)) return;
+  // A name like '..', '.' or blank must never point at the base folder or above.
+  if (!isContained(basePath, artistDir) || !fs.existsSync(artistDir)) return;
 
   const prefix = `${trackId}.`;
   let entries: string[];
@@ -117,7 +119,7 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts
   }
 }
 
-export function deleteMusicArtist(artistId: string): { success: true } | { success: false; error: string } {
+export function deleteMusicArtist(artistId: string, opts: { baseDir?: string } = {}): { success: true } | { success: false; error: string } {
   const db = getDb();
 
   const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
@@ -139,19 +141,18 @@ export function deleteMusicArtist(artistId: string): { success: true } | { succe
     return { success: false, error: 'Artist not found.' };
   }
 
-  // 3. Delete the artist's media folder recursively. Music has no
-  // custom_save_path equivalent (unlike channels), so this is always
-  // relative to getMusicDownloadsDir().
-  const artistDir = path.join(getMusicDownloadsDir(), sanitizeFolderName(artist.name || artistId));
-  if (fs.existsSync(artistDir)) {
-    try {
-      fs.rmSync(artistDir, { recursive: true, force: true });
-    } catch (err: any) {
-      console.error(`Failed to delete artist directory ${artistDir}:`, err);
-    }
-  } else {
-    console.warn(`Wipe: artist directory not found, skipping fs removal: ${artistDir} (artist "${artist.name}", ${tracks.length} track(s))`);
-  }
+  // 3. Delete the artist's media folder. Music has no custom_save_path
+  // equivalent (unlike channels), so this is always relative to
+  // getMusicDownloadsDir(). Never the base folder or above (a name like '..'),
+  // and only this artist's own files when another artist shares the folder.
+  const others = db.prepare('SELECT id, name FROM music_artists').all() as { id: string; name: string }[];
+  removeEntityFolder({
+    baseDir: opts.baseDir ?? getMusicDownloadsDir(),
+    folder: sanitizeFolderName(artist.name || artistId),
+    ownIds: tracks.map((t) => t.id),
+    otherFolders: others.map((o) => sanitizeFolderName(o.name || o.id)),
+    label: `Artist "${artist.name}"`,
+  });
 
   return { success: true };
 }
