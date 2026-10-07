@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { cancelTidyRun, moveFileVerified, planTidy, runTidy, type RunnerFs } from '../../server/utils/videoTidy';
+import { cancelTidyRun, getTidyStatus, isTidyRunning, moveFileVerified, planTidy, planTidyAsync, runTidy, startTidyRun, type RunnerFs } from '../../server/utils/videoTidy';
 import { resolveStoredPath } from '../../server/utils/videoPaths';
 import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
 
@@ -68,11 +68,13 @@ describe('runTidy', () => {
     legacy('v1', 'Good', ['.mp4']);
     legacy('v2', 'Bad', ['.mp4']);
     let removedBeforeInPlace = false;
+    const placedNames: string[] = [];
     const crossDevice: RunnerFs = {
       ...realFsp,
       // Only renames across devices fail: the final rename inside the target folder is local.
       rename: async (a, b) => {
         if (path.dirname(a) !== path.dirname(b)) throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+        placedNames.push(path.basename(b));
         await fs.promises.rename(a, b);
       },
       copyFile: async (a, b) => {
@@ -89,6 +91,7 @@ describe('runTidy', () => {
 
     expect(status).toMatchObject({ moved: 1, errors: 1 });
     expect(removedBeforeInPlace).toBe(false);
+    expect(placedNames).toEqual(['Good [v1].mp4']); // the bad copy never reached its final name
     expect(fs.readdirSync(path.join(dir, 'Chan', 'Good [v1]'))).toEqual(['Good [v1].mp4']);
     expect(fs.readFileSync(path.join(dir, 'Chan', 'Good [v1]', 'Good [v1].mp4'), 'utf8')).toBe('v1.mp4');
     expect(fs.existsSync(path.join(dir, 'Chan', 'v1.mp4'))).toBe(false);
@@ -182,5 +185,279 @@ describe('moveFileVerified with a destination already there', () => {
     await expect(moveFileVerified(realFsp, bigFrom, bigTo)).rejects.toThrow(/different/);
     expect(fs.readFileSync(bigFrom, 'utf8')).toBe('abcdef');
     expect(fs.readFileSync(bigTo, 'utf8')).toBe('abc');
+  });
+});
+
+/** A filesystem where renames across folders fail like a move to another device. */
+function crossDeviceFs(over: Partial<RunnerFs> = {}): RunnerFs {
+  return {
+    ...realFsp,
+    rename: async (a, b) => {
+      if (path.dirname(a) !== path.dirname(b)) throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' });
+      await fs.promises.rename(a, b);
+    },
+    ...over,
+  };
+}
+const chan = (...p: string[]) => path.join(dir, 'Chan', ...p);
+
+describe('runTidy safety guards', () => {
+  it('never follows symlinks: a symlinked destination or source is refused and nothing is deleted', async () => {
+    legacy('v1', 'Link', ['.mp4']);
+    fs.mkdirSync(chan('Link [v1]'));
+    fs.symlinkSync(chan('v1.mp4'), chan('Link [v1]', 'Link [v1].mp4'));
+    fs.mkdirSync(path.join(dir, 'media'));
+    fs.writeFileSync(path.join(dir, 'media', 'x.mp4'), 'real');
+    insertVideo(db, { id: 'v2', channelId: 'c1', title: 'Out', localVideoPath: '/downloads/Chan/v2.mp4', localThumbnailPath: null });
+    fs.symlinkSync('../media/x.mp4', chan('v2.mp4'));
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 0, errors: 2 });
+    expect(status.errorDetails.map((e) => e.message).join(' ')).toMatch(/Destination is a symlink[\s\S]*Source is a symlink/);
+    expect(fs.readFileSync(chan('v1.mp4'), 'utf8')).toBe('v1.mp4');
+    expect(fs.lstatSync(chan('Link [v1]', 'Link [v1].mp4')).isSymbolicLink()).toBe(true);
+    expect(fs.readlinkSync(chan('v2.mp4'))).toBe('../media/x.mp4');
+    expect(fs.readFileSync(path.join(dir, 'media', 'x.mp4'), 'utf8')).toBe('real');
+    expect(fs.existsSync(chan('Out [v2]'))).toBe(false);
+    expect(paths('v1').local_video_path).toBe('/downloads/Chan/v1.mp4');
+  });
+
+  it('refuses a destination that is a link to another identical file or a hard link to the source', async () => {
+    const src = path.join(dir, 'a.src');
+    fs.writeFileSync(src, 'same');
+    fs.writeFileSync(path.join(dir, 'elsewhere'), 'same');
+    fs.symlinkSync(path.join(dir, 'elsewhere'), path.join(dir, 'sym.dst'));
+    fs.linkSync(src, path.join(dir, 'hard.dst'));
+
+    await expect(moveFileVerified(realFsp, src, path.join(dir, 'sym.dst'))).rejects.toThrow(/symlink/);
+    await expect(moveFileVerified(realFsp, src, path.join(dir, 'hard.dst'))).rejects.toThrow(/same file/);
+    expect(fs.readFileSync(src, 'utf8')).toBe('same');
+    expect(fs.readFileSync(path.join(dir, 'hard.dst'), 'utf8')).toBe('same');
+  });
+
+  it('across devices: flushes the copy, renames it into place, flushes the folder, verifies, and only then removes the source', async () => {
+    legacy('v1', 'Order', ['.mp4']);
+    const calls: string[] = [];
+    const rel = (p: string) => path.relative(dir, p);
+    const base = crossDeviceFs();
+    const recording = crossDeviceFs({
+      copyFile: async (a, b) => { calls.push(`copy ${rel(b)}`); await base.copyFile(a, b); },
+      fsyncFile: async (p) => { calls.push(`fsync ${rel(p)}`); },
+      rename: async (a, b) => { calls.push(`rename ${rel(a)} -> ${rel(b)}`); await base.rename(a, b); },
+      fsyncDir: async (p) => { calls.push(`fsyncDir ${rel(p)}`); },
+      lstat: async (p) => { calls.push(`lstat ${rel(p)}`); return fs.promises.lstat(p); },
+      unlink: async (p) => { calls.push(`unlink ${rel(p)}`); await base.unlink(p); },
+    });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: recording });
+
+    expect(status).toMatchObject({ moved: 1, errors: 0 });
+    const to = path.join('Chan', 'Order [v1]', 'Order [v1].mp4');
+    const tail = calls.slice(calls.indexOf(`copy ${to}.tidy-part`));
+    expect(tail.slice(0, tail.indexOf(`unlink ${path.join('Chan', 'v1.mp4')}`) + 1).filter((c) => !c.startsWith('lstat') || c === `lstat ${to}`)).toEqual([
+      `copy ${to}.tidy-part`,
+      `fsync ${to}.tidy-part`,
+      `lstat ${to}`,
+      `rename ${to}.tidy-part -> ${to}`,
+      `fsyncDir ${path.dirname(to)}`,
+      `lstat ${to}`,
+      `unlink ${path.join('Chan', 'v1.mp4')}`,
+    ]);
+  });
+
+  it('across devices: a file appearing at the destination is never overwritten, and a bad placed copy never costs the source', async () => {
+    legacy('v1', 'Race', ['.mp4']);
+    legacy('v2', 'Shrunk', ['.mp4']);
+    const exdev = crossDeviceFs();
+    const fsp = crossDeviceFs({
+      copyFile: async (a, b) => {
+        await fs.promises.copyFile(a, b);
+        if (a.endsWith('v1.mp4')) fs.writeFileSync(b.slice(0, -'.tidy-part'.length), 'foreign');
+      },
+      rename: async (a, b) => {
+        await exdev.rename(a, b);
+        if (b.endsWith('Shrunk [v2].mp4')) fs.writeFileSync(b, 'x');
+      },
+    });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ moved: 0, errors: 2 });
+    expect(fs.readFileSync(chan('Race [v1]', 'Race [v1].mp4'), 'utf8')).toBe('foreign');
+    expect(fs.readdirSync(chan('Race [v1]'))).toEqual(['Race [v1].mp4']);
+    expect(fs.readFileSync(chan('v1.mp4'), 'utf8')).toBe('v1.mp4');
+    expect(fs.readFileSync(chan('v2.mp4'), 'utf8')).toBe('v2.mp4');
+    expect(fs.existsSync(chan('Shrunk [v2]'))).toBe(false);
+  });
+
+  it('clears a stale partial copy only in the folder being written and only while its source exists', async () => {
+    legacy('v1', 'Part', ['.mp4']);
+    fs.mkdirSync(chan('Part [v1]'));
+    fs.writeFileSync(chan('Part [v1]', 'Part [v1].mp4.tidy-part'), 'half');
+    fs.writeFileSync(chan('Part [v1]', 'Part [v1].jpg.tidy-part'), 'keep');
+    // Interrupted after the move: the source is gone, so its partial copy is left alone.
+    legacy('v2', 'Done', ['.mp4']);
+    fs.mkdirSync(chan('Done [v2]'));
+    fs.renameSync(chan('v2.mp4'), chan('Done [v2]', 'Done [v2].mp4'));
+    fs.writeFileSync(chan('Done [v2]', 'Done [v2].mp4.tidy-part'), 'keep');
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: crossDeviceFs() });
+
+    expect(status).toMatchObject({ moved: 2, errors: 0 });
+    expect(fs.readdirSync(chan('Part [v1]')).sort()).toEqual(['Part [v1].jpg.tidy-part', 'Part [v1].mp4']);
+    expect(fs.readdirSync(chan('Done [v2]')).sort()).toEqual(['Done [v2].mp4', 'Done [v2].mp4.tidy-part']);
+    expect(fs.readFileSync(chan('Part [v1]', 'Part [v1].mp4'), 'utf8')).toBe('v1.mp4');
+  });
+
+  it('reports both paths when a file cannot be moved back, keeps it, and continues with the next video', async () => {
+    legacy('v1', 'Stuck', ['.mp4']);
+    legacy('v2', 'Fine', ['.mp4']);
+    db.exec(`CREATE TRIGGER no_v1 BEFORE UPDATE OF local_video_path ON videos WHEN NEW.id = 'v1' BEGIN SELECT RAISE(ABORT, 'database is locked'); END;`);
+    const fsp: RunnerFs = {
+      ...realFsp,
+      rename: async (a, b) => {
+        if (a.includes('Stuck [v1]')) throw Object.assign(new Error('permission denied'), { code: 'EACCES' });
+        await fs.promises.rename(a, b);
+      },
+    };
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ state: 'done', moved: 1, errors: 1 });
+    expect(status.lastError).toContain(`${chan('Stuck [v1]', 'Stuck [v1].mp4')} -> ${chan('v1.mp4')}`);
+    expect(fs.readFileSync(chan('Stuck [v1]', 'Stuck [v1].mp4'), 'utf8')).toBe('v1.mp4');
+    expect(fs.existsSync(chan('Fine [v2]', 'Fine [v2].mp4'))).toBe(true);
+  });
+
+  it('skips a video that started downloading after the plan, leaving it untouched', async () => {
+    legacy('v1', 'First', ['.mp4']);
+    legacy('v2', 'Second', ['.mp4']);
+    const fsp: RunnerFs = {
+      ...realFsp,
+      rename: async (a, b) => {
+        db.prepare("UPDATE videos SET download_status = 'downloading' WHERE id = 'v2'").run();
+        await fs.promises.rename(a, b);
+      },
+    };
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ moved: 1, skipped: 1 });
+    expect(fs.readdirSync(chan()).sort()).toEqual(['First [v1]', 'v2.mp4']);
+  });
+
+  it('resumes an interrupted video: source already gone and destination present -> database updated, nothing deleted', async () => {
+    legacy('v1', 'Half', ['.mp4', '.jpg']);
+    fs.mkdirSync(chan('Half [v1]'));
+    fs.renameSync(chan('v1.mp4'), chan('Half [v1]', 'Half [v1].mp4'));
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 1, errors: 0 });
+    expect(fs.readdirSync(chan('Half [v1]')).sort()).toEqual(['Half [v1].jpg', 'Half [v1].mp4']);
+    expect(fs.readFileSync(chan('Half [v1]', 'Half [v1].mp4'), 'utf8')).toBe('v1.mp4');
+    expect(paths('v1').local_video_path).toBe('/downloads/Chan/Half%20%5Bv1%5D/Half%20%5Bv1%5D.mp4');
+  });
+
+  it('caps errorDetails at 50 while counting every error', async () => {
+    for (let i = 0; i < 51; i++) legacy(`e${i}`, `E${i}`, ['.mp4']);
+    db.exec(`CREATE TRIGGER no_update BEFORE UPDATE OF local_video_path ON videos BEGIN SELECT RAISE(ABORT, 'database is locked'); END;`);
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp, batchPauseMs: 0 });
+
+    expect(status.errors).toBe(51);
+    expect(status.errorDetails).toHaveLength(50);
+  });
+
+  it('startTidyRun runs one at a time and refuses during a library wipe', async () => {
+    legacy('v1', 'Slow', ['.mp4']);
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const slow: RunnerFs = { ...realFsp, rename: async (a, b) => { await gate; await fs.promises.rename(a, b); } };
+
+    expect(startTidyRun({ db, downloadsDir: dir, fsp: slow })).toEqual({ started: true });
+    expect(isTidyRunning()).toBe(true);
+    expect(startTidyRun({ db, downloadsDir: dir, fsp: realFsp })).toMatchObject({ started: false });
+    release();
+    await vi.waitFor(() => expect(getTidyStatus().state).toBe('done'));
+    expect(getTidyStatus().moved).toBe(1);
+
+    const wipeFlag = Symbol.for('YouKeep.libraryWipeInProgress');
+    (globalThis as any)[wipeFlag] = true;
+    try {
+      expect(startTidyRun({ db, downloadsDir: dir, fsp: realFsp })).toMatchObject({ started: false, error: expect.stringContaining('wipe') });
+    } finally {
+      (globalThis as any)[wipeFlag] = false;
+    }
+  });
+});
+
+describe('doubled channel folder repair guards', () => {
+  const custom = () => path.join(dir, 'Dup');
+  function doubled() {
+    insertChannel(db, { id: 'c2', title: 'Dup', customSavePath: custom() });
+    insertVideo(db, { id: 'd1', channelId: 'c2', title: 'Dup Clip', localVideoPath: '/downloads/Dup/d1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(custom(), 'Dup'), { recursive: true });
+    fs.writeFileSync(path.join(custom(), 'Dup', 'd1.mp4'), 'd1');
+  }
+  const savePath = () => (db.prepare('SELECT custom_save_path FROM channels WHERE id = ?').get('c2') as any).custom_save_path;
+
+  it('keeps the save path while another video of the channel is still in the old layout', async () => {
+    doubled();
+    insertVideo(db, { id: 'd2', channelId: 'c2', title: 'Gone', localVideoPath: '/downloads/Dup/d2.mp4', localThumbnailPath: null });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
+    expect(savePath()).toBe(custom());
+  });
+
+  it('keeps the save path while a video of the channel is downloading', async () => {
+    doubled();
+    insertVideo(db, { id: 'd3', channelId: 'c2', title: 'Now', downloadStatus: 'downloading', localVideoPath: null, localThumbnailPath: null });
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
+    expect(savePath()).toBe(custom());
+  });
+
+  it('never overwrites a save path changed while the run was moving files', async () => {
+    doubled();
+    const fsp: RunnerFs = {
+      ...realFsp,
+      rename: async (a, b) => {
+        db.prepare("UPDATE channels SET custom_save_path = '/elsewhere' WHERE id = 'c2'").run();
+        await fs.promises.rename(a, b);
+      },
+    };
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
+    expect(savePath()).toBe('/elsewhere');
+  });
+});
+
+describe('planTidyAsync', () => {
+  it('gives the same plan as planTidy and never plans a temporary partial copy', async () => {
+    legacy('v1', 'Alpha');
+    legacy('v2', 'Beta', ['.mp4']);
+    const custom = path.join(dir, 'Dup');
+    insertChannel(db, { id: 'c2', title: 'Dup', customSavePath: custom });
+    const base = 'Clip [d1]';
+    insertVideo(db, { id: 'd1', channelId: 'c2', title: 'Clip', localVideoPath: `/downloads/Dup/${encodeURIComponent(base)}/${encodeURIComponent(`${base}.mp4`)}`, localThumbnailPath: null });
+    fs.mkdirSync(path.join(custom, 'Dup', base), { recursive: true });
+    fs.writeFileSync(path.join(custom, 'Dup', base, `${base}.mp4`), 'd1');
+    fs.writeFileSync(path.join(custom, 'Dup', base, `${base}.mp4.tidy-part`), 'd');
+
+    const sync = planTidy(db, { downloadsDir: dir });
+    const async = await planTidyAsync(db, { downloadsDir: dir, everyRows: 1 });
+
+    expect(async).toEqual(sync);
+    expect(sync.items).toHaveLength(3);
+    const dup = sync.items.find((i) => i.id === 'd1')!;
+    expect(dup.moves.map((m) => path.basename(m.from))).toEqual([`${base}.mp4`]);
   });
 });

@@ -59,6 +59,8 @@ export interface TidyPreview {
 export interface TidyPlan { preview: TidyPreview; items: TidyPlanItem[]; channelFixes: TidyChannelFix[] }
 
 const SAMPLE_LIMIT = 10;
+/** Suffix of the temporary copy made during a cross-device move: never planned or moved as a video file. */
+const PARTIAL_SUFFIX = '.tidy-part';
 
 interface TidyRow {
   id: string;
@@ -239,7 +241,7 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache): Classif
     if (!fsx.isWritable(nestedDir) || !fsx.isWritable(finalDir)) return { status: 'notWritable' };
     // The video file first (it is what the preview samples show), then the rest by name.
     const moves = fsx.readdirSync(nestedDir)
-      .filter((entry) => entry.startsWith(`${videoFolder}.`))
+      .filter((entry) => entry.startsWith(`${videoFolder}.`) && !entry.endsWith(PARTIAL_SUFFIX))
       .sort((a, b) => Number(b === fileName) - Number(a === fileName))
       .map((entry) => ({ from: path.join(nestedDir, entry), to: path.join(finalDir, entry), size: sizeOf(fsx, path.join(nestedDir, entry)) }));
     // Never overwrite a different file already at the final place.
@@ -308,7 +310,11 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache): Classif
   };
 }
 
-export function planTidy(db: Database.Database, opts: { downloadsDir: string; fs?: PlannerFs }): TidyPlan {
+/**
+ * The planner as a generator that pauses after each video, so the runner (and
+ * any route) can plan a big library without blocking the event loop.
+ */
+function* planTidySteps(db: Database.Database, opts: { downloadsDir: string; fs?: PlannerFs }): Generator<void, TidyPlan, void> {
   const fsx = new PlanFsCache(opts.fs ?? nodePlannerFs);
   const rows = db.prepare(`
     SELECT v.id AS id, v.title AS title, v.channel_id AS channelId,
@@ -349,11 +355,37 @@ export function planTidy(db: Database.Database, opts: { downloadsDir: string; fs
         preview.samples.push({ id: item.id, title: item.title, from: item.moves[0].from, to: item.moves[0].to });
       }
     }
+    yield;
   }
 
   preview.duplicateFolders = fixes.size;
   preview.channels = [...perChannel.values()];
   return { preview, items, channelFixes: [...fixes.values()] };
+}
+
+/** Synchronous plan (tests, small libraries). Same result as planTidyAsync. */
+export function planTidy(db: Database.Database, opts: { downloadsDir: string; fs?: PlannerFs }): TidyPlan {
+  const steps = planTidySteps(db, opts);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/**
+ * Same plan as planTidy, but yields to the event loop every `everyRows` videos so
+ * a slow (network/FUSE) share does not freeze the server while it is probed.
+ */
+export async function planTidyAsync(db: Database.Database, opts: { downloadsDir: string; fs?: PlannerFs; everyRows?: number }): Promise<TidyPlan> {
+  const every = Math.max(1, opts.everyRows ?? 10);
+  const steps = planTidySteps(db, opts);
+  let step = steps.next();
+  for (let n = 1; !step.done; n++) {
+    if (n % every === 0) await yieldToEventLoop();
+    step = steps.next();
+  }
+  return step.value;
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +417,18 @@ export interface RunnerFs {
   fsyncFile?(p: string): Promise<void>;
   /** Byte-for-byte comparison of two files. Defaults to a streaming compare through Node. */
   sameContent?(a: string, b: string): Promise<boolean>;
+  /** Stat without following symlinks. Defaults to Node's lstat. */
+  lstat?(p: string): Promise<LinkStat>;
+  /** Flushes a folder's entries (a rename into it) to disk. Defaults to an fsync through Node. */
+  fsyncDir?(p: string): Promise<void>;
+}
+
+export interface LinkStat {
+  size: number;
+  dev: number;
+  ino: number;
+  isFile(): boolean;
+  isSymbolicLink(): boolean;
 }
 
 export interface TidyRunDeps {
@@ -398,8 +442,6 @@ export interface TidyRunDeps {
 }
 
 const ERROR_DETAILS_LIMIT = 50;
-/** Suffix of the temporary copy made during a cross-device move (never left at the final name). */
-const PARTIAL_SUFFIX = '.tidy-part';
 const COMPARE_CHUNK = 1024 * 1024;
 
 // globalThis-backed, like libraryWipe.ts, so the state survives Nitro dev reloads.
@@ -438,9 +480,33 @@ async function nodeFsyncFile(p: string): Promise<void> {
   }
 }
 
-async function nodeSameContent(a: string, b: string): Promise<boolean> {
-  const [ha, hb] = await Promise.all([fs.promises.open(a, 'r'), fs.promises.open(b, 'r')]);
+// Folders cannot be opened or fsynced on every platform/filesystem: that is not an error.
+const DIR_FSYNC_UNSUPPORTED = new Set(['EISDIR', 'EINVAL', 'ENOTSUP', 'EOPNOTSUPP', 'EPERM', 'EACCES', 'EBADF']);
+
+async function nodeFsyncDir(p: string): Promise<void> {
+  let handle: fs.promises.FileHandle;
   try {
+    handle = await fs.promises.open(p, 'r');
+  } catch (err: any) {
+    if (DIR_FSYNC_UNSUPPORTED.has(err?.code)) return;
+    throw err;
+  }
+  try {
+    await handle.sync();
+  } catch (err: any) {
+    if (!DIR_FSYNC_UNSUPPORTED.has(err?.code)) throw err;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function nodeSameContent(a: string, b: string): Promise<boolean> {
+  const opened = await Promise.allSettled([fs.promises.open(a, 'r'), fs.promises.open(b, 'r')]);
+  const handles = opened.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+  try {
+    const failed = opened.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) throw failed.reason;
+    const [ha, hb] = handles as [fs.promises.FileHandle, fs.promises.FileHandle];
     const ba = Buffer.alloc(COMPARE_CHUNK);
     const bb = Buffer.alloc(COMPARE_CHUNK);
     for (;;) {
@@ -450,7 +516,7 @@ async function nodeSameContent(a: string, b: string): Promise<boolean> {
       if (!ba.subarray(0, ra.bytesRead).equals(bb.subarray(0, rb.bytesRead))) return false;
     }
   } finally {
-    await Promise.all([ha.close(), hb.close()]);
+    await Promise.allSettled(handles.map((h) => h.close()));
   }
 }
 
@@ -463,7 +529,18 @@ const nodeRunnerFs: RunnerFs = {
   rmdir: (p) => fs.promises.rmdir(p),
   fsyncFile: nodeFsyncFile,
   sameContent: nodeSameContent,
+  lstat: (p) => fs.promises.lstat(p),
+  fsyncDir: nodeFsyncDir,
 };
+
+async function lstatOrNull(fsp: RunnerFs, p: string): Promise<LinkStat | null> {
+  try {
+    return await (fsp.lstat ? fsp.lstat(p) : fs.promises.lstat(p));
+  } catch (err: any) {
+    if (err?.code === 'ENOENT' || err?.code === 'ENOTDIR') return null;
+    throw err;
+  }
+}
 
 async function statOrNull(fsp: RunnerFs, p: string): Promise<{ size: number; isDirectory(): boolean } | null> {
   try {
@@ -487,14 +564,24 @@ function conflictError(to: string): Error {
  *   flush, check the size, rename into place, check again, then remove the source.
  */
 export async function moveFileVerified(fsp: RunnerFs, from: string, to: string): Promise<void> {
-  const source = await statOrNull(fsp, from);
-  const existing = await statOrNull(fsp, to);
+  // lstat: symlinks, folders and devices are never followed, moved or deleted.
+  const source = await lstatOrNull(fsp, from);
+  const existing = await lstatOrNull(fsp, to);
+  if (source && !source.isFile()) {
+    throw new Error(`${source.isSymbolicLink() ? 'Source is a symlink' : 'Source is not a regular file'}, left untouched: ${from}`);
+  }
+  if (existing && !existing.isFile()) {
+    throw new Error(`${existing.isSymbolicLink() ? 'Destination is a symlink' : 'Destination is not a regular file'}; both paths were left in place: ${to}`);
+  }
   if (!source) {
-    if (existing) return;
+    if (existing) return; // already moved by an earlier, interrupted run
     throw new Error(`Source file is missing: ${from}`);
   }
   if (existing) {
-    const same = existing.size === source.size && !existing.isDirectory()
+    if (existing.dev === source.dev && existing.ino === source.ino) {
+      throw new Error(`${to} and ${from} are the same file (a link); both paths were left in place.`);
+    }
+    const same = existing.size === source.size
       && await (fsp.sameContent ?? nodeSameContent)(from, to).catch(() => false);
     if (!same) throw conflictError(to);
     await fsp.unlink(from);
@@ -508,22 +595,45 @@ export async function moveFileVerified(fsp: RunnerFs, from: string, to: string):
   }
 
   const partial = `${to}${PARTIAL_SUFFIX}`;
-  // A leftover partial copy is our own (the source is intact): start again.
-  if (await statOrNull(fsp, partial)) await fsp.unlink(partial);
+  // Stale partial copies are cleared by tidyOne before the video starts; never guess here.
+  if (await lstatOrNull(fsp, partial)) throw new Error(`A leftover temporary copy is in the way: ${partial}`);
   try {
     await fsp.copyFile(from, partial);
     await (fsp.fsyncFile ?? nodeFsyncFile)(partial);
     const copied = await statOrNull(fsp, partial);
     if (!copied || copied.size !== source.size) throw new Error(`The copy of ${from} could not be verified.`);
-    if (await statOrNull(fsp, to)) throw conflictError(to);
+    if (await lstatOrNull(fsp, to)) throw conflictError(to);
     await fsp.rename(partial, to);
   } catch (err) {
     try { await fsp.unlink(partial); } catch {}
     throw err;
   }
-  const placed = await statOrNull(fsp, to);
-  if (!placed || placed.size !== source.size) throw new Error(`The copy of ${from} could not be verified.`);
+  try {
+    // The rename must be durable before the source on the other filesystem goes away.
+    await (fsp.fsyncDir ?? nodeFsyncDir)(path.dirname(to));
+    const placed = await lstatOrNull(fsp, to);
+    if (!placed || !placed.isFile() || placed.size !== source.size) throw new Error(`The copy of ${from} could not be verified.`);
+  } catch (err) {
+    // `to` is the copy this call just made and the source is intact: remove the copy.
+    try { await fsp.unlink(to); } catch {}
+    throw err;
+  }
   await fsp.unlink(from);
+}
+
+/**
+ * Removes `<to>.tidy-part` leftovers of an interrupted cross-device move, only in
+ * the folder this video is about to be written to, and only when the matching
+ * source is still there (so the partial copy is never the only copy).
+ */
+async function clearStalePartials(fsp: RunnerFs, item: TidyPlanItem): Promise<void> {
+  for (const move of item.moves) {
+    const partial = `${move.to}${PARTIAL_SUFFIX}`;
+    const stale = await lstatOrNull(fsp, partial);
+    if (!stale || !stale.isFile()) continue;
+    const source = await lstatOrNull(fsp, move.from);
+    if (source && source.isFile()) await fsp.unlink(partial);
+  }
 }
 
 type ItemOutcome = { result: 'moved' | 'skipped' } | { result: 'error'; message: string };
@@ -537,6 +647,7 @@ async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs,
   const done: TidyMove[] = [];
   try {
     if (createdDir) await fsp.mkdir(item.toDir, { recursive: true });
+    else await clearStalePartials(fsp, item);
     for (const move of item.moves) {
       await moveFileVerified(fsp, move.from, move.to);
       done.push(move);
@@ -572,23 +683,44 @@ async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs,
   return { result: 'moved' };
 }
 
-/** Corrects a doubled custom save path once every video of the channel sits at its final place. */
-function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs): boolean {
-  const channel = db.prepare('SELECT custom_save_path FROM channels WHERE id = ?').get(fix.channelId) as { custom_save_path: string | null } | undefined;
-  if (!channel || channel.custom_save_path !== fix.from) return false;
-  const base = path.resolve(fix.from);
-  const channelFolder = path.basename(base);
-  const rows = db.prepare('SELECT id, download_status AS status, local_video_path AS url FROM videos WHERE channel_id = ?').all(fix.channelId) as
-    { id: string; status: string; url: string | null }[];
-  const ready = rows.every((r) => {
+type FixRow = { id: string; status: string; url: string | null };
+
+/** DB-side readiness: nothing downloading, every stored path new-layout under this channel folder. */
+function channelRowsReady(rows: FixRow[], channelFolder: string): boolean {
+  return rows.every((r) => {
     if (r.status === 'downloading') return false;
     if (!r.url) return true;
     if (!isNewLayoutUrl(r.url, r.id)) return false;
-    const [channelSegment, videoFolder, fileName] = storedUrlSegments(r.url)!;
-    return channelSegment === channelFolder && fsx.existsSync(path.join(base, videoFolder, fileName));
+    return storedUrlSegments(r.url)![0] === channelFolder;
   });
-  if (!ready) return false;
-  return db.prepare('UPDATE channels SET custom_save_path = ? WHERE id = ? AND custom_save_path = ?').run(fix.to, fix.channelId, fix.from).changes === 1;
+}
+
+/**
+ * Corrects a doubled custom save path once every video of the channel sits at
+ * its final place. The disk probes yield to the event loop; the decision itself
+ * is taken in one transaction that re-reads the rows (unchanged since the
+ * probes) and compare-and-sets the old custom_save_path.
+ */
+async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs): Promise<boolean> {
+  const base = path.resolve(fix.from);
+  const channelFolder = path.basename(base);
+  const readRows = () => db.prepare('SELECT id, download_status AS status, local_video_path AS url FROM videos WHERE channel_id = ? ORDER BY id')
+    .all(fix.channelId) as FixRow[];
+  const rows = readRows();
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    if (r.url && isNewLayoutUrl(r.url, r.id)) {
+      const [, videoFolder, fileName] = storedUrlSegments(r.url)!;
+      if (!fsx.existsSync(path.join(base, videoFolder, fileName))) return false;
+    }
+    if ((i + 1) % 25 === 0) await yieldToEventLoop();
+  }
+  return db.transaction(() => {
+    const now = readRows();
+    const unchanged = now.length === rows.length && now.every((r, i) => r.id === rows[i]!.id && r.url === rows[i]!.url);
+    if (!unchanged || !channelRowsReady(now, channelFolder)) return false;
+    return db.prepare('UPDATE channels SET custom_save_path = ? WHERE id = ? AND custom_save_path = ?').run(fix.to, fix.channelId, fix.from).changes === 1;
+  })();
 }
 
 /** Runs one tidy pass. Callers wanting a background run use startTidyRun (one at a time). */
@@ -604,7 +736,7 @@ export async function runTidy(deps: TidyRunDeps): Promise<TidyStatus> {
 
   try {
     // Always plan fresh: never trust an older preview.
-    const plan = planTidy(deps.db, { downloadsDir: deps.downloadsDir, fs: plannerFs });
+    const plan = await planTidyAsync(deps.db, { downloadsDir: deps.downloadsDir, fs: plannerFs });
     status.total = plan.items.length;
     for (let i = 0; i < plan.items.length; i++) {
       if (_g[G_TIDY_CANCEL]) {
@@ -627,7 +759,7 @@ export async function runTidy(deps: TidyRunDeps): Promise<TidyStatus> {
     }
     if (status.state === 'running') {
       for (const fix of plan.channelFixes) {
-        if (applyChannelFix(deps.db, fix, plannerFs)) status.channelsFixed++;
+        if (await applyChannelFix(deps.db, fix, plannerFs)) status.channelsFixed++;
       }
       status.state = 'done';
     }
