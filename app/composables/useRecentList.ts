@@ -2,10 +2,11 @@ import { ref, computed } from 'vue';
 
 const PAGE_SIZE = 30;
 
-// "Load more" paging over /api/music/playlists/recently-added (key 'tracks')
-// or /api/podcasts/episodes/recent (key 'episodes'): both return the page under
-// `key` plus the `total` count. A failed page keeps what was already loaded.
-export function useRecentList(url: string, key: 'tracks' | 'episodes') {
+// "Load more" paging over /api/music/playlists/recently-added (key 'tracks'),
+// /api/podcasts/episodes/recent (key 'episodes') or /api/music/favorites (key
+// 'items'): each returns the page under `key` plus the `total` count. A failed
+// page keeps what was already loaded.
+export function useRecentList(url: string, key: 'tracks' | 'episodes' | 'items') {
   const items = ref<any[]>([]);
   const total = ref(0);
   const loading = ref(false);

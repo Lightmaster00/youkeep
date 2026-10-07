@@ -259,6 +259,7 @@ const sidebarGroups = computed(() =>
     enabled: enabledModules.value,
     hiddenNavLinks: displayPrefs.effective.value.hiddenNavLinks,
     mustChangePassword: !!user.value?.mustChangePassword,
+    isGuest: !user.value,
   })
 );
 
