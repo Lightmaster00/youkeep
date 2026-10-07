@@ -22,6 +22,11 @@
       <span class="mini-player-artist">{{ currentTrack.artist_name || '' }}</span>
     </div>
 
+    <span class="mini-player-track-actions">
+      <TrackLikeButton :track-id="currentTrack.id" />
+      <AddToPlaylistMenu :track-id="currentTrack.id" class="mini-player-add-to-playlist" />
+    </span>
+
     <button
       v-if="currentTrack.has_clip"
       @click="setClipMode(!clipMode)"
@@ -290,6 +295,12 @@ onMounted(async () => {
   text-overflow: ellipsis;
 }
 
+.mini-player-track-actions {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
 .mini-player-controls {
   display: flex;
   align-items: center;
@@ -471,6 +482,11 @@ onMounted(async () => {
 
   .mini-player-info {
     width: 72px;
+  }
+
+  /* The like button stays; "Add to playlist" is on every track row. */
+  .mini-player-track-actions .mini-player-add-to-playlist {
+    display: none;
   }
 
   /* Single truncated line: the artist name is the one that goes. */

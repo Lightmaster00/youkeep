@@ -44,6 +44,7 @@
           >
             <span class="track-row-title" v-html="highlightMatch(track.title, search)"></span>
             <span class="track-row-artist">{{ track.artist_name }}</span>
+            <MusicTrackActions :track-id="track.id" class="track-search-actions" />
           </div>
         </div>
       </template>
@@ -167,6 +168,7 @@
               >
                 {{ downloadingClipIds.has(track.id) ? 'Downloading…' : 'Download clip' }}
               </button>
+              <MusicTrackActions :track-id="track.id" />
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
               <button v-if="isAdmin" @click.stop="openTrackEdit(track, album.id)" class="edit-btn" title="Edit">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
@@ -224,6 +226,7 @@
               >
                 {{ downloadingClipIds.has(track.id) ? 'Downloading…' : 'Download clip' }}
               </button>
+              <MusicTrackActions :track-id="track.id" />
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
               <button v-if="isAdmin" @click.stop="openTrackEdit(track, 'none')" class="edit-btn" title="Edit">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
@@ -943,6 +946,10 @@ const getVisBadgeClass = (vis: string): string => {
   color: var(--text-secondary);
   margin-left: 8px;
   font-size: 13px;
+}
+
+.track-search-actions {
+  margin-left: auto;
 }
 
 .badge-clip {

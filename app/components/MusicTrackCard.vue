@@ -18,6 +18,7 @@
         @click.stop
       >{{ track.artist_name }}</NuxtLink>
       <p v-if="track.album_title" class="media-card-meta">{{ track.album_title }}</p>
+      <MusicTrackActions v-if="showActions" :track-id="track.id" class="media-card-actions" />
     </div>
   </div>
 </template>
@@ -26,8 +27,9 @@
 import { computed } from 'vue';
 
 // Card for one track (Home "Recently added music" row, /music/recent). Same
-// markup and look as the show cards of the Podcasts library.
-const props = defineProps<{ track: any; active?: boolean }>();
+// markup and look as the show cards of the Podcasts library. `showActions`
+// adds the like and "Add to playlist" buttons (logged-in users only).
+const props = defineProps<{ track: any; active?: boolean; showActions?: boolean }>();
 const emit = defineEmits<{ play: [track: any] }>();
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M9 18V5l12-2v13\'></path><circle cx=\'6\' cy=\'18\' r=\'3\'></circle><circle cx=\'18\' cy=\'16\' r=\'3\'></circle></svg>';
@@ -39,3 +41,7 @@ function onCoverError(event: Event) {
   if (target && target.src !== fallbackCover) target.src = fallbackCover;
 }
 </script>
+
+<style scoped>
+.media-card-actions { margin-top: 4px; }
+</style>

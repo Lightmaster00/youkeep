@@ -15,6 +15,7 @@
         :key="track.id"
         :track="track"
         :active="currentTrack?.id === track.id"
+        show-actions
         @play="playTrack"
       />
     </div>
