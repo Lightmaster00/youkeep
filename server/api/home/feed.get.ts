@@ -50,7 +50,7 @@ const FEED_VIDEO_COLUMNS = `
 
 const SECTION_TITLES: Record<HomeSectionId, string> = {
   recent: 'Recently added',
-  popular: 'Populaires',
+  popular: 'Popular',
   suggested: 'Suggested for you',
   subscriptions: 'By followed channel',
 };

@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url';
 // The admin screens are English only (spec 2026-10-06-admin-settings-reorg).
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
-function filesUnder(dir: string, ext: string): string[] {
+function filesUnder(dir: string, ext: string | string[]): string[] {
+  const exts = Array.isArray(ext) ? ext : [ext];
   return readdirSync(dir).flatMap((name) => {
     const full = join(dir, name);
-    if (statSync(full).isDirectory()) return filesUnder(full, ext);
-    return name.endsWith(ext) ? [full] : [];
+    if (statSync(full).isDirectory()) return filesUnder(full, exts);
+    return exts.some((e) => name.endsWith(e)) ? [full] : [];
   });
 }
 
@@ -36,6 +37,10 @@ const GROUPS: Record<string, string[]> = {
     join(ROOT, 'server/api/channels/[id].get.ts'),
     ...filesUnder(join(ROOT, 'server/api/admin'), '.ts'),
   ],
+  // The whole app is English only; code comments are ignored (see frenchHits).
+  'every .vue/.ts file under app, server and shared': ['app', 'server', 'shared'].flatMap((d) =>
+    filesUnder(join(ROOT, d), ['.vue', '.ts'])
+  ),
 };
 
 const ACCENTED = /[àâäçéèêëîïôöùûüÿœæÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸŒÆ«»]/;
@@ -55,6 +60,8 @@ function frenchHits(source: string, file: string): string[] {
   const allowed = ALLOWLIST.filter((a) => a.file === file).map((a) => a.text);
   const hits: string[] = [];
   source.split('\n').forEach((line, index) => {
+    // Comment-only lines may stay French (code comments are not translated).
+    if (/^(\/\/|\*|\/\*|<!--)/.test(line.trim())) return;
     const cleaned = allowed.reduce((acc, text) => acc.split(text).join(''), line);
     const word = FRENCH_WORDS.find((w) => cleaned.includes(w));
     if (ACCENTED.test(cleaned) || word) hits.push(`${file}:${index + 1}: ${line.trim()}`);
@@ -62,11 +69,13 @@ function frenchHits(source: string, file: string): string[] {
   return hits;
 }
 
-describe('admin screens are English only', () => {
+describe('the app is English only', () => {
   it('the guard itself detects French (self-test)', () => {
     expect(frenchHits('<h3>Recherche</h3>', 'x.vue')).toHaveLength(1);
     expect(frenchHits("toast.error('Échec')", 'x.vue')).toHaveLength(1);
     expect(frenchHits('<span>{{ on ? "Active" : "Paused" }}</span>', 'x.vue')).toHaveLength(0);
+    expect(frenchHits('// Récupérer la visibilité', 'x.ts')).toHaveLength(0);
+    expect(frenchHits(' * Vérifier l\'accès', 'x.ts')).toHaveLength(0);
     expect(Object.values(GROUPS).flat().length).toBeGreaterThan(30);
   });
 

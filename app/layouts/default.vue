@@ -13,7 +13,7 @@
           <input
             type="text"
             v-model="searchQuery"
-            placeholder="Search videos, channels..."
+            :placeholder="searchPlaceholder(activeSpace.id)"
             class="search-input"
             @input="onSearchInput"
             @focus="onSearchFocus"
@@ -150,6 +150,7 @@ import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { spaces } from '~/spaces';
+import { searchPlaceholder } from '~/utils/searchPlaceholder';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
 import { shouldApplyLanding } from '~/utils/displayPrefs';
 import { buildSidebarGroups } from '~/utils/sidebarGroups';

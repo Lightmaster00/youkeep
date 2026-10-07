@@ -99,7 +99,7 @@
     <div v-else class="artist-detail-view">
       <button @click="goBack" class="btn btn-secondary back-btn">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        Musique
+        Music
       </button>
 
       <div v-if="detailPending" class="music-loading">Loading...</div>
@@ -881,7 +881,7 @@ const getVisBadgeClass = (vis: string): string => {
   /* .album-group (the ancestor card) has overflow: hidden, so without this
      a row whose fixed-size children (track number, duration, edit button,
      and — for an admin viewing a track with no clip yet — the wide
-     "Télécharger le clip" button) exceed the available width gets its
+     "Download clip" button) exceed the available width gets its
      trailing controls silently clipped and unreachable. overflow-x: auto
      makes them reachable by scrolling the row instead. */
   overflow-x: auto;
