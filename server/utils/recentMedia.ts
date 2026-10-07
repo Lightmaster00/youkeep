@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 import { musicVisibilityClause } from './musicVisibility';
 import { podcastVisibilityClause } from './podcastVisibility';
+import { MUSIC_TRACK_COLUMNS, MUSIC_TRACK_JOINS } from './musicTrackRows';
 import type { SessionForVisibility } from './musicVisibility';
 
 // Newest playable tracks and episodes across the whole library, shared by the
@@ -21,12 +22,9 @@ export function queryRecentTracks(
   const clause = musicVisibilityClause(session, 'a');
   const where = `t.download_status = 'completed'${clause ? ` AND ${clause}` : ''}`;
   const items = db.prepare(`
-    SELECT t.id, t.title, t.track_number, t.genre, t.language, t.duration,
-           t.local_file_path, t.local_thumbnail_path, t.has_clip, t.artist_id, a.name as artist_name,
-           t.album_id, al.title as album_title, al.cover_url as album_cover_url
+    SELECT ${MUSIC_TRACK_COLUMNS}
     FROM music_tracks t
-    JOIN music_artists a ON t.artist_id = a.id
-    LEFT JOIN music_albums al ON t.album_id = al.id
+    ${MUSIC_TRACK_JOINS}
     WHERE ${where}
     ORDER BY t.created_at DESC, t.id DESC
     LIMIT ? OFFSET ?

@@ -186,6 +186,36 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE music_favorites (
+      user_id TEXT NOT NULL,
+      track_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, track_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE music_user_playlists (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE music_user_playlist_tracks (
+      playlist_id TEXT NOT NULL,
+      track_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      added_at INTEGER NOT NULL,
+      PRIMARY KEY (playlist_id, track_id),
+      FOREIGN KEY (playlist_id) REFERENCES music_user_playlists(id) ON DELETE CASCADE,
+      FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_music_favorites_user_created ON music_favorites(user_id, created_at DESC);
+
     CREATE TABLE podcast_shows (
       id TEXT PRIMARY KEY,
       feed_url TEXT UNIQUE NOT NULL,
