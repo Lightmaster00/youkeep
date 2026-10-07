@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs';
+import { isTidyRunning } from './videoTidy';
 
 export type WipeItemType = 'channel' | 'artist' | 'show';
 
@@ -104,6 +105,9 @@ export function getWipeReport(): WipeReport | null {
 export function startLibraryWipe(): { started: true } | { started: false; error: string } {
   if (isWipeInProgress()) {
     return { started: false, error: 'A library wipe is already in progress.' };
+  }
+  if (isTidyRunning()) {
+    return { started: false, error: 'Library tidying is in progress. Try again when it has finished.' };
   }
   _g[G_WIPE_IN_PROGRESS] = true;
   _g[G_WIPE_PROGRESS] = null;

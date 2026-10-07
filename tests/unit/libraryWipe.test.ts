@@ -1,5 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { buildWipeReport } from '../../server/utils/libraryWipe';
+import { describe, it, expect, vi } from 'vitest';
+
+const tidy = vi.hoisted(() => ({ running: false }));
+vi.mock('../../server/utils/videoTidy', () => ({ isTidyRunning: () => tidy.running }));
+
+import { buildWipeReport, startLibraryWipe, isWipeInProgress } from '../../server/utils/libraryWipe';
 
 describe('buildWipeReport', () => {
   it('returns empty succeeded/failed for an empty outcome list', () => {
@@ -23,5 +27,14 @@ describe('buildWipeReport', () => {
         { type: 'channel', id: 'c2', name: 'Channel Two', error: 'not found' },
       ],
     });
+  });
+});
+
+describe('startLibraryWipe', () => {
+  it('refuses to start while library tidying runs, without flagging a wipe', () => {
+    tidy.running = true;
+    expect(startLibraryWipe()).toEqual({ started: false, error: expect.stringContaining('tidying') });
+    expect(isWipeInProgress()).toBe(false);
+    tidy.running = false;
   });
 });
