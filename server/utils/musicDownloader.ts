@@ -695,12 +695,61 @@ export async function startMusicQueueWorker() {
 }
 
 /**
+ * Records a track download attempt that ended in an error. Mirrors
+ * recordFailedAttempt in downloader.ts: a pause (status set back to 'pending',
+ * or the global music pause) keeps the track queued with its progress; an
+ * admin cancel (status set to 'failed' by the cancel route) leaves it failed,
+ * so the worker does not restart it until the admin retries it. Otherwise it
+ * is a genuine failure: re-queued at the end of the queue, or marked failed
+ * after MAX_RETRY_COUNT attempts.
+ */
+export function recordFailedMusicAttempt(trackId: string, trackTitle: string, errMsg: string): void {
+  const db = getDb();
+  const MAX_RETRY_COUNT = 3;
+  addLog(`Download FAILED for track "${trackTitle}" (${trackId}): ${errMsg}`);
+
+  const currentTrack = db.prepare('SELECT download_status, retry_count FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string; retry_count: number | null } | undefined;
+  const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
+  const isPausedGlobal = pausedSetting?.value === '1';
+
+  if (currentTrack?.download_status === 'failed') {
+    addLog(`Download of track "${trackTitle}" (${trackId}) was cancelled; it stays failed until it is retried.`);
+    return;
+  }
+
+  if (isPausedGlobal || currentTrack?.download_status === 'pending') {
+    addLog(`Download of track "${trackTitle}" (${trackId}) was interrupted or intentionally paused.`);
+    // Deliberate interruption, not a genuine failure — retry_count is untouched.
+    db.prepare(`
+      UPDATE music_tracks
+      SET download_status = 'pending', download_speed = null, download_eta = null
+      WHERE id = ?
+    `).run(trackId);
+  } else {
+    const nextRetryCount = (currentTrack?.retry_count ?? 0) + 1;
+    if (nextRetryCount >= MAX_RETRY_COUNT) {
+      db.prepare(`
+        UPDATE music_tracks
+        SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
+        WHERE id = ?
+      `).run(errMsg, nextRetryCount, trackId);
+      addLog(`Track "${trackTitle}" (${trackId}) permanently marked as failed after ${nextRetryCount} attempts.`);
+    } else {
+      db.prepare(`
+        UPDATE music_tracks
+        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?, retry_count = ?
+        WHERE id = ?
+      `).run(errMsg, Date.now(), nextRetryCount, trackId);
+    }
+  }
+}
+
+/**
  * Runs a single track download to completion and updates its DB status accordingly.
  * Not awaited by the orchestrator loop above — mirrors runSingleDownload in downloader.ts.
  */
 async function runSingleMusicDownload(trackId: string, trackTitle: string, artistId: string): Promise<void> {
   const db = getDb();
-  const MAX_RETRY_COUNT = 3;
   try {
     const clipsSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_download_clips'").get() as { value: string } | undefined;
     const wantClip = clipsSetting?.value === '1';
@@ -740,38 +789,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
     `).run(clipFallbackError ? `Clip indisponible, repli sur l'audio seul : ${clipFallbackError}` : null, trackId);
     addLog(`${result.hasClip ? 'Clip' : 'Audio'} download SUCCEEDED: "${trackTitle}"`);
   } catch (err: any) {
-    const errMsg = err.message || String(err);
-    addLog(`Download FAILED for track "${trackTitle}" (${trackId}): ${errMsg}`);
-
-    const currentTrack = db.prepare('SELECT download_status, retry_count FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string; retry_count: number | null } | undefined;
-    const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
-    const isPausedGlobal = pausedSetting?.value === '1';
-
-    if (isPausedGlobal || currentTrack?.download_status === 'pending') {
-      addLog(`Download of track "${trackTitle}" (${trackId}) was interrupted or intentionally paused.`);
-      // Deliberate interruption, not a genuine failure — retry_count is untouched.
-      db.prepare(`
-        UPDATE music_tracks
-        SET download_status = 'pending', download_speed = null, download_eta = null
-        WHERE id = ?
-      `).run(trackId);
-    } else {
-      const nextRetryCount = (currentTrack?.retry_count ?? 0) + 1;
-      if (nextRetryCount >= MAX_RETRY_COUNT) {
-        db.prepare(`
-          UPDATE music_tracks
-          SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
-          WHERE id = ?
-        `).run(errMsg, nextRetryCount, trackId);
-        addLog(`Track "${trackTitle}" (${trackId}) permanently marked as failed after ${nextRetryCount} attempts.`);
-      } else {
-        db.prepare(`
-          UPDATE music_tracks
-          SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?, retry_count = ?
-          WHERE id = ?
-        `).run(errMsg, Date.now(), nextRetryCount, trackId);
-      }
-    }
+    recordFailedMusicAttempt(trackId, trackTitle, err.message || String(err));
     await new Promise(resolve => setTimeout(resolve, 2000));
   } finally {
     decrementActiveMusicDownloadCount();

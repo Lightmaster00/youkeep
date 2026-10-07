@@ -1,6 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
-
-const CANCELLED_MESSAGE = 'Cancelled by an admin.';
+import { CANCELLED_BY_ADMIN_MESSAGE } from '../../../utils/downloader';
 
 /**
  * Cancels a queued or running video download. The video is marked failed
@@ -25,6 +24,6 @@ export default defineEventHandler(async (event) => {
   }
 
   cancelDownload(videoId, 'failed');
-  db.prepare('UPDATE videos SET last_error = ?, is_manually_queued = 0 WHERE id = ?').run(CANCELLED_MESSAGE, videoId);
+  db.prepare('UPDATE videos SET last_error = ?, is_manually_queued = 0 WHERE id = ?').run(CANCELLED_BY_ADMIN_MESSAGE, videoId);
   return { success: true };
 });

@@ -431,6 +431,9 @@ export async function startQueueWorker() {
   }
 }
 
+/** The last_error of a download an admin cancelled (videos and music tracks). */
+export const CANCELLED_BY_ADMIN_MESSAGE = 'Cancelled by an admin.';
+
 /**
  * Records a download attempt that ended in an error. The attempt may have been
  * ended on purpose while it ran: a pause (status set back to 'pending', or the
