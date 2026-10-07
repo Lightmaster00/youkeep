@@ -61,6 +61,23 @@ describe('TidyLibraryPanel', () => {
     expect(w.find('[data-testid="tidy-report"]').text()).toContain('2 moved');
   });
 
+  it('reports unfinished downloads whose partial files will be moved, and lets them start a run alone', async () => {
+    previewReply = () => ({ ...PREVIEW, total: 1, toMove: 0, alreadyTidy: 1, unfinishedToMove: 2, unfinishedFiles: 5 });
+    const w = await mountPanel();
+    await w.find('[data-testid="tidy-preview-btn"]').trigger('click');
+    await flushPromises();
+    const text = w.find('[data-testid="tidy-unfinished"]').text();
+    expect(text).toContain('2 unfinished download(s)');
+    expect(text).toContain('5 partial file(s)');
+    expect(startButton(w).disabled).toBe(false);
+
+    previewReply = () => ({ ...PREVIEW, toMove: 0, unfinishedToMove: 0, unfinishedFiles: 0 });
+    await w.find('[data-testid="tidy-preview-btn"]').trigger('click');
+    await flushPromises();
+    expect(w.find('[data-testid="tidy-unfinished"]').exists()).toBe(false);
+    expect(startButton(w).disabled).toBe(true);
+  });
+
   it('resumes the progress bar of a running tidy and can cancel it', async () => {
     statusReplies = [{ ...STATUS, state: 'running', processed: 1, total: 4, moved: 1 }];
     const w = await mountPanel();

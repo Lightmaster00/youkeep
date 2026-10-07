@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
-import { buildVideoPaths, candidateVideoDirs, channelBaseDirs, channelReadBaseDir, folderIdOf, idFromVideoFolder, isContained, isNewLayoutUrl, storedUrlSegments } from './videoPaths';
+import { buildVideoPaths, candidateVideoDirs, channelBaseDirs, channelReadBaseDir, channelWriteBaseDir, folderIdOf, idFromVideoFolder, isContained, isNewLayoutUrl, isPartialDownloadName, storedUrlSegments } from './videoPaths';
 import { activeProcesses, addLog, sanitizeFolderName } from './downloader';
 import { isWipeInProgress } from './libraryWipe';
 
@@ -30,7 +30,8 @@ export interface TidyPlanItem {
   title: string;
   channelId: string;
   channelTitle: string;
-  kind: 'legacy' | 'duplicate';
+  /** 'partial': flat partial files of an unfinished legacy download (no database change). */
+  kind: 'legacy' | 'duplicate' | 'partial';
   fromDir: string;
   toDir: string;
   moves: TidyMove[];
@@ -52,9 +53,16 @@ export interface TidyPreview {
   missingFiles: number;
   notWritable: number;
   duplicateFolders: number;
+  /** Unfinished downloads whose flat partial files will be moved into the video's folder (not counted in total/toMove). */
+  unfinishedToMove: number;
+  /** How many partial files those are. */
+  unfinishedFiles: number;
   /** Channels whose save path ends with their own folder name but is NOT a doubled folder to repair. */
   channelNotes: { channelId: string; channel: string; note: string }[];
-  /** Videos that could not be checked (e.g. an unreadable folder), counted in notWritable. */
+  /**
+   * Videos that could not be checked (e.g. an unreadable folder, counted in
+   * notWritable), and unfinished downloads whose partial files stay in place.
+   */
   problems: { id: string; title: string; reason: string }[];
   samples: { id: string; title: string; from: string; to: string }[];
   channels: { channelId: string; channel: string; toMove: number }[];
@@ -90,6 +98,7 @@ class PlanFsCache implements PlannerFs {
   private readonly access = new Map<string, Error | null>();
   private readonly writable = new Map<string, boolean>();
   private readonly subtitleIndexes = new Map<string, Map<string, string[]>>();
+  private readonly partialIndexes = new Map<string, Map<string, string[]>>();
 
   constructor(private readonly inner: PlannerFs) {}
 
@@ -153,6 +162,30 @@ class PlanFsCache implements PlannerFs {
       this.writable.set(dir, hit);
     }
     return hit;
+  }
+
+  /** Partial download files `<id>.*` (see isPartialDownloadName) of one video id in a folder, from one listing. */
+  partialsFor(dir: string, id: string): string[] {
+    let index = this.partialIndexes.get(dir);
+    if (!index) {
+      index = new Map();
+      let entries: string[] = [];
+      try {
+        entries = this.existsSync(dir) ? this.readdirSync(dir) : [];
+      } catch {
+        entries = [];
+      }
+      for (const entry of entries) {
+        for (let i = entry.indexOf('.'); i > 0; i = entry.indexOf('.', i + 1)) {
+          const key = entry.slice(0, i);
+          const list = index.get(key) ?? [];
+          list.push(entry);
+          index.set(key, list);
+        }
+      }
+      this.partialIndexes.set(dir, index);
+    }
+    return (index.get(id) ?? []).filter((entry) => isPartialDownloadName(id, entry));
   }
 
   /**
@@ -386,6 +419,97 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache, repairab
   };
 }
 
+interface UnfinishedRow { id: string; title: string; channelId: string; channelTitle: string | null; customPath: string | null }
+
+type ClassifiedPartial = { status: 'none' } | { status: 'problem'; reason: string } | { status: 'move'; item: TidyPlanItem };
+
+/** Name of a folder for this id in `channelDir` (like findExistingVideoDir, through the planner fs), or undefined. */
+function existingVideoFolder(fsx: PlanFsCache, channelDir: string, id: string): string | undefined {
+  let entries: string[];
+  try {
+    entries = fsx.existsSync(channelDir) ? fsx.readdirSync(channelDir) : [];
+  } catch {
+    return undefined;
+  }
+  const wanted = folderIdOf(id);
+  const matches = entries.filter((entry) => {
+    if (idFromVideoFolder(entry) !== wanted) return false;
+    try { return fsx.statSync(path.join(channelDir, entry)).isDirectory(); } catch { return false; }
+  });
+  const withOwnFiles = matches.find((name) => {
+    try { return fsx.readdirSync(path.join(channelDir, name)).some((f) => f.startsWith(`${name}.`)); } catch { return false; }
+  });
+  return withOwnFiles ?? matches[0];
+}
+
+/**
+ * An unfinished download started before one folder per video left flat
+ * partial files `<id>.*.part|.ytdl` / `<id>.f<format>.<ext>` in the channel
+ * folder (or in the nested folder of a doubled one). They are moved into the
+ * folder the downloader now resumes in, renamed `<Title> [<id>].<rest>`, so
+ * yt-dlp picks them up. Never overwrites; same move rules as other files.
+ */
+function classifyPartial(row: UnfinishedRow, downloadsDir: string, fsx: PlanFsCache): ClassifiedPartial {
+  const channelFolder = sanitizeFolderName(row.channelTitle || row.channelId);
+  if (isUnsafeFolderSegment(channelFolder)) return { status: 'none' };
+  let srcDir: string | null = null;
+  let names: string[] = [];
+  let inNestedFolder = false;
+  search: for (const base of channelBaseDirs(row.customPath, downloadsDir)) {
+    for (const candidate of [path.join(base, channelFolder), path.join(base, channelFolder, channelFolder)]) {
+      const found = fsx.partialsFor(candidate, row.id);
+      if (found.length > 0) {
+        srcDir = candidate;
+        names = found;
+        inNestedFolder = candidate !== path.join(base, channelFolder);
+        break search;
+      }
+    }
+  }
+  if (!srcDir) return { status: 'none' };
+
+  // Where the downloader resumes: its write base, the folder already there for this id, else one named from the title.
+  const writeBase = path.resolve(channelWriteBaseDir(row.customPath, downloadsDir));
+  const folderName = existingVideoFolder(fsx, path.join(writeBase, channelFolder), row.id);
+  const target = buildVideoPaths({ baseDir: writeBase, channelFolder, title: row.title, id: row.id, folderName });
+  if (!isContained(writeBase, target.dir)) return { status: 'none' };
+  const moves: TidyMove[] = [];
+  for (const name of names) {
+    const from = path.join(srcDir, name);
+    const to = path.join(target.dir, `${target.baseName}${name.slice(row.id.length)}`);
+    const size = sizeOf(fsx, from);
+    if (fsx.existsSync(to) && sizeOf(fsx, to) !== size) {
+      return { status: 'problem', reason: `Its unfinished download's partial files were left in place: a different ${path.basename(to)} is already in ${target.dir}.` };
+    }
+    moves.push({ from, to, size });
+  }
+  if (targetHasForeignContent(fsx, target.dir, target.baseName)) {
+    return { status: 'problem', reason: `Its unfinished download's partial files were left in place: ${target.dir} holds other files.` };
+  }
+  if (!fsx.isWritable(srcDir) || !fsx.isWritable(target.dir)) {
+    return { status: 'problem', reason: 'Its unfinished download\'s partial files were left in place: YouKeep cannot write to their folder.' };
+  }
+  return {
+    status: 'move',
+    item: {
+      id: row.id,
+      title: row.title,
+      channelId: row.channelId,
+      channelTitle: row.channelTitle || row.channelId,
+      kind: 'partial',
+      fromDir: srcDir,
+      toDir: target.dir,
+      moves,
+      // The nested folder of a repaired doubled channel goes once empty; a channel folder stays.
+      cleanupDirs: inNestedFolder ? [srcDir] : [],
+      oldVideoUrl: '',
+      oldThumbUrl: null,
+      newVideoUrl: '',
+      newThumbUrl: null,
+    },
+  };
+}
+
 /**
  * The planner as a generator that pauses after each video, so the runner (and
  * any route) can plan a big library without blocking the event loop.
@@ -402,7 +526,7 @@ function* planTidySteps(db: Database.Database, opts: { downloadsDir: string; fs?
   `).all() as TidyRow[];
 
   const preview: TidyPreview = {
-    total: rows.length, toMove: 0, alreadyTidy: 0, conflicts: 0, missingFiles: 0, notWritable: 0, duplicateFolders: 0,
+    total: rows.length, toMove: 0, alreadyTidy: 0, conflicts: 0, missingFiles: 0, notWritable: 0, duplicateFolders: 0, unfinishedToMove: 0, unfinishedFiles: 0,
     channelNotes: [], problems: [], samples: [], channels: [],
   };
   const items: TidyPlanItem[] = [];
@@ -448,6 +572,33 @@ function* planTidySteps(db: Database.Database, opts: { downloadsDir: string; fs?
       perChannel.set(item.channelId, entry);
       if (preview.samples.length < SAMPLE_LIMIT && item.moves[0]) {
         preview.samples.push({ id: item.id, title: item.title, from: item.moves[0].from, to: item.moves[0].to });
+      }
+    }
+    yield;
+  }
+
+  // Unfinished downloads (never 'downloading': a running download owns its files).
+  const unfinished = db.prepare(`
+    SELECT v.id AS id, v.title AS title, v.channel_id AS channelId, c.title AS channelTitle, c.custom_save_path AS customPath
+    FROM videos v JOIN channels c ON c.id = v.channel_id
+    WHERE v.download_status NOT IN ('completed', 'downloading') AND (v.local_video_path IS NULL OR v.local_video_path = '')
+    ORDER BY v.channel_id, v.id
+  `).all() as UnfinishedRow[];
+  for (const row of unfinished) {
+    let result: ClassifiedPartial;
+    try {
+      result = classifyPartial(row, opts.downloadsDir, fsx);
+    } catch (err: any) {
+      result = { status: 'problem', reason: `Its unfinished download's folder could not be read (${err?.code || err?.message || String(err)}).` };
+    }
+    if (result.status === 'problem') {
+      if (preview.problems.length < SAMPLE_LIMIT * 2) preview.problems.push({ id: row.id, title: row.title, reason: result.reason });
+    } else if (result.status === 'move') {
+      items.push(result.item);
+      preview.unfinishedToMove++;
+      preview.unfinishedFiles += result.item.moves.length;
+      if (preview.samples.length < SAMPLE_LIMIT && result.item.moves[0]) {
+        preview.samples.push({ id: row.id, title: row.title, from: result.item.moves[0].from, to: result.item.moves[0].to });
       }
     }
     yield;
@@ -754,10 +905,22 @@ async function clearStalePartials(fsp: RunnerFs, item: TidyPlanItem): Promise<vo
 
 type ItemOutcome = { result: 'moved' | 'skipped' } | { result: 'error'; message: string };
 
-async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs, isBusy: (id: string) => boolean): Promise<ItemOutcome> {
-  const row = db.prepare('SELECT download_status AS status, local_video_path AS url FROM videos WHERE id = ?').get(item.id) as
+/** An unfinished download whose partial files may be moved: not completed, not downloading, no stored file. */
+function isIdleUnfinished(db: Database.Database, id: string, isBusy: (id: string) => boolean): boolean {
+  const row = db.prepare('SELECT download_status AS status, local_video_path AS url FROM videos WHERE id = ?').get(id) as
     { status: string; url: string | null } | undefined;
-  if (!row || row.status !== 'completed' || row.url !== item.oldVideoUrl || isBusy(item.id)) return { result: 'skipped' };
+  return !!row && row.status !== 'completed' && row.status !== 'downloading' && !row.url && !isBusy(id);
+}
+
+async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs, isBusy: (id: string) => boolean): Promise<ItemOutcome> {
+  const partial = item.kind === 'partial';
+  if (partial) {
+    if (!isIdleUnfinished(db, item.id, isBusy)) return { result: 'skipped' };
+  } else {
+    const row = db.prepare('SELECT download_status AS status, local_video_path AS url FROM videos WHERE id = ?').get(item.id) as
+      { status: string; url: string | null } | undefined;
+    if (!row || row.status !== 'completed' || row.url !== item.oldVideoUrl || isBusy(item.id)) return { result: 'skipped' };
+  }
 
   const createdDir = !(await statOrNull(fsp, item.toDir));
   const done: TidyMove[] = [];
@@ -769,6 +932,9 @@ async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs,
     }
     else await clearStalePartials(fsp, item);
     for (const move of item.moves) {
+      // A download that starts meanwhile owns the files: stop here, and do not move
+      // back the ones already in the folder it resumes from.
+      if (partial && !isIdleUnfinished(db, item.id, isBusy)) return { result: 'skipped' };
       await moveFileVerified(fsp, move.from, move.to);
       done.push(move);
     }
@@ -776,7 +942,7 @@ async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs,
       const stat = await statOrNull(fsp, move.to);
       if (!stat || (move.size !== null && stat.size !== move.size)) throw new Error(`Moved file could not be verified: ${move.to}`);
     }
-    db.transaction(() => {
+    if (!partial) db.transaction(() => {
       const result = db.prepare('UPDATE videos SET local_video_path = ?, local_thumbnail_path = ? WHERE id = ? AND local_video_path = ?')
         .run(item.newVideoUrl, item.newThumbUrl, item.id, item.oldVideoUrl);
       if (result.changes !== 1) throw new Error('The video changed while its files were being moved.');

@@ -3,6 +3,7 @@
     <h4 class="results-header">Tidy library files</h4>
     <p class="section-desc">
       Moves each downloaded video into its own folder named after its title, together with its thumbnail, subtitles and metadata files.
+      Partial files of unfinished downloads go into their video's folder too, so those downloads resume where they stopped.
       Nothing moves until you start it, and you can run it again to finish whatever is left.
     </p>
 
@@ -38,6 +39,9 @@
     <template v-else>
       <div v-if="preview" class="tidy-preview" data-testid="tidy-preview">
         <p><strong>{{ preview.toMove }}</strong> of {{ preview.total }} video(s) will be moved. {{ preview.alreadyTidy }} already tidy.</p>
+        <p v-if="preview.unfinishedToMove" class="section-desc" data-testid="tidy-unfinished">
+          {{ preview.unfinishedToMove }} unfinished download(s): their {{ preview.unfinishedFiles }} partial file(s) will be moved into the video's folder so the download can resume.
+        </p>
         <p v-if="hasProblems" class="section-desc">
           Left as they are: {{ preview.conflicts }} name conflict(s), {{ preview.missingFiles }} missing file(s),
           {{ preview.notWritable }} in folders YouKeep cannot write to.
@@ -75,6 +79,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 interface TidyPreview {
   total: number; toMove: number; alreadyTidy: number; conflicts: number; missingFiles: number; notWritable: number; duplicateFolders: number;
+  unfinishedToMove?: number; unfinishedFiles?: number;
   samples: { id: string; title: string; from: string; to: string }[];
   channels: { channelId: string; channel: string; toMove: number }[];
   channelNotes?: { channelId: string; channel: string; note: string }[];
@@ -110,7 +115,7 @@ function schedulePoll() {
   pollTimer = setTimeout(pollStatus, 1000);
 }
 
-const canStart = computed(() => !!preview.value && !loadingPreview.value && (preview.value.toMove > 0 || preview.value.duplicateFolders > 0) && !starting.value);
+const canStart = computed(() => !!preview.value && !loadingPreview.value && (preview.value.toMove > 0 || preview.value.duplicateFolders > 0 || (preview.value.unfinishedToMove ?? 0) > 0) && !starting.value);
 const hasProblems = computed(() => !!preview.value && preview.value.conflicts + preview.value.missingFiles + preview.value.notWritable > 0);
 const progressPercent = computed(() => {
   const s = status.value;

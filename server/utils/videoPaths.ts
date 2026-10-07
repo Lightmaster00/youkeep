@@ -299,6 +299,20 @@ export function isVideoArtifactName(baseName: string, entry: string): boolean {
   return MEDIA_RE.test(core) || THUMB_RE.test(core) || SUBTITLE_RE.test(core);
 }
 
+const FRAGMENT_RE = new RegExp(`^f[A-Za-z0-9_-]+\\.(?:${FRAGMENT_EXTENSIONS.join('|')})$`, 'i');
+
+/**
+ * True when `entry` is a file an unfinished download of this video left
+ * behind and yt-dlp resumes from: a `.part` / `.ytdl` / `.part-Frag<n>` file,
+ * or a finished per-format fragment `<baseName>.f<format>.<ext>` waiting to be
+ * merged. Never the merged video, thumbnail, subtitles or metadata.
+ */
+export function isPartialDownloadName(baseName: string, entry: string): boolean {
+  if (!isVideoArtifactName(baseName, entry)) return false;
+  const rest = entry.slice(baseName.length + 1);
+  return PARTIAL_SUFFIX_RE.test(rest) || FRAGMENT_RE.test(rest);
+}
+
 function isRegularFile(file: string): boolean {
   try {
     return fs.lstatSync(file).isFile();
