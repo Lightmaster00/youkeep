@@ -36,14 +36,12 @@ export default defineEventHandler(async (event) => {
     title: string;
     custom_save_path: string | null;
   } | undefined;
-  const basePath = channel?.custom_save_path && channel.custom_save_path.trim().length > 0
-    ? channel.custom_save_path
-    : getDownloadsDir();
-  const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || video.channel_id));
-
   // Where this video's files are, resolved before its row is deleted: its own
-  // folder (one folder per video) or, for legacy videos, the channel folder.
+  // folder (one folder per video) or, for legacy videos, the channel folder,
+  // under the base the downloader wrote it to (see channelBaseDirs).
   const location = resolveStoredPath(db, video, { downloadsDir: getDownloadsDir() });
+  const basePath = location.baseDir;
+  const channelDir = path.resolve(basePath, sanitizeFolderName(channel?.title || video.channel_id));
 
   // 2. Kill the download if it's running
   cancelDownload(videoId);

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
-import { candidateVideoDirs, channelReadBaseDir, decodeUrlSegments, idFromVideoFolder, isContained, storedUrlSegments } from '../../utils/videoPaths';
+import { candidateVideoDirs, channelBaseDirs, decodeUrlSegments, idFromVideoFolder, isContained, storedUrlSegments } from '../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
   const filePath = event.context.params?.path;
@@ -41,12 +41,14 @@ export default defineEventHandler(async (event) => {
     if (!stored || stored[0] !== channelSegment || stored[1] !== videoFolder) {
       throw createError({ statusCode: 404, statusMessage: 'File not found' });
     }
-    const baseDir = path.resolve(channelReadBaseDir(video.custom_save_path, downloadsDir));
-    const candidates = candidateVideoDirs(baseDir, channelSegment, videoFolder).map((dir) => path.resolve(dir, fileName));
-    if (candidates.some((candidate) => !isContained(baseDir, candidate))) {
+    // Where the downloader writes this channel's files first, then the other
+    // place it may have written them (see channelBaseDirs).
+    const candidates = channelBaseDirs(video.custom_save_path, downloadsDir).flatMap((baseDir) =>
+      candidateVideoDirs(baseDir, channelSegment, videoFolder).map((dir) => ({ baseDir, file: path.resolve(dir, fileName) })));
+    if (candidates.some((candidate) => !isContained(candidate.baseDir, candidate.file))) {
       throw createError({ statusCode: 403, statusMessage: 'Access denied' });
     }
-    absolutePath = candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+    absolutePath = (candidates.find((candidate) => fs.existsSync(candidate.file)) ?? candidates[0]!).file;
   } else {
     if (parts.length < 2) {
       throw createError({ statusCode: 400, statusMessage: 'Invalid file path' });
@@ -80,20 +82,22 @@ export default defineEventHandler(async (event) => {
 
       const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
       if (channel) {
-        const hasCustomPath = !!(channel.custom_save_path && channel.custom_save_path.trim().length > 0);
-        const basePath = hasCustomPath ? (channel.custom_save_path as string) : downloadsDir;
-        const channelDir = path.resolve(basePath, sanitizeFolderName(channel.title || channelId));
-        const resolvedPath = path.resolve(channelDir, fileName);
+        // Same bases, same order as the new layout above.
+        for (const basePath of channelBaseDirs(channel.custom_save_path, downloadsDir)) {
+          const channelDir = path.resolve(basePath, sanitizeFolderName(channel.title || channelId));
+          const resolvedPath = path.resolve(channelDir, fileName);
 
-        // Containment check: resolvedPath must stay inside channelDir, whether
-        // it's the default downloads dir or a channel's custom save path.
-        const relativeToChannelDir = path.relative(channelDir, resolvedPath);
-        if (relativeToChannelDir.startsWith('..') || path.isAbsolute(relativeToChannelDir)) {
-          throw createError({ statusCode: 403, statusMessage: 'Access denied' });
-        }
+          // Containment check: resolvedPath must stay inside channelDir, whether
+          // it's the default downloads dir or a channel's custom save path.
+          const relativeToChannelDir = path.relative(channelDir, resolvedPath);
+          if (relativeToChannelDir.startsWith('..') || path.isAbsolute(relativeToChannelDir)) {
+            throw createError({ statusCode: 403, statusMessage: 'Access denied' });
+          }
 
-        if (fs.existsSync(resolvedPath)) {
-          absolutePath = resolvedPath;
+          if (fs.existsSync(resolvedPath)) {
+            absolutePath = resolvedPath;
+            break;
+          }
         }
       }
     }

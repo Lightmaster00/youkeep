@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
-import { buildVideoPaths, channelReadBaseDir, folderIdOf, idFromVideoFolder, isContained, isNewLayoutUrl, storedUrlSegments } from './videoPaths';
+import { buildVideoPaths, candidateVideoDirs, channelBaseDirs, channelReadBaseDir, folderIdOf, idFromVideoFolder, isContained, isNewLayoutUrl, storedUrlSegments } from './videoPaths';
 import { activeProcesses, addLog, sanitizeFolderName } from './downloader';
 import { isWipeInProgress } from './libraryWipe';
 
@@ -282,9 +282,25 @@ export function doubledRepairBlocker(db: Database.Database, channelId: string, c
   return evidence ? null : 'none of its files are there';
 }
 
+/**
+ * The base folder holding a video's stored file, looked up like every reader
+ * does (channelBaseDirs: where the downloader writes first), or the channel's
+ * save folder when the file is in none of them.
+ */
+function storedFileBase(row: TidyRow, downloadsDir: string, fsx: PlannerFs, channelFolder: string): string {
+  const bases = channelBaseDirs(row.customPath, downloadsDir);
+  const stored = isNewLayoutUrl(row.videoUrl, row.id) ? storedUrlSegments(row.videoUrl) : null;
+  const holdsFile = (base: string) => stored
+    ? candidateVideoDirs(base, stored[0], stored[1]).some((dir) => fsx.existsSync(path.join(dir, stored[2])))
+    : fsx.existsSync(path.join(base, channelFolder, path.posix.basename(row.videoUrl)));
+  return bases.find(holdsFile) ?? path.resolve(channelReadBaseDir(row.customPath, downloadsDir));
+}
+
 function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache, repairable: boolean): Classified {
-  const baseDir = path.resolve(channelReadBaseDir(row.customPath, downloadsDir));
   const channelFolder = sanitizeFolderName(row.channelTitle || row.channelId);
+  const baseDir = storedFileBase(row, downloadsDir, fsx, channelFolder);
+  // Only the save folder itself can be a doubled folder to repair, never the default folder.
+  if (baseDir !== path.resolve(channelReadBaseDir(row.customPath, downloadsDir))) repairable = false;
   const common = { id: row.id, title: row.title, channelId: row.channelId, channelTitle: row.channelTitle || row.channelId, oldVideoUrl: row.videoUrl, oldThumbUrl: row.thumbUrl };
 
   if (isNewLayoutUrl(row.videoUrl, row.id)) {

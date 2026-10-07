@@ -157,9 +157,57 @@ export function isNewLayoutUrl(url: string | null | undefined, id: string): bool
   return !!segments && segments[1].endsWith(`[${cleanName(id) || '_'}]`);
 }
 
-/** Base folder used to READ a channel's files (same rule the file route has always used). */
+/**
+ * A channel's save folder as set (or the downloads folder when none is set),
+ * whether or not it is writable. Only for deciding what a save folder IS
+ * (doubled-folder detection, overlap checks); to find a channel's files use
+ * channelBaseDirs.
+ */
 export function channelReadBaseDir(customSavePath: string | null | undefined, downloadsDir: string): string {
   return customSavePath && customSavePath.trim().length > 0 ? customSavePath : downloadsDir;
+}
+
+/**
+ * True when `dir` is a writable folder, or a missing one `mkdir -p` could
+ * create (its deepest existing ancestor is a writable folder). Like
+ * isDirWritable, but never creates anything.
+ */
+function couldWriteInto(dir: string): boolean {
+  let probe = path.resolve(dir);
+  for (;;) {
+    try {
+      if (!fs.statSync(probe).isDirectory()) return false;
+      fs.accessSync(probe, fs.constants.W_OK);
+      return true;
+    } catch (err: any) {
+      if (err?.code !== 'ENOENT') return false;
+      const parent = path.dirname(probe);
+      if (parent === probe) return false;
+      probe = parent;
+    }
+  }
+}
+
+/**
+ * The base folder the downloader writes a channel's videos under: the same
+ * rule as resolveChannelBaseDir (its save folder when set and writable, else
+ * the default downloads folder), without creating any folder.
+ */
+export function channelWriteBaseDir(customSavePath: string | null | undefined, downloadsDir: string): string {
+  return customSavePath && customSavePath.trim().length > 0 && couldWriteInto(customSavePath) ? customSavePath : downloadsDir;
+}
+
+/**
+ * Every base folder a channel's video files may be under, in lookup order:
+ * where the downloader writes now first (the source of truth), then the other
+ * place it writes to when the save folder is (or was, at download time)
+ * unwritable: the save folder itself and the default downloads folder.
+ */
+export function channelBaseDirs(customSavePath: string | null | undefined, downloadsDir: string): string[] {
+  const bases = [channelWriteBaseDir(customSavePath, downloadsDir)];
+  if (customSavePath && customSavePath.trim().length > 0) bases.push(customSavePath, downloadsDir);
+  const seen = new Set<string>();
+  return bases.map((base) => path.resolve(base)).filter((base) => !seen.has(base) && !!seen.add(base));
 }
 
 /**
@@ -346,14 +394,15 @@ export function resolveStoredPath(
   const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(row.channel_id) as
     { title: string | null; custom_save_path: string | null } | undefined;
   const downloadsDir = opts.downloadsDir ?? getDownloadsDir();
-  const baseDir = path.resolve(channelReadBaseDir(channel?.custom_save_path, downloadsDir));
+  // Where the downloader writes first; the first base actually holding the files wins.
+  const bases = channelBaseDirs(channel?.custom_save_path, downloadsDir);
   const channelFolder = sanitizeFolderName(channel?.title || row.channel_id);
 
   const stored = isNewLayoutUrl(row.local_video_path, row.id) ? storedUrlSegments(row.local_video_path) : null;
   if (stored) {
     const [channelFolderSegment, videoFolder, fileName] = stored;
-    const candidates = candidateVideoDirs(baseDir, channelFolderSegment, videoFolder);
-    const dir = candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+    const all = bases.flatMap((base) => candidateVideoDirs(base, channelFolderSegment, videoFolder).map((dir) => ({ base, dir })));
+    const { base: baseDir, dir } = all.find((c) => fs.existsSync(c.dir)) ?? all[0]!;
     return {
       layout: 'new',
       baseDir,
@@ -364,6 +413,8 @@ export function resolveStoredPath(
     };
   }
   if (row.local_video_path) {
+    const fileName = path.posix.basename(row.local_video_path);
+    const baseDir = bases.find((base) => fs.existsSync(path.resolve(base, channelFolder, fileName))) ?? bases[0]!;
     const dir = path.resolve(baseDir, channelFolder);
     return {
       layout: 'legacy',
@@ -371,9 +422,11 @@ export function resolveStoredPath(
       dir,
       baseName: row.id,
       urlDir: `/downloads/${channelFolder}`,
-      videoFile: path.resolve(dir, path.posix.basename(row.local_video_path)),
+      videoFile: path.resolve(dir, fileName),
     };
   }
+  // No stored path yet: the folder already on disk for this id, else where the downloader would create it.
+  const baseDir = bases.find((base) => findExistingVideoDir(path.join(base, channelSegment(channelFolder)), row.id) !== null) ?? bases[0]!;
   const p = resolveVideoPaths({ baseDir, channelFolder, title: row.title, id: row.id });
   return { layout: 'new', baseDir, dir: p.dir, baseName: p.baseName, urlDir: p.urlDir, videoFile: null };
 }
@@ -503,8 +556,9 @@ export function removeEntityFolder(opts: { baseDir: string; folder: string; ownI
  *   default downloads folder, or a music/podcast download root is that folder
  *   or inside it, only this channel's own video files and folders are removed,
  *   and the channel folder itself only if it is then empty.
- * - Videos a partly repaired doubled channel folder already moved up to
- *   `<base>/<Title> [<id>]` are removed with the rules of deleting one video.
+ * - Videos outside that folder (moved up to `<base>/<Title> [<id>]` by a partly
+ *   repaired doubled folder, or under the other base the downloader used, see
+ *   channelBaseDirs) are removed with the rules of deleting one video.
  */
 export function prepareChannelFilesRemoval(
   db: Database.Database,
@@ -519,8 +573,11 @@ export function prepareChannelFilesRemoval(
   const rows = db.prepare('SELECT id, channel_id, title, local_video_path FROM videos WHERE channel_id = ?').all(channelId) as
     { id: string; channel_id: string; title: string | null; local_video_path: string | null }[];
   const locations = rows.map((row) => resolveStoredPath(db, row, { downloadsDir }));
-  const movedUp = locations.filter((loc, i) => !!rows[i]!.local_video_path && loc.layout === 'new'
-    && path.dirname(loc.dir) === loc.baseDir && path.basename(loc.baseDir) === channelFolder);
+  // Video folders outside the channel folder removed below: moved up by a
+  // partly repaired doubled folder, or under the other base the downloader
+  // used while the save folder was unwritable (see channelBaseDirs).
+  const elsewhere = locations.filter((loc, i) => !!rows[i]!.local_video_path && loc.layout === 'new'
+    && !isContained(channelDir, loc.dir));
   const ids = new Set(rows.map((row) => row.id));
 
   /** Why `channelDir` may hold someone else's files, or null. */
@@ -546,7 +603,7 @@ export function prepareChannelFilesRemoval(
   return {
     channelDir,
     remove() {
-      for (const loc of movedUp) removeVideoFiles(loc);
+      for (const loc of elsewhere) removeVideoFiles(loc);
       if (!isContained(baseDir, channelDir)) {
         const skippedReason = `the channel folder ${channelDir} is not inside its base folder ${baseDir}`;
         console.error(`Channel ${channelId}: files left in place because ${skippedReason}.`);
