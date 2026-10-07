@@ -70,6 +70,116 @@ interface TidyRow {
   customPath: string | null;
 }
 
+/**
+ * Per-plan memo over the injected fs: the plan never changes the disk, so each
+ * folder is listed, each path probed and each folder's writability checked once.
+ * A channel folder with thousands of legacy videos is read once, not once per video.
+ */
+class PlanFsCache implements PlannerFs {
+  private readonly lists = new Map<string, string[] | Error>();
+  private readonly exists = new Map<string, boolean>();
+  private readonly stats = new Map<string, { size: number; isDirectory(): boolean } | Error>();
+  private readonly access = new Map<string, Error | null>();
+  private readonly writable = new Map<string, boolean>();
+  private readonly subtitleIndexes = new Map<string, Map<string, string[]>>();
+
+  constructor(private readonly inner: PlannerFs) {}
+
+  existsSync(p: string): boolean {
+    let hit = this.exists.get(p);
+    if (hit === undefined) {
+      hit = this.inner.existsSync(p);
+      this.exists.set(p, hit);
+    }
+    return hit;
+  }
+
+  statSync(p: string): { size: number; isDirectory(): boolean } {
+    let hit = this.stats.get(p);
+    if (hit === undefined) {
+      try {
+        hit = this.inner.statSync(p);
+      } catch (err) {
+        hit = err instanceof Error ? err : new Error(String(err));
+      }
+      this.stats.set(p, hit);
+    }
+    if (hit instanceof Error) throw hit;
+    return hit;
+  }
+
+  /** Sorted, so every plan is deterministic. Callers must not mutate the result. */
+  readdirSync(p: string): string[] {
+    let hit = this.lists.get(p);
+    if (hit === undefined) {
+      try {
+        hit = [...this.inner.readdirSync(p)].sort();
+      } catch (err) {
+        hit = err instanceof Error ? err : new Error(String(err));
+      }
+      this.lists.set(p, hit);
+    }
+    if (hit instanceof Error) throw hit;
+    return hit;
+  }
+
+  accessSync(p: string, mode?: number): void {
+    const key = `${mode ?? ''}:${p}`;
+    let hit = this.access.get(key);
+    if (hit === undefined) {
+      try {
+        this.inner.accessSync(p, mode);
+        hit = null;
+      } catch (err) {
+        hit = err instanceof Error ? err : new Error(String(err));
+      }
+      this.access.set(key, hit);
+    }
+    if (hit) throw hit;
+  }
+
+  isWritable(dir: string): boolean {
+    let hit = this.writable.get(dir);
+    if (hit === undefined) {
+      hit = isWritable(this, dir);
+      this.writable.set(dir, hit);
+    }
+    return hit;
+  }
+
+  /**
+   * Subtitle files of a legacy channel folder for one video id, from an index
+   * built from a single listing. `<id>.vtt` and `<id>.<anything>.vtt` belong to
+   * `<id>`: every prefix of a `.vtt` entry ending just before a dot is a
+   * candidate id, which keeps look-alikes apart (`v10.fr.vtt` is never `v1`'s).
+   */
+  subtitlesFor(dir: string, id: string): string[] {
+    let index = this.subtitleIndexes.get(dir);
+    if (!index) {
+      index = new Map();
+      const entries = this.existsSync(dir) ? this.readdirSync(dir) : [];
+      for (const entry of entries) {
+        if (!entry.endsWith('.vtt')) continue;
+        const lastDot = entry.length - '.vtt'.length;
+        for (let i = entry.indexOf('.'); i > 0 && i <= lastDot; i = entry.indexOf('.', i + 1)) {
+          const key = entry.slice(0, i);
+          const list = index.get(key) ?? [];
+          list.push(entry);
+          index.set(key, list);
+        }
+      }
+      this.subtitleIndexes.set(dir, index);
+    }
+    return index.get(id) ?? [];
+  }
+}
+
+// A channel folder name that is empty or a dot segment would point at (or above)
+// the base folder: such a video is reported as a conflict, never moved.
+function isUnsafeFolderSegment(name: string): boolean {
+  return !name || name === '.' || name === '..' || /[\\/\u0000-\u001f\u007f]/.test(name);
+}
+
 type Classified =
   | { status: 'tidy' | 'missing' | 'conflict' | 'notWritable' }
   | { status: 'move'; item: TidyPlanItem };
@@ -109,15 +219,11 @@ function targetHasForeignContent(fsx: PlannerFs, dir: string, baseName: string):
   return fsx.readdirSync(dir).some((entry) => !entry.startsWith(`${baseName}.`));
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 function isDoubled(customPath: string | null, baseDir: string, channelFolder: string): boolean {
   return !!(customPath && customPath.trim()) && path.basename(baseDir) === channelFolder;
 }
 
-function classify(row: TidyRow, downloadsDir: string, fsx: PlannerFs): Classified {
+function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache): Classified {
   const baseDir = path.resolve(channelReadBaseDir(row.customPath, downloadsDir));
   const channelFolder = sanitizeFolderName(row.channelTitle || row.channelId);
   const common = { id: row.id, title: row.title, channelId: row.channelId, channelTitle: row.channelTitle || row.channelId, oldVideoUrl: row.videoUrl, oldThumbUrl: row.thumbUrl };
@@ -130,9 +236,9 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlannerFs): Classifie
     const nestedDir = path.join(baseDir, channelSegment, videoFolder);
     if (!fsx.existsSync(path.join(nestedDir, fileName))) return { status: 'missing' };
     if (targetHasForeignContent(fsx, finalDir, videoFolder)) return { status: 'conflict' };
-    if (!isWritable(fsx, nestedDir) || !isWritable(fsx, finalDir)) return { status: 'notWritable' };
+    if (!fsx.isWritable(nestedDir) || !fsx.isWritable(finalDir)) return { status: 'notWritable' };
     // The video file first (it is what the preview samples show), then the rest by name.
-    const moves = [...fsx.readdirSync(nestedDir)].sort()
+    const moves = fsx.readdirSync(nestedDir)
       .filter((entry) => entry.startsWith(`${videoFolder}.`))
       .sort((a, b) => Number(b === fileName) - Number(a === fileName))
       .map((entry) => ({ from: path.join(nestedDir, entry), to: path.join(finalDir, entry), size: sizeOf(fsx, path.join(nestedDir, entry)) }));
@@ -155,6 +261,7 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlannerFs): Classifie
 
   const fileName = path.posix.basename(row.videoUrl);
   if (!fileName.startsWith(`${row.id}.`)) return { status: 'conflict' };
+  if (isUnsafeFolderSegment(channelFolder)) return { status: 'conflict' };
   const srcDir = path.join(baseDir, channelFolder);
   const doubled = isDoubled(row.customPath, baseDir, channelFolder);
   const target = buildVideoPaths({ baseDir: doubled ? path.dirname(baseDir) : baseDir, channelFolder, title: row.title, id: row.id });
@@ -181,14 +288,9 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlannerFs): Classifie
   if (thumbName.startsWith(`${row.id}.`) && addMove(thumbName)) {
     newThumbUrl = target.thumbUrlFor(thumbName.slice(row.id.length + 1));
   }
-  const subtitlePattern = new RegExp(`^${escapeRegExp(row.id)}(\\..+)?\\.vtt$`);
-  if (fsx.existsSync(srcDir)) {
-    for (const entry of [...fsx.readdirSync(srcDir)].sort()) {
-      if (subtitlePattern.test(entry)) addMove(entry);
-    }
-  }
+  for (const entry of fsx.subtitlesFor(srcDir, row.id)) addMove(entry);
   if (clash || targetHasForeignContent(fsx, target.dir, target.baseName)) return { status: 'conflict' };
-  if (!isWritable(fsx, srcDir) || !isWritable(fsx, target.dir)) return { status: 'notWritable' };
+  if (!fsx.isWritable(srcDir) || !fsx.isWritable(target.dir)) return { status: 'notWritable' };
 
   return {
     status: 'move',
@@ -207,7 +309,7 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlannerFs): Classifie
 }
 
 export function planTidy(db: Database.Database, opts: { downloadsDir: string; fs?: PlannerFs }): TidyPlan {
-  const fsx = opts.fs ?? nodePlannerFs;
+  const fsx = new PlanFsCache(opts.fs ?? nodePlannerFs);
   const rows = db.prepare(`
     SELECT v.id AS id, v.title AS title, v.channel_id AS channelId,
            v.local_video_path AS videoUrl, v.local_thumbnail_path AS thumbUrl,
