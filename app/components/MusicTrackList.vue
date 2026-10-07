@@ -149,4 +149,18 @@ function formatDuration(seconds: number | null | undefined): string {
     display: none;
   }
 }
+
+/* Phones: the action buttons would squeeze the title to a few pixels, so they
+   move to their own line under the title. */
+@media (max-width: 560px) {
+  .mtl-row {
+    grid-template-columns: 40px minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
+  .mtl-actions {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
 </style>
