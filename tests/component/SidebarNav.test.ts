@@ -40,7 +40,7 @@ describe('default layout sidebar', () => {
     const w = await mountLayout();
     expect(w.findAll('.sidebar-divider-title').map((t) => t.text())).toEqual(['Video', 'Music', 'Podcasts']);
     const hrefs = w.findAll('.sidebar-link').map((a) => a.attributes('href'));
-    expect(hrefs).toEqual(['/', '/shorts', '/channels', '/subscriptions', '/playlists', '/music', '/podcasts']);
+    expect(hrefs).toEqual(['/', '/shorts', '/channels', '/subscriptions', '/playlists', '/music', '/music/recent', '/podcasts', '/podcasts/recent']);
     expect(w.find('.space-switcher').exists()).toBe(false);
   });
 

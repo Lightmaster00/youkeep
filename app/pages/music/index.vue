@@ -183,7 +183,7 @@
               :disabled="trackGroups[album.id]?.loading"
               class="btn btn-secondary load-more-btn"
             >
-              Charger plus
+              Load more
             </button>
           </div>
         </div>
@@ -240,7 +240,7 @@
               :disabled="trackGroups['none']?.loading"
               class="btn btn-secondary load-more-btn"
             >
-              Charger plus
+              Load more
             </button>
           </div>
         </div>

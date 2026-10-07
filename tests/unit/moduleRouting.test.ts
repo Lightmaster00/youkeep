@@ -11,6 +11,8 @@ describe('moduleForPagePath', () => {
     ['/music/anything', 'music'],
     ['/podcasts', 'podcasts'],
     ['/podcasts/shows', 'podcasts'],
+    ['/music/recent', 'music'],
+    ['/podcasts/recent', 'podcasts'],
   ])('%s belongs to %s', (path, expected) => {
     expect(moduleForPagePath(path)).toBe(expected);
   });
@@ -31,6 +33,8 @@ describe('resolveActiveSpaceId', () => {
     expect(resolveActiveSpaceId('/music/artists', false, ['video'])).toBe('music');
     expect(resolveActiveSpaceId('/podcasts', true, ['video'])).toBe('podcasts');
     expect(resolveActiveSpaceId('/podcasts/shows', false, ['music'])).toBe('podcasts');
+    expect(resolveActiveSpaceId('/music/recent', false, all)).toBe('music');
+    expect(resolveActiveSpaceId('/podcasts/recent', false, all)).toBe('podcasts');
   });
 
   it('uses video for module-less pages when video is enabled (and /musicfoo is not music)', () => {

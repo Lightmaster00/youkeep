@@ -9,7 +9,7 @@ export function shouldApplyLanding(path: string, query: Record<string, unknown>)
 }
 
 // A link is dropped only if it is hideable AND listed as hidden, so Home ('/')
-// and the single library link of the music/podcasts spaces can never disappear.
+// and the Library/Recent links of the music/podcasts spaces can never disappear.
 export function filterNavLinks<T extends { to: string }>(links: T[], hidden: string[]): T[] {
   const hideable = HIDEABLE_NAV_LINKS as readonly string[];
   return links.filter((link) => !(hideable.includes(link.to) && hidden.includes(link.to)));

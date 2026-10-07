@@ -130,7 +130,7 @@
             :disabled="episodesLoading"
             class="btn btn-secondary load-more-btn"
           >
-            Charger plus
+            Load more
           </button>
         </div>
       </template>
