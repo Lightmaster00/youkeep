@@ -65,6 +65,8 @@ export interface TidyPlan { preview: TidyPreview; items: TidyPlanItem[]; channel
 const SAMPLE_LIMIT = 10;
 /** Suffix of the temporary copy made during a cross-device move: never planned or moved as a video file. */
 const PARTIAL_SUFFIX = '.tidy-part';
+/** Metadata files older downloads left next to a legacy video. */
+const LEGACY_LEFTOVER_SUFFIXES = ['.info.json', '.description'];
 
 interface TidyRow {
   id: string;
@@ -346,6 +348,9 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache, repairab
     newThumbUrl = target.thumbUrlFor(thumbName.slice(row.id.length + 1));
   }
   for (const entry of fsx.subtitlesFor(srcDir, row.id)) addMove(entry);
+  // Leftovers of older downloads (new downloads ingest and delete the .info.json):
+  // they go with the video, renamed like its other files, under the same rules.
+  for (const leftover of LEGACY_LEFTOVER_SUFFIXES) addMove(`${row.id}${leftover}`);
   if (clash || targetHasForeignContent(fsx, target.dir, target.baseName)) return { status: 'conflict' };
   if (!fsx.isWritable(srcDir) || !fsx.isWritable(target.dir)) return { status: 'notWritable' };
 

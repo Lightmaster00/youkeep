@@ -87,6 +87,28 @@ describe('planTidy', () => {
     expect(item!.newThumbUrl).toBe(`/downloads/Chan/${folder}/${folder}.jpg`);
   });
 
+  it('plans the legacy .info.json and .description leftovers with the video, under the new names', () => {
+    insertChannel(db, { id: 'c1', title: 'Chan' });
+    legacyRow('c1', 'Chan', 'v1', 'Clip');
+    for (const f of ['v1.mp4', 'v1.info.json', 'v1.description', 'v10.info.json', 'v10.description']) write(`Chan/${f}`);
+
+    const [item] = planTidy(db, { downloadsDir: dir }).items;
+
+    expect(item!.moves.map((m) => [path.basename(m.from), path.basename(m.to)])).toEqual([
+      ['v1.mp4', 'Clip [v1].mp4'],
+      ['v1.info.json', 'Clip [v1].info.json'],
+      ['v1.description', 'Clip [v1].description'],
+    ]);
+  });
+
+  it('never plans a leftover over a different file already at the destination', () => {
+    insertChannel(db, { id: 'c1', title: 'Chan' });
+    legacyRow('c1', 'Chan', 'v1', 'Clip');
+    write('Chan/v1.mp4'); write('Chan/v1.info.json', '{"a":1}'); write('Chan/Clip [v1]/Clip [v1].info.json', 'different');
+
+    expect(planTidy(db, { downloadsDir: dir }).preview).toMatchObject({ toMove: 0, conflicts: 1 });
+  });
+
   it('never plans to overwrite a different file already at the destination', () => {
     insertChannel(db, { id: 'c1', title: 'Chan' });
     legacyRow('c1', 'Chan', 'v1', 'Clip');

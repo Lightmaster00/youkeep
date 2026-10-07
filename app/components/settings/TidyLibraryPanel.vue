@@ -2,7 +2,7 @@
   <div class="tidy-panel" data-testid="tidy-panel">
     <h4 class="results-header">Tidy library files</h4>
     <p class="section-desc">
-      Moves each downloaded video into its own folder named after its title, together with its thumbnail and subtitles.
+      Moves each downloaded video into its own folder named after its title, together with its thumbnail, subtitles and metadata files.
       Nothing moves until you start it, and you can run it again to finish whatever is left.
     </p>
 

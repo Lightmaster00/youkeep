@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { cancelTidyRun, getTidyStatus, isTidyRunning, moveFileVerified, nodePlannerFs, planTidy, planTidyAsync, previewTidy, runTidy, startTidyRun, type RunnerFs } from '../../server/utils/videoTidy';
-import { resolveStoredPath } from '../../server/utils/videoPaths';
+import { removeVideoFiles, resolveStoredPath } from '../../server/utils/videoPaths';
 import { createTestDb, insertChannel, insertVideo, mockEvent } from '../helpers/testDb';
 
 let db: Database.Database;
@@ -50,6 +50,36 @@ describe('runTidy', () => {
     expect(row.local_thumbnail_path).toBe(`/downloads/Chan/${encodeURIComponent(base)}/${encodeURIComponent(`${base}.jpg`)}`);
     expect(fs.existsSync(resolveStoredPath(db, row, { downloadsDir: dir }).videoFile!)).toBe(true);
     expect(planTidy(db, { downloadsDir: dir }).preview).toMatchObject({ toMove: 0, alreadyTidy: 1 });
+  });
+
+  it('moves the legacy .info.json and .description leftovers with the video; deleting the video later removes its whole folder', async () => {
+    legacy('v1', 'Clip', ['.mp4', '.jpg', '.info.json', '.description']);
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ state: 'done', moved: 1, errors: 0 });
+    const base = 'Clip [v1]';
+    const folder = path.join(dir, 'Chan', base);
+    expect(fs.readdirSync(folder).sort()).toEqual([`${base}.description`, `${base}.info.json`, `${base}.jpg`, `${base}.mp4`]);
+    expect(fs.readFileSync(path.join(folder, `${base}.info.json`), 'utf8')).toBe('v1.info.json');
+    expect(fs.readdirSync(path.join(dir, 'Chan'))).toEqual([base]);
+
+    removeVideoFiles(resolveStoredPath(db, paths('v1'), { downloadsDir: dir }));
+    expect(fs.existsSync(folder)).toBe(false);
+  });
+
+  it('a symlinked .info.json leftover is refused like any other file: nothing is moved or deleted', async () => {
+    legacy('v1', 'Clip', ['.mp4']);
+    fs.writeFileSync(path.join(dir, 'real.json'), 'real');
+    fs.symlinkSync(path.join(dir, 'real.json'), path.join(dir, 'Chan', 'v1.info.json'));
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 0, errors: 1 });
+    expect(fs.readFileSync(path.join(dir, 'Chan', 'v1.mp4'), 'utf8')).toBe('v1.mp4');
+    expect(fs.lstatSync(path.join(dir, 'Chan', 'v1.info.json')).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(path.join(dir, 'real.json'), 'utf8')).toBe('real');
+    expect(paths('v1').local_video_path).toBe('/downloads/Chan/v1.mp4');
   });
 
   it('puts every file back when the database update fails', async () => {

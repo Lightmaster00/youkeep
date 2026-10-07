@@ -210,13 +210,14 @@ const PARTIAL_SUFFIX_RE = /(?:\.part(?:-Frag\d+(?:\.part)?)?|\.ytdl)$/i;
 /**
  * True when `entry` is a file name yt-dlp produces for this video: the media
  * (incl. per-format fragments, merge temp files and partials), thumbnail,
- * `<lang>.vtt` subtitles or `.info.json`. Anything else is a foreign file.
+ * `<lang>.vtt` subtitles, `.info.json` or a `.description` (moved in by the
+ * tidy tool from a legacy download). Anything else is a foreign file.
  */
 export function isVideoArtifactName(baseName: string, entry: string): boolean {
   const prefix = `${baseName}.`;
   if (!entry.startsWith(prefix)) return false;
   const rest = entry.slice(prefix.length);
-  if (rest === 'info.json') return true;
+  if (rest === 'info.json' || rest === 'description') return true;
   const core = rest.replace(PARTIAL_SUFFIX_RE, '');
   return MEDIA_RE.test(core) || THUMB_RE.test(core) || SUBTITLE_RE.test(core);
 }
