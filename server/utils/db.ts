@@ -2,13 +2,14 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import { getDataDir } from './dataDir';
 
 let dbInstance: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (dbInstance) return dbInstance;
 
-  const dataDir = path.resolve(process.cwd(), 'data');
+  const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
@@ -713,7 +714,7 @@ export function getDb(): Database.Database {
       const updateSize = db.prepare("UPDATE videos SET size_bytes = ? WHERE id = ?");
       db.transaction((videos) => {
         for (const v of videos) {
-          const mp4Path = path.resolve(process.cwd(), 'data/downloads', v.channel_id, `${v.id}.mp4`);
+          const mp4Path = path.join(getDataDir(), 'downloads', v.channel_id, `${v.id}.mp4`);
           if (fs.existsSync(mp4Path)) {
             const size = fs.statSync(mp4Path).size;
             updateSize.run(size, v.id);

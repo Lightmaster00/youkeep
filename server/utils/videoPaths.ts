@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
 import { getDownloadsDir, sanitizeFolderName } from './downloader';
+import { getDataDir } from './dataDir';
 
 // One folder per video: <base>/<Channel>/<Title> [<id>]/<Title> [<id>].<ext>
 // (spec docs/superpowers/specs/2026-10-06-video-storage-layout-design.md).
@@ -384,8 +385,8 @@ export function musicAndPodcastRoots(): string[] {
   return [
     '/downloads/music',
     '/downloads/podcasts',
-    path.resolve(process.cwd(), 'data/downloads-music'),
-    path.resolve(process.cwd(), 'data/downloads-podcasts'),
+    path.join(getDataDir(), 'downloads-music'),
+    path.join(getDataDir(), 'downloads-podcasts'),
   ];
 }
 

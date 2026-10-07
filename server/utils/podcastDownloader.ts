@@ -6,6 +6,7 @@ import { pipeline } from 'stream/promises';
 import Parser from 'rss-parser';
 import { Cron } from 'croner';
 import { getDb } from './db';
+import { getDataDir } from './dataDir';
 import { addLog, sanitizeFolderName, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
@@ -82,7 +83,7 @@ export function getPodcastDownloadsDir(): string {
     return defaultPath;
   }
 
-  const localFallback = path.resolve(process.cwd(), 'data/downloads-podcasts');
+  const localFallback = path.join(getDataDir(), 'downloads-podcasts');
   try { fs.mkdirSync(localFallback, { recursive: true }); } catch (err) {}
   return localFallback;
 }

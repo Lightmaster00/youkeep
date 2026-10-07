@@ -5,6 +5,7 @@ import https from 'https';
 import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
+import { getDataDir } from './dataDir';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
@@ -177,15 +178,11 @@ export function wakeWorker() {
 // Maximum time (ms) a single download is allowed to run before being killed
 const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
-// Ensure local directories exist
-const dataDir = path.resolve(process.cwd(), 'data');
-const binDir = path.join(dataDir, 'bin');
-
-[dataDir, binDir].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-});
+// Where the managed yt-dlp binary lives. Created only when yt-dlp is needed
+// (getYtdlPath), never as a side effect of importing this module.
+function getBinDir(): string {
+  return path.join(getDataDir(), 'bin');
+}
 
 export function isDirWritable(dirPath: string): boolean {
   try {
@@ -227,7 +224,7 @@ export function getDownloadsDir(): string {
     return defaultPath;
   }
   
-  const localFallback = path.resolve(process.cwd(), 'data/downloads');
+  const localFallback = path.join(getDataDir(), 'downloads');
   try { fs.mkdirSync(localFallback, { recursive: true }); } catch (err) {}
   return localFallback;
 }
@@ -239,11 +236,13 @@ export function getDownloadsDir(): string {
 export async function getYtdlPath(): Promise<string> {
   const isWin = process.platform === 'win32';
   const filename = isWin ? 'yt-dlp.exe' : 'yt-dlp';
+  const binDir = getBinDir();
   const ytdlPath = path.join(binDir, filename);
 
   if (fs.existsSync(ytdlPath) && fs.statSync(ytdlPath).size > 0) {
     return ytdlPath;
   }
+  fs.mkdirSync(binDir, { recursive: true });
 
   // Remove incomplete/0-byte files if they exist
   if (fs.existsSync(ytdlPath)) {

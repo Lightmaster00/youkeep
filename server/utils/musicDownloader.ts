@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
+import { getDataDir } from './dataDir';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
@@ -80,7 +81,7 @@ export function getMusicDownloadsDir(): string {
     return defaultPath;
   }
 
-  const localFallback = path.resolve(process.cwd(), 'data/downloads-music');
+  const localFallback = path.join(getDataDir(), 'downloads-music');
   try { fs.mkdirSync(localFallback, { recursive: true }); } catch (err) {}
   return localFallback;
 }

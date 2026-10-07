@@ -2,17 +2,20 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { cleanupPartialMusicFiles, getMusicDownloadsDir } from '../../server/utils/musicDownloader';
+import { assertInTmp } from '../helpers/testDb';
 
 // cleanupPartialMusicFiles looks up the artist's name in the DB to build the
 // folder name, falling back to the raw artistId when no matching artist row
 // exists. Using a unique nonexistent artistId as the folder name means these
-// tests need no DB fixtures and can't collide with other tests or real data.
+// tests need no DB fixtures and can't collide with other tests. The music
+// folder is the test run's temporary data folder (tests/setup/server.ts).
 let artistId: string;
 let artistDir: string;
 
 beforeEach(() => {
   artistId = `test-cleanup-artist-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   artistDir = path.join(getMusicDownloadsDir(), artistId);
+  assertInTmp(artistDir);
   fs.mkdirSync(artistDir, { recursive: true });
 });
 
