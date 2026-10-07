@@ -337,6 +337,27 @@ export function getDb(): Database.Database {
       FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS podcast_show_follows (
+      user_id TEXT NOT NULL,
+      show_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, show_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS podcast_episode_progress (
+      user_id TEXT NOT NULL,
+      episode_id TEXT NOT NULL,
+      position_seconds INTEGER NOT NULL,
+      duration_seconds INTEGER,
+      completed INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, episode_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (episode_id) REFERENCES podcast_episodes(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS search_platforms (
       id TEXT PRIMARY KEY,
       api_key TEXT NOT NULL DEFAULT '',
@@ -397,6 +418,8 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_music_favorites_user_created ON music_favorites(user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_music_user_playlists_user_id ON music_user_playlists(user_id);
     CREATE INDEX IF NOT EXISTS idx_music_user_playlist_tracks_track_id ON music_user_playlist_tracks(track_id);
+    CREATE INDEX IF NOT EXISTS idx_podcast_show_follows_user_created ON podcast_show_follows(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_podcast_episode_progress_user_updated ON podcast_episode_progress(user_id, updated_at DESC);
   `);
 
   // Setup FTS5 Virtual Table for Search (if not exists)

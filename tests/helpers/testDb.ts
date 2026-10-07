@@ -252,6 +252,29 @@ export function createTestDb(): Database.Database {
       created_at INTEGER NOT NULL,
       FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE podcast_show_follows (
+      user_id TEXT NOT NULL,
+      show_id TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, show_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (show_id) REFERENCES podcast_shows(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_podcast_show_follows_user_created ON podcast_show_follows(user_id, created_at DESC);
+
+    CREATE TABLE podcast_episode_progress (
+      user_id TEXT NOT NULL,
+      episode_id TEXT NOT NULL,
+      position_seconds INTEGER NOT NULL,
+      duration_seconds INTEGER,
+      completed INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, episode_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (episode_id) REFERENCES podcast_episodes(id) ON DELETE CASCADE
+    );
+    CREATE INDEX idx_podcast_episode_progress_user_updated ON podcast_episode_progress(user_id, updated_at DESC);
   `);
 
   db.prepare("INSERT INTO settings (key, value) VALUES ('default_downloads_dir', ?)").run(TEST_DOWNLOADS_DIR);
