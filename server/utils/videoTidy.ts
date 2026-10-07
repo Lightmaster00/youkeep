@@ -821,7 +821,7 @@ function channelRowsReady(rows: FixRow[], channelFolder: string): boolean {
  * is taken in one transaction that re-reads the rows (unchanged since the
  * probes) and compare-and-sets the old custom_save_path.
  */
-async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs, downloadsDir: string): Promise<string | null> {
+async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs, downloadsDir: string, isBusy: (id: string) => boolean): Promise<string | null> {
   const base = path.resolve(fix.from);
   const channelFolder = path.basename(base);
   const readRows = () => db.prepare('SELECT id, download_status AS status, local_video_path AS url FROM videos WHERE channel_id = ? ORDER BY id')
@@ -835,7 +835,7 @@ async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: 
     }
     if ((i + 1) % 25 === 0) await yieldToEventLoop();
   }
-  return db.transaction((): string | null => {
+  const problem = db.transaction((): string | null => {
     const now = readRows();
     const unchanged = now.length === rows.length && now.every((r, i) => r.id === rows[i]!.id && r.url === rows[i]!.url);
     if (!unchanged) return 'its videos changed during the run';
@@ -846,6 +846,49 @@ async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: 
     const changed = db.prepare('UPDATE channels SET custom_save_path = ? WHERE id = ? AND custom_save_path = ?').run(fix.to, fix.channelId, fix.from).changes === 1;
     return changed ? null : 'its save folder was changed meanwhile';
   })();
+  // Same tick as the save path change: no download can start in between.
+  if (problem === null) moveUnfinishedVideoFolders(db, fix, isBusy);
+  return problem;
+}
+
+/**
+ * After a doubled save path `<P>/<Chan>` was corrected to `<P>`, the channel
+ * folder is `<P>/<Chan>` and the downloader looks for a video's folder there.
+ * Video folders still in the old nested `<P>/<Chan>/<Chan>` hold partial files
+ * of paused or interrupted downloads (completed videos were all moved before
+ * the fix): move each one up, so resuming reuses its partial files and a cancel
+ * removes them, instead of leaving them orphaned. Synchronous on purpose; never
+ * overwrites a folder already there; a folder of a video being downloaded is
+ * left alone. Then the nested folder is removed if it is empty.
+ */
+function moveUnfinishedVideoFolders(db: Database.Database, fix: TidyChannelFix, isBusy: (id: string) => boolean): void {
+  const channelDir = path.resolve(fix.from);
+  const nested = path.join(channelDir, path.basename(channelDir));
+  const ids = new Map((db.prepare('SELECT id FROM videos WHERE channel_id = ?').all(fix.channelId) as { id: string }[])
+    .map((r) => [folderIdOf(r.id), r.id] as const));
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(nested, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const folderId = entry.isDirectory() ? idFromVideoFolder(entry.name) : null;
+    const id = folderId === null ? undefined : ids.get(folderId);
+    if (id === undefined || isBusy(id)) continue;
+    const from = path.join(nested, entry.name);
+    const to = path.join(channelDir, entry.name);
+    if (fs.existsSync(to)) {
+      addLog(`Tidy library files: ${from} was left in place: ${to} already exists.`);
+      continue;
+    }
+    try {
+      fs.renameSync(from, to);
+    } catch (err: any) {
+      addLog(`Tidy library files: ${from} could not be moved to ${to}: ${err?.message || String(err)}`);
+    }
+  }
+  try { fs.rmdirSync(nested); } catch {} // only succeeds on an empty folder
 }
 
 /** What the admin should do after a run that did not finish everything (null when nothing is left). */
@@ -896,7 +939,7 @@ export async function runTidy(deps: TidyRunDeps): Promise<TidyStatus> {
     }
     if (status.state === 'running') {
       for (const fix of plan.channelFixes) {
-        const problem = await applyChannelFix(deps.db, fix, plannerFs, deps.downloadsDir);
+        const problem = await applyChannelFix(deps.db, fix, plannerFs, deps.downloadsDir, isBusy);
         if (problem === null) status.channelsFixed++;
         else {
           const channel = deps.db.prepare('SELECT title FROM channels WHERE id = ?').get(fix.channelId) as { title: string | null } | undefined;
