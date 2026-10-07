@@ -113,7 +113,7 @@ export default defineEventHandler(async (event) => {
     const token = query.token ? String(query.token) : undefined;
     const hasAccess = await canAccessVideo(matchedVideoId, event, token);
     if (!hasAccess) {
-      throw createError({ statusCode: 403, statusMessage: 'Accès refusé. Ce contenu est restreint.' });
+      throw createError({ statusCode: 403, statusMessage: 'Access denied. This content is restricted.' });
     }
   }
 

@@ -63,7 +63,7 @@ export default defineEventHandler(async (event) => {
 
   const hasAccess = await canAccessPodcastEpisode(episodeId, event);
   if (!hasAccess) {
-    throw createError({ statusCode: 403, statusMessage: 'Accès refusé. Ce contenu est restreint.' });
+    throw createError({ statusCode: 403, statusMessage: 'Access denied. This content is restricted.' });
   }
 
   // Resolve the show directory the same way downloadEpisodeFile built it —

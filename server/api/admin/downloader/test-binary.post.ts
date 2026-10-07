@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       success: status === 0,
-      version: stdout || 'Inconnue',
+      version: stdout || 'Unknown',
       ffmpegAvailable,
       stdout,
       stderr,

@@ -51,7 +51,7 @@ export function resetStaleDownloadsForTable(
       WHERE download_status = 'downloading'
     `).run();
     if (result.changes > 0) {
-      log(`Réinitialisation de ${result.changes} ${resetLogLabel}.`);
+      log(`Reset ${result.changes} ${resetLogLabel}.`);
     }
   } catch (err: any) {
     console.error(`Failed to reset stale ${errorContext}:`, err);

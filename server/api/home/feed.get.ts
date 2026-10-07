@@ -49,10 +49,10 @@ const FEED_VIDEO_COLUMNS = `
 `;
 
 const SECTION_TITLES: Record<HomeSectionId, string> = {
-  recent: 'Ajoutés récemment',
+  recent: 'Recently added',
   popular: 'Populaires',
-  suggested: 'Suggéré pour toi',
-  subscriptions: 'Par chaîne suivie',
+  suggested: 'Suggested for you',
+  subscriptions: 'By followed channel',
 };
 
 const POPULAR_ORDER: Record<PopularRanking, string> = {

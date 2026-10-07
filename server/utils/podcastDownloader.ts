@@ -349,7 +349,7 @@ export async function ingestPodcastFeed(
   }
 
   if (skippedNoEnclosure > 0) {
-    addLog(`Ingestion du flux "${showTitle}" : ${skippedNoEnclosure} élément(s) sans enclosure audio ignoré(s).`);
+    addLog(`Ingesting feed "${showTitle}": skipped ${skippedNoEnclosure} item(s) without an audio enclosure.`);
   }
 
   const showState = db.prepare('SELECT sync_status FROM podcast_shows WHERE id = ?').get(showId) as { sync_status: string } | undefined;
@@ -450,19 +450,19 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
 
     const watchdog = setTimeout(() => {
       if (!settled) {
-        addLog(`Téléchargement podcast [${episodeId}] timeout après ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
+        addLog(`Podcast download [${episodeId}] timed out after ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
         try { controller.abort(); } catch (e) {}
         activePodcastAbortControllers.delete(episodeId);
         activePodcastDownloadStartTimes.delete(episodeId);
         cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
-        settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
+        settle(() => reject(new Error(`Timeout: the download exceeded ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
       }
     }, PODCAST_DOWNLOAD_TIMEOUT_MS);
 
     try {
       const episode = db.prepare('SELECT audio_url FROM podcast_episodes WHERE id = ?').get(episodeId) as { audio_url: string } | undefined;
       if (!episode || !episode.audio_url) {
-        throw new Error("L'épisode n'a pas d'audio_url à télécharger.");
+        throw new Error("The episode has no audio_url to download.");
       }
 
       const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
@@ -473,7 +473,7 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
         fs.mkdirSync(showDir, { recursive: true });
       }
 
-      addLog(`Lancement du téléchargement de l'épisode ${episodeId} : ${episode.audio_url}`);
+      addLog(`Starting download of episode ${episodeId}: ${episode.audio_url}`);
       const response = await fetch(episode.audio_url, { signal: controller.signal });
       if (!response.ok || !response.body) {
         throw new Error(`HTTP ${response.status}`);
@@ -573,7 +573,7 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
       // leaves the write stream's file descriptor open indefinitely.
       fileStream?.destroy();
       if (!settled) {
-        addLog(`Échec du téléchargement de l'épisode ${episodeId} : ${err.message || err}`);
+        addLog(`Download failed for episode ${episodeId}: ${err.message || err}`);
         cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
       }
       settle(() => reject(err));
@@ -589,13 +589,13 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
  */
 export async function startPodcastQueueWorker() {
   if (getIsPodcastProcessing()) {
-    addLog('Worker podcast déjà en cours d\'exécution. Réveil du worker...');
+    addLog('Podcast worker already running. Waking the worker...');
     wakePodcastWorker();
     return;
   }
   setIsPodcastProcessing(true);
   setPodcastWorkerShouldRun(true);
-  addLog('Démarrage du worker de podcasts (mode persistant)...');
+  addLog('Starting the podcast worker (persistent mode)...');
 
   try {
     const db = getDb();
@@ -647,7 +647,7 @@ export async function startPodcastQueueWorker() {
         }
 
         consecutiveSystemErrors = 0;
-        addLog(`Lancement du téléchargement d'épisode : "${episode.title}" (ID: ${episode.id})`);
+        addLog(`Starting episode download: "${episode.title}" (ID: ${episode.id})`);
 
         db.prepare(`
           UPDATE podcast_episodes
@@ -663,20 +663,20 @@ export async function startPodcastQueueWorker() {
         runSinglePodcastDownload(episode.id, episode.title, episode.show_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
-        addLog(`Erreur système dans la boucle du worker podcast (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
+        addLog(`System error in the podcast worker loop (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
         if (consecutiveSystemErrors >= 5) {
-          addLog('Trop d\'erreurs système consécutives. Arrêt du worker podcast.');
+          addLog('Too many consecutive system errors. Stopping the podcast worker.');
           break;
         }
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
   } catch (err: any) {
-    addLog(`Erreur générale fatale du worker podcast : ${err.message || err}`);
+    addLog(`Fatal podcast worker error: ${err.message || err}`);
   } finally {
     setIsPodcastProcessing(false);
     setPodcastWorkerShouldRun(false);
-    addLog('Worker de podcasts arrêté.');
+    addLog('Podcast worker stopped.');
   }
 }
 
@@ -697,17 +697,17 @@ async function runSinglePodcastDownload(episodeId: string, episodeTitle: string,
       SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = null, retry_count = 0
       WHERE id = ?
     `).run(episodeId);
-    addLog(`Téléchargement RÉUSSI : "${episodeTitle}"`);
+    addLog(`Download SUCCEEDED: "${episodeTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
-    addLog(`ÉCHEC du téléchargement pour l'épisode "${episodeTitle}" (${episodeId}) : ${errMsg}`);
+    addLog(`Download FAILED for episode "${episodeTitle}" (${episodeId}): ${errMsg}`);
 
     const currentEpisode = db.prepare('SELECT download_status, retry_count FROM podcast_episodes WHERE id = ?').get(episodeId) as { download_status: string; retry_count: number | null } | undefined;
     const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_downloader_paused'").get() as { value: string } | undefined;
     const isPausedGlobal = pausedSetting?.value === '1';
 
     if (isPausedGlobal || currentEpisode?.download_status === 'pending') {
-      addLog(`Téléchargement de l'épisode "${episodeTitle}" (${episodeId}) interrompu ou mis en pause intentionnellement.`);
+      addLog(`Download of episode "${episodeTitle}" (${episodeId}) was interrupted or intentionally paused.`);
       // Deliberate interruption, not a genuine failure — retry_count is untouched.
       db.prepare(`
         UPDATE podcast_episodes
@@ -722,7 +722,7 @@ async function runSinglePodcastDownload(episodeId: string, episodeTitle: string,
           SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
           WHERE id = ?
         `).run(errMsg, nextRetryCount, episodeId);
-        addLog(`Épisode "${episodeTitle}" (${episodeId}) marqué comme définitivement échoué après ${nextRetryCount} tentatives.`);
+        addLog(`Episode "${episodeTitle}" (${episodeId}) permanently marked as failed after ${nextRetryCount} attempts.`);
       } else {
         db.prepare(`
           UPDATE podcast_episodes
@@ -785,7 +785,7 @@ export function cancelPodcastDownload(episodeId: string, targetStatus: 'failed' 
  * 'pending'. Mirrors resetStaleMusicDownloads/resetStaleDownloads.
  */
 export function resetStalePodcastDownloads() {
-  resetStaleDownloadsForTable(getDb(), 'podcast_episodes', 'téléchargements de podcasts interrompus', 'podcast downloads', addLog);
+  resetStaleDownloadsForTable(getDb(), 'podcast_episodes', 'interrupted podcast downloads', 'podcast downloads', addLog);
 }
 
 /**
@@ -803,21 +803,21 @@ export async function syncAllPodcastShows(): Promise<void> {
     moduleId: 'podcasts',
     fetchEntities: () => db.prepare('SELECT id, title, feed_url FROM podcast_shows').all() as { id: string; title: string; feed_url: string }[],
     processEntity: async (show) => {
-      addLog(`Resynchronisation du podcast : ${show.title} (${show.id})`);
+      addLog(`Resyncing podcast: ${show.title} (${show.id})`);
       db.prepare("UPDATE podcast_shows SET sync_status = 'downloading' WHERE id = ?").run(show.id);
 
       try {
         const result = await ingestPodcastFeed(show.feed_url);
         if (!result.success) {
-          addLog(`Échec de la resynchronisation du podcast ${show.title} (${show.id}) : ${result.message}`);
+          addLog(`Failed to resync podcast ${show.title} (${show.id}) : ${result.message}`);
         }
       } catch (err: any) {
-        addLog(`Erreur lors de la resynchronisation du podcast ${show.title} (${show.id}) : ${err.message || err}`);
+        addLog(`Error while resyncing podcast ${show.title} (${show.id}) : ${err.message || err}`);
       }
     },
-    onStart: (count) => addLog(`Démarrage de la resynchronisation automatique de ${count} podcast(s)...`),
-    onPaused: () => addLog('Resynchronisation automatique des podcasts interrompue : téléchargements en pause.'),
-    onComplete: () => addLog('Resynchronisation automatique des podcasts terminée.'),
+    onStart: (count) => addLog(`Starting automatic resync of ${count} podcast(s)...`),
+    onPaused: () => addLog('Automatic podcast resync interrupted: downloads are paused.'),
+    onComplete: () => addLog('Automatic podcast resync finished.'),
     onFatalError: (err) => console.error('Fatal error during syncAllPodcastShows:', err),
     // No afterLoop — podcasts have no metadata-refresh post-loop hook equivalent.
     startWorker: startPodcastQueueWorker,

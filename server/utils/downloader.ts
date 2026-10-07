@@ -279,7 +279,7 @@ export async function getYtdlPath(): Promise<string> {
  */
 export async function updateYtdl(): Promise<string> {
   const ytdlPath = await getYtdlPath();
-  addLog('Vérification des mises à jour de yt-dlp...');
+  addLog('Checking for yt-dlp updates...');
   
   // Make sure ffmpeg is in path
   const env = buildSpawnEnv();
@@ -287,10 +287,10 @@ export async function updateYtdl(): Promise<string> {
   try {
     const res = await runProcessAsync(ytdlPath, ['-U'], env);
     const output = res.stdout || res.stderr || '';
-    addLog(`Résultat de la mise à jour de yt-dlp : ${output.trim()}`);
+    addLog(`yt-dlp update result: ${output.trim()}`);
     return output;
   } catch (err: any) {
-    addLog(`Échec de la mise à jour de yt-dlp : ${err.message || err}`);
+    addLog(`yt-dlp update failed: ${err.message || err}`);
     throw err;
   }
 }
@@ -302,13 +302,13 @@ export async function updateYtdl(): Promise<string> {
 export async function startQueueWorker() {
   if (getIsProcessing()) {
     // Worker already running — wake it up if it is sleeping so it checks the queue instantly
-    addLog('Worker déjà en cours d\'exécution. Réveil du worker...');
+    addLog('Worker already running. Waking the worker...');
     wakeWorker();
     return;
   }
   setIsProcessing(true);
   setWorkerShouldRun(true);
-  addLog('Démarrage du worker de file d\'attente (mode persistant)...');
+  addLog('Starting the queue worker (persistent mode)...');
 
   try {
     const db = getDb();
@@ -368,7 +368,7 @@ export async function startQueueWorker() {
         }
 
         consecutiveSystemErrors = 0;
-        addLog(`Lancement du téléchargement : "${video.title}" (ID: ${video.id})`);
+        addLog(`Starting download: "${video.title}" (ID: ${video.id})`);
 
         // Update status to downloading, keeping the existing progress if it exists
         db.prepare(`
@@ -388,9 +388,9 @@ export async function startQueueWorker() {
         runSingleDownload(video.id, video.title, video.channel_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
-        addLog(`Erreur système dans la boucle du worker (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
+        addLog(`System error in the worker loop (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
         if (consecutiveSystemErrors >= 5) {
-          addLog('Trop d\'erreurs système consécutives. Arrêt du worker.');
+          addLog('Too many consecutive system errors. Stopping the worker.');
           break;
         }
         // Wait before retrying to let the database/system recover
@@ -398,11 +398,11 @@ export async function startQueueWorker() {
       }
     }
   } catch (err: any) {
-    addLog(`Erreur générale fatale du worker : ${err.message || err}`);
+    addLog(`Fatal worker error: ${err.message || err}`);
   } finally {
     setIsProcessing(false);
     setWorkerShouldRun(false);
-    addLog('Worker de file d\'attente arrêté.');
+    addLog('Queue worker stopped.');
   }
 }
 
@@ -423,10 +423,10 @@ async function runSingleDownload(videoId: string, videoTitle: string, channelId:
       SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = null, retry_count = 0
       WHERE id = ?
     `).run(videoId);
-    addLog(`Téléchargement RÉUSSI : "${videoTitle}"`);
+    addLog(`Download SUCCEEDED: "${videoTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
-    addLog(`ÉCHEC du téléchargement pour la vidéo "${videoTitle}" (${videoId}) : ${errMsg}`);
+    addLog(`Download FAILED for video "${videoTitle}" (${videoId}): ${errMsg}`);
 
     // Check if the download was interrupted intentionally (e.g. paused/cancelled via API or global paused setting)
     const currentVideo = db.prepare('SELECT download_status, retry_count FROM videos WHERE id = ?').get(videoId) as { download_status: string; retry_count: number | null } | undefined;
@@ -434,7 +434,7 @@ async function runSingleDownload(videoId: string, videoTitle: string, channelId:
     const isPausedGlobal = pausedSetting?.value === '1';
 
     if (isPausedGlobal || currentVideo?.download_status === 'pending') {
-      addLog(`Téléchargement de la vidéo "${videoTitle}" (${videoId}) interrompu ou mis en pause intentionnellement.`);
+      addLog(`Download of video "${videoTitle}" (${videoId}) was interrupted or intentionally paused.`);
       // Ensure status is pending, speed/eta are null, but preserve progress and files.
       // This is a deliberate interruption, not a genuine failure — retry_count is untouched.
       db.prepare(`
@@ -453,7 +453,7 @@ async function runSingleDownload(videoId: string, videoTitle: string, channelId:
           SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, retry_count = ?
           WHERE id = ?
         `).run(errMsg, nextRetryCount, videoId);
-        addLog(`Vidéo "${videoTitle}" (${videoId}) marquée comme définitivement échouée après ${nextRetryCount} tentatives.`);
+        addLog(`Video "${videoTitle}" (${videoId}) permanently marked as failed after ${nextRetryCount} attempts.`);
       } else {
         // Put the video back to pending but move it to the end of the queue by updating created_at
         db.prepare(`
@@ -478,14 +478,14 @@ async function runSingleDownload(videoId: string, videoTitle: string, channelId:
  */
 export function stopQueueWorker() {
   setWorkerShouldRun(false);
-  addLog('Arrêt du worker de file d\'attente demandé.');
+  addLog('Queue worker stop requested.');
 }
 
 /**
  * Resets any stale downloads stuck in 'downloading' status back to 'pending'
  */
 export function resetStaleDownloads() {
-  resetStaleDownloadsForTable(getDb(), 'videos', 'téléchargements interrompus', 'downloads', addLog);
+  resetStaleDownloadsForTable(getDb(), 'videos', 'interrupted downloads', 'downloads', addLog);
 }
 
 /**
@@ -767,7 +767,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
 
     const env = buildSpawnEnv();
 
-    addLog(`Lancement de la commande de téléchargement (ffmpeg disponible: ${ffmpegAvailable}) : ${ytdlPath} ${args.join(' ')}`);
+    addLog(`Starting download command (ffmpeg available: ${ffmpegAvailable}): ${ytdlPath} ${args.join(' ')}`);
     const child = spawn(ytdlPath, args, { env });
     activeProcesses.set(videoId, child);
     keepFilesOnExit.delete(videoId); // a fresh attempt: no pause pending for it
@@ -787,11 +787,11 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     // Watchdog: kill and fail if download hangs for too long
     const watchdog = setTimeout(() => {
       if (!settled) {
-        addLog(`yt-dlp [${videoId}] timeout après ${DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
+        addLog(`yt-dlp [${videoId}] timed out after ${DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
         try { child.kill('SIGKILL'); } catch (e) {}
         activeProcesses.delete(videoId);
         cleanupPartialFiles(videoId, channelId);
-        settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
+        settle(() => reject(new Error(`Timeout: the download exceeded ${DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
       }
     }, DOWNLOAD_TIMEOUT_MS);
 
@@ -891,7 +891,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
         const videoUrlPath = found.videoUrl;
 
         if (!videoFile || !videoUrlPath) {
-          const errorMsg = lastStderr ? `yt-dlp a terminé mais aucun fichier vidéo n'a été trouvé : ${lastStderr}` : `yt-dlp a terminé mais aucun fichier vidéo n'a été trouvé`;
+          const errorMsg = lastStderr ? `yt-dlp finished but no video file was found : ${lastStderr}` : `yt-dlp finished but no video file was found`;
           settle(() => reject(new Error(errorMsg)));
           return;
         }
@@ -1008,7 +1008,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
           settle(() => reject(dbErr));
         }
       } else {
-        const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
+        const errorMsg = lastStderr ? `yt-dlp failed (code ${code}): ${lastStderr}` : `yt-dlp failed with code ${code}`;
         cleanupAfterFailedExit(videoId, channelId);
         settle(() => reject(new Error(errorMsg)));
       }
@@ -1086,15 +1086,15 @@ function ensureChannelExists(db: any, channelId: string, channelTitle: string): 
   const fetchChannelDetails = (attempt: number) => {
     setTimeout(async () => {
       try {
-        addLog(`Récupération des détails de la nouvelle chaîne "${channelTitle}" (${channelId}), tentative ${attempt + 1}/${retryDelaysMs.length}...`);
+        addLog(`Fetching details of new channel "${channelTitle}" (${channelId}), attempt ${attempt + 1}/${retryDelaysMs.length}...`);
         await ingestUrl(`https://www.youtube.com/channel/${channelId}`, { channelMetadataOnly: true });
       } catch (err: any) {
         const nextAttempt = attempt + 1;
         if (nextAttempt < retryDelaysMs.length) {
-          addLog(`Échec de la récupération des détails de la chaîne "${channelTitle}" (${channelId}) : ${err.message || err}. Nouvel essai...`);
+          addLog(`Failed to fetch details of channel "${channelTitle}" (${channelId}): ${err.message || err}. Retrying...`);
           fetchChannelDetails(nextAttempt);
         } else {
-          addLog(`Échec définitif de la récupération des détails (avatar, bannière) de la chaîne "${channelTitle}" (${channelId}) après ${retryDelaysMs.length} tentatives : ${err.message || err}`);
+          addLog(`Giving up fetching details (avatar, banner) of channel "${channelTitle}" (${channelId}) after ${retryDelaysMs.length} attempts: ${err.message || err}`);
         }
       }
     }, retryDelaysMs[attempt]);
@@ -1200,7 +1200,7 @@ export async function ingestUrl(
       } catch (e: any) {
         const msg = e?.message || String(e);
         console.warn(`Could not ingest shorts for channel ${baseUrl}:`, e);
-        addLog(`Échec de l'ingestion des shorts pour la chaîne ${baseUrl} : ${msg}`);
+        addLog(`Shorts ingestion failed for channel ${baseUrl}: ${msg}`);
       }
     }
     
@@ -1795,7 +1795,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
     throw new Error(`Channel not found: ${channelId}`);
   }
 
-  addLog(`Synchronisation des playlists pour la chaîne: "${channel.title}" (${channelId})`);
+  addLog(`Syncing playlists for channel: "${channel.title}" (${channelId})`);
 
   const env = buildSpawnEnv();
 
@@ -1810,12 +1810,12 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
     stdout = child.stdout;
     status = child.status;
   } catch (err: any) {
-    addLog(`Échec de récupération des playlists pour ${channelId}: ${err.message || err}`);
+    addLog(`Failed to fetch playlists for ${channelId}: ${err.message || err}`);
     return;
   }
 
   if (status !== 0) {
-    addLog(`Aucune playlist publique trouvée ou échec d'accès aux playlists pour ${channelId}`);
+    addLog(`No public playlist found or playlist access failed for ${channelId}`);
     return;
   }
 
@@ -1823,13 +1823,13 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
   try {
     data = JSON.parse(stdout);
   } catch (err) {
-    addLog(`Échec d'analyse du JSON des playlists pour ${channelId}`);
+    addLog(`Failed to parse playlists JSON for ${channelId}`);
     return;
   }
 
   if (data._type === 'playlist' || Array.isArray(data.entries)) {
     const playlists = data.entries || [];
-    addLog(`${playlists.length} playlists détectées pour la chaîne ${channel.title}. Importation en cours...`);
+    addLog(`${playlists.length} playlists detected for channel ${channel.title}. Importing...`);
 
     const insertPlaylist = db.prepare(`
       INSERT INTO playlists (id, title, description, channel_id, thumbnail_url, created_at)
@@ -1882,14 +1882,14 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
             for (const entry of completedEntries) {
               insertPlaylistVideo.run(pl.id, entry.id, pos++);
             }
-            addLog(`Playlist "${plTitle}" synchronisée : ${completedEntries.length} vidéos archivées liées.`);
+            addLog(`Playlist "${plTitle}" synced: ${completedEntries.length} archived video(s) linked.`);
           } else {
             // Delete playlist if it exists from a previous run but is now empty
             db.prepare("DELETE FROM playlists WHERE id = ?").run(pl.id);
           }
         }
       } catch (err: any) {
-        addLog(`Erreur lors de la synchronisation de la playlist ${plTitle} (${pl.id}) : ${err.message || err}`);
+        addLog(`Error while syncing playlist ${plTitle} (${pl.id}) : ${err.message || err}`);
       }
     }
   }

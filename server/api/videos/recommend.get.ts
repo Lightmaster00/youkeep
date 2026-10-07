@@ -4,7 +4,7 @@ import { getRecommendedVideos } from '../../utils/recommend';
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
   if (!session) {
-    throw createError({ statusCode: 401, statusMessage: 'Non autorisé.' });
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized.' });
   }
 
   const db = getDb();

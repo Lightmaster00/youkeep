@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     if (!emailRegex.test(email)) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Format de l\'adresse e-mail invalide.'
+        statusMessage: 'Invalid email address format.'
       });
     }
   }
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     if (!phoneRegex.test(phone)) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Format du numéro de téléphone invalide.'
+        statusMessage: 'Invalid phone number format.'
       });
     }
   }
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     if (!dobRegex.test(dob)) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Format de la date de naissance invalide (doit être YYYY-MM-DD).'
+        statusMessage: 'Invalid date of birth format (must be YYYY-MM-DD).'
       });
     }
   }

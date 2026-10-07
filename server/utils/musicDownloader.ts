@@ -342,7 +342,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
       const db = getDb();
 
       if (!isFfmpegAvailable()) {
-        reject(new Error('ffmpeg est requis pour l\'extraction audio et n\'a pas été trouvé sur le système.'));
+        reject(new Error('ffmpeg is required for audio extraction and was not found on the system.'));
         return;
       }
 
@@ -379,7 +379,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
           ];
 
       const env = buildSpawnEnv();
-      addLog(`Lancement du téléchargement ${wantClip ? 'du clip' : 'audio'} : ${ytdlPath} ${args.join(' ')}`);
+      addLog(`Starting ${wantClip ? 'clip' : 'audio'} download: ${ytdlPath} ${args.join(' ')}`);
       const child = spawn(ytdlPath, args, { env });
       activeMusicProcesses.set(trackId, child);
       activeMusicDownloadStartTimes.set(trackId, attemptStartedAt);
@@ -389,12 +389,12 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
 
       const watchdog = setTimeout(() => {
         if (!settled) {
-          addLog(`yt-dlp [${trackId}] timeout après ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Annulation.`);
+          addLog(`yt-dlp [${trackId}] timed out after ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
           try { child.kill('SIGKILL'); } catch (e) {}
           activeMusicProcesses.delete(trackId);
           activeMusicDownloadStartTimes.delete(trackId);
           cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
-          settle(() => reject(new Error(`Timeout: le téléchargement a dépassé ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
+          settle(() => reject(new Error(`Timeout: the download exceeded ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
         }
       }, MUSIC_DOWNLOAD_TIMEOUT_MS);
 
@@ -455,7 +455,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
           }
 
           if (!localFilePath) {
-            const errorMsg = lastStderr ? `yt-dlp a terminé mais aucun fichier audio n'a été trouvé : ${lastStderr}` : `yt-dlp a terminé mais aucun fichier audio n'a été trouvé`;
+            const errorMsg = lastStderr ? `yt-dlp finished but no audio file was found : ${lastStderr}` : `yt-dlp finished but no audio file was found`;
             settle(() => reject(new Error(errorMsg)));
             return;
           }
@@ -526,7 +526,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
             settle(() => reject(dbErr));
           }
         } else {
-          const errorMsg = lastStderr ? `yt-dlp a échoué (code ${code}) : ${lastStderr}` : `yt-dlp a échoué avec le code ${code}`;
+          const errorMsg = lastStderr ? `yt-dlp failed (code ${code}): ${lastStderr}` : `yt-dlp failed with code ${code}`;
           cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
           settle(() => reject(new Error(errorMsg)));
         }
@@ -580,10 +580,10 @@ export async function downloadTrackClip(trackId: string): Promise<void> {
         }
       }
     }
-    addLog(`Clip téléchargé avec succès pour la track ${trackId}.`);
+    addLog(`Clip downloaded successfully for track ${trackId}.`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
-    addLog(`Échec du téléchargement du clip pour la track ${trackId} : ${errMsg}`);
+    addLog(`Clip download failed for track ${trackId}: ${errMsg}`);
     try {
       db.prepare('UPDATE music_tracks SET last_error = ? WHERE id = ?').run(errMsg, trackId);
     } catch (dbErr) {
@@ -600,13 +600,13 @@ export async function downloadTrackClip(trackId: string): Promise<void> {
 
 export async function startMusicQueueWorker() {
   if (getIsMusicProcessing()) {
-    addLog('Worker musique déjà en cours d\'exécution. Réveil du worker...');
+    addLog('Music worker already running. Waking the worker...');
     wakeMusicWorker();
     return;
   }
   setIsMusicProcessing(true);
   setMusicWorkerShouldRun(true);
-  addLog('Démarrage du worker de musique (mode persistant)...');
+  addLog('Starting the music worker (persistent mode)...');
 
   try {
     const db = getDb();
@@ -659,7 +659,7 @@ export async function startMusicQueueWorker() {
         }
 
         consecutiveSystemErrors = 0;
-        addLog(`Lancement du téléchargement audio : "${track.title}" (ID: ${track.id})`);
+        addLog(`Starting audio download: "${track.title}" (ID: ${track.id})`);
 
         db.prepare(`
           UPDATE music_tracks
@@ -675,20 +675,20 @@ export async function startMusicQueueWorker() {
         runSingleMusicDownload(track.id, track.title, track.artist_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
-        addLog(`Erreur système dans la boucle du worker musique (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
+        addLog(`System error in the music worker loop (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
         if (consecutiveSystemErrors >= 5) {
-          addLog('Trop d\'erreurs système consécutives. Arrêt du worker musique.');
+          addLog('Too many consecutive system errors. Stopping the music worker.');
           break;
         }
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
   } catch (err: any) {
-    addLog(`Erreur générale fatale du worker musique : ${err.message || err}`);
+    addLog(`Fatal music worker error: ${err.message || err}`);
   } finally {
     setIsMusicProcessing(false);
     setMusicWorkerShouldRun(false);
-    addLog('Worker de musique arrêté.');
+    addLog('Music worker stopped.');
   }
 }
 
@@ -710,7 +710,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
         result = await downloadMusicTrackFile(trackId, artistId, { wantClip: true });
       } catch (clipErr: any) {
         clipFallbackError = clipErr.message || String(clipErr);
-        addLog(`Échec du téléchargement du clip pour "${trackTitle}" (${trackId}), repli sur l'audio seul : ${clipFallbackError}`);
+        addLog(`Clip download failed for "${trackTitle}" (${trackId}), falling back to audio only: ${clipFallbackError}`);
 
         const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
         const currentTrackState = db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string } | undefined;
@@ -736,17 +736,17 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
       SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?, retry_count = 0
       WHERE id = ?
     `).run(clipFallbackError ? `Clip indisponible, repli sur l'audio seul : ${clipFallbackError}` : null, trackId);
-    addLog(`Téléchargement ${result.hasClip ? 'du clip' : 'audio'} RÉUSSI : "${trackTitle}"`);
+    addLog(`${result.hasClip ? 'Clip' : 'Audio'} download SUCCEEDED: "${trackTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
-    addLog(`ÉCHEC du téléchargement pour la track "${trackTitle}" (${trackId}) : ${errMsg}`);
+    addLog(`Download FAILED for track "${trackTitle}" (${trackId}): ${errMsg}`);
 
     const currentTrack = db.prepare('SELECT download_status, retry_count FROM music_tracks WHERE id = ?').get(trackId) as { download_status: string; retry_count: number | null } | undefined;
     const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_downloader_paused'").get() as { value: string } | undefined;
     const isPausedGlobal = pausedSetting?.value === '1';
 
     if (isPausedGlobal || currentTrack?.download_status === 'pending') {
-      addLog(`Téléchargement de la track "${trackTitle}" (${trackId}) interrompu ou mis en pause intentionnellement.`);
+      addLog(`Download of track "${trackTitle}" (${trackId}) was interrupted or intentionally paused.`);
       // Deliberate interruption, not a genuine failure — retry_count is untouched.
       db.prepare(`
         UPDATE music_tracks
@@ -761,7 +761,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
           SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
           WHERE id = ?
         `).run(errMsg, nextRetryCount, trackId);
-        addLog(`Track "${trackTitle}" (${trackId}) marquée comme définitivement échouée après ${nextRetryCount} tentatives.`);
+        addLog(`Track "${trackTitle}" (${trackId}) permanently marked as failed after ${nextRetryCount} attempts.`);
       } else {
         db.prepare(`
           UPDATE music_tracks
@@ -823,7 +823,7 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
  * Mirrors resetStaleDownloads in downloader.ts.
  */
 export function resetStaleMusicDownloads() {
-  resetStaleDownloadsForTable(getDb(), 'music_tracks', 'téléchargements musicaux interrompus', 'music downloads', addLog);
+  resetStaleDownloadsForTable(getDb(), 'music_tracks', 'interrupted music downloads', 'music downloads', addLog);
 }
 
 /**
@@ -851,15 +851,15 @@ export async function syncAllMusicArtists(): Promise<void> {
       try {
         const result = await ingestMusicUrl(url);
         if (!result.success) {
-          addLog(`Échec de la resynchronisation de l'artiste ${artist.name} (${artist.id}) : ${result.message}`);
+          addLog(`Failed to resync artist ${artist.name} (${artist.id}) : ${result.message}`);
         }
       } catch (err: any) {
-        addLog(`Erreur lors de la resynchronisation de l'artiste ${artist.name} (${artist.id}) : ${err.message || err}`);
+        addLog(`Error while resyncing artist ${artist.name} (${artist.id}) : ${err.message || err}`);
       }
     },
-    onStart: (count) => addLog(`Démarrage de la resynchronisation automatique de ${count} artiste(s) musicaux...`),
-    onPaused: () => addLog('Resynchronisation automatique musicale interrompue : téléchargements en pause.'),
-    onComplete: () => addLog('Resynchronisation automatique musicale terminée.'),
+    onStart: (count) => addLog(`Starting automatic resync of ${count} music artist(s)...`),
+    onPaused: () => addLog('Automatic music resync interrupted: downloads are paused.'),
+    onComplete: () => addLog('Automatic music resync finished.'),
     onFatalError: (err) => console.error('Fatal error during syncAllMusicArtists:', err),
     // No afterLoop — syncAllMusicArtists has no equivalent of video's
     // refreshCompletedVideosMetadata() post-loop hook (Global Constraints: don't add one).

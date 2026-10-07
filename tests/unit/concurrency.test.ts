@@ -75,14 +75,14 @@ describe('resetStaleDownloadsForTable', () => {
     db.prepare("UPDATE videos SET download_progress = 42, download_speed = '1MB/s', download_eta = '00:10' WHERE id = 'v1'").run();
 
     const log = vi.fn();
-    resetStaleDownloadsForTable(db, 'videos', 'téléchargements interrompus', 'downloads', log);
+    resetStaleDownloadsForTable(db, 'videos', 'interrupted downloads', 'downloads', log);
 
     const row = db.prepare('SELECT download_status, download_progress, download_speed, download_eta FROM videos WHERE id = ?').get('v1') as any;
     expect(row).toEqual({ download_status: 'pending', download_progress: 0, download_speed: null, download_eta: null });
     const status = (id: string) => (db.prepare('SELECT download_status FROM videos WHERE id = ?').get(id) as any).download_status;
     expect(status('v2')).toBe('completed');
     expect(status('v3')).toBe('failed');
-    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements interrompus.');
+    expect(log).toHaveBeenCalledWith('Reset 1 interrupted downloads.');
   });
 
   it('works on the music_tracks and podcast_episodes tables', () => {
@@ -93,13 +93,13 @@ describe('resetStaleDownloadsForTable', () => {
     insertPodcastEpisode(db, { id: 'e1', showId: 'sh1', downloadStatus: 'downloading' });
 
     const log = vi.fn();
-    resetStaleDownloadsForTable(db, 'music_tracks', 'téléchargements musicaux interrompus', 'music downloads', log);
-    resetStaleDownloadsForTable(db, 'podcast_episodes', 'téléchargements de podcasts interrompus', 'podcast downloads', log);
+    resetStaleDownloadsForTable(db, 'music_tracks', 'interrupted music downloads', 'music downloads', log);
+    resetStaleDownloadsForTable(db, 'podcast_episodes', 'interrupted podcast downloads', 'podcast downloads', log);
 
     expect((db.prepare('SELECT download_status FROM music_tracks WHERE id = ?').get('t1') as any).download_status).toBe('pending');
     expect((db.prepare('SELECT download_status FROM podcast_episodes WHERE id = ?').get('e1') as any).download_status).toBe('pending');
-    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements musicaux interrompus.');
-    expect(log).toHaveBeenCalledWith('Réinitialisation de 1 téléchargements de podcasts interrompus.');
+    expect(log).toHaveBeenCalledWith('Reset 1 interrupted music downloads.');
+    expect(log).toHaveBeenCalledWith('Reset 1 interrupted podcast downloads.');
   });
 
   it('does not call log when no rows were changed', () => {
@@ -107,7 +107,7 @@ describe('resetStaleDownloadsForTable', () => {
     insertChannel(db, { id: 'c1' });
     insertVideo(db, { id: 'v1', channelId: 'c1', downloadStatus: 'completed' });
     const log = vi.fn();
-    resetStaleDownloadsForTable(db, 'videos', 'téléchargements interrompus', 'downloads', log);
+    resetStaleDownloadsForTable(db, 'videos', 'interrupted downloads', 'downloads', log);
     expect(log).not.toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe('resetStaleDownloadsForTable', () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const brokenDb = { prepare: () => { throw new Error('boom'); } } as any;
     const log = vi.fn();
-    expect(() => resetStaleDownloadsForTable(brokenDb, 'videos', 'téléchargements interrompus', 'downloads', log)).not.toThrow();
+    expect(() => resetStaleDownloadsForTable(brokenDb, 'videos', 'interrupted downloads', 'downloads', log)).not.toThrow();
     expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to reset stale downloads:', expect.any(Error));
     expect(log).not.toHaveBeenCalled();
   });

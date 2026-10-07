@@ -58,7 +58,7 @@ export default defineEventHandler(async (event) => {
 
   const hasAccess = await canAccessMusicTrack(trackId, event);
   if (!hasAccess) {
-    throw createError({ statusCode: 403, statusMessage: 'Accès refusé. Ce contenu est restreint.' });
+    throw createError({ statusCode: 403, statusMessage: 'Access denied. This content is restricted.' });
   }
 
   const downloadsDir = getMusicDownloadsDir();

@@ -10,14 +10,14 @@ export default defineEventHandler(async (event) => {
   if (!username || !password) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Nom d\'utilisateur et mot de passe requis.'
+      statusMessage: 'Username and password are required.'
     });
   }
 
   if (password.length < 8) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Le mot de passe doit faire au moins 8 caractères.'
+      statusMessage: 'Password must be at least 8 characters.'
     });
   }
 
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
     if (err.message === 'ALREADY_SETUP') {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Le profil administrateur a déjà été configuré.'
+        statusMessage: 'The admin profile has already been set up.'
       });
     }
     throw err;
