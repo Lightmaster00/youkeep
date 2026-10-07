@@ -37,7 +37,7 @@ const GROUPS: Record<string, string[]> = {
     join(ROOT, 'server/api/channels/[id].get.ts'),
     ...filesUnder(join(ROOT, 'server/api/admin'), '.ts'),
   ],
-  // The whole app is English only; code comments are ignored (see frenchHits).
+  // The whole app is English only; code comments are checked too.
   'every .vue/.ts file under app, server and shared': ['app', 'server', 'shared'].flatMap((d) =>
     filesUnder(join(ROOT, d), ['.vue', '.ts'])
   ),
@@ -60,8 +60,6 @@ function frenchHits(source: string, file: string): string[] {
   const allowed = ALLOWLIST.filter((a) => a.file === file).map((a) => a.text);
   const hits: string[] = [];
   source.split('\n').forEach((line, index) => {
-    // Comment-only lines may stay French (code comments are not translated).
-    if (/^(\/\/|\*|\/\*|<!--)/.test(line.trim())) return;
     const cleaned = allowed.reduce((acc, text) => acc.split(text).join(''), line);
     const word = FRENCH_WORDS.find((w) => cleaned.includes(w));
     if (ACCENTED.test(cleaned) || word) hits.push(`${file}:${index + 1}: ${line.trim()}`);
@@ -74,8 +72,8 @@ describe('the app is English only', () => {
     expect(frenchHits('<h3>Recherche</h3>', 'x.vue')).toHaveLength(1);
     expect(frenchHits("toast.error('Échec')", 'x.vue')).toHaveLength(1);
     expect(frenchHits('<span>{{ on ? "Active" : "Paused" }}</span>', 'x.vue')).toHaveLength(0);
-    expect(frenchHits('// Récupérer la visibilité', 'x.ts')).toHaveLength(0);
-    expect(frenchHits(' * Vérifier l\'accès', 'x.ts')).toHaveLength(0);
+    expect(frenchHits('// Récupérer la visibilité', 'x.ts')).toHaveLength(1);
+    expect(frenchHits(' * Vérifier l\'accès', 'x.ts')).toHaveLength(1);
     expect(Object.values(GROUPS).flat().length).toBeGreaterThan(30);
   });
 

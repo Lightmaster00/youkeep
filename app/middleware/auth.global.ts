@@ -9,7 +9,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     await auth.fetchUser();
   }
 
-  // Si non connecté et essaie d'aller sur une page protégée
+  // If not logged in and trying to reach a protected page
   const publicRoutes = ['/login', '/', '/channels', '/categories', '/shorts'];
   const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/watch/');
   if (!auth.isLoggedIn.value && !isPublicRoute) {

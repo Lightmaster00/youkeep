@@ -155,7 +155,7 @@ export async function requireAdmin(event: H3Event): Promise<UserSession> {
 export async function canAccessVideo(videoId: string, event: any, token?: string): Promise<boolean> {
   const db = getDb();
   
-  // Récupérer la visibilité de la vidéo et de sa chaîne
+  // Fetch the visibility of the video and of its channel
   const video = db.prepare(`
     SELECT v.visibility as video_visibility, v.share_token, c.visibility as channel_visibility 
     FROM videos v
@@ -165,27 +165,27 @@ export async function canAccessVideo(videoId: string, event: any, token?: string
 
   if (!video) return false;
 
-  // Si le token de partage est valide, l'accès est autorisé
+  // If the share token is valid, access is granted
   if (token && video.share_token && token === video.share_token) {
     return true;
   }
 
-  // Récupérer l'utilisateur
+  // Fetch the user
   const user = await getUserFromSession(event);
 
-  // Déterminer la visibilité effective (la plus restrictive des deux)
+  // Determine the effective visibility (the more restrictive of the two)
   const visMap: Record<string, number> = { 'public': 0, 'private': 1, 'ultra_private': 2 };
   const videoLevel = visMap[video.video_visibility] ?? 0;
   const channelLevel = visMap[video.channel_visibility] ?? 0;
   const effectiveVisibilityLevel = Math.max(videoLevel, channelLevel);
 
   if (effectiveVisibilityLevel === 0) {
-    // Public : accessible à tous
+    // Public: accessible to everyone
     return true;
   }
 
   if (!user) {
-    // Invité : accès refusé aux contenus restreints
+    // Guest: access denied to restricted content
     return false;
   }
 
@@ -194,11 +194,11 @@ export async function canAccessVideo(videoId: string, event: any, token?: string
   }
 
   if (effectiveVisibilityLevel === 1) {
-    // Privé : tout membre connecté peut voir
+    // Private: any logged-in member can view
     return true;
   }
 
-  // Si l'utilisateur possède un accès explicite à la chaîne de la vidéo
+  // If the user has explicit access to the video's channel
   const channelAccessCheck = db.prepare(`
     SELECT 1 FROM user_channel_access 
     WHERE user_id = ? AND channel_id = (SELECT channel_id FROM videos WHERE id = ?)
@@ -207,7 +207,7 @@ export async function canAccessVideo(videoId: string, event: any, token?: string
     return true;
   }
 
-  // Ultra Privé : réservé uniquement à l'admin
+  // Ultra Private: admin only
   return false;
 }
 
@@ -235,7 +235,7 @@ export async function canAccessChannel(channelId: string, event: any): Promise<b
     return true;
   }
 
-  // Vérifier l'accès explicite accordé à l'utilisateur
+  // Check the explicit access granted to the user
   const explicitAccess = db.prepare('SELECT 1 FROM user_channel_access WHERE user_id = ? AND channel_id = ?').get(user.id, channelId);
   if (explicitAccess) {
     return true;

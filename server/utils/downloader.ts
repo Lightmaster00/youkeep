@@ -866,7 +866,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
             speedUpdateCount++;
           }
 
-          // Moyenne de toutes les vitesses depuis le début
+          // Average of all speeds since the start
           const avgSpeedBytes = speedUpdateCount > 0 
              ? totalSpeedSumBytes / speedUpdateCount 
              : (rawSpeedBytes || 0);

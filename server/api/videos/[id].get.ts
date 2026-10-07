@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Video not found.' });
   }
 
-  // Vérification de permission
+  // Permission check
   const hasAccess = await canAccessVideo(videoId, event, token);
   if (!hasAccess) {
     throw createError({
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     });
   }
   
-  // Enregistrer dans l'historique de visionnage si l'utilisateur est connecté
+  // Record in the watch history if the user is logged in
   if (session) {
     try {
       db.prepare(`
@@ -51,14 +51,14 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Auto-générer le share token pour l'admin si non existant
+  // Auto-generate the share token for the admin if missing
   if (session?.role === 'admin' && !video.share_token) {
     const nextToken = crypto.randomUUID();
     db.prepare('UPDATE videos SET share_token = ? WHERE id = ?').run(nextToken, videoId);
     video.share_token = nextToken;
   }
 
-  // Récupérer les commentaires associés
+  // Fetch the associated comments
   const comments = db.prepare(`
     SELECT * FROM comments
     WHERE video_id = ?
