@@ -20,7 +20,8 @@ export default defineConfig({
         test: {
           name: 'component',
           environment: 'nuxt',
-          include: ['tests/component/**/*.test.ts']
+          include: ['tests/component/**/*.test.ts'],
+          setupFiles: ['tests/setup/component.ts']
         }
       })
     ]
