@@ -21,15 +21,15 @@
     </div>
 
     <div class="podcast-mini-player-controls">
-      <button @click="skipBack" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Reculer de 15 secondes" aria-label="Reculer de 15 secondes">
+      <button @click="skipBack" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Back 15 seconds" aria-label="Back 15 seconds">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         <span class="podcast-mini-player-skip-label">15</span>
       </button>
-      <button @click="togglePlay" class="podcast-mini-player-btn podcast-mini-player-play-btn" title="Lecture/Pause" aria-label="Lecture/Pause">
+      <button @click="togglePlay" class="podcast-mini-player-btn podcast-mini-player-play-btn" title="Play/Pause" aria-label="Play/Pause">
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button @click="skipForward" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Avancer de 30 secondes" aria-label="Avancer de 30 secondes">
+      <button @click="skipForward" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Forward 30 seconds" aria-label="Forward 30 seconds">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path></svg>
         <span class="podcast-mini-player-skip-label">30</span>
       </button>
@@ -48,8 +48,8 @@
         class="podcast-mini-player-rate"
         :value="playbackRate"
         @change="onRateChange"
-        title="Vitesse de lecture"
-        aria-label="Vitesse de lecture"
+        title="Playback speed"
+        aria-label="Playback speed"
       >
         <option v-for="rate in PLAYBACK_RATES" :key="rate" :value="rate">{{ rate }}x</option>
       </select>
@@ -124,7 +124,7 @@ function onPlay() {
 }
 
 function onAudioError() {
-  toast.error('Erreur de lecture de l\'épisode.');
+  toast.error('Error playing the episode.');
   isPlaying.value = false;
 }
 

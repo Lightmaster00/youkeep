@@ -6,19 +6,19 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Rechercher un podcast ou un épisode..."
+          placeholder="Search for a podcast or an episode..."
           class="form-input podcast-search-input"
         />
       </div>
 
       <template v-if="search">
-        <div v-if="episodeSearchPending" class="podcast-loading">Chargement...</div>
-        <div v-else-if="episodeSearchError" class="podcast-error">Erreur lors de la recherche.</div>
+        <div v-if="episodeSearchPending" class="podcast-loading">Loading...</div>
+        <div v-else-if="episodeSearchError" class="podcast-error">Search failed.</div>
         <EmptyState
           v-else-if="episodeSearchResults.length === 0"
           icon="music"
-          title="Aucun résultat"
-          description="Aucun épisode ne correspond à cette recherche."
+          title="No results"
+          description="No episodes match this search."
         />
         <div v-else class="episode-search-results">
           <div
@@ -34,15 +34,15 @@
       </template>
 
       <template v-else>
-        <div v-if="gridPending" class="podcast-loading">Chargement...</div>
+        <div v-if="gridPending" class="podcast-loading">Loading...</div>
 
-        <div v-else-if="gridError" class="podcast-error">Erreur lors du chargement des podcasts.</div>
+        <div v-else-if="gridError" class="podcast-error">Failed to load podcasts.</div>
 
         <EmptyState
           v-else-if="shows.length === 0"
           icon="music"
-          title="Aucun podcast archivé"
-          description="Aucun podcast archivé pour l'instant."
+          title="No podcasts archived"
+          description="No podcasts archived yet."
         />
 
         <div v-else class="show-grid">
@@ -55,7 +55,7 @@
             <img :src="s.cover_url || fallbackCover" @error="handleCoverError" class="show-card-cover" alt="" />
             <div class="show-card-body">
               <h3 class="show-card-title">{{ s.title }}</h3>
-              <p class="show-card-meta">{{ s.episode_count }} épisode(s)</p>
+              <p class="show-card-meta">{{ s.episode_count }} episode(s)</p>
               <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(s.visibility)">{{ formatVisibility(s.visibility) }}</span>
             </div>
           </div>
@@ -70,8 +70,8 @@
         Podcasts
       </button>
 
-      <div v-if="detailPending" class="podcast-loading">Chargement...</div>
-      <div v-else-if="detailError" class="podcast-error">Podcast introuvable ou accès refusé.</div>
+      <div v-if="detailPending" class="podcast-loading">Loading...</div>
+      <div v-else-if="detailError" class="podcast-error">Podcast not found or access denied.</div>
 
       <template v-else-if="show">
         <div class="show-detail-header">
@@ -89,8 +89,8 @@
         <EmptyState
           v-if="episodes.length === 0 && !episodesLoading && !episodesError"
           icon="music"
-          title="Aucun épisode"
-          description="Aucun épisode pour ce podcast pour l'instant."
+          title="No episodes"
+          description="No episodes for this podcast yet."
         />
 
         <div v-else class="episode-list">
@@ -108,21 +108,21 @@
               v-if="ep.download_status === 'completed' && ep.local_file_path"
               @click.stop="playEpisode(ep)"
               class="episode-play-btn"
-              title="Lire l'épisode"
-              aria-label="Lire l'épisode"
+              title="Play episode"
+              aria-label="Play episode"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </button>
             <span class="badge" :class="getStatusBadgeClass(ep.download_status)">{{ formatStatus(ep.download_status) }}</span>
-            <button v-if="isAdmin" @click.stop="openEpisodeEdit(ep)" class="edit-btn" title="Modifier">
+            <button v-if="isAdmin" @click.stop="openEpisodeEdit(ep)" class="edit-btn" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
             </button>
           </div>
 
-          <div v-if="episodesLoading" class="podcast-loading">Chargement...</div>
+          <div v-if="episodesLoading" class="podcast-loading">Loading...</div>
           <div v-if="episodesError" class="podcast-error">
-            Erreur lors du chargement des épisodes.
-            <button @click="loadEpisodes" :disabled="episodesLoading" class="btn btn-secondary load-more-btn">Réessayer</button>
+            Failed to load episodes.
+            <button @click="loadEpisodes" :disabled="episodesLoading" class="btn btn-secondary load-more-btn">Retry</button>
           </div>
           <button
             v-if="episodes.length < episodesTotal"
@@ -388,16 +388,16 @@ const formatPubDate = (raw: string | null): string => {
   if (!raw) return '';
   const d = new Date(raw);
   if (isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const formatStatus = (status: string): string => {
   switch (status) {
-    case 'completed': return 'Téléchargé';
-    case 'downloading': return 'En cours';
-    case 'pending': return 'En attente';
-    case 'failed': return 'Échec';
-    default: return status || 'En attente';
+    case 'completed': return 'Downloaded';
+    case 'downloading': return 'In progress';
+    case 'pending': return 'Queued';
+    case 'failed': return 'Failed';
+    default: return status || 'Queued';
   }
 };
 

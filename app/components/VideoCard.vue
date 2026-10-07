@@ -25,7 +25,7 @@
         playsinline
         @timeupdate="handlePreviewTimeUpdate"
       ></video>
-      <span v-if="isPreviewActive" class="preview-badge">APERÇU</span>
+      <span v-if="isPreviewActive" class="preview-badge">PREVIEW</span>
       <div v-if="isPreviewActive" class="preview-progress">
         <div class="preview-progress-fill" :style="{ width: previewProgressPercent + '%' }"></div>
       </div>

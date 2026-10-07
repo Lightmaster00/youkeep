@@ -245,8 +245,8 @@
               <div class="rec-info" style="display: flex; flex-direction: column; min-width: 0; flex: 1; justify-content: center;">
                 <h4 class="rec-title" :title="rel.title" style="font-size: 12.5px; font-weight: 600; line-height: 1.3; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ rel.title }}</h4>
                 <div class="rec-metadata" style="font-size: 11px; margin-top: 4px;">
-                  <span v-if="rel.download_status !== 'completed'" style="color: #ef4444; font-weight: 500;">Non téléchargé</span>
-                  <span v-else style="color: var(--text-secondary);">Téléchargé</span>
+                  <span v-if="rel.download_status !== 'completed'" style="color: #ef4444; font-weight: 500;">Not downloaded</span>
+                  <span v-else style="color: var(--text-secondary);">Downloaded</span>
                 </div>
               </div>
             </div>
@@ -255,7 +255,7 @@
           <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.06); margin: 20px 0;" />
         </template>
 
-        <h2 class="sidebar-title">{{ playlistId ? 'Autres suggestions' : 'Other archived videos' }}</h2>
+        <h2 class="sidebar-title">{{ playlistId ? 'Other suggestions' : 'Other archived videos' }}</h2>
         
         <div v-if="relatedPending" class="sidebar-loading">
           <div class="spinner"></div>
@@ -495,7 +495,7 @@ const handleVideoEnded = () => {
     if (currentIndex >= 0 && currentIndex < playlistVideos.value.length - 1) {
       const nextVideo = playlistVideos.value[currentIndex + 1];
       if (nextVideo.download_status === 'completed') {
-        toast.info(`Lecture de la vidéo suivante : ${nextVideo.title}`);
+        toast.info(`Playing next video: ${nextVideo.title}`);
         autoNextTimer = setTimeout(() => {
           autoNextTimer = null;
           navigateTo(`/watch/${nextVideo.id}?playlistId=${playlistId.value}`);

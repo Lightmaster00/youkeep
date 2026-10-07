@@ -1,16 +1,16 @@
 <template>
-  <BaseModal :show="show" title="Modifier l'épisode" @close="$emit('close')">
+  <BaseModal :show="show" title="Edit episode" @close="$emit('close')">
     <form @submit.prevent="handleSubmit">
       <div class="form-group">
-        <label for="episode-edit-title">Titre *</label>
+        <label for="episode-edit-title">Title *</label>
         <input id="episode-edit-title" v-model="form.title" type="text" class="form-input" />
       </div>
       <div class="form-group" style="margin-top: 16px;">
-        <label for="episode-edit-number">N° d'épisode</label>
+        <label for="episode-edit-number">Episode number</label>
         <input id="episode-edit-number" v-model.number="form.episodeNumber" type="number" min="1" class="form-input" />
       </div>
       <div class="form-group" style="margin-top: 16px;">
-        <label for="episode-edit-season">N° de saison</label>
+        <label for="episode-edit-season">Season number</label>
         <input id="episode-edit-season" v-model.number="form.seasonNumber" type="number" min="1" class="form-input" />
       </div>
       <div class="form-group" style="margin-top: 16px;">
@@ -18,8 +18,8 @@
         <textarea id="episode-edit-description" v-model="form.description" rows="5" class="form-input"></textarea>
       </div>
       <div class="modal-footer" style="margin-top: 24px; padding: 0; border: none;">
-        <button type="button" class="btn btn-secondary" @click="$emit('close')">Annuler</button>
-        <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? 'Enregistrement...' : 'Enregistrer' }}</button>
+        <button type="button" class="btn btn-secondary" @click="$emit('close')">Cancel</button>
+        <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? 'Saving...' : 'Save' }}</button>
       </div>
     </form>
   </BaseModal>
@@ -76,10 +76,10 @@ async function handleSubmit() {
         seasonNumber: form.value.seasonNumber
       }
     });
-    toast.success('Épisode mis à jour.');
+    toast.success('Episode updated.');
     emit('saved', data.episode);
   } catch (e: any) {
-    toast.error(e?.data?.statusMessage || "Erreur lors de la mise à jour de l'épisode.");
+    toast.error(e?.data?.statusMessage || "Failed to update the episode.");
   } finally {
     saving.value = false;
   }

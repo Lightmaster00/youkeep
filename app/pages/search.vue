@@ -1,34 +1,34 @@
 <template>
   <div class="search-page">
-    <h1 class="search-page-title">Résultats pour "{{ query }}"</h1>
+    <h1 class="search-page-title">Results for "{{ query }}"</h1>
 
     <section v-if="isEnabled('video')" class="search-section">
-      <h2 class="search-section-title">Vidéos</h2>
-      <div v-if="videosPending" class="search-loading">Chargement...</div>
-      <div v-else-if="videosError" class="search-error">Erreur lors du chargement des vidéos.</div>
+      <h2 class="search-section-title">Videos</h2>
+      <div v-if="videosPending" class="search-loading">Loading...</div>
+      <div v-else-if="videosError" class="search-error">Failed to load videos.</div>
       <EmptyState
         v-else-if="videos.length === 0"
         icon="video"
-        title="Aucune vidéo"
-        description="Aucune vidéo ne correspond à cette recherche."
+        title="No videos"
+        description="No videos match this search."
       />
       <template v-else>
         <div class="video-grid stagger-in">
           <VideoCard v-for="video in videos" :key="video.id" :video="video" :search-query="query" />
         </div>
-        <NuxtLink :to="{ path: '/', query: { q: query } }" class="search-see-more">Voir plus de vidéos</NuxtLink>
+        <NuxtLink :to="{ path: '/', query: { q: query } }" class="search-see-more">See more videos</NuxtLink>
       </template>
     </section>
 
     <section v-if="isEnabled('music')" class="search-section">
-      <h2 class="search-section-title">Musique</h2>
-      <div v-if="tracksPending" class="search-loading">Chargement...</div>
-      <div v-else-if="tracksError" class="search-error">Erreur lors du chargement de la musique.</div>
+      <h2 class="search-section-title">Music</h2>
+      <div v-if="tracksPending" class="search-loading">Loading...</div>
+      <div v-else-if="tracksError" class="search-error">Failed to load music.</div>
       <EmptyState
         v-else-if="tracks.length === 0"
         icon="music"
-        title="Aucun titre"
-        description="Aucun titre ne correspond à cette recherche."
+        title="No tracks"
+        description="No tracks match this search."
       />
       <template v-else>
         <div class="search-result-rows">
@@ -42,19 +42,19 @@
             <span class="search-result-subtitle">{{ track.artist_name }}</span>
           </div>
         </div>
-        <NuxtLink :to="{ path: '/music', query: { q: query } }" class="search-see-more">Voir plus de musique</NuxtLink>
+        <NuxtLink :to="{ path: '/music', query: { q: query } }" class="search-see-more">See more music</NuxtLink>
       </template>
     </section>
 
     <section v-if="isEnabled('podcasts')" class="search-section">
       <h2 class="search-section-title">Podcasts</h2>
-      <div v-if="episodesPending" class="search-loading">Chargement...</div>
-      <div v-else-if="episodesError" class="search-error">Erreur lors du chargement des podcasts.</div>
+      <div v-if="episodesPending" class="search-loading">Loading...</div>
+      <div v-else-if="episodesError" class="search-error">Failed to load podcasts.</div>
       <EmptyState
         v-else-if="episodes.length === 0"
         icon="music"
-        title="Aucun épisode"
-        description="Aucun épisode ne correspond à cette recherche."
+        title="No episodes"
+        description="No episodes match this search."
       />
       <template v-else>
         <div class="search-result-rows">
@@ -68,7 +68,7 @@
             <span class="search-result-subtitle">{{ episode.show_title }}</span>
           </div>
         </div>
-        <NuxtLink :to="{ path: '/podcasts', query: { q: query } }" class="search-see-more">Voir plus de podcasts</NuxtLink>
+        <NuxtLink :to="{ path: '/podcasts', query: { q: query } }" class="search-see-more">See more podcasts</NuxtLink>
       </template>
     </section>
   </div>

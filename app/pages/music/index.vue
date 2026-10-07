@@ -6,33 +6,33 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Rechercher un artiste ou un titre..."
+          placeholder="Search for an artist or a track..."
           class="form-input music-search-input"
         />
         <template v-if="!search">
           <select v-model="genre" class="form-input">
-            <option value="">Tous les genres</option>
+            <option value="">All genres</option>
             <option v-for="g in facets.genres" :key="g" :value="g">{{ g }}</option>
           </select>
           <select v-model="language" class="form-input">
-            <option value="">Toutes les langues</option>
+            <option value="">All languages</option>
             <option v-for="l in facets.languages" :key="l" :value="l">{{ l }}</option>
           </select>
           <select v-model="year" class="form-input">
-            <option value="">Toutes les années</option>
+            <option value="">All years</option>
             <option v-for="y in facets.years" :key="y" :value="y">{{ y }}</option>
           </select>
         </template>
       </div>
 
       <template v-if="search">
-        <div v-if="trackSearchPending" class="music-loading">Chargement...</div>
-        <div v-else-if="trackSearchError" class="music-error">Erreur lors de la recherche.</div>
+        <div v-if="trackSearchPending" class="music-loading">Loading...</div>
+        <div v-else-if="trackSearchError" class="music-error">Search failed.</div>
         <EmptyState
           v-else-if="trackSearchResults.length === 0"
           icon="music"
-          title="Aucun résultat"
-          description="Aucun titre ne correspond à cette recherche."
+          title="No results"
+          description="No tracks match this search."
         />
         <div v-else class="track-search-results">
           <div
@@ -61,20 +61,20 @@
             </div>
             <div class="playlist-card-info">
               <h4 class="playlist-card-label">{{ playlist.label }}</h4>
-              <p class="playlist-card-count">{{ playlist.tracks.length }} titre(s)</p>
+              <p class="playlist-card-count">{{ playlist.tracks.length }} track(s)</p>
             </div>
           </div>
         </div>
 
-        <div v-if="gridPending" class="music-loading">Chargement...</div>
+        <div v-if="gridPending" class="music-loading">Loading...</div>
 
-        <div v-else-if="gridError" class="music-error">Erreur lors du chargement des artistes.</div>
+        <div v-else-if="gridError" class="music-error">Failed to load artists.</div>
 
         <EmptyState
           v-else-if="artists.length === 0"
           icon="music"
-          :title="hasActiveFilters ? 'Aucun résultat' : 'Aucun artiste archivé'"
-          :description="hasActiveFilters ? 'Aucun résultat pour ces filtres.' : 'Aucun artiste archivé pour l\'instant.'"
+          :title="hasActiveFilters ? 'No results' : 'No artists archived'"
+          :description="hasActiveFilters ? 'No results for these filters.' : 'No artists archived yet.'"
         />
 
         <div v-else class="artist-grid">
@@ -87,7 +87,7 @@
             <img :src="a.avatar_url || fallbackAvatar" @error="handleAvatarError" class="artist-card-avatar" alt="" />
             <div class="artist-card-body">
               <h3 class="artist-card-name">{{ a.name }}</h3>
-              <p class="artist-card-meta">{{ a.track_count }} titre(s)</p>
+              <p class="artist-card-meta">{{ a.track_count }} track(s)</p>
               <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(a.visibility)">{{ formatVisibility(a.visibility) }}</span>
             </div>
           </div>
@@ -102,8 +102,8 @@
         Musique
       </button>
 
-      <div v-if="detailPending" class="music-loading">Chargement...</div>
-      <div v-else-if="detailError" class="music-error">Artiste introuvable ou accès refusé.</div>
+      <div v-if="detailPending" class="music-loading">Loading...</div>
+      <div v-else-if="detailError" class="music-error">Artist not found or access denied.</div>
 
       <template v-else-if="artist">
         <div class="artist-detail-header">
@@ -116,7 +116,7 @@
             <p v-if="artist.description" class="artist-detail-desc">{{ artist.description }}</p>
             <button @click="playArtistMix" class="btn btn-secondary artist-mix-btn">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              Lecture aléatoire
+              Shuffle play
             </button>
           </div>
         </div>
@@ -124,8 +124,8 @@
         <EmptyState
           v-if="albums.length === 0 && standaloneTrackCount === 0"
           icon="music"
-          title="Aucun titre archivé"
-          description="Aucun titre complété pour cet artiste pour l'instant."
+          title="No tracks archived"
+          description="No completed tracks for this artist yet."
         />
 
         <div v-for="album in albums" :key="album.id" class="album-group">
@@ -133,9 +133,9 @@
             <img :src="album.cover_url || fallbackCover" class="album-cover" alt="" />
             <div class="album-info">
               <h3 class="album-title">{{ album.title }}</h3>
-              <p class="album-meta">{{ album.release_year || 'Année inconnue' }} &bull; {{ album.track_count }} titre(s)</p>
+              <p class="album-meta">{{ album.release_year || 'Unknown year' }} &bull; {{ album.track_count }} track(s)</p>
             </div>
-            <button v-if="isAdmin" @click.stop="openAlbumEdit(album)" class="edit-btn" title="Modifier">
+            <button v-if="isAdmin" @click.stop="openAlbumEdit(album)" class="edit-btn" title="Edit">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
             </button>
           </div>
@@ -155,7 +155,7 @@
                 v-if="track.has_clip"
                 @click="toggleTrackClipMode($event, track, album.id)"
                 class="badge badge-clip"
-                title="Voir le clip"
+                title="Watch the clip"
               >
                 🎬 Clip
               </button>
@@ -165,17 +165,17 @@
                 :disabled="downloadingClipIds.has(track.id)"
                 class="btn btn-secondary clip-download-btn"
               >
-                {{ downloadingClipIds.has(track.id) ? 'Téléchargement…' : 'Télécharger le clip' }}
+                {{ downloadingClipIds.has(track.id) ? 'Downloading…' : 'Download clip' }}
               </button>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-              <button v-if="isAdmin" @click.stop="openTrackEdit(track, album.id)" class="edit-btn" title="Modifier">
+              <button v-if="isAdmin" @click.stop="openTrackEdit(track, album.id)" class="edit-btn" title="Edit">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
               </button>
             </div>
-            <div v-if="trackGroups[album.id]?.loading" class="music-loading">Chargement...</div>
+            <div v-if="trackGroups[album.id]?.loading" class="music-loading">Loading...</div>
             <div v-if="trackGroups[album.id]?.error" class="music-error">
-              Erreur lors du chargement des titres.
-              <button @click="loadTracks(album.id)" class="btn btn-secondary load-more-btn">Réessayer</button>
+              Failed to load tracks.
+              <button @click="loadTracks(album.id)" class="btn btn-secondary load-more-btn">Retry</button>
             </div>
             <button
               v-if="(trackGroups[album.id]?.tracks.length || 0) < (trackGroups[album.id]?.total || 0)"
@@ -192,8 +192,8 @@
           <div class="album-header" @click="toggleStandalone">
             <div class="album-cover album-cover-placeholder"></div>
             <div class="album-info">
-              <h3 class="album-title">Titres sans album</h3>
-              <p class="album-meta">{{ standaloneTrackCount }} titre(s)</p>
+              <h3 class="album-title">Tracks without an album</h3>
+              <p class="album-meta">{{ standaloneTrackCount }} track(s)</p>
             </div>
           </div>
           <div v-if="standaloneExpanded" class="album-tracks">
@@ -212,7 +212,7 @@
                 v-if="track.has_clip"
                 @click="toggleTrackClipMode($event, track, 'none')"
                 class="badge badge-clip"
-                title="Voir le clip"
+                title="Watch the clip"
               >
                 🎬 Clip
               </button>
@@ -222,17 +222,17 @@
                 :disabled="downloadingClipIds.has(track.id)"
                 class="btn btn-secondary clip-download-btn"
               >
-                {{ downloadingClipIds.has(track.id) ? 'Téléchargement…' : 'Télécharger le clip' }}
+                {{ downloadingClipIds.has(track.id) ? 'Downloading…' : 'Download clip' }}
               </button>
               <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-              <button v-if="isAdmin" @click.stop="openTrackEdit(track, 'none')" class="edit-btn" title="Modifier">
+              <button v-if="isAdmin" @click.stop="openTrackEdit(track, 'none')" class="edit-btn" title="Edit">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
               </button>
             </div>
-            <div v-if="trackGroups['none']?.loading" class="music-loading">Chargement...</div>
+            <div v-if="trackGroups['none']?.loading" class="music-loading">Loading...</div>
             <div v-if="trackGroups['none']?.error" class="music-error">
-              Erreur lors du chargement des titres.
-              <button @click="loadTracks('none')" class="btn btn-secondary load-more-btn">Réessayer</button>
+              Failed to load tracks.
+              <button @click="loadTracks('none')" class="btn btn-secondary load-more-btn">Retry</button>
             </div>
             <button
               v-if="(trackGroups['none']?.tracks.length || 0) < (trackGroups['none']?.total || 0)"
@@ -299,21 +299,21 @@ async function fetchPlaylists() {
   try {
     const mostPlayed = await $fetch<any>('/api/music/playlists/most-played');
     if (mostPlayed.tracks?.length > 0) {
-      results.push({ key: 'most-played', label: 'Les plus écoutés', tracks: mostPlayed.tracks });
+      results.push({ key: 'most-played', label: 'Most played', tracks: mostPlayed.tracks });
     }
   } catch (e) { /* silently skip this card on error */ }
 
   try {
     const recentlyAdded = await $fetch<any>('/api/music/playlists/recently-added');
     if (recentlyAdded.tracks?.length > 0) {
-      results.push({ key: 'recently-added', label: 'Ajoutés récemment', tracks: recentlyAdded.tracks });
+      results.push({ key: 'recently-added', label: 'Recently added', tracks: recentlyAdded.tracks });
     }
   } catch (e) { /* silently skip this card on error */ }
 
   try {
     const rediscover = await $fetch<any>('/api/music/playlists/rediscover');
     if (rediscover.tracks?.length > 0) {
-      results.push({ key: 'rediscover', label: 'À (re)découvrir', tracks: rediscover.tracks });
+      results.push({ key: 'rediscover', label: 'Rediscover', tracks: rediscover.tracks });
     }
   } catch (e) { /* silently skip this card on error */ }
 
@@ -504,9 +504,9 @@ async function downloadClip(track: any) {
   downloadingClipIds.value = new Set([...downloadingClipIds.value, track.id]);
   try {
     await $fetch(`/api/admin/music/tracks/${track.id}/download-clip`, { method: 'POST' });
-    toast.success('Téléchargement du clip lancé — rechargez la page dans quelques minutes pour voir la pastille.');
+    toast.success('Clip download started — reload the page in a few minutes to see the badge.');
   } catch (e: any) {
-    toast.error(e?.data?.statusMessage || 'Erreur lors du lancement du téléchargement du clip.');
+    toast.error(e?.data?.statusMessage || 'Failed to start the clip download.');
   } finally {
     downloadingClipIds.value = new Set([...downloadingClipIds.value].filter((id) => id !== track.id));
   }
@@ -790,7 +790,7 @@ const getVisBadgeClass = (vis: string): string => {
 /* Mirrors channels.vue's .channel-profile-header stacking (same avatar+info
    header shape, already shipped and proven). Below 480px the 96px avatar +
    20px gap leave too little width for the info column to hold real content
-   (a bio with an unbroken URL/email, or the "Lecture aléatoire" button) —
+   (a bio with an unbroken URL/email, or the "Shuffle play" button) —
    no single child-level fix (word-break, button wrapping) closes the gap
    for every kind of content, but stacking the header removes the
    side-by-side width constraint entirely. */

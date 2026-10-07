@@ -1,21 +1,21 @@
 <template>
-  <BaseModal :show="show" title="Modifier l'album" @close="$emit('close')">
+  <BaseModal :show="show" title="Edit album" @close="$emit('close')">
     <form @submit.prevent="handleSubmit">
       <div class="form-group">
-        <label for="album-edit-title">Titre *</label>
+        <label for="album-edit-title">Title *</label>
         <input id="album-edit-title" v-model="form.title" type="text" required class="form-input" />
       </div>
       <div class="form-group" style="margin-top: 16px;">
-        <label for="album-edit-year">Année</label>
+        <label for="album-edit-year">Year</label>
         <input id="album-edit-year" v-model.number="form.releaseYear" type="number" min="1900" max="2100" class="form-input" />
       </div>
       <div class="form-group" style="margin-top: 16px;">
-        <label for="album-edit-cover">URL de la pochette</label>
+        <label for="album-edit-cover">Cover URL</label>
         <input id="album-edit-cover" v-model="form.coverUrl" type="text" placeholder="https://..." class="form-input" />
       </div>
       <div class="modal-footer" style="margin-top: 24px; padding: 0; border: none;">
-        <button type="button" class="btn btn-secondary" @click="$emit('close')">Annuler</button>
-        <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? 'Enregistrement...' : 'Enregistrer' }}</button>
+        <button type="button" class="btn btn-secondary" @click="$emit('close')">Cancel</button>
+        <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? 'Saving...' : 'Save' }}</button>
       </div>
     </form>
   </BaseModal>
@@ -69,10 +69,10 @@ async function handleSubmit() {
         coverUrl: form.value.coverUrl
       }
     });
-    toast.success('Album mis à jour.');
+    toast.success('Album updated.');
     emit('saved', data.album);
   } catch (e: any) {
-    toast.error(e?.data?.statusMessage || "Erreur lors de la mise à jour de l'album.");
+    toast.error(e?.data?.statusMessage || "Failed to update the album.");
   } finally {
     saving.value = false;
   }

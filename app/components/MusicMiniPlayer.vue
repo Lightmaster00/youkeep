@@ -27,22 +27,22 @@
       @click="setClipMode(!clipMode)"
       class="mini-player-btn mini-player-clip-toggle"
       :class="{ active: clipMode }"
-      :title="clipMode ? 'Repasser en mode audio' : 'Voir le clip'"
-      :aria-label="clipMode ? 'Repasser en mode audio' : 'Voir le clip'"
+      :title="clipMode ? 'Back to audio mode' : 'Watch the clip'"
+      :aria-label="clipMode ? 'Back to audio mode' : 'Watch the clip'"
       :aria-pressed="clipMode"
     >
       🎬
     </button>
 
     <div class="mini-player-controls">
-      <button @click="prev" class="mini-player-btn" title="Précédent">
+      <button @click="prev" class="mini-player-btn" title="Previous">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"></line></svg>
       </button>
-      <button @click="togglePlay" class="mini-player-btn mini-player-play-btn" title="Lecture/Pause">
+      <button @click="togglePlay" class="mini-player-btn mini-player-play-btn" title="Play/Pause">
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button @click="next" class="mini-player-btn" title="Suivant">
+      <button @click="next" class="mini-player-btn" title="Next">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line></svg>
       </button>
     </div>
@@ -56,14 +56,14 @@
     </div>
 
     <div class="mini-player-extra-controls">
-      <button @click="toggleShuffle" class="mini-player-btn" :class="{ active: shuffleOn }" title="Aléatoire">
+      <button @click="toggleShuffle" class="mini-player-btn" :class="{ active: shuffleOn }" title="Shuffle">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
       </button>
-      <button @click="cycleRepeat" class="mini-player-btn" :class="{ active: repeatMode !== 'off' }" title="Répétition">
+      <button @click="cycleRepeat" class="mini-player-btn" :class="{ active: repeatMode !== 'off' }" title="Repeat">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
         <span v-if="repeatMode === 'one'" class="repeat-one-badge">1</span>
       </button>
-      <button @click="startRadio" class="mini-player-btn" title="Démarrer une radio">
+      <button @click="startRadio" class="mini-player-btn" title="Start a radio">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path></svg>
       </button>
       <input
@@ -142,7 +142,7 @@ function onEnded() {
 }
 
 function onAudioError() {
-  toast.error('Erreur de lecture audio.');
+  toast.error('Error playing audio.');
   isPlaying.value = false;
   setClipMode(false);
 }

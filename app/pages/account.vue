@@ -75,8 +75,8 @@
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             <div>
-              <h4>Affichage</h4>
-              <p class="section-desc mb-0">Adaptez la densité des grilles, la navigation et l'espace affiché au démarrage. Les valeurs non modifiées suivent les défauts de l'instance.</p>
+              <h4>Display</h4>
+              <p class="section-desc mb-0">Adjust grid density, navigation and the space shown at startup. Settings you leave unchanged follow the instance defaults.</p>
             </div>
           </div>
 
@@ -140,32 +140,32 @@
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
             <div>
-              <h4>Jetons API</h4>
-              <p class="section-desc mb-0">Générez un jeton pour connecter une application externe (client mobile, script) à votre compte.</p>
+              <h4>API tokens</h4>
+              <p class="section-desc mb-0">Generate a token to connect an external app (mobile client, script) to your account.</p>
             </div>
           </div>
 
           <hr class="separator" />
 
           <div v-if="newToken" class="form-msg success-msg mt-3 mb-4 alert-box new-token-reveal">
-            <strong>⚠️ Ce jeton ne sera plus jamais affiché.</strong> Copiez-le maintenant :
+            <strong>⚠️ This token will never be shown again.</strong> Copy it now:
             <div class="new-token-value">
               <code ref="tokenCodeEl">{{ newToken }}</code>
-              <UiButton variant="secondary" @click="copyNewToken">Copier</UiButton>
+              <UiButton variant="secondary" @click="copyNewToken">Copy</UiButton>
             </div>
             <p v-if="copyMessage" class="copy-message">{{ copyMessage }}</p>
-            <UiButton variant="primary" class="mt-3" @click="dismissNewToken">J'ai copié mon jeton</UiButton>
+            <UiButton variant="primary" class="mt-3" @click="dismissNewToken">I've copied my token</UiButton>
           </div>
 
           <form v-else @submit.prevent="handleCreateToken" class="mt-4">
             <div class="form-group">
-              <label class="form-label" for="token_label">Nom du jeton</label>
+              <label class="form-label" for="token_label">Token name</label>
               <input
                 type="text"
                 id="token_label"
                 v-model="newTokenLabel"
                 class="form-input"
-                placeholder="ex : iPhone, Tablette salon"
+                placeholder="e.g. iPhone, living-room tablet"
                 maxlength="100"
                 required
               />
@@ -177,7 +177,7 @@
 
             <div class="form-actions mt-4">
               <UiButton variant="primary" type="submit" :loading="creatingToken">
-                Générer
+                Generate
               </UiButton>
             </div>
           </form>
@@ -187,12 +187,12 @@
               <div class="api-token-info">
                 <span class="api-token-label">{{ token.label }}</span>
                 <span class="api-token-meta">
-                  Créé le {{ formatTokenDate(token.createdAt) }} ·
-                  {{ token.lastUsedAt ? `Utilisé le ${formatTokenDate(token.lastUsedAt)}` : 'Jamais utilisé' }}
+                  Created {{ formatTokenDate(token.createdAt) }} ·
+                  {{ token.lastUsedAt ? `Last used ${formatTokenDate(token.lastUsedAt)}` : 'Never used' }}
                 </span>
               </div>
               <UiButton variant="danger" :loading="revokingTokenId === token.id" @click="handleRevokeToken(token.id)">
-                Révoquer
+                Revoke
               </UiButton>
             </div>
           </div>
@@ -342,7 +342,7 @@ const handleCreateToken = async () => {
     await fetchApiTokens();
   } catch (err: any) {
     tokenSuccess.value = false;
-    tokenMessage.value = err.data?.statusMessage || 'La création du jeton a échoué.';
+    tokenMessage.value = err.data?.statusMessage || 'Failed to create the token.';
   } finally {
     creatingToken.value = false;
   }
@@ -360,7 +360,7 @@ const copyNewToken = async () => {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(newToken.value);
-      copyMessage.value = 'Jeton copié.';
+      copyMessage.value = 'Token copied.';
       return;
     }
   } catch (e) {
@@ -375,14 +375,14 @@ const copyNewToken = async () => {
     selection?.addRange(range);
     try {
       if (document.execCommand('copy')) {
-        copyMessage.value = 'Jeton copié.';
+        copyMessage.value = 'Token copied.';
         return;
       }
     } catch (e) {
       // leave the text selected for a manual copy
     }
   }
-  copyMessage.value = 'Copie automatique impossible : le jeton est sélectionné, copiez-le avec Ctrl+C (ou Cmd+C).';
+  copyMessage.value = 'Automatic copy failed: the token is selected, copy it with Ctrl+C (or Cmd+C).';
 };
 
 const dismissNewToken = () => {
@@ -391,7 +391,7 @@ const dismissNewToken = () => {
 };
 
 const handleRevokeToken = async (tokenId: string) => {
-  if (!confirm('Révoquer ce jeton ? Toute application qui l\'utilise perdra immédiatement l\'accès.')) {
+  if (!confirm('Revoke this token? Any app using it will immediately lose access.')) {
     return;
   }
   revokingTokenId.value = tokenId;
@@ -406,7 +406,7 @@ const handleRevokeToken = async (tokenId: string) => {
 };
 
 const formatTokenDate = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleDateString('fr-FR', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 onMounted(() => {

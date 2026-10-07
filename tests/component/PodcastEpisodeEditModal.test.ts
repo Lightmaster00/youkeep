@@ -108,7 +108,7 @@ describe('PodcastEpisodeEditModal', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('emits "close" when the Annuler button is clicked', async () => {
+  it('emits "close" when the Cancel button is clicked', async () => {
     const wrapper = await mountSuspended(PodcastEpisodeEditModal, {
       props: { show: true, episode: EPISODE }
     });

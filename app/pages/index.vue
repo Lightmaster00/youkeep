@@ -13,7 +13,7 @@
       :title="emptyHomeCopy.title"
       :description="emptyHomeCopy.description"
       icon="video"
-      :action-text="auth.isLoggedIn.value ? 'Ouvrir mon compte' : undefined"
+      :action-text="auth.isLoggedIn.value ? 'Open my account' : undefined"
       action-route="/account"
     />
 
@@ -152,8 +152,8 @@ const homeFullyHidden = computed(() => isHomeFullyHidden(displayPrefs.value, aut
 
 // A guest cannot change preferences: the admin hid everything, so say that instead.
 const emptyHomeCopy = computed(() => auth.isLoggedIn.value
-  ? { title: 'Ton accueil est vide', description: "Tu as masqué le bloc vedette et toutes les sections. Réactive-en dans les préférences d'affichage de ton compte." }
-  : { title: 'Accueil vide', description: "L'administrateur a masqué toutes les sections de l'accueil de cette instance." });
+  ? { title: 'Your home is empty', description: "You hid the featured block and all sections. Turn some back on in your account's display preferences." }
+  : { title: 'Home is empty', description: "The administrator has hidden every home section on this instance." });
 const route = useRoute();
 const router = useRouter();
 
@@ -274,7 +274,7 @@ const formatViews = (views: number | null): string => {
 const formatUploadDate = (dateStr: string | null): string => {
   if (!dateStr || dateStr.length !== 8) return '';
   const y = dateStr.slice(0, 4), mo = dateStr.slice(4, 6), d = dateStr.slice(6, 8);
-  return new Date(+y, +mo - 1, +d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(+y, +mo - 1, +d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 </script>
 
