@@ -9,7 +9,7 @@ import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlock
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { resolveVideoPaths, locateDownloadedFiles, removeVideoFiles } from './videoPaths';
+import { resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, type VideoPaths } from './videoPaths';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -121,6 +121,32 @@ const keepFilesOnExit: Set<string> = _g[G_KEEP_FILES_ON_EXIT];
 export function cleanupAfterFailedExit(videoId: string, channelId: string): void {
   if (keepFilesOnExit.delete(videoId)) return;
   cleanupPartialFiles(videoId, channelId);
+}
+
+/**
+ * Called when yt-dlp exits with a non-zero code. With --ignore-errors, yt-dlp
+ * exits 1 after a non-fatal error (a subtitle, thumbnail or comment request
+ * that failed) even when the video itself was fully downloaded and merged.
+ * Returns true when that finished video file is there: it is kept and the
+ * download is finalized as a success. Otherwise removes this attempt's
+ * partial files (as before) and returns false. A process killed by a signal
+ * (cancel, pause, timeout: code null) never counts as finished.
+ */
+export function keepFinishedOutputAfterError(videoId: string, channelId: string, code: number | null, paths: VideoPaths): boolean {
+  if (code !== null && code !== 0) {
+    const { videoFile } = locateDownloadedFiles(paths);
+    let finished = false;
+    try {
+      const stat = videoFile ? fs.lstatSync(videoFile) : null;
+      finished = !!stat && stat.isFile() && stat.size > 0;
+    } catch {}
+    if (finished) {
+      keepFilesOnExit.delete(videoId);
+      return true;
+    }
+  }
+  cleanupAfterFailedExit(videoId, channelId);
+  return false;
 }
 
 export function getActiveDownloadCount(): number { return _g[G_ACTIVE_DOWNLOAD_COUNT]; }
@@ -883,7 +909,11 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
       clearTimeout(watchdog);
       activeProcesses.delete(videoId);
       if (settled) return; // Already resolved/rejected by watchdog or error handler
-      if (code === 0) {
+      const keptAfterError = code !== 0 && keepFinishedOutputAfterError(videoId, channelId, code, paths);
+      if (keptAfterError) {
+        addLog(`yt-dlp [${videoId}] exited with code ${code} but the video file is complete: keeping it${lastStderr ? ` (last error: ${lastStderr})` : ''}.`);
+      }
+      if (code === 0 || keptAfterError) {
         // Locate what yt-dlp wrote in the video's own folder (mp4, webm, mkv, ...
         // and jpg, webp, png, ... thumbnails).
         const found = locateDownloadedFiles(paths);
@@ -1008,8 +1038,8 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
           settle(() => reject(dbErr));
         }
       } else {
+        // keepFinishedOutputAfterError already removed this attempt's partial files.
         const errorMsg = lastStderr ? `yt-dlp failed (code ${code}): ${lastStderr}` : `yt-dlp failed with code ${code}`;
-        cleanupAfterFailedExit(videoId, channelId);
         settle(() => reject(new Error(errorMsg)));
       }
     });
