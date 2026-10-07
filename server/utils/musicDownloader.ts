@@ -5,11 +5,11 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { getDataDir } from './dataDir';
-import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, sanitizeFolderName, isDirWritable, isFfmpegAvailable } from './downloader';
+import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, isFfmpegAvailable } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { isContained, removeEntityFolder } from './videoPaths';
+import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -90,7 +90,7 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts
   const db = getDb();
   const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
   const basePath = getMusicDownloadsDir();
-  const artistDir = path.join(basePath, sanitizeFolderName(artist?.name || artistId));
+  const artistDir = path.join(basePath, entityFolderName(artist?.name, artistId));
 
   // A name like '..', '.' or blank must never point at the base folder or above.
   if (!isContained(basePath, artistDir) || !fs.existsSync(artistDir)) return;
@@ -149,9 +149,9 @@ export function deleteMusicArtist(artistId: string, opts: { baseDir?: string } =
   const others = db.prepare('SELECT id, name FROM music_artists').all() as { id: string; name: string }[];
   removeEntityFolder({
     baseDir: opts.baseDir ?? getMusicDownloadsDir(),
-    folder: sanitizeFolderName(artist.name || artistId),
+    folder: entityFolderName(artist.name, artistId),
     ownIds: tracks.map((t) => t.id),
-    otherFolders: others.map((o) => sanitizeFolderName(o.name || o.id)),
+    otherFolders: others.map((o) => entityFolderName(o.name, o.id)),
     label: `Artist "${artist.name}"`,
   });
 
@@ -349,7 +349,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
       }
 
       const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
-      const folderName = sanitizeFolderName(artist?.name || artistId);
+      const folderName = entityFolderName(artist?.name, artistId);
       const baseDir = getMusicDownloadsDir();
       const artistDir = path.join(baseDir, folderName);
 
@@ -572,7 +572,7 @@ export async function downloadTrackClip(trackId: string): Promise<void> {
 
     if (previousFilePath) {
       const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(track.artist_id) as { name: string } | undefined;
-      const folderName = sanitizeFolderName(artist?.name || track.artist_id);
+      const folderName = entityFolderName(artist?.name, track.artist_id);
       const artistDir = path.join(getMusicDownloadsDir(), folderName);
       const previousAudioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
       for (const ext of previousAudioExtensions) {

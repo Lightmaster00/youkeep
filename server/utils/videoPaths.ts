@@ -52,6 +52,23 @@ function channelSegment(channelFolder: string): string {
   return !cleaned || cleaned === '.' || cleaned === '..' ? '_' : cleaned;
 }
 
+/**
+ * The folder `<base>/<folder>` of a music artist or podcast show, used to
+ * download, serve, clean up and delete its files. It is the name as
+ * sanitizeFolderName has always made it, unchanged for every name that is a
+ * real folder name (existing libraries keep working). A name that would not
+ * stay strictly inside the base folder (blank, '.', '..', which sanitizing
+ * cannot fix) is replaced by the entity's id: stable, so every caller finds
+ * the same folder. Like channelSegment, '_' is the last resort.
+ */
+export function entityFolderName(name: string | null | undefined, id: string): string {
+  const usable = (folder: string) => folder !== '' && folder !== '.' && folder !== '..';
+  const fromName = sanitizeFolderName(name || id);
+  if (usable(fromName)) return fromName;
+  const fromId = sanitizeFolderName(id ?? '');
+  return usable(fromId) ? fromId : '_';
+}
+
 // encodeURIComponent leaves ! ' ( ) * as is; they break unquoted CSS url(...).
 function encodeSegment(value: string): string {
   return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);

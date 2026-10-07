@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
+import { entityFolderName } from '../../utils/videoPaths';
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const downloadsDir = getMusicDownloadsDir();
-  const artistDir = path.resolve(downloadsDir, sanitizeFolderName(track.artist_name || track.artist_id));
+  const artistDir = path.resolve(downloadsDir, entityFolderName(track.artist_name, track.artist_id));
   const resolvedPath = path.resolve(artistDir, fileName);
 
   // Containment check: resolvedPath must stay inside artistDir.

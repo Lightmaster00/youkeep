@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
+import { entityFolderName } from '../../utils/videoPaths';
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -67,10 +68,10 @@ export default defineEventHandler(async (event) => {
   }
 
   // Resolve the show directory the same way downloadEpisodeFile built it —
-  // sanitizeFolderName(show.title || showId) — rather than trusting the
+  // entityFolderName(show.title, showId) — rather than trusting the
   // stored local_file_path, which is a URL path, not a filesystem path.
   const downloadsDir = getPodcastDownloadsDir();
-  const showDir = path.resolve(downloadsDir, sanitizeFolderName(episode.show_title || episode.show_id));
+  const showDir = path.resolve(downloadsDir, entityFolderName(episode.show_title, episode.show_id));
   const resolvedPath = path.resolve(showDir, fileName);
 
   // Containment check: resolvedPath must stay inside showDir.

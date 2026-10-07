@@ -7,10 +7,10 @@ import Parser from 'rss-parser';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { getDataDir } from './dataDir';
-import { addLog, sanitizeFolderName, isDirWritable } from './downloader';
+import { addLog, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { isContained, removeEntityFolder } from './videoPaths';
+import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -92,7 +92,7 @@ export function cleanupPartialPodcastFiles(episodeId: string, showId: string, op
   const db = getDb();
   const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
   const basePath = getPodcastDownloadsDir();
-  const showDir = path.join(basePath, sanitizeFolderName(show?.title || showId));
+  const showDir = path.join(basePath, entityFolderName(show?.title, showId));
 
   // A name like '..', '.' or blank must never point at the base folder or above.
   if (!isContained(basePath, showDir) || !fs.existsSync(showDir)) return;
@@ -154,9 +154,9 @@ export function deletePodcastShow(showId: string, opts: { baseDir?: string } = {
   const others = db.prepare('SELECT id, title FROM podcast_shows').all() as { id: string; title: string }[];
   removeEntityFolder({
     baseDir: opts.baseDir ?? getPodcastDownloadsDir(),
-    folder: sanitizeFolderName(show.title || showId),
+    folder: entityFolderName(show.title, showId),
     ownIds: episodes.map((e) => e.id),
-    otherFolders: others.map((o) => sanitizeFolderName(o.title || o.id)),
+    otherFolders: others.map((o) => entityFolderName(o.title, o.id)),
     label: `Show "${show.title}"`,
   });
 
@@ -434,7 +434,7 @@ function formatEta(seconds: number): string {
  * (unlike videos/music_tracks) — this deliberately does not write a file
  * size anywhere; only local_file_path is recorded on success.
  */
-function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
+export function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
   const attemptStartedAt = Date.now();
   return new Promise<void>(async (resolve, reject) => {
     const db = getDb();
@@ -469,7 +469,7 @@ function downloadEpisodeFile(episodeId: string, showId: string): Promise<void> {
       }
 
       const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
-      const folderName = sanitizeFolderName(show?.title || showId);
+      const folderName = entityFolderName(show?.title, showId);
       const baseDir = getPodcastDownloadsDir();
       const showDir = path.join(baseDir, folderName);
       if (!fs.existsSync(showDir)) {

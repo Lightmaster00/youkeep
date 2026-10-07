@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import path from 'path';
 import {
-  videoBaseName, buildVideoPaths, isContained, idFromVideoFolder, isNewLayoutUrl, decodeUrlSegments, candidateVideoDirs, VIDEO_BASENAME_MAX_BYTES,
+  videoBaseName, buildVideoPaths, isContained, idFromVideoFolder, isNewLayoutUrl, decodeUrlSegments, candidateVideoDirs, VIDEO_BASENAME_MAX_BYTES, entityFolderName,
 } from '../../server/utils/videoPaths';
 import { sanitizeFolderName } from '../../server/utils/downloader';
 
@@ -99,5 +99,24 @@ describe('isContained', () => {
     expect(isContained('/a', '/a')).toBe(false);
     expect(isContained('/a', '/a/../b')).toBe(false);
     expect(isContained('/a', '/ab')).toBe(false);
+  });
+});
+
+describe('entityFolderName', () => {
+  it('keeps every real folder name exactly as sanitizeFolderName made it', () => {
+    for (const name of ['Band', 'AC/DC', ' Spaced ', 'Beyoncé', '...', '.hidden', 'a..b', 'Who?']) {
+      expect(entityFolderName(name, 'id1')).toBe(sanitizeFolderName(name));
+    }
+  });
+
+  it('falls back to the id for a name that would not stay inside the base folder', () => {
+    for (const name of ['..', '.', '', '   ', ' .. ', null, undefined]) {
+      expect(entityFolderName(name, 'artist-42')).toBe('artist-42');
+    }
+  });
+
+  it('falls back to "_" when the id is degenerate too', () => {
+    expect(entityFolderName('..', '..')).toBe('_');
+    expect(entityFolderName('', '')).toBe('_');
   });
 });
