@@ -101,6 +101,36 @@ describe('ensurePodcastPubTs (migration)', () => {
     expect(() => ensurePodcastPubTs(old)).not.toThrow();
     expect(pubTs(old).a).toBe(42);
   });
+
+  const backfillScans = (d: Database.Database) => {
+    const spy = vi.spyOn(d, 'prepare');
+    ensurePodcastPubTs(d);
+    const n = spy.mock.calls.filter(([sql]) => /SELECT\s+id,\s*pub_date\s+FROM\s+podcast_episodes/i.test(String(sql))).length;
+    spy.mockRestore();
+    return n;
+  };
+
+  it('backfills once: a later startup does not re-scan, even with unparsable rows left', () => {
+    const old = legacyDb();
+    expect(backfillScans(old)).toBe(1);
+    expect(pubTs(old)).toEqual({ a: Date.parse('2026-10-06T10:00:00Z'), b: null, c: null });
+    // 'b' (garbage) still has a pub_date and a NULL pub_ts, yet no rescan happens.
+    expect(backfillScans(old)).toBe(0);
+    expect(backfillScans(old)).toBe(0);
+  });
+
+  it('a DB that has the flag is left alone; one without it is still filled', () => {
+    const old = legacyDb();
+    ensurePodcastPubTs(old);
+    old.prepare("INSERT INTO podcast_episodes (id, show_id, title, pub_date, created_at) VALUES ('d', 's', 'D', '2026-10-01T00:00:00Z', 4)").run();
+    ensurePodcastPubTs(old);
+    expect(pubTs(old).d).toBeNull(); // flag set: no second pass (ingest sets pub_ts for new rows)
+
+    const fresh = legacyDb();
+    fresh.exec('CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    ensurePodcastPubTs(fresh);
+    expect(pubTs(fresh).a).toBe(Date.parse('2026-10-06T10:00:00Z'));
+  });
 });
 
 describe('ingestPodcastFeed', () => {
