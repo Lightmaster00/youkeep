@@ -7,6 +7,8 @@ import {
   mergePrefs,
   applyChange,
   buildView,
+  HOME_SECTION_IDS,
+  GUEST_HOME_SECTIONS,
 } from '../../shared/displayPrefs';
 
 describe('validatePartial', () => {
@@ -38,6 +40,8 @@ describe('validatePartial', () => {
     [{ homeSections: 'recent' }, 'homeSections'],
     [{ homeSections: ['recent', 'bogus'] }, 'homeSections'],
     [{ homeSections: ['recent', 'recent'] }, 'homeSections'],
+    [{ homeSections: ['recentMusic', 'recentMusic'] }, 'homeSections'],
+    [{ homeSections: ['recentmusic'] }, 'homeSections'],
     [{ hiddenNavLinks: 'shorts' }, 'hiddenNavLinks'],
     [{ hiddenNavLinks: ['/'] }, 'hiddenNavLinks'],
     [{ hiddenNavLinks: [1] }, 'hiddenNavLinks'],
@@ -47,6 +51,30 @@ describe('validatePartial', () => {
     [[], 'body'],
   ])('rejects %j (key %s)', (input, key) => {
     expect(() => validatePartial(input)).toThrow(expect.objectContaining({ name: 'InvalidPrefError', key }));
+  });
+});
+
+describe('music and podcast home sections', () => {
+  it('accepts recentMusic and newEpisodes in any order, mixed with the video sections', () => {
+    expect(validatePartial({ homeSections: ['newEpisodes', 'recent', 'recentMusic'] }).set)
+      .toEqual({ homeSections: ['newEpisodes', 'recent', 'recentMusic'] });
+    expect(HOME_SECTION_IDS).toEqual(['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes']);
+  });
+
+  it('keeps them out of the app default so stored and inherited prefs do not change silently', () => {
+    expect(APP_DEFAULTS.homeSections).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
+    expect(buildView({}, {}).effective.homeSections).not.toContain('recentMusic');
+    expect(buildView({}, {}).effective.homeSections).not.toContain('newEpisodes');
+  });
+
+  it('lets guests see them (visibility rules still apply server side)', () => {
+    expect(GUEST_HOME_SECTIONS).toContain('recentMusic');
+    expect(GUEST_HOME_SECTIONS).toContain('newEpisodes');
+  });
+
+  it('keeps a stored list containing them when read back', () => {
+    expect(parseStoredPartial(JSON.stringify({ homeSections: ['recentMusic', 'popular'] })))
+      .toEqual({ homeSections: ['recentMusic', 'popular'] });
   });
 });
 

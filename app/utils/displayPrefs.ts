@@ -1,4 +1,4 @@
-import { GUEST_HOME_SECTIONS, HIDEABLE_NAV_LINKS } from '#shared/displayPrefs';
+import { GUEST_HOME_SECTIONS, HIDEABLE_NAV_LINKS, MEDIA_HOME_SECTION_MODULE } from '#shared/displayPrefs';
 import type { DisplayPrefs, LandingSpace } from '#shared/displayPrefs';
 import type { ModuleId } from './moduleRouting';
 
@@ -28,12 +28,18 @@ export function resolveLandingTarget(landing: LandingSpace, enabled: ModuleId[])
   return home === '/' ? null : home;
 }
 
-// True when nothing at all is configured to appear on the video home for this viewer.
+// True when nothing at all is configured to appear on the home for this viewer.
+// When `enabled` is given, the music/podcast rows of a module that is off do not count.
 export function isHomeFullyHidden(
   prefs: Pick<DisplayPrefs, 'homeHero' | 'homeSections'>,
-  loggedIn: boolean
+  loggedIn: boolean,
+  enabled?: ModuleId[]
 ): boolean {
   if (prefs.homeHero) return false;
-  const visible = loggedIn ? prefs.homeSections : prefs.homeSections.filter((id) => GUEST_HOME_SECTIONS.includes(id));
+  const visible = prefs.homeSections.filter((id) => {
+    if (!loggedIn && !GUEST_HOME_SECTIONS.includes(id)) return false;
+    const module = MEDIA_HOME_SECTION_MODULE[id];
+    return !(module && enabled && !enabled.includes(module));
+  });
   return visible.length === 0;
 }

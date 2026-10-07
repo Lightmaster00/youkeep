@@ -3,6 +3,8 @@ import { getRecommendedVideos } from '../../utils/recommend';
 import { getUserFromSession } from '../../utils/auth';
 import type { UserSession } from '../../utils/auth';
 import { getDisplayView } from '../../utils/displayPrefsStore';
+import { isModuleEnabled } from '../../utils/modules';
+import { queryRecentEpisodes, queryRecentTracks } from '../../utils/recentMedia';
 import { APP_DEFAULTS } from '../../../shared/displayPrefs';
 import type { DisplayPrefs, HomeSectionId, PopularRanking } from '../../../shared/displayPrefs';
 
@@ -53,6 +55,8 @@ const SECTION_TITLES: Record<HomeSectionId, string> = {
   popular: 'Popular',
   suggested: 'Suggested for you',
   subscriptions: 'By followed channel',
+  recentMusic: 'Recently added music',
+  newEpisodes: 'New podcast episodes',
 };
 
 const POPULAR_ORDER: Record<PopularRanking, string> = {
@@ -218,6 +222,18 @@ export default defineEventHandler(async (event) => {
       return subscriptionChannels.length > 0
         ? { id: 'subscriptions', title: SECTION_TITLES.subscriptions, channels: subscriptionChannels }
         : null;
+    },
+    // Music and podcast rows: never share ids with the video sections, so no
+    // claim(); a module that is off contributes nothing.
+    recentMusic: () => {
+      if (!isModuleEnabled(db, 'music')) return null;
+      const tracks = queryRecentTracks(db, session, rowSize).items;
+      return tracks.length > 0 ? { id: 'recentMusic', title: SECTION_TITLES.recentMusic, tracks } : null;
+    },
+    newEpisodes: () => {
+      if (!isModuleEnabled(db, 'podcasts')) return null;
+      const episodes = queryRecentEpisodes(db, session, rowSize).items;
+      return episodes.length > 0 ? { id: 'newEpisodes', title: SECTION_TITLES.newEpisodes, episodes } : null;
     },
   };
 

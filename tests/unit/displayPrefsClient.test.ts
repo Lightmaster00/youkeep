@@ -62,4 +62,16 @@ describe('isHomeFullyHidden', () => {
   ] as const)('%j (loggedIn=%s) → %s', (prefs, loggedIn, expected) => {
     expect(isHomeFullyHidden({ homeHero: prefs.homeHero, homeSections: [...prefs.homeSections] }, loggedIn)).toBe(expected);
   });
+
+  it('counts the music and podcast rows, for guests too', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['recentMusic'] }, false)).toBe(false);
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['newEpisodes'] }, false)).toBe(false);
+  });
+
+  it('ignores a row whose module is off when the enabled modules are given', () => {
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['recentMusic', 'newEpisodes'] }, true, ['video'])).toBe(true);
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['recentMusic'] }, true, ['video', 'music'])).toBe(false);
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['newEpisodes'] }, true, ['video', 'podcasts'])).toBe(false);
+    expect(isHomeFullyHidden({ homeHero: false, homeSections: ['newEpisodes'] }, true, ['video', 'music'])).toBe(true);
+  });
 });

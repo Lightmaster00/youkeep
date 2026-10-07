@@ -8,14 +8,21 @@ export const DENSITIES: readonly Density[] = ['compact', 'comfortable', 'spaciou
 export const LANDING_SPACES: readonly LandingSpace[] = ['auto', 'video', 'music', 'podcasts'];
 export const HIDEABLE_NAV_LINKS = ['/shorts', '/channels', '/subscriptions', '/playlists'] as const;
 
-export type HomeSectionId = 'recent' | 'popular' | 'suggested' | 'subscriptions';
+export type HomeSectionId = 'recent' | 'popular' | 'suggested' | 'subscriptions' | 'recentMusic' | 'newEpisodes';
 export type PopularRanking = 'localViewers' | 'youtubeViews' | 'trending7d' | 'watchTime';
 
-export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['recent', 'popular', 'suggested', 'subscriptions'];
+export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes'];
 // Sections a logged-out visitor can see (the others need a user). The server
 // mirrors this by returning null for guests in the suggested/subscriptions
 // builders of server/api/home/feed.get.ts: update both together.
-export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['recent', 'popular'];
+// recentMusic/newEpisodes are listed because guests may see public content;
+// the music/podcast visibility rules still filter what they get.
+export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['recent', 'popular', 'recentMusic', 'newEpisodes'];
+// The home rows that belong to a module other than Video (hidden when it is off).
+export const MEDIA_HOME_SECTION_MODULE: Readonly<Partial<Record<HomeSectionId, 'music' | 'podcasts'>>> = {
+  recentMusic: 'music',
+  newEpisodes: 'podcasts',
+};
 export const POPULAR_RANKINGS: readonly PopularRanking[] = ['localViewers', 'youtubeViews', 'trending7d', 'watchTime'];
 export const ROW_SIZES: readonly number[] = [10, 15, 20, 30];
 export const SUBSCRIPTION_CHANNEL_COUNTS: readonly number[] = [4, 8, 12, 16];
@@ -38,6 +45,9 @@ export const PREF_KEYS: readonly PrefKey[] = [
   'homeSections', 'homeHero', 'popularRanking', 'rowSize', 'subscriptionChannels',
 ];
 
+// The default home list leaves out recentMusic/newEpisodes on purpose: an install that
+// never stored homeSections inherits this list, so adding them here would
+// change existing users' homes without anyone choosing it. They are opt-in.
 export const APP_DEFAULTS: DisplayPrefs = {
   density: 'comfortable',
   hiddenNavLinks: [],
