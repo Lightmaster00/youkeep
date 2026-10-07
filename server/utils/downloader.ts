@@ -1601,8 +1601,17 @@ export async function ingestUrl(
 }
 
 /**
- * Iterates through all channels, sets them to 'downloading',
- * runs yt-dlp metadata ingestion for each, and triggers the queue worker.
+ * Channels a sync-all re-checks: only the followed ones. A channel an admin
+ * paused (or a passive reference channel, created paused) is left paused:
+ * sync-all never resumes it.
+ */
+export function listChannelsToSync(db: any): { id: string; title: string }[] {
+  return db.prepare("SELECT id, title FROM channels WHERE sync_status = 'downloading'").all() as { id: string; title: string }[];
+}
+
+/**
+ * Re-checks every followed channel (see listChannelsToSync) with yt-dlp
+ * metadata ingestion, then triggers the queue worker.
  */
 export async function syncAllChannels(): Promise<void> {
   const db = getDb();
@@ -1612,18 +1621,11 @@ export async function syncAllChannels(): Promise<void> {
     activeFlagSettingKey: 'sync_all_active',
     pausedSettingKey: 'downloader_paused',
     moduleId: 'video',
-    fetchEntities: () => {
-      // Video-only pre-loop step: mark every channel as actively downloading before
-      // listing them. This runs inside runSyncAllEntities's try block (via this
-      // closure), same as it did in the original inline function, so it's still
-      // covered by the outer fatal-error catch and still runs after the
-      // 'sync_all_active' flag is set to '1'. syncAllMusicArtists has no equivalent
-      // blanket update — it sets each artist's sync_status individually inside
-      // processEntity instead (see Task 5).
-      db.prepare("UPDATE channels SET sync_status = 'downloading'").run();
-      return db.prepare("SELECT id, title FROM channels").all() as { id: string; title: string }[];
-    },
+    fetchEntities: () => listChannelsToSync(db),
     processEntity: async (ch) => {
+      // Paused by an admin since the list was read: leave it paused.
+      const current = db.prepare('SELECT sync_status FROM channels WHERE id = ?').get(ch.id) as { sync_status: string | null } | undefined;
+      if (current?.sync_status !== 'downloading') return;
       console.log(`Updating channel: ${ch.title} (${ch.id})`);
       const url = `https://www.youtube.com/channel/${ch.id}`;
       try {

@@ -795,6 +795,14 @@ export function resetStalePodcastDownloads() {
  * episodes, then starts the download queue for anything newly pending.
  * Mirrors syncAllMusicArtists/syncAllChannels.
  */
+/**
+ * Shows a sync-all re-checks: only the followed ones. A show an admin paused
+ * is left paused: sync-all never resumes it.
+ */
+export function listPodcastShowsToSync(db: any): { id: string; title: string; feed_url: string }[] {
+  return db.prepare("SELECT id, title, feed_url FROM podcast_shows WHERE sync_status = 'downloading'").all() as { id: string; title: string; feed_url: string }[];
+}
+
 export async function syncAllPodcastShows(): Promise<void> {
   const db = getDb();
 
@@ -803,10 +811,12 @@ export async function syncAllPodcastShows(): Promise<void> {
     activeFlagSettingKey: 'podcast_sync_all_active',
     pausedSettingKey: 'podcast_downloader_paused',
     moduleId: 'podcasts',
-    fetchEntities: () => db.prepare('SELECT id, title, feed_url FROM podcast_shows').all() as { id: string; title: string; feed_url: string }[],
+    fetchEntities: () => listPodcastShowsToSync(db),
     processEntity: async (show) => {
+      // Paused by an admin since the list was read: leave it paused.
+      const current = db.prepare('SELECT sync_status FROM podcast_shows WHERE id = ?').get(show.id) as { sync_status: string | null } | undefined;
+      if (current?.sync_status !== 'downloading') return;
       addLog(`Resyncing podcast: ${show.title} (${show.id})`);
-      db.prepare("UPDATE podcast_shows SET sync_status = 'downloading' WHERE id = ?").run(show.id);
 
       try {
         const result = await ingestPodcastFeed(show.feed_url);

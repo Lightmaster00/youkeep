@@ -73,6 +73,7 @@ export function createTestDb(): Database.Database {
       visibility TEXT DEFAULT 'public',
       avatar_url TEXT,
       custom_save_path TEXT,
+      sync_status TEXT DEFAULT 'paused',
       created_at INTEGER NOT NULL
     );
 
@@ -131,6 +132,7 @@ export function createTestDb(): Database.Database {
 
     CREATE TABLE music_artists (
       id TEXT PRIMARY KEY,
+      channel_id TEXT UNIQUE,
       name TEXT NOT NULL,
       description TEXT,
       avatar_url TEXT,

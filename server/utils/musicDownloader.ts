@@ -832,6 +832,14 @@ export function resetStaleMusicDownloads() {
  * tracks, then starts the download queue for anything newly pending.
  * Mirrors syncAllChannels in downloader.ts.
  */
+/**
+ * Artists a sync-all re-checks: only the followed ones. An artist an admin
+ * paused is left paused: sync-all never resumes it.
+ */
+export function listMusicArtistsToSync(db: any): { id: string; name: string; channel_id: string }[] {
+  return db.prepare("SELECT id, name, channel_id FROM music_artists WHERE channel_id IS NOT NULL AND sync_status = 'downloading'").all() as { id: string; name: string; channel_id: string }[];
+}
+
 export async function syncAllMusicArtists(): Promise<void> {
   const db = getDb();
 
@@ -840,13 +848,12 @@ export async function syncAllMusicArtists(): Promise<void> {
     activeFlagSettingKey: 'music_sync_all_active',
     pausedSettingKey: 'music_downloader_paused',
     moduleId: 'music',
-    fetchEntities: () => db.prepare("SELECT id, name, channel_id FROM music_artists WHERE channel_id IS NOT NULL").all() as { id: string; name: string; channel_id: string }[],
+    fetchEntities: () => listMusicArtistsToSync(db),
     processEntity: async (artist) => {
-      addLog(`Resynchronisation de l'artiste : ${artist.name} (${artist.id})`);
-      // Per-artist sync_status write, done here inside processEntity rather than as a
-      // single blanket pre-loop UPDATE (contrast with syncAllChannels in downloader.ts,
-      // Task 4) — this matches the original inline loop body exactly.
-      db.prepare("UPDATE music_artists SET sync_status = 'downloading' WHERE id = ?").run(artist.id);
+      // Paused by an admin since the list was read: leave it paused.
+      const current = db.prepare('SELECT sync_status FROM music_artists WHERE id = ?').get(artist.id) as { sync_status: string | null } | undefined;
+      if (current?.sync_status !== 'downloading') return;
+      addLog(`Resyncing artist: ${artist.name} (${artist.id})`);
 
       const url = `https://www.youtube.com/channel/${artist.channel_id}`;
       try {

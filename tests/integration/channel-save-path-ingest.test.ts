@@ -17,7 +17,7 @@ beforeEach(() => {
   db = createTestDb();
   // The shared test schema has only the columns most tests need; add the follow options ones.
   for (const col of ['description TEXT', 'banner_url TEXT', 'download_videos INTEGER DEFAULT 1', 'download_shorts INTEGER DEFAULT 0',
-    'download_lives INTEGER DEFAULT 0', 'date_after TEXT', "sync_status TEXT DEFAULT 'paused'"]) db.exec(`ALTER TABLE channels ADD COLUMN ${col}`);
+    'download_lives INTEGER DEFAULT 0', 'date_after TEXT']) db.exec(`ALTER TABLE channels ADD COLUMN ${col}`);
   (globalThis as any).getDb = () => db;
   (globalThis as any).requireAdmin = async () => ({ id: 'admin', role: 'admin' });
 });
