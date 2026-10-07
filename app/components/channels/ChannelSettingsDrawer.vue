@@ -74,7 +74,7 @@
 
         <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); margin: 8px 0;" />
 
-        <!-- Supprimer -->
+        <!-- Delete -->
         <div style="margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 16px;">
           <button
             @click="handleDeleteChannel"
