@@ -6,26 +6,6 @@
         <NuxtLink to="/" class="logo">
           <span class="logo-you">You</span><span class="logo-keep">Keep</span>
         </NuxtLink>
-
-        <div v-if="!user?.mustChangePassword" class="space-switcher" :class="{ 'is-active': spaceMenuOpen }" @click.stop="toggleSpaceMenu">
-          <i class="space-switcher-icon" v-html="activeSpace.icon"></i>
-          <span class="space-switcher-label">{{ activeSpace.label }}</span>
-          <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-
-          <div v-if="spaceMenuOpen" class="dropdown-menu space-menu" @click.stop>
-            <div
-              v-for="space in visibleSpaces"
-              :key="space.id"
-              class="dropdown-item space-menu-item"
-              :class="{ active: space.id === activeSpace.id }"
-              @click="selectSpace(space.homeRoute)"
-            >
-              <i class="space-switcher-icon" v-html="space.icon"></i>
-              {{ space.label }}
-              <span v-if="!isEnabled(space.id)" class="badge badge-failed" style="margin-left: auto;">Désactivé</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="header-center">
@@ -61,7 +41,7 @@
               class="search-dropdown-clear"
               @mousedown.prevent="onClearHistory"
             >
-              Effacer
+              Clear
             </div>
           </div>
         </form>
@@ -110,17 +90,27 @@
       <aside class="sidebar">
         <div class="sidebar-inner">
           <nav class="sidebar-nav">
-            <NuxtLink
-              v-for="link in visibleNavLinks"
-              v-show="!link.hideWhenMustChangePassword || !user?.mustChangePassword"
-              :key="link.to"
-              :to="link.to"
-              class="sidebar-link"
-              active-class="active"
+            <div
+              v-for="group in sidebarGroups"
+              :key="group.id"
+              class="sidebar-group"
+              :class="{ 'is-off': !group.enabled }"
             >
-              <i class="sidebar-link-icon" v-html="link.icon"></i>
-              <span>{{ link.label }}</span>
-            </NuxtLink>
+              <div class="sidebar-divider-title">
+                {{ group.label }}
+                <span v-if="!group.enabled" class="badge badge-failed">Off</span>
+              </div>
+              <NuxtLink
+                v-for="link in group.links"
+                :key="link.to"
+                :to="link.to"
+                class="sidebar-link"
+                active-class="active"
+              >
+                <i class="sidebar-link-icon" v-html="link.icon"></i>
+                <span>{{ link.label }}</span>
+              </NuxtLink>
+            </div>
           </nav>
         </div>
       </aside>
@@ -161,7 +151,8 @@ import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { spaces } from '~/spaces';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
-import { filterNavLinks, shouldApplyLanding } from '~/utils/displayPrefs';
+import { shouldApplyLanding } from '~/utils/displayPrefs';
+import { buildSidebarGroups } from '~/utils/sidebarGroups';
 
 const { user, isAdmin, logout } = useAuth();
 const displayPrefs = useDisplayPrefs();
@@ -171,7 +162,6 @@ const { currentTrack } = useMusicPlayer();
 const { currentEpisode } = usePodcastPlayer();
 const { restoreActiveType } = useActiveMiniPlayer();
 const dropdownOpen = ref(false);
-const spaceMenuOpen = ref(false);
 const searchQuery = ref('');
 const { get: getSearchHistory, add: addSearchHistory, clear: clearSearchHistory } = useSearchHistory();
 const { suggestions, fetchSuggestions } = useSearchSuggestions();
@@ -254,20 +244,21 @@ function onClearHistory() {
 
 const router = useRouter();
 const route = useRoute();
-const { enabledModules, isEnabled, refresh: refreshModules } = useModules();
+const { enabledModules, refresh: refreshModules } = useModules();
 const activeSpace = computed(() => {
   const id = resolveActiveSpaceId(route.path, isAdmin.value, enabledModules.value);
   return spaces.find((s) => s.id === id) ?? spaces[0]!;
 });
 
-// Navigation links the current user chose to show (Home and the library links are never hideable).
-const visibleNavLinks = computed(() =>
-  filterNavLinks(activeSpace.value.navLinks, displayPrefs.effective.value.hiddenNavLinks)
-);
-
-// Non-admins only see enabled modules; admins see all, disabled ones carry a badge.
-const visibleSpaces = computed(() =>
-  spaces.filter((s) => isAdmin.value || isEnabled(s.id))
+// One sidebar: every space is a group. Disabled modules are hidden from users
+// and shown dimmed (Off) to admins; hidden-link prefs apply to the Video group.
+const sidebarGroups = computed(() =>
+  buildSidebarGroups(spaces, {
+    isAdmin: isAdmin.value,
+    enabled: enabledModules.value,
+    hiddenNavLinks: displayPrefs.effective.value.hiddenNavLinks,
+    mustChangePassword: !!user.value?.mustChangePassword,
+  })
 );
 
 // Fill search query on mount if present in URL
@@ -298,23 +289,11 @@ watch(() => route.query.q, (newVal) => {
 
 const toggleDropdown = () => {
   dropdownOpen.value = !dropdownOpen.value;
-  spaceMenuOpen.value = false;
-};
-
-const toggleSpaceMenu = () => {
-  spaceMenuOpen.value = !spaceMenuOpen.value;
-  dropdownOpen.value = false;
-};
-
-const selectSpace = (homeRoute: string) => {
-  spaceMenuOpen.value = false;
-  navigateTo(homeRoute);
 };
 
 // Close dropdown if clicked outside
 const closeDropdown = () => {
   dropdownOpen.value = false;
-  spaceMenuOpen.value = false;
 };
 onMounted(() => {
   window.addEventListener('click', closeDropdown);
@@ -454,41 +433,6 @@ onUnmounted(() => {
   margin-left: 4px;
   font-weight: 600;
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
-}
-
-.space-switcher {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 16px;
-  padding: 6px 14px 6px 10px;
-  border-radius: 40px;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.space-switcher:hover,
-.space-switcher.is-active {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(139, 92, 246, 0.3);
-  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.15);
-}
-
-.space-switcher.is-active .dropdown-arrow {
-  transform: rotate(180deg);
-  color: var(--accent-primary-hover);
-}
-
-.space-switcher-icon {
-  display: flex;
-  align-items: center;
-  color: var(--text-secondary);
 }
 
 .search-form {
@@ -723,20 +667,6 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.space-menu {
-  top: 44px;
-  left: 0;
-  right: auto;
-  width: 200px;
-}
-
-.space-menu-item.active {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-  border-left: 2px solid var(--accent-primary);
-  padding-left: 18px;
-}
-
 .logout-btn {
   color: #ef4444;
 }
@@ -833,13 +763,32 @@ onUnmounted(() => {
   color: white;
 }
 
+.sidebar-group + .sidebar-group {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-group.is-off {
+  opacity: 0.5;
+}
+
 .sidebar-divider-title {
-  padding: 24px 24px 8px 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  padding: 16px 16px 6px 16px;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.1em;
+}
+
+.sidebar-inner:hover .sidebar-divider-title {
+  opacity: 1;
 }
 
 .content-area {
@@ -865,9 +814,6 @@ onUnmounted(() => {
     box-shadow: none;
   }
   .sidebar-link span, .sidebar-divider-title {
-    display: none;
-  }
-  .space-switcher-label {
     display: none;
   }
   .sidebar-link {
