@@ -433,13 +433,66 @@ export async function startQueueWorker() {
 }
 
 /**
+ * Records a download attempt that ended in an error. The attempt may have been
+ * ended on purpose while it ran: a pause (status set back to 'pending', or the
+ * global pause) keeps it queued with its progress; an admin cancel (status set
+ * to 'failed' by cancelDownload) leaves it failed, so the worker does not
+ * restart it until the admin retries it. Otherwise it is a genuine failure:
+ * re-queued at the end of the queue, or marked failed after MAX_RETRY_COUNT.
+ */
+export function recordFailedAttempt(videoId: string, videoTitle: string, errMsg: string): void {
+  const db = getDb();
+  const MAX_RETRY_COUNT = 3;
+  addLog(`Download FAILED for video "${videoTitle}" (${videoId}): ${errMsg}`);
+
+  const currentVideo = db.prepare('SELECT download_status, retry_count FROM videos WHERE id = ?').get(videoId) as { download_status: string; retry_count: number | null } | undefined;
+  const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
+  const isPausedGlobal = pausedSetting?.value === '1';
+
+  if (currentVideo?.download_status === 'failed') {
+    addLog(`Download of video "${videoTitle}" (${videoId}) was cancelled; it stays failed until it is retried.`);
+    return;
+  }
+
+  if (isPausedGlobal || currentVideo?.download_status === 'pending') {
+    addLog(`Download of video "${videoTitle}" (${videoId}) was interrupted or intentionally paused.`);
+    // Ensure status is pending, speed/eta are null, but preserve progress and files.
+    // This is a deliberate interruption, not a genuine failure — retry_count is untouched.
+    db.prepare(`
+      UPDATE videos
+      SET download_status = 'pending', download_speed = null, download_eta = null
+      WHERE id = ?
+    `).run(videoId);
+  } else {
+    const nextRetryCount = (currentVideo?.retry_count ?? 0) + 1;
+    if (nextRetryCount >= MAX_RETRY_COUNT) {
+      // Exhausted retries — mark failed and stop consuming queue turns. Not requeued
+      // (created_at is not bumped), so the queue worker's `WHERE download_status = 'pending'`
+      // query will never pick this row up again until an explicit retry-failed request.
+      db.prepare(`
+        UPDATE videos
+        SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, retry_count = ?
+        WHERE id = ?
+      `).run(errMsg, nextRetryCount, videoId);
+      addLog(`Video "${videoTitle}" (${videoId}) permanently marked as failed after ${nextRetryCount} attempts.`);
+    } else {
+      // Put the video back to pending but move it to the end of the queue by updating created_at
+      db.prepare(`
+        UPDATE videos
+        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, created_at = ?, retry_count = ?
+        WHERE id = ?
+      `).run(errMsg, Date.now(), nextRetryCount, videoId);
+    }
+  }
+}
+
+/**
  * Runs a single video download to completion and updates its DB status accordingly.
  * Deliberately not awaited by the orchestrator loop in startQueueWorker: a failure or
  * long runtime here is isolated to this video and never blocks other concurrent downloads.
  */
 async function runSingleDownload(videoId: string, videoTitle: string, channelId: string): Promise<void> {
   const db = getDb();
-  const MAX_RETRY_COUNT = 3;
   try {
     await downloadVideoFile(videoId, channelId);
 
@@ -451,44 +504,7 @@ async function runSingleDownload(videoId: string, videoTitle: string, channelId:
     `).run(videoId);
     addLog(`Download SUCCEEDED: "${videoTitle}"`);
   } catch (err: any) {
-    const errMsg = err.message || String(err);
-    addLog(`Download FAILED for video "${videoTitle}" (${videoId}): ${errMsg}`);
-
-    // Check if the download was interrupted intentionally (e.g. paused/cancelled via API or global paused setting)
-    const currentVideo = db.prepare('SELECT download_status, retry_count FROM videos WHERE id = ?').get(videoId) as { download_status: string; retry_count: number | null } | undefined;
-    const pausedSetting = db.prepare("SELECT value FROM settings WHERE key = 'downloader_paused'").get() as { value: string } | undefined;
-    const isPausedGlobal = pausedSetting?.value === '1';
-
-    if (isPausedGlobal || currentVideo?.download_status === 'pending') {
-      addLog(`Download of video "${videoTitle}" (${videoId}) was interrupted or intentionally paused.`);
-      // Ensure status is pending, speed/eta are null, but preserve progress and files.
-      // This is a deliberate interruption, not a genuine failure — retry_count is untouched.
-      db.prepare(`
-        UPDATE videos
-        SET download_status = 'pending', download_speed = null, download_eta = null
-        WHERE id = ?
-      `).run(videoId);
-    } else {
-      const nextRetryCount = (currentVideo?.retry_count ?? 0) + 1;
-      if (nextRetryCount >= MAX_RETRY_COUNT) {
-        // Exhausted retries — mark failed and stop consuming queue turns. Not requeued
-        // (created_at is not bumped), so the queue worker's `WHERE download_status = 'pending'`
-        // query will never pick this row up again until an explicit retry-failed request.
-        db.prepare(`
-          UPDATE videos
-          SET download_status = 'failed', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, retry_count = ?
-          WHERE id = ?
-        `).run(errMsg, nextRetryCount, videoId);
-        addLog(`Video "${videoTitle}" (${videoId}) permanently marked as failed after ${nextRetryCount} attempts.`);
-      } else {
-        // Put the video back to pending but move it to the end of the queue by updating created_at
-        db.prepare(`
-          UPDATE videos
-          SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, created_at = ?, retry_count = ?
-          WHERE id = ?
-        `).run(errMsg, Date.now(), nextRetryCount, videoId);
-      }
-    }
+    recordFailedAttempt(videoId, videoTitle, err.message || String(err));
     // Brief pause so a rapidly-failing video isn't immediately re-picked; scoped to this
     // video's own task so it doesn't block the orchestrator or other concurrent downloads.
     await new Promise(resolve => setTimeout(resolve, 2000));
