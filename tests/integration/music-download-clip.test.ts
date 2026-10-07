@@ -60,13 +60,14 @@ describe('POST /api/admin/music/tracks/[id]/download-clip', () => {
     insertMusicArtist(db, { id: 'a1' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', hasClip: false });
     const cookie = loginAs('admin1', 'admin');
+    // Never the real download (it would run yt-dlp); it settles on the next tick.
+    vi.spyOn(musicDownloader, 'downloadTrackClip').mockImplementation(() => new Promise((resolve) => setTimeout(resolve, 0)));
 
     const first = handler(eventFor('t1', cookie));
     await expect(handler(eventFor('t1', cookie))).rejects.toMatchObject({ statusCode: 409 });
 
-    // Let the first request's fire-and-forget downloadTrackClip settle (it will
-    // fail fast in this test environment since yt-dlp isn't real) so it doesn't
-    // leak the reservation into a later test.
+    // Let the first request's fire-and-forget downloadTrackClip settle so it
+    // doesn't leak the reservation into a later test.
     await first;
     await new Promise((resolve) => setTimeout(resolve, 50));
   });

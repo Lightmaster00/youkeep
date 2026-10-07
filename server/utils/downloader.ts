@@ -1124,7 +1124,10 @@ export function upsertIngestedChannel(
     dateAfter: string | null; customSavePath: string | null;
   },
   options: { sync_status?: string; visibility?: string; download_videos?: number; download_shorts?: number; download_lives?: number; date_after?: string | null },
-): void {
+): { savePathKept: boolean } {
+  const existing = db.prepare('SELECT custom_save_path FROM channels WHERE id = ?').get(row.id) as { custom_save_path: string | null } | undefined;
+  // A folder typed for a channel that is already followed is not applied: say so.
+  const savePathKept = !!existing && !!row.customSavePath && row.customSavePath.trim() !== (existing.custom_save_path ?? '').trim();
   db.prepare(`
     INSERT INTO channels (
       id, title, description, avatar_url, banner_url,
@@ -1153,6 +1156,7 @@ export function upsertIngestedChannel(
     options.download_lives !== undefined ? options.download_lives : null,
     options.date_after !== undefined ? options.date_after : null,
   );
+  return { savePathKept };
 }
 
 export async function ingestUrl(
@@ -1167,7 +1171,7 @@ export async function ingestUrl(
     visibility?: string;
     custom_save_path?: string | null;
   } = {}
-): Promise<{ success: boolean; message: string; count: number }> {
+): Promise<{ success: boolean; message: string; count: number; savePathKept?: boolean }> {
   const db = getDb();
   
   // If this is a base channel URL, split it into videos and shorts calls to ensure we retrieve everything.
@@ -1177,7 +1181,7 @@ export async function ingestUrl(
     console.log(`Base channel URL detected: ${baseUrl}. Ingesting requested tabs...`);
     
     // First ingest metadata to register/update the channel
-    await ingestUrl(baseUrl, { ...options, channelMetadataOnly: true });
+    const metadata = await ingestUrl(baseUrl, { ...options, channelMetadataOnly: true });
 
     let videosCount = 0;
     let shortsCount = 0;
@@ -1214,7 +1218,8 @@ export async function ingestUrl(
     return {
       success: true,
       message: msg,
-      count: videosCount + shortsCount
+      count: videosCount + shortsCount,
+      ...(metadata.savePathKept ? { savePathKept: true } : {}),
     };
   }
 
@@ -1393,7 +1398,7 @@ export async function ingestUrl(
     const dateAfter = options.date_after !== undefined ? options.date_after : null;
     const customSavePath = options.custom_save_path !== undefined ? options.custom_save_path : null;
 
-    upsertIngestedChannel(db, {
+    const { savePathKept } = upsertIngestedChannel(db, {
       id: channelId, title: channelTitle, description: channelDesc, avatarUrl, bannerUrl,
       syncStatus: initialSyncStatus, visibility: initialVisibility, downloadVideos: dlVideos, downloadShorts: dlShorts,
       downloadLives: dlLives, dateAfter, customSavePath,
@@ -1403,7 +1408,8 @@ export async function ingestUrl(
       return { 
         success: true, 
         message: `Channel metadata for "${channelTitle}" has been updated.`, 
-        count: 0 
+        count: 0,
+        ...(savePathKept ? { savePathKept: true } : {}),
       };
     }
 
@@ -1512,7 +1518,8 @@ export async function ingestUrl(
     return { 
       success: true, 
       message: `Channel/playlist "${channelTitle}" has been imported. ${syncNote}`, 
-      count: videosAdded 
+      count: videosAdded,
+      ...(savePathKept ? { savePathKept: true } : {}),
     };
   } 
   

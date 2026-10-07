@@ -134,12 +134,14 @@ async function runLibraryWipeInternal(): Promise<void> {
   const shows = db.prepare('SELECT id, title FROM podcast_shows').all() as { id: string; title: string }[];
 
   const total = channels.length + artists.length + shows.length;
+  // Every one of these channels goes: their folders need not be kept for each other.
+  const wipedChannelIds = new Set(channels.map((c) => c.id));
   let index = 0;
 
   for (const c of channels) {
     index += 1;
     _g[G_WIPE_PROGRESS] = { type: 'channel', name: c.title, index, total };
-    outcomes.push(deleteChannelForWipe(c.id, c.title));
+    outcomes.push(deleteChannelForWipe(c.id, c.title, wipedChannelIds));
     // Every delete call above is fully synchronous (better-sqlite3 and
     // fs.rmSync are both sync APIs) — without this yield, this whole "async"
     // function would run to completion on the first tick with no actual
@@ -174,7 +176,7 @@ async function runLibraryWipeInternal(): Promise<void> {
 // Mirrors channels/[id].delete.ts's exact logic (custom_save_path aware),
 // but as a plain function rather than an HTTP route, since the wipe loop
 // needs to call it many times without going through H3.
-function deleteChannelForWipe(channelId: string, title: string): WipeOutcome {
+function deleteChannelForWipe(channelId: string, title: string, wipedChannelIds: Set<string>): WipeOutcome {
   const db = getDb();
   try {
     const videos = db.prepare('SELECT id FROM videos WHERE channel_id = ?').all(channelId) as { id: string }[];
@@ -184,7 +186,7 @@ function deleteChannelForWipe(channelId: string, title: string): WipeOutcome {
     } | undefined;
     // Resolved before the rows are deleted (it reads the videos' stored paths).
     const files = channel
-      ? prepareChannelFilesRemoval(db, channelId, { baseDir: resolveChannelBaseDir(channel.custom_save_path), downloadsDir: getDownloadsDir() })
+      ? prepareChannelFilesRemoval(db, channelId, { baseDir: resolveChannelBaseDir(channel.custom_save_path), downloadsDir: getDownloadsDir(), excludeChannelIds: wipedChannelIds })
       : null;
 
     for (const v of videos) {

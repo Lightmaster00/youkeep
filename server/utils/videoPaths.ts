@@ -374,33 +374,106 @@ export function listSubtitleFiles(loc: StoredVideoLocation): { code: string; fil
 }
 
 /**
+ * Where the music and podcast downloaders write: the defaults and local
+ * fallbacks of getMusicDownloadsDir / getPodcastDownloadsDir. Listed here
+ * (not computed by calling them: they create folders) so a video channel
+ * folder that happens to be one of them is never removed recursively.
+ */
+export function musicAndPodcastRoots(): string[] {
+  return [
+    '/downloads/music',
+    '/downloads/podcasts',
+    path.resolve(process.cwd(), 'data/downloads-music'),
+    path.resolve(process.cwd(), 'data/downloads-podcasts'),
+  ];
+}
+
+/**
+ * A path in a form that compares equal for every way of naming one folder:
+ * the real path of its deepest existing part (symlinks and aliases resolved),
+ * then the rest as written; no trailing separator; lower case (folders that
+ * differ only by case are the same folder on case-insensitive disks and SMB).
+ */
+function comparablePath(p: string): string {
+  const resolved = path.resolve(p);
+  const rest: string[] = [];
+  let probe = resolved;
+  let real = resolved;
+  for (;;) {
+    try {
+      real = path.join(fs.realpathSync(probe), ...rest);
+      break;
+    } catch {
+      const parent = path.dirname(probe);
+      if (parent === probe) {
+        real = resolved;
+        break;
+      }
+      rest.unshift(path.basename(probe));
+      probe = parent;
+    }
+  }
+  const trimmed = real.length > 1 ? real.replace(/[\\/]+$/, '') : real;
+  return trimmed.toLowerCase();
+}
+
+/** True when `child` is `parent` itself or inside it, however either is spelled. */
+function sameOrInsideFolder(parent: string, child: string): boolean {
+  const a = comparablePath(parent);
+  const b = comparablePath(child);
+  return a === b || b.startsWith(a.endsWith(path.sep) ? a : a + path.sep);
+}
+
+/**
  * Prepares removing a channel's files from disk. Call it BEFORE the channel's
  * rows are deleted (it reads them), then call `remove()` afterwards.
- * - Removes `<base>/<Channel>` recursively, but only when that folder is
- *   strictly inside the base folder: a title like `..`, `.` or blank never
- *   points the removal at the base folder or above it.
- * - Also removes the videos a partly repaired doubled channel folder already
- *   moved up to `<base>/<Title> [<id>]` (outside `<base>/<Channel>`), with the
- *   same rules as deleting one video: only its own files, then its folder if
- *   empty; never anything else in the base folder.
+ * - `<base>/<Channel>` is only ever touched when it is strictly inside the base
+ *   folder: a title like `..`, `.` or blank never points at the base or above.
+ * - It is removed recursively only when it holds no one else's files: when
+ *   another channel's base or channel folder (outside `excludeChannelIds`), the
+ *   default downloads folder, or a music/podcast download root is that folder
+ *   or inside it, only this channel's own video files and folders are removed,
+ *   and the channel folder itself only if it is then empty.
+ * - Videos a partly repaired doubled channel folder already moved up to
+ *   `<base>/<Title> [<id>]` are removed with the rules of deleting one video.
  */
 export function prepareChannelFilesRemoval(
   db: Database.Database,
   channelId: string,
-  opts: { baseDir: string; downloadsDir?: string },
+  opts: { baseDir: string; downloadsDir?: string; excludeChannelIds?: Set<string>; protectedRoots?: string[] },
 ): { channelDir: string; remove(): { removedChannelDir: boolean; skippedReason: string | null } } {
   const channel = db.prepare('SELECT title FROM channels WHERE id = ?').get(channelId) as { title: string | null } | undefined;
   const baseDir = path.resolve(opts.baseDir);
+  const downloadsDir = opts.downloadsDir ?? getDownloadsDir();
   const channelFolder = sanitizeFolderName(channel?.title || channelId);
   const channelDir = path.resolve(baseDir, channelFolder);
   const rows = db.prepare('SELECT id, channel_id, title, local_video_path FROM videos WHERE channel_id = ?').all(channelId) as
     { id: string; channel_id: string; title: string | null; local_video_path: string | null }[];
-  const movedUp: StoredVideoLocation[] = [];
-  for (const row of rows) {
-    if (!row.local_video_path || !isNewLayoutUrl(row.local_video_path, row.id)) continue;
-    const loc = resolveStoredPath(db, row, { downloadsDir: opts.downloadsDir });
-    if (path.dirname(loc.dir) === loc.baseDir && path.basename(loc.baseDir) === channelFolder) movedUp.push(loc);
-  }
+  const locations = rows.map((row) => resolveStoredPath(db, row, { downloadsDir }));
+  const movedUp = locations.filter((loc, i) => !!rows[i]!.local_video_path && loc.layout === 'new'
+    && path.dirname(loc.dir) === loc.baseDir && path.basename(loc.baseDir) === channelFolder);
+  const ids = new Set(rows.map((row) => row.id));
+
+  /** Why `channelDir` may hold someone else's files, or null. */
+  const sharedReason = (): string | null => {
+    const roots = [downloadsDir, ...(opts.protectedRoots ?? musicAndPodcastRoots())];
+    if (roots.some((root) => sameOrInsideFolder(channelDir, root))) return 'a download root is that folder or inside it';
+    const others = db.prepare('SELECT id, title, custom_save_path FROM channels WHERE id != ?').all(channelId) as
+      { id: string; title: string | null; custom_save_path: string | null }[];
+    for (const other of others) {
+      if (opts.excludeChannelIds?.has(other.id)) continue;
+      const folder = sanitizeFolderName(other.title || other.id);
+      // Where it reads (its save folder) and where the downloader writes when that
+      // folder is not writable (the default folder). Not resolveChannelBaseDir:
+      // it creates missing folders.
+      const bases = [channelReadBaseDir(other.custom_save_path, downloadsDir), downloadsDir];
+      if (bases.some((base) => sameOrInsideFolder(channelDir, base) || sameOrInsideFolder(channelDir, path.join(base, folder)))) {
+        return `channel "${other.title || other.id}" keeps its files there`;
+      }
+    }
+    return null;
+  };
+
   return {
     channelDir,
     remove() {
@@ -411,6 +484,26 @@ export function prepareChannelFilesRemoval(
         return { removedChannelDir: false, skippedReason };
       }
       if (!fs.existsSync(channelDir)) return { removedChannelDir: false, skippedReason: null };
+      const shared = sharedReason();
+      if (shared) {
+        // Only this channel's own files: its video folders, then its legacy <id>.* files.
+        for (const loc of locations) if (loc.layout === 'new') removeVideoFiles(loc);
+        try {
+          for (const entry of fs.readdirSync(channelDir)) {
+            const id = entry.slice(0, Math.max(0, entry.indexOf('.')));
+            const file = path.join(channelDir, entry);
+            if (ids.has(id) && isVideoArtifactName(id, entry) && isRegularFile(file)) {
+              try { fs.unlinkSync(file); } catch (err) { console.error(`Failed to delete video file ${file}:`, err); }
+            }
+          }
+          fs.rmdirSync(channelDir); // only when nothing else is left in it
+          return { removedChannelDir: true, skippedReason: null };
+        } catch (err: any) {
+          if (err?.code !== 'ENOTEMPTY' && err?.code !== 'EEXIST') console.error(`Failed to clean channel directory ${channelDir}:`, err);
+          console.warn(`Channel ${channelId}: ${channelDir} kept because ${shared}; only this channel's own files were removed.`);
+          return { removedChannelDir: false, skippedReason: `the folder is shared: ${shared}` };
+        }
+      }
       try {
         fs.rmSync(channelDir, { recursive: true, force: true });
         return { removedChannelDir: true, skippedReason: null };

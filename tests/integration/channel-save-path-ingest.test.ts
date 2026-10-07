@@ -24,11 +24,12 @@ beforeEach(() => {
 
 describe('channel save path on follow', () => {
   it('is set when a channel is first followed, kept when it is followed again, and changed only by the options route', async () => {
-    upsertIngestedChannel(db, row('new', '/data/videos'), {});
+    expect(upsertIngestedChannel(db, row('new', '/data/videos'), {})).toEqual({ savePathKept: false });
     expect(savePath('new')).toBe('/data/videos');
+    expect(upsertIngestedChannel(db, row('new', '/data/videos'), {})).toEqual({ savePathKept: false }); // same folder again
 
     insertChannel(db, { id: 'old', title: 'Chan', customSavePath: '/data/videos/Chan' });
-    upsertIngestedChannel(db, row('old', '/data/videos'), { sync_status: 'downloading' });
+    expect(upsertIngestedChannel(db, row('old', '/data/videos'), { sync_status: 'downloading' })).toEqual({ savePathKept: true });
     expect(savePath('old')).toBe('/data/videos/Chan');
     expect((db.prepare('SELECT sync_status FROM channels WHERE id = ?').get('old') as any).sync_status).toBe('downloading');
 

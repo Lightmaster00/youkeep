@@ -1,4 +1,26 @@
 import Database from 'better-sqlite3';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+/**
+ * Every test database's default downloads folder: a temporary folder, so code
+ * that falls back to the default downloads folder (getDownloadsDir,
+ * resolveChannelBaseDir) can never point at the developer's real media.
+ */
+export const TEST_DOWNLOADS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'yk-test-downloads-'));
+process.on('exit', () => {
+  try { fs.rmSync(TEST_DOWNLOADS_DIR, { recursive: true, force: true }); } catch {}
+});
+
+/** Throws unless `p` is inside the system temporary folder (tests must never touch real files). */
+export function assertInTmp(p: string): void {
+  const tmp = fs.realpathSync(os.tmpdir());
+  let probe = path.resolve(p);
+  while (!fs.existsSync(probe) && path.dirname(probe) !== probe) probe = path.dirname(probe);
+  const real = fs.realpathSync(probe);
+  if (real !== tmp && !real.startsWith(tmp + path.sep)) throw new Error(`Test path outside the temporary folder: ${p}`);
+}
 
 // Minimal schema mirroring server/utils/db.ts — only the tables/columns the
 // access-control logic under test actually touches.
@@ -198,6 +220,7 @@ export function createTestDb(): Database.Database {
     );
   `);
 
+  db.prepare("INSERT INTO settings (key, value) VALUES ('default_downloads_dir', ?)").run(TEST_DOWNLOADS_DIR);
   return db;
 }
 

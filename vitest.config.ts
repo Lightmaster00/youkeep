@@ -11,7 +11,9 @@ export default defineConfig({
         test: {
           name: 'server',
           environment: 'node',
-          include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts']
+          include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+          // Keeps every server test away from the real database and media folders.
+          setupFiles: ['tests/setup/server.ts'],
         }
       },
       await defineVitestProject({

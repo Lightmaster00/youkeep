@@ -324,11 +324,14 @@ async function follow(target: string, raw: any | null): Promise<boolean> {
   if (adding.value) return false;
   adding.value = true;
   try {
-    await $fetch(props.config.ingestEndpoint, {
+    const result = await $fetch<{ savePathKept?: boolean } | null>(props.config.ingestEndpoint, {
       method: 'POST',
       body: props.config.buildIngestBody(target, options, raw),
     });
     toast.success(`Now following ${raw ? props.config.toResultView(raw).title : target}.`);
+    if (result?.savePathKept) {
+      toast.info('Channel already followed: its save folder was not changed. Use Edit options to change it.', 8000);
+    }
     await loadFollowing();
     return true;
   } catch (err: any) {

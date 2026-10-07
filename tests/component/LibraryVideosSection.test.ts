@@ -81,6 +81,19 @@ describe('LibrarySourceSection — Videos', () => {
     expect(w.find('[data-testid="follow-result-0"]').exists()).toBe(false);
   });
 
+  it('says when a channel already followed keeps its save folder', async () => {
+    searchPayload = { channels: [{ id: 'UC9', title: 'Followed' }] };
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, opts?: any) =>
+      url === '/api/admin/downloader/ingest' ? { success: true, message: 'ok', savePathKept: true } : base(url, opts));
+    const w = await mountVideos();
+    await search(w);
+    await w.find('[data-testid="option-save-folder"]').setValue('/mnt/other');
+    await w.find('[data-testid="follow-result-0"]').trigger('click');
+    await flushPromises();
+    expect(toastMessages()).toContain('Channel already followed: its save folder was not changed. Use Edit options to change it.');
+  });
+
   it('applies every option for new follows', async () => {
     searchPayload = { channels: [{ id: 'UC1', title: 'My Channel' }] };
     const w = await mountVideos();
