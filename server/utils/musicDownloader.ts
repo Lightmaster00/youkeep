@@ -786,7 +786,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
       UPDATE music_tracks
       SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?, retry_count = 0
       WHERE id = ?
-    `).run(clipFallbackError ? `Clip indisponible, repli sur l'audio seul : ${clipFallbackError}` : null, trackId);
+    `).run(clipFallbackError ? `Clip unavailable, falling back to audio only: ${clipFallbackError}` : null, trackId);
     addLog(`${result.hasClip ? 'Clip' : 'Audio'} download SUCCEEDED: "${trackTitle}"`);
   } catch (err: any) {
     recordFailedMusicAttempt(trackId, trackTitle, err.message || String(err));

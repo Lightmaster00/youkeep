@@ -108,16 +108,19 @@ export function nextPollDelay(states: Record<DownloadKind, TypeQueueState>): num
 }
 
 export function queueActionsFor(item: QueueItem): QueueAction[] {
+  // Failed items (including cancelled ones) can only be retried; podcasts have no cancel route.
+  if (item.status === 'failed') return ['retry'];
   if (item.kind === 'video') return item.status === 'pending' ? ['prioritize', 'cancel'] : ['cancel'];
   if (item.kind === 'music') return ['cancel'];
-  // Podcasts have no cancel route; failed episodes can be retried one by one.
-  return item.status === 'failed' ? ['retry'] : [];
+  return [];
 }
 
 export function queueActionRequest(item: QueueItem, action: QueueAction): { url: string; body?: Record<string, string> } {
   if (item.kind === 'video' && action === 'prioritize') return { url: '/api/admin/downloader/prioritize', body: { videoId: item.id } };
   if (item.kind === 'video' && action === 'cancel') return { url: '/api/admin/downloader/cancel', body: { videoId: item.id } };
   if (item.kind === 'music' && action === 'cancel') return { url: `/api/admin/music/tracks/${encodeURIComponent(item.id)}/cancel` };
+  if (item.kind === 'video' && action === 'retry') return { url: '/api/admin/downloader/retry-failed', body: { videoId: item.id } };
+  if (item.kind === 'music' && action === 'retry') return { url: '/api/admin/music/retry-failed', body: { trackId: item.id } };
   if (item.kind === 'podcast' && action === 'retry') return { url: '/api/admin/podcasts/retry-failed', body: { episodeId: item.id } };
   throw new Error(`Unsupported queue action "${action}" for ${item.kind}`);
 }

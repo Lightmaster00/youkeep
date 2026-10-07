@@ -85,7 +85,10 @@ describe('queue actions', () => {
   it('offers Prioritize for queued videos, Cancel for videos and music, Retry for failed podcasts', () => {
     expect(queueActionsFor(item('video', 'v', 'pending'))).toEqual(['prioritize', 'cancel']);
     expect(queueActionsFor(item('video', 'v', 'downloading'))).toEqual(['cancel']);
-    expect(queueActionsFor(item('music', 'm', 'failed'))).toEqual(['cancel']);
+    expect(queueActionsFor(item('music', 'm', 'failed'))).toEqual(['retry']);
+    expect(queueActionsFor(item('video', 'v', 'failed'))).toEqual(['retry']);
+    expect(queueActionRequest(item('video', 'v1', 'failed'), 'retry')).toEqual({ url: '/api/admin/downloader/retry-failed', body: { videoId: 'v1' } });
+    expect(queueActionRequest(item('music', 'm1', 'failed'), 'retry')).toEqual({ url: '/api/admin/music/retry-failed', body: { trackId: 'm1' } });
     expect(queueActionsFor(item('podcast', 'p', 'failed'))).toEqual(['retry']);
     expect(queueActionsFor(item('podcast', 'p', 'pending'))).toEqual([]);
   });
