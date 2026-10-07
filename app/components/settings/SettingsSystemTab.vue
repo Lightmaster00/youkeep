@@ -102,7 +102,7 @@
         <span class="system-chevron" aria-hidden="true"></span>
         <span class="system-summary-text">
           <span class="system-summary-title">Tools &amp; logs</span>
-          <span class="section-desc">Check and update the download engine (yt-dlp and FFmpeg) and read the server's recent log.</span>
+          <span class="section-desc">Check and update the download engine (yt-dlp and FFmpeg), tidy the video files on disk and read the server's recent log.</span>
         </span>
       </summary>
       <div class="system-tools-body">
@@ -157,6 +157,9 @@
       <h4>Update output:</h4>
       <pre class="diagnostic-pre mt-2">{{ updateConsoleOutput || 'Updating yt-dlp...' }}</pre>
     </div>
+
+    <TidyLibraryPanel class="mt-3" />
+
   <div class="logs-container glass-panel">
     <div class="logs-header">
       <div class="flex-align-center gap-10">
@@ -248,6 +251,7 @@
 import { ref, computed, watch, onUnmounted, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
+import TidyLibraryPanel from '~/components/settings/TidyLibraryPanel.vue';
 
 const toast = useToast();
 const WIPE_CONFIRM_WORD = 'DELETE';
