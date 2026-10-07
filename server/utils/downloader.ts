@@ -1111,6 +1111,50 @@ const MAX_PLAYLIST_IMPORT_SIZE = 500;
  * Metadata Ingestion
  * Fetches playlist/video/channel JSON from yt-dlp and writes it to DB.
  */
+/**
+ * Creates or updates a followed channel's row from an ingest. custom_save_path is
+ * only set when the row is created: following an existing channel again never
+ * changes where its files are read from (only the channel options route does).
+ */
+export function upsertIngestedChannel(
+  db: ReturnType<typeof getDb>,
+  row: {
+    id: string; title: string; description: string; avatarUrl: string | null; bannerUrl: string | null;
+    syncStatus: string; visibility: string; downloadVideos: number; downloadShorts: number; downloadLives: number;
+    dateAfter: string | null; customSavePath: string | null;
+  },
+  options: { sync_status?: string; visibility?: string; download_videos?: number; download_shorts?: number; download_lives?: number; date_after?: string | null },
+): void {
+  db.prepare(`
+    INSERT INTO channels (
+      id, title, description, avatar_url, banner_url,
+      sync_status, visibility, download_videos, download_shorts,
+      download_lives, date_after, custom_save_path, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      description = excluded.description,
+      avatar_url = COALESCE(excluded.avatar_url, avatar_url),
+      banner_url = COALESCE(excluded.banner_url, banner_url),
+      sync_status = COALESCE(?, sync_status),
+      visibility = COALESCE(?, visibility),
+      download_videos = COALESCE(?, download_videos),
+      download_shorts = COALESCE(?, download_shorts),
+      download_lives = COALESCE(?, download_lives),
+      date_after = COALESCE(?, date_after)
+  `).run(
+    row.id, row.title, row.description, row.avatarUrl, row.bannerUrl,
+    row.syncStatus, row.visibility, row.downloadVideos, row.downloadShorts, row.downloadLives, row.dateAfter, row.customSavePath, Date.now(),
+    options.sync_status !== undefined ? options.sync_status : null,
+    options.visibility !== undefined ? options.visibility : null,
+    options.download_videos !== undefined ? options.download_videos : null,
+    options.download_shorts !== undefined ? options.download_shorts : null,
+    options.download_lives !== undefined ? options.download_lives : null,
+    options.date_after !== undefined ? options.date_after : null,
+  );
+}
+
 export async function ingestUrl(
   url: string,
   options: {
@@ -1349,36 +1393,11 @@ export async function ingestUrl(
     const dateAfter = options.date_after !== undefined ? options.date_after : null;
     const customSavePath = options.custom_save_path !== undefined ? options.custom_save_path : null;
 
-    db.prepare(`
-      INSERT INTO channels (
-        id, title, description, avatar_url, banner_url, 
-        sync_status, visibility, download_videos, download_shorts, 
-        download_lives, date_after, custom_save_path, created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title,
-        description = excluded.description,
-        avatar_url = COALESCE(excluded.avatar_url, avatar_url),
-        banner_url = COALESCE(excluded.banner_url, banner_url),
-        sync_status = COALESCE(?, sync_status),
-        visibility = COALESCE(?, visibility),
-        download_videos = COALESCE(?, download_videos),
-        download_shorts = COALESCE(?, download_shorts),
-        download_lives = COALESCE(?, download_lives),
-        date_after = COALESCE(?, date_after),
-        custom_save_path = COALESCE(?, custom_save_path)
-    `).run(
-      channelId, channelTitle, channelDesc, avatarUrl, bannerUrl,
-      initialSyncStatus, initialVisibility, dlVideos, dlShorts, dlLives, dateAfter, customSavePath, Date.now(),
-      options.sync_status !== undefined ? options.sync_status : null,
-      options.visibility !== undefined ? options.visibility : null,
-      options.download_videos !== undefined ? options.download_videos : null,
-      options.download_shorts !== undefined ? options.download_shorts : null,
-      options.download_lives !== undefined ? options.download_lives : null,
-      options.date_after !== undefined ? options.date_after : null,
-      options.custom_save_path !== undefined ? options.custom_save_path : null
-    );
+    upsertIngestedChannel(db, {
+      id: channelId, title: channelTitle, description: channelDesc, avatarUrl, bannerUrl,
+      syncStatus: initialSyncStatus, visibility: initialVisibility, downloadVideos: dlVideos, downloadShorts: dlShorts,
+      downloadLives: dlLives, dateAfter, customSavePath,
+    }, options);
 
     if (options.channelMetadataOnly) {
       return { 

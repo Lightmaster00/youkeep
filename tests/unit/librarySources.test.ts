@@ -115,6 +115,8 @@ describe('videosSource', () => {
       visibility: 'public',
       custom_save_path: '/data/videos',
     });
+    // The default folder itself is not sent, so the channel keeps following the default.
+    expect(videosSource.buildIngestBody('u', { ...o, defaultFolder: '/data/videos/' }, raw)).not.toHaveProperty('custom_save_path');
   });
 
   it('passes every option, and the chosen folder as is, for a pasted URL', () => {

@@ -77,8 +77,7 @@ describe('LibrarySourceSection — Videos', () => {
       download_lives: false,
       sync_status: 'downloading',
       visibility: 'public',
-      custom_save_path: '/data/videos',
-    });
+    }); // the pre-filled default folder is not sent: the channel follows the default
     expect(w.find('[data-testid="follow-result-0"]').exists()).toBe(false);
   });
 

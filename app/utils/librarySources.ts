@@ -31,6 +31,8 @@ export interface FollowOptions {
   /** YYYY-MM-DD from <input type="date">, or ''. */
   dateAfter: string;
   saveFolder: string;
+  /** The current default save folder: a save folder equal to it is not sent, so the channel follows the default. */
+  defaultFolder: string;
 }
 
 export interface LibrarySourceConfig {
@@ -73,6 +75,7 @@ export function defaultFollowOptions(kind: SourceKind): FollowOptions {
     downloadLives: false,
     dateAfter: '',
     saveFolder: DEFAULT_SAVE_FOLDER,
+    defaultFolder: DEFAULT_SAVE_FOLDER,
   };
 }
 
@@ -224,8 +227,11 @@ export const videosSource: LibrarySourceConfig = {
   ingestEndpoint: '/api/admin/downloader/ingest',
   buildIngestBody: (target, options) => {
     // The base folder only: the downloader adds the channel folder and one
-    // folder per video inside it.
+    // folder per video inside it. Sent only when it differs from the default,
+    // so the channel keeps following the default folder (and a channel that is
+    // already followed keeps its folder: the server never rewrites it).
     const savePath = options.saveFolder.trim();
+    const custom = savePath && savePath.replace(/\/+$/, '') !== options.defaultFolder.trim().replace(/\/+$/, '') ? savePath : '';
     return {
       url: target,
       download_videos: options.downloadVideos,
@@ -234,7 +240,7 @@ export const videosSource: LibrarySourceConfig = {
       ...(options.dateAfter ? { date_after: options.dateAfter.replace(/-/g, '') } : {}),
       sync_status: options.autoSync ? 'downloading' : 'paused',
       visibility: options.visibility || 'public',
-      ...(savePath ? { custom_save_path: savePath } : {}),
+      ...(custom ? { custom_save_path: custom } : {}),
     };
   },
   listEndpoint: '/api/channels',

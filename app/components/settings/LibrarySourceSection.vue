@@ -214,6 +214,7 @@ async function loadDefaultFolder() {
   } catch {
     options.saveFolder = DEFAULT_SAVE_FOLDER;
   }
+  options.defaultFolder = options.saveFolder;
 }
 
 async function saveDefaultFolder() {
@@ -225,6 +226,7 @@ async function saveDefaultFolder() {
   savingDefaultFolder.value = true;
   try {
     await $fetch('/api/admin/downloader/default-dir', { method: 'POST', body: { path } });
+    options.defaultFolder = path;
     toast.success('Default save folder updated.');
   } catch (err: any) {
     toast.error(err?.data?.statusMessage || 'Could not save the default folder.');

@@ -40,6 +40,12 @@
         <p v-if="preview.duplicateFolders" class="section-desc">
           {{ preview.duplicateFolders }} channel(s) saved in a doubled folder (like "Channel/Channel") will be repaired.
         </p>
+        <div v-if="preview.channelNotes?.length" data-testid="tidy-channel-notes">
+          <p class="section-desc">These channels keep their save folder (their videos are still tidied inside it):</p>
+          <ul class="tidy-list">
+            <li v-for="note in preview.channelNotes" :key="note.channelId">{{ note.channel }}: {{ note.note }}</li>
+          </ul>
+        </div>
         <ul v-if="preview.samples.length" class="tidy-list">
           <li v-for="sample in preview.samples.slice(0, 10)" :key="sample.id"><code>{{ sample.from }}</code> &rarr; <code>{{ sample.to }}</code></li>
         </ul>
@@ -63,6 +69,7 @@ interface TidyPreview {
   total: number; toMove: number; alreadyTidy: number; conflicts: number; missingFiles: number; notWritable: number; duplicateFolders: number;
   samples: { id: string; title: string; from: string; to: string }[];
   channels: { channelId: string; channel: string; toMove: number }[];
+  channelNotes?: { channelId: string; channel: string; note: string }[];
 }
 interface TidyStatus {
   state: 'idle' | 'running' | 'done' | 'failed' | 'cancelled';

@@ -120,6 +120,11 @@ export function storedUrlSegments(url: string | null | undefined): [string, stri
   return segments ? [segments[0]!, segments[1]!, segments[2]!] : null;
 }
 
+/** The id as it appears between the brackets of a video folder name. */
+export function folderIdOf(id: string): string {
+  return cleanName(id) || '_';
+}
+
 /** The id between the last brackets of a video folder name (`<Title> [<id>]`). */
 export function idFromVideoFolder(folder: string): string | null {
   // Only the LAST `[...]` group counts; the id itself may contain brackets.

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
-import { buildVideoPaths, channelReadBaseDir, isNewLayoutUrl, storedUrlSegments } from './videoPaths';
+import { buildVideoPaths, channelReadBaseDir, folderIdOf, idFromVideoFolder, isContained, isNewLayoutUrl, storedUrlSegments } from './videoPaths';
 import { activeProcesses, addLog, sanitizeFolderName } from './downloader';
 import { isWipeInProgress } from './libraryWipe';
 
@@ -52,6 +52,8 @@ export interface TidyPreview {
   missingFiles: number;
   notWritable: number;
   duplicateFolders: number;
+  /** Channels whose save path ends with their own folder name but is NOT a doubled folder to repair. */
+  channelNotes: { channelId: string; channel: string; note: string }[];
   samples: { id: string; title: string; from: string; to: string }[];
   channels: { channelId: string; channel: string; toMove: number }[];
 }
@@ -225,14 +227,65 @@ function isDoubled(customPath: string | null, baseDir: string, channelFolder: st
   return !!(customPath && customPath.trim()) && path.basename(baseDir) === channelFolder;
 }
 
-function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache): Classified {
+/**
+ * Why a channel whose save path `<custom>` ends with its own folder name is NOT a
+ * genuine doubled folder (`<custom>/<Chan>/...`) that may be repaired, or null
+ * when it is one. Repairing moves its videos into `<custom>` itself and makes
+ * `<custom>` the channel folder (deleted as a whole with the channel), so it
+ * must belong to this channel alone:
+ * - no other channel's base or channel folder, nor the default downloads
+ *   folder, is `<custom>` or inside it;
+ * - `<custom>` holds nothing but the nested `<Chan>` folder and this channel's
+ *   own `[<id>]` video folders;
+ * - this channel's files really are there (nested folder or already moved).
+ */
+export function doubledRepairBlocker(db: Database.Database, channelId: string, customPath: string, downloadsDir: string, fsx: PlannerFs): string | null {
+  const custom = path.resolve(customPath);
+  const folder = path.basename(custom);
+  const overlaps = (p: string) => p === custom || isContained(custom, p);
+  if (overlaps(path.resolve(downloadsDir))) return 'the default downloads folder is inside it';
+  const others = db.prepare('SELECT id, title, custom_save_path FROM channels WHERE id != ?').all(channelId) as
+    { id: string; title: string | null; custom_save_path: string | null }[];
+  for (const other of others) {
+    const base = path.resolve(channelReadBaseDir(other.custom_save_path, downloadsDir));
+    if (overlaps(base) || overlaps(path.resolve(base, sanitizeFolderName(other.title || other.id)))) {
+      return 'it is shared with other channels';
+    }
+  }
+  const ids = (db.prepare('SELECT id FROM videos WHERE channel_id = ?').all(channelId) as { id: string }[]).map((r) => r.id);
+  const folderIds = new Set(ids.map(folderIdOf));
+  const rawIds = new Set(ids);
+  const isOwnVideoFolder = (entry: string) => {
+    const id = idFromVideoFolder(entry);
+    return id !== null && folderIds.has(id);
+  };
+  let entries: string[];
+  try {
+    entries = fsx.readdirSync(custom);
+  } catch {
+    return 'it cannot be read';
+  }
+  if (entries.some((entry) => entry !== folder && !isOwnVideoFolder(entry))) return 'it holds other files or folders';
+  if (entries.some(isOwnVideoFolder)) return null;
+  if (!entries.includes(folder)) return 'none of its files are there';
+  let nested: string[];
+  try {
+    nested = fsx.readdirSync(path.join(custom, folder));
+  } catch {
+    return 'it cannot be read';
+  }
+  const evidence = nested.some((entry) => rawIds.has(entry.slice(0, Math.max(0, entry.indexOf('.')))) || isOwnVideoFolder(entry));
+  return evidence ? null : 'none of its files are there';
+}
+
+function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache, repairable: boolean): Classified {
   const baseDir = path.resolve(channelReadBaseDir(row.customPath, downloadsDir));
   const channelFolder = sanitizeFolderName(row.channelTitle || row.channelId);
   const common = { id: row.id, title: row.title, channelId: row.channelId, channelTitle: row.channelTitle || row.channelId, oldVideoUrl: row.videoUrl, oldThumbUrl: row.thumbUrl };
 
   if (isNewLayoutUrl(row.videoUrl, row.id)) {
     const [channelSegment, videoFolder, fileName] = storedUrlSegments(row.videoUrl)!;
-    if (!isDoubled(row.customPath, baseDir, channelSegment)) return { status: 'tidy' };
+    if (!repairable || !isDoubled(row.customPath, baseDir, channelSegment)) return { status: 'tidy' };
     const finalDir = path.join(baseDir, videoFolder);
     if (fsx.existsSync(path.join(finalDir, fileName))) return { status: 'tidy' };
     const nestedDir = path.join(baseDir, channelSegment, videoFolder);
@@ -265,7 +318,7 @@ function classify(row: TidyRow, downloadsDir: string, fsx: PlanFsCache): Classif
   if (!fileName.startsWith(`${row.id}.`)) return { status: 'conflict' };
   if (isUnsafeFolderSegment(channelFolder)) return { status: 'conflict' };
   const srcDir = path.join(baseDir, channelFolder);
-  const doubled = isDoubled(row.customPath, baseDir, channelFolder);
+  const doubled = repairable && isDoubled(row.customPath, baseDir, channelFolder);
   const target = buildVideoPaths({ baseDir: doubled ? path.dirname(baseDir) : baseDir, channelFolder, title: row.title, id: row.id });
   const moves: TidyMove[] = [];
   // Set when a destination file already exists with a different size: never overwrite it.
@@ -327,19 +380,29 @@ function* planTidySteps(db: Database.Database, opts: { downloadsDir: string; fs?
 
   const preview: TidyPreview = {
     total: rows.length, toMove: 0, alreadyTidy: 0, conflicts: 0, missingFiles: 0, notWritable: 0, duplicateFolders: 0,
-    samples: [], channels: [],
+    channelNotes: [], samples: [], channels: [],
   };
   const items: TidyPlanItem[] = [];
   const perChannel = new Map<string, { channelId: string; channel: string; toMove: number }>();
   const fixes = new Map<string, TidyChannelFix>();
+  // Per channel: may its doubled-looking folder be repaired? (computed once)
+  const repairableByChannel = new Map<string, boolean>();
 
   for (const row of rows) {
     const baseDir = path.resolve(channelReadBaseDir(row.customPath, opts.downloadsDir));
-    if (isDoubled(row.customPath, baseDir, sanitizeFolderName(row.channelTitle || row.channelId)) && !fixes.has(row.channelId)) {
-      fixes.set(row.channelId, { channelId: row.channelId, from: row.customPath as string, to: path.dirname(baseDir) });
+    let repairable = repairableByChannel.get(row.channelId);
+    if (repairable === undefined) {
+      repairable = false;
+      if (row.customPath && isDoubled(row.customPath, baseDir, sanitizeFolderName(row.channelTitle || row.channelId))) {
+        const blocker = doubledRepairBlocker(db, row.channelId, row.customPath, opts.downloadsDir, fsx);
+        repairable = blocker === null;
+        if (repairable) fixes.set(row.channelId, { channelId: row.channelId, from: row.customPath, to: path.dirname(baseDir) });
+        else preview.channelNotes.push({ channelId: row.channelId, channel: row.channelTitle || row.channelId, note: `Its folder ${baseDir} is left as is: ${blocker}.` });
+      }
+      repairableByChannel.set(row.channelId, repairable);
     }
 
-    const result = classify(row, opts.downloadsDir, fsx);
+    const result = classify(row, opts.downloadsDir, fsx, repairable);
     if (result.status === 'tidy') preview.alreadyTidy++;
     else if (result.status === 'missing') preview.missingFiles++;
     else if (result.status === 'conflict') preview.conflicts++;
@@ -706,7 +769,7 @@ function channelRowsReady(rows: FixRow[], channelFolder: string): boolean {
  * is taken in one transaction that re-reads the rows (unchanged since the
  * probes) and compare-and-sets the old custom_save_path.
  */
-async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs): Promise<boolean> {
+async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: PlannerFs, downloadsDir: string): Promise<boolean> {
   const base = path.resolve(fix.from);
   const channelFolder = path.basename(base);
   const readRows = () => db.prepare('SELECT id, download_status AS status, local_video_path AS url FROM videos WHERE channel_id = ? ORDER BY id')
@@ -724,6 +787,8 @@ async function applyChannelFix(db: Database.Database, fix: TidyChannelFix, fsx: 
     const now = readRows();
     const unchanged = now.length === rows.length && now.every((r, i) => r.id === rows[i]!.id && r.url === rows[i]!.url);
     if (!unchanged || !channelRowsReady(now, channelFolder)) return false;
+    // Still this channel's folder alone (nothing shared or foreign appeared since the plan)?
+    if (doubledRepairBlocker(db, fix.channelId, fix.from, downloadsDir, fsx) !== null) return false;
     return db.prepare('UPDATE channels SET custom_save_path = ? WHERE id = ? AND custom_save_path = ?').run(fix.to, fix.channelId, fix.from).changes === 1;
   })();
 }
@@ -764,7 +829,7 @@ export async function runTidy(deps: TidyRunDeps): Promise<TidyStatus> {
     }
     if (status.state === 'running') {
       for (const fix of plan.channelFixes) {
-        if (await applyChannelFix(deps.db, fix, plannerFs)) status.channelsFixed++;
+        if (await applyChannelFix(deps.db, fix, plannerFs, deps.downloadsDir)) status.channelsFixed++;
       }
       status.state = 'done';
     }

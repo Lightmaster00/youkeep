@@ -5,7 +5,7 @@ import path from 'path';
 import Database from 'better-sqlite3';
 import { cancelTidyRun, getTidyStatus, isTidyRunning, moveFileVerified, planTidy, planTidyAsync, runTidy, startTidyRun, type RunnerFs } from '../../server/utils/videoTidy';
 import { resolveStoredPath } from '../../server/utils/videoPaths';
-import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
+import { createTestDb, insertChannel, insertVideo, mockEvent } from '../helpers/testDb';
 
 let db: Database.Database;
 let dir: string;
@@ -524,5 +524,94 @@ describe('planTidyAsync', () => {
     expect(sync.items).toHaveLength(3);
     const dup = sync.items.find((i) => i.id === 'd1')!;
     expect(dup.moves.map((m) => path.basename(m.from))).toEqual([`${base}.mp4`]);
+  });
+});
+
+describe('doubled-looking folders that must not be repaired', () => {
+  const savePathOf = (id: string) => (db.prepare('SELECT custom_save_path FROM channels WHERE id = ?').get(id) as any).custom_save_path;
+
+  it('leaves a base folder shared with other channels as is, and a later channel delete removes only that channel', async () => {
+    const shared = path.join(dir, 'X', 'YouTube');
+    insertChannel(db, { id: 'yt', title: 'YouTube', customSavePath: shared });
+    insertChannel(db, { id: 'ot', title: 'Other', customSavePath: shared });
+    insertVideo(db, { id: 'y1', channelId: 'yt', title: 'Yclip', localVideoPath: '/downloads/YouTube/y1.mp4', localThumbnailPath: null });
+    insertVideo(db, { id: 'o1', channelId: 'ot', title: 'Oclip', localVideoPath: '/downloads/Other/o1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(shared, 'YouTube'), { recursive: true });
+    fs.mkdirSync(path.join(shared, 'Other'), { recursive: true });
+    fs.writeFileSync(path.join(shared, 'YouTube', 'y1.mp4'), 'y1');
+    fs.writeFileSync(path.join(shared, 'Other', 'o1.mp4'), 'o1');
+
+    const preview = planTidy(db, { downloadsDir: dir }).preview;
+    expect(preview.duplicateFolders).toBe(0);
+    expect(preview.channelNotes).toEqual([expect.objectContaining({ channelId: 'yt', note: expect.stringContaining('shared with other channels') })]);
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 2, channelsFixed: 0, errors: 0 });
+    expect(savePathOf('yt')).toBe(shared);
+    expect(fs.readdirSync(shared).sort()).toEqual(['Other', 'YouTube']);
+    expect(fs.readdirSync(path.join(shared, 'YouTube'))).toEqual(['Yclip [y1]']);
+    expect(fs.readFileSync(path.join(shared, 'Other', 'Oclip [o1]', 'Oclip [o1].mp4'), 'utf8')).toBe('o1');
+
+    const { default: deleteChannel } = await import('../../server/api/admin/channels/[id].delete');
+    const downloader = await import('../../server/utils/downloader');
+    Object.assign(globalThis as any, {
+      getDb: () => db, requireAdmin: async () => ({}), cancelDownload: () => {},
+      resolveChannelBaseDir: downloader.resolveChannelBaseDir, sanitizeFolderName: downloader.sanitizeFolderName,
+    });
+    await deleteChannel(mockEvent('', { method: 'DELETE', params: { id: 'yt' } }));
+    expect(fs.readdirSync(shared)).toEqual(['Other']);
+    expect(fs.readFileSync(path.join(shared, 'Other', 'Oclip [o1]', 'Oclip [o1].mp4'), 'utf8')).toBe('o1');
+  });
+
+  it('does not repair a folder named like the channel that holds other files', async () => {
+    const custom = path.join(dir, 'Lib', 'Vid');
+    insertChannel(db, { id: 'cv', title: 'Vid', customSavePath: custom });
+    insertVideo(db, { id: 'w1', channelId: 'cv', title: 'Wclip', localVideoPath: '/downloads/Vid/w1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(custom, 'Vid'), { recursive: true });
+    fs.writeFileSync(path.join(custom, 'Vid', 'w1.mp4'), 'w1');
+    fs.writeFileSync(path.join(custom, 'notes.txt'), 'mine');
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp: realFsp });
+
+    expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
+    expect(savePathOf('cv')).toBe(custom);
+    expect(fs.readdirSync(custom).sort()).toEqual(['Vid', 'notes.txt']);
+    expect(fs.existsSync(path.join(custom, 'Vid', 'Wclip [w1]', 'Wclip [w1].mp4'))).toBe(true);
+  });
+
+  it('does not repair the default downloads folder itself, nor a folder without any of the channel\'s files', () => {
+    const downloads = path.join(dir, 'videos');
+    db.prepare("DELETE FROM channels WHERE id = 'c1'").run();
+    insertChannel(db, { id: 'cd', title: 'videos', customSavePath: downloads });
+    insertVideo(db, { id: 'z1', channelId: 'cd', title: 'Z', localVideoPath: '/downloads/videos/z1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(downloads, 'videos'), { recursive: true });
+    fs.writeFileSync(path.join(downloads, 'videos', 'z1.mp4'), 'z1');
+    const custom = path.join(dir, 'Empty');
+    insertChannel(db, { id: 'ce', title: 'Empty', customSavePath: custom });
+    insertVideo(db, { id: 'e1', channelId: 'ce', title: 'E', localVideoPath: '/downloads/Empty/e1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(custom, 'Empty'), { recursive: true });
+    fs.writeFileSync(path.join(custom, 'Empty', 'x.txt'), 'x');
+
+    const preview = planTidy(db, { downloadsDir: downloads }).preview;
+
+    expect(preview.duplicateFolders).toBe(0);
+    const notes = Object.fromEntries(preview.channelNotes.map((n) => [n.channelId, n.note]));
+    expect(notes.cd).toContain('default downloads folder');
+    expect(notes.ce).toContain('none of its files');
+  });
+
+  it('re-checks the folder right before correcting the save path', async () => {
+    const custom = path.join(dir, 'Dup');
+    insertChannel(db, { id: 'c2', title: 'Dup', customSavePath: custom });
+    insertVideo(db, { id: 'd1', channelId: 'c2', title: 'Dup Clip', localVideoPath: '/downloads/Dup/d1.mp4', localThumbnailPath: null });
+    fs.mkdirSync(path.join(custom, 'Dup'), { recursive: true });
+    fs.writeFileSync(path.join(custom, 'Dup', 'd1.mp4'), 'd1');
+    const fsp: RunnerFs = { ...realFsp, rename: async (a, b) => { await fs.promises.rename(a, b); fs.writeFileSync(path.join(custom, 'arrived.txt'), 'new'); } };
+
+    const status = await runTidy({ db, downloadsDir: dir, fsp });
+
+    expect(status).toMatchObject({ moved: 1, channelsFixed: 0 });
+    expect(savePathOf('c2')).toBe(custom);
   });
 });

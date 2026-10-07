@@ -7,6 +7,7 @@ const PREVIEW = {
   total: 3, toMove: 2, alreadyTidy: 1, conflicts: 0, missingFiles: 0, notWritable: 0, duplicateFolders: 0,
   samples: [{ id: 'a', title: 'A', from: '/v/Chan/a.mp4', to: '/v/Chan/A [a]/A [a].mp4' }],
   channels: [{ channelId: 'c1', channel: 'Chan', toMove: 2 }],
+  channelNotes: [{ channelId: 'c9', channel: 'YouTube', note: 'Its folder /v/YouTube is left as is: it is shared with other channels.' }],
 };
 const STATUS = { state: 'idle', processed: 0, total: 0, moved: 0, skipped: 0, errors: 0, lastError: null, errorDetails: [], channelsFixed: 0 };
 
@@ -50,6 +51,7 @@ describe('TidyLibraryPanel', () => {
     await w.find('[data-testid="tidy-preview-btn"]').trigger('click');
     await flushPromises();
     expect(w.find('[data-testid="tidy-preview"]').text()).toContain('/v/Chan/A [a]/A [a].mp4');
+    expect(w.find('[data-testid="tidy-channel-notes"]').text()).toContain('YouTube: Its folder /v/YouTube is left as is: it is shared with other channels.');
     expect(startButton(w).disabled).toBe(false);
 
     await w.find('[data-testid="tidy-start"]').trigger('click');
