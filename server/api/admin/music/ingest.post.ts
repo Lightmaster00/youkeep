@@ -4,7 +4,7 @@ import { ingestMusicUrl } from '../../../utils/musicDownloader';
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
   const body = await readBody(event);
-  const { url, sync_status, visibility } = body;
+  const { url, sync_status, visibility, channelId, name, avatarUrl } = body;
 
   if (!url) {
     throw createError({ statusCode: 400, statusMessage: 'URL is required.' });
@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
     const result = await ingestMusicUrl(url, {
       sync_status: sync_status !== undefined ? sync_status : undefined,
       visibility: visibility !== undefined ? visibility : undefined,
+      // Optional hints from a search result: with them the artist is created
+      // at once and its tracks are listed in the background.
+      hints: { channelId, name, avatarUrl },
     });
 
     if (!result.success) {

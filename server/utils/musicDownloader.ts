@@ -10,6 +10,7 @@ import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
+import { enqueueBackgroundImport } from './backgroundImports';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -158,129 +159,315 @@ export function deleteMusicArtist(artistId: string, opts: { baseDir?: string } =
   return { success: true };
 }
 
+const CHANNEL_URL_PATTERN = /youtube\.com\/(channel\/[a-zA-Z0-9_-]+|@[a-zA-Z0-9._-]+|c\/[a-zA-Z0-9_-]+|user\/[a-zA-Z0-9_-]+)\/?$/;
+
+/** Hard limit for the quick "who is this channel" lookup of a pasted URL. */
+export const CHANNEL_METADATA_TIMEOUT_MS = 20_000;
+
+/**
+ * The yt-dlp runner and the queue worker starter used by follow/import.
+ * Tests replace these so no real yt-dlp process or download worker ever starts.
+ */
+export const musicImportDeps = {
+  /** Runs yt-dlp with `args` and returns its parsed JSON output; throws a readable error otherwise. */
+  runYtdlJson: async (args: string[], timeoutMs?: number): Promise<any> => {
+    const ytdlPath = await getYtdlPath();
+    const env = buildSpawnEnv();
+    let child: { stdout: string; stderr: string; status: number | null };
+    try {
+      child = await runProcessAsync(ytdlPath, args, env, undefined, timeoutMs);
+    } catch (err: any) {
+      throw new Error(`yt-dlp execution error: ${err.message || err}`);
+    }
+    if (child.status !== 0) {
+      throw new Error(`yt-dlp metadata fetch failed: ${child.stderr || 'Unknown error'}`);
+    }
+    try {
+      return JSON.parse(child.stdout);
+    } catch (err) {
+      throw new Error('Failed to parse JSON output from yt-dlp');
+    }
+  },
+  startWorker: (): void => { startMusicQueueWorker(); },
+};
+
+/** The URL whose flat listing holds every upload of a followed artist. */
+export function artistListingUrl(channelId: string): string {
+  return `https://www.youtube.com/channel/${channelId}/videos`;
+}
+
+interface ArtistListingMeta {
+  channelId: string;
+  name: string;
+  description: string;
+  avatarUrl: string | null;
+  bannerUrl: string | null;
+}
+
+function parseArtistListingMeta(data: any): ArtistListingMeta {
+  let avatarUrl: string | null = null;
+  let bannerUrl: string | null = null;
+  if (data.thumbnails && Array.isArray(data.thumbnails)) {
+    const avatarObj = data.thumbnails.find((t: any) => t.id === 'avatar_uncropped' || (t.id && String(t.id).includes('avatar')));
+    const bannerObj = data.thumbnails.find((t: any) => t.id === 'banner_uncropped' || (t.id && String(t.id).includes('banner')));
+    if (avatarObj) avatarUrl = avatarObj.url;
+    if (bannerObj) bannerUrl = bannerObj.url;
+    if (!avatarUrl && data.thumbnails.length > 0) {
+      avatarUrl = data.thumbnails[data.thumbnails.length - 1].url;
+    }
+  }
+  return {
+    channelId: data.channel_id || data.uploader_id || 'unknown-channel',
+    name: data.channel || data.uploader || data.title || 'Unknown Artist',
+    description: data.description || '',
+    avatarUrl,
+    bannerUrl,
+  };
+}
+
+function collectTrackEntries(data: any): any[] {
+  const entries: any[] = [];
+  const seen = new Set<string>();
+  function collect(item: any) {
+    if (!item) return;
+    if (item._type === 'playlist' || Array.isArray(item.entries)) {
+      for (const entry of item.entries || []) collect(entry);
+    } else if (item.id && (item._type === 'url' || item._type === 'url_transparent' || !item._type)) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        entries.push(item);
+      }
+    }
+  }
+  collect(data);
+  return entries;
+}
+
+/** Upserts every listed track for an artist in one transaction; returns how many are new. */
+function upsertArtistTracks(db: ReturnType<typeof getDb>, artistId: string, channelId: string, entries: any[]): number {
+  const upsertTrack = db.prepare(`
+    INSERT INTO music_tracks (id, artist_id, title, duration, view_count, upload_date, download_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      view_count = COALESCE(excluded.view_count, view_count),
+      duration = COALESCE(excluded.duration, duration),
+      upload_date = COALESCE(excluded.upload_date, upload_date)
+  `);
+  const checkExists = db.prepare('SELECT 1 FROM music_tracks WHERE id = ?');
+  let tracksAdded = 0;
+  db.transaction(() => {
+    for (const entry of entries) {
+      if (!entry.id || entry.id === channelId) continue;
+      const exists = checkExists.get(entry.id);
+      upsertTrack.run(entry.id, artistId, entry.title || `Track ${entry.id}`, entry.duration || null, entry.view_count || null, entry.upload_date || null, Date.now());
+      if (!exists) tracksAdded++;
+    }
+  })();
+  return tracksAdded;
+}
+
+/**
+ * Creates the artist row for `channelId`, or updates the existing one. Same
+ * sync_status / visibility semantics as always: a new artist gets the given
+ * values (defaults: paused, public); an existing one keeps its own unless a
+ * value is given.
+ */
+function upsertArtistRow(
+  db: ReturnType<typeof getDb>,
+  meta: { channelId: string; name: string; description?: string | null; avatarUrl: string | null; bannerUrl?: string | null },
+  options: { sync_status?: string; visibility?: string },
+  importStatus?: 'importing',
+): string {
+  const existingArtist = db.prepare('SELECT id FROM music_artists WHERE channel_id = ?').get(meta.channelId) as { id: string } | undefined;
+  const artistId = existingArtist?.id || crypto.randomUUID();
+  if (existingArtist) {
+    db.prepare(`
+      UPDATE music_artists
+      SET name = ?, description = COALESCE(?, description), avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url),
+          sync_status = COALESCE(?, sync_status), visibility = COALESCE(?, visibility)
+      WHERE id = ?
+    `).run(meta.name, meta.description ?? null, meta.avatarUrl, meta.bannerUrl ?? null, options.sync_status ?? null, options.visibility ?? null, artistId);
+  } else {
+    db.prepare(`
+      INSERT INTO music_artists (id, channel_id, name, description, avatar_url, banner_url, sync_status, visibility, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(artistId, meta.channelId, meta.name, meta.description ?? '', meta.avatarUrl, meta.bannerUrl ?? null, options.sync_status || 'paused', options.visibility || 'public', Date.now());
+  }
+  if (importStatus) {
+    db.prepare('UPDATE music_artists SET import_status = ?, import_error = NULL WHERE id = ?').run(importStatus, artistId);
+  }
+  return artistId;
+}
+
+function startWorkerIfDownloading(db: ReturnType<typeof getDb>, artistId: string) {
+  const artistState = db.prepare('SELECT sync_status FROM music_artists WHERE id = ?').get(artistId) as { sync_status: string } | undefined;
+  if (artistState?.sync_status === 'downloading') {
+    musicImportDeps.startWorker();
+  }
+}
+
+/**
+ * Lists every upload of an artist's channel (the slow, whole-channel yt-dlp
+ * listing) and upserts the tracks. Also refreshes the artist's name,
+ * description and pictures from the listing. Throws on failure. Does not
+ * touch import_status and does not start the download worker.
+ */
+export async function importArtistTracks(artistId: string, fetchUrl: string): Promise<{ count: number; name: string }> {
+  const data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', fetchUrl]);
+  const db = getDb();
+  const artist = db.prepare('SELECT channel_id, name FROM music_artists WHERE id = ?').get(artistId) as { channel_id: string | null; name: string } | undefined;
+  // Unfollowed while the listing ran: nothing to import into.
+  if (!artist) return { count: 0, name: '' };
+
+  const meta = parseArtistListingMeta(data);
+  const name = data.channel || data.uploader || data.title || artist.name;
+  db.prepare(`
+    UPDATE music_artists
+    SET name = ?, description = ?, avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url)
+    WHERE id = ?
+  `).run(name, meta.description, meta.avatarUrl, meta.bannerUrl, artistId);
+
+  const count = upsertArtistTracks(db, artistId, artist.channel_id || meta.channelId, collectTrackEntries(data));
+  return { count, name };
+}
+
+/**
+ * Marks the artist as importing and queues its full track listing in the
+ * background (at most MAX_CONCURRENT_IMPORTS at once). When the listing ends
+ * the artist is 'done' (or 'failed' with the error), and the download worker
+ * starts if the artist is followed with downloads on. Never throws.
+ * Returns false when the artist does not exist or has no channel.
+ */
+export function startArtistImport(artistId: string): boolean {
+  const db = getDb();
+  const artist = db.prepare('SELECT channel_id FROM music_artists WHERE id = ?').get(artistId) as { channel_id: string | null } | undefined;
+  if (!artist?.channel_id) return false;
+  const channelId = artist.channel_id;
+
+  db.prepare("UPDATE music_artists SET import_status = 'importing', import_error = NULL WHERE id = ?").run(artistId);
+  enqueueBackgroundImport(`music:${artistId}`, async () => {
+    const db = getDb();
+    try {
+      const result = await importArtistTracks(artistId, artistListingUrl(channelId));
+      db.prepare("UPDATE music_artists SET import_status = 'done', import_error = NULL WHERE id = ?").run(artistId);
+      addLog(`Artist "${result.name}" imported in the background: ${result.count} new track(s).`);
+    } catch (err: any) {
+      const message = err?.message || String(err);
+      addLog(`Background import of artist ${artistId} failed: ${message}`);
+      try {
+        db.prepare("UPDATE music_artists SET import_status = 'failed', import_error = ? WHERE id = ?").run(message.slice(0, 1000), artistId);
+      } catch (dbErr) {
+        console.error(`[import] Could not record the failed import of artist ${artistId}:`, dbErr);
+      }
+    }
+    try {
+      startWorkerIfDownloading(db, artistId);
+    } catch (err) {
+      console.error(`[import] Could not start the music worker after importing artist ${artistId}:`, err);
+    }
+  });
+  return true;
+}
+
+/** Queues again every artist import a restart interrupted. Returns how many were queued. */
+export function resumeInterruptedArtistImports(): number {
+  const db = getDb();
+  const rows = db.prepare("SELECT id FROM music_artists WHERE import_status = 'importing'").all() as { id: string }[];
+  let resumed = 0;
+  for (const row of rows) {
+    if (startArtistImport(row.id)) resumed++;
+  }
+  if (resumed > 0) addLog(`Resuming ${resumed} interrupted artist import(s).`);
+  return resumed;
+}
+
+export interface FollowHints {
+  channelId?: string;
+  name?: string;
+  avatarUrl?: string | null;
+}
+
+/** Hints are used only when they carry a plausible channel id and a name. */
+function usableHints(hints: FollowHints | undefined): { channelId: string; name: string; avatarUrl: string | null } | null {
+  if (!hints) return null;
+  const channelId = typeof hints.channelId === 'string' ? hints.channelId.trim() : '';
+  const name = typeof hints.name === 'string' ? hints.name.trim() : '';
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(channelId) || !name) return null;
+  const avatarUrl = typeof hints.avatarUrl === 'string' && /^https:\/\//i.test(hints.avatarUrl.trim()) ? hints.avatarUrl.trim() : null;
+  return { channelId, name: name.slice(0, 300), avatarUrl };
+}
+
 /**
  * Metadata Ingestion for music.
- * Fetches channel/video JSON from yt-dlp and writes it to the music_* tables.
- * Mirrors ingestUrl in downloader.ts, adapted for the music schema: music_artists.id
- * is a generated id (not the YouTube channel id), so artist lookup/upsert is always
- * by channel_id. No videos/shorts tab split — music channels don't need it.
+ * Following a channel answers at once: the artist row is created (from the
+ * search result's hints, or from a quick one-entry lookup of a pasted URL)
+ * and the full track listing runs in the background (see startArtistImport).
+ * A single video or a playlist is small and stays synchronous.
+ * music_artists.id is a generated id (not the YouTube channel id), so artist
+ * lookup/upsert is always by channel_id.
  */
 export async function ingestMusicUrl(
   url: string,
   options: {
     sync_status?: string;
     visibility?: string;
+    hints?: FollowHints;
   } = {}
-): Promise<{ success: boolean; message: string; count: number }> {
+): Promise<{ success: boolean; message: string; count: number; importing?: boolean; artistId?: string }> {
   const db = getDb();
 
-  const channelPattern = /youtube\.com\/(channel\/[a-zA-Z0-9_-]+|@[a-zA-Z0-9._-]+|c\/[a-zA-Z0-9_-]+|user\/[a-zA-Z0-9_-]+)\/?$/;
   const trimmedUrl = url.trim();
-  const isChannelUrl = channelPattern.test(trimmedUrl);
+  const isChannelUrl = CHANNEL_URL_PATTERN.test(trimmedUrl);
   const fetchUrl = isChannelUrl ? `${trimmedUrl.replace(/\/$/, '')}/videos` : trimmedUrl;
+  const hints = usableHints(options.hints);
 
-  const ytdlPath = await getYtdlPath();
-  const env = buildSpawnEnv();
-  const args = ['--dump-single-json', '--flat-playlist', fetchUrl];
+  if (hints || isChannelUrl) {
+    let meta: { channelId: string; name: string; description?: string | null; avatarUrl: string | null; bannerUrl?: string | null };
+    if (hints) {
+      meta = { ...hints, description: null, bannerUrl: null };
+    } else {
+      let data: any;
+      try {
+        data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', '--playlist-end', '1', fetchUrl], CHANNEL_METADATA_TIMEOUT_MS);
+      } catch (err: any) {
+        return { success: false, message: err?.message || String(err), count: 0 };
+      }
+      const parsed = parseArtistListingMeta(data);
+      if (parsed.channelId === 'unknown-channel') {
+        return { success: false, message: 'Could not find the channel behind this address.', count: 0 };
+      }
+      meta = parsed;
+    }
 
-  let stdout = '';
-  let stderr = '';
-  let status: number | null = null;
-  try {
-    const child = await runProcessAsync(ytdlPath, args, env);
-    stdout = child.stdout;
-    stderr = child.stderr;
-    status = child.status;
-  } catch (err: any) {
-    return { success: false, message: `yt-dlp execution error: ${err.message || err}`, count: 0 };
-  }
-
-  if (status !== 0) {
-    return { success: false, message: `yt-dlp metadata fetch failed: ${stderr || 'Unknown error'}`, count: 0 };
+    const artistId = upsertArtistRow(db, meta, options, 'importing');
+    startArtistImport(artistId);
+    return {
+      success: true,
+      message: `Now following "${meta.name}". Its tracks are being imported in the background.`,
+      count: 0,
+      importing: true,
+      artistId,
+    };
   }
 
   let data: any;
   try {
-    data = JSON.parse(stdout);
-  } catch (err) {
-    return { success: false, message: 'Failed to parse JSON output from yt-dlp', count: 0 };
+    data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', fetchUrl]);
+  } catch (err: any) {
+    return { success: false, message: err?.message || String(err), count: 0 };
   }
 
-  // Case A: channel/playlist listing
+  // Case A: playlist listing (small: imported synchronously)
   if (data._type === 'playlist' || Array.isArray(data.entries)) {
-    const channelId = data.channel_id || data.uploader_id || 'unknown-channel';
-    const channelTitle = data.channel || data.uploader || data.title || 'Unknown Artist';
-    const channelDesc = data.description || '';
-
-    let avatarUrl: string | null = null;
-    let bannerUrl: string | null = null;
-    if (data.thumbnails && Array.isArray(data.thumbnails)) {
-      const avatarObj = data.thumbnails.find((t: any) => t.id === 'avatar_uncropped' || (t.id && String(t.id).includes('avatar')));
-      const bannerObj = data.thumbnails.find((t: any) => t.id === 'banner_uncropped' || (t.id && String(t.id).includes('banner')));
-      if (avatarObj) avatarUrl = avatarObj.url;
-      if (bannerObj) bannerUrl = bannerObj.url;
-      if (!avatarUrl && data.thumbnails.length > 0) {
-        avatarUrl = data.thumbnails[data.thumbnails.length - 1].url;
-      }
-    }
-
-    const existingArtist = db.prepare('SELECT id FROM music_artists WHERE channel_id = ?').get(channelId) as { id: string } | undefined;
-    const artistId = existingArtist?.id || crypto.randomUUID();
-    const initialSyncStatus = options.sync_status || 'paused';
-    const initialVisibility = options.visibility || 'public';
-
-    if (existingArtist) {
-      db.prepare(`
-        UPDATE music_artists
-        SET name = ?, description = ?, avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url),
-            sync_status = COALESCE(?, sync_status), visibility = COALESCE(?, visibility)
-        WHERE id = ?
-      `).run(channelTitle, channelDesc, avatarUrl, bannerUrl, options.sync_status ?? null, options.visibility ?? null, artistId);
-    } else {
-      db.prepare(`
-        INSERT INTO music_artists (id, channel_id, name, description, avatar_url, banner_url, sync_status, visibility, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(artistId, channelId, channelTitle, channelDesc, avatarUrl, bannerUrl, initialSyncStatus, initialVisibility, Date.now());
-    }
-
-    const trackEntries: any[] = [];
-    function collectEntries(item: any) {
-      if (!item) return;
-      if (item._type === 'playlist' || Array.isArray(item.entries)) {
-        for (const entry of item.entries) collectEntries(entry);
-      } else if (item.id && (item._type === 'url' || item._type === 'url_transparent' || !item._type)) {
-        if (!trackEntries.some((t: any) => t.id === item.id)) trackEntries.push(item);
-      }
-    }
-    collectEntries(data);
-
-    const upsertTrack = db.prepare(`
-      INSERT INTO music_tracks (id, artist_id, title, duration, view_count, upload_date, download_status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-      ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title,
-        view_count = COALESCE(excluded.view_count, view_count),
-        duration = COALESCE(excluded.duration, duration),
-        upload_date = COALESCE(excluded.upload_date, upload_date)
-    `);
-    const checkExists = db.prepare('SELECT 1 FROM music_tracks WHERE id = ?');
-
-    let tracksAdded = 0;
-    for (const entry of trackEntries) {
-      if (!entry.id || entry.id === channelId) continue;
-      const exists = checkExists.get(entry.id);
-      upsertTrack.run(entry.id, artistId, entry.title || `Track ${entry.id}`, entry.duration || null, entry.view_count || null, entry.upload_date || null, Date.now());
-      if (!exists) tracksAdded++;
-    }
-
-    const artistState = db.prepare('SELECT sync_status FROM music_artists WHERE id = ?').get(artistId) as { sync_status: string } | undefined;
-    if (artistState?.sync_status === 'downloading') {
-      startMusicQueueWorker();
-    }
+    const meta = parseArtistListingMeta(data);
+    const artistId = upsertArtistRow(db, meta, options);
+    const tracksAdded = upsertArtistTracks(db, artistId, meta.channelId, collectTrackEntries(data));
+    startWorkerIfDownloading(db, artistId);
 
     return {
       success: true,
-      message: `Artist "${channelTitle}" ingested. ${tracksAdded} new track(s) added.`,
+      message: `Artist "${meta.name}" ingested. ${tracksAdded} new track(s) added.`,
       count: tracksAdded
     };
   }
@@ -318,10 +505,7 @@ export async function ingestMusicUrl(
     ON CONFLICT(id) DO UPDATE SET title = excluded.title
   `).run(trackId, artistId, data.title || `Track ${trackId}`, data.duration || null, data.view_count || null, data.upload_date || null, Date.now());
 
-  const artistState = db.prepare('SELECT sync_status FROM music_artists WHERE id = ?').get(artistId) as { sync_status: string } | undefined;
-  if (artistState?.sync_status === 'downloading') {
-    startMusicQueueWorker();
-  }
+  startWorkerIfDownloading(db, artistId);
 
   return {
     success: true,
@@ -874,14 +1058,13 @@ export async function syncAllMusicArtists(): Promise<void> {
       if (current?.sync_status !== 'downloading') return;
       addLog(`Resyncing artist: ${artist.name} (${artist.id})`);
 
-      const url = `https://www.youtube.com/channel/${artist.channel_id}`;
       try {
-        const result = await ingestMusicUrl(url);
-        if (!result.success) {
-          addLog(`Failed to resync artist ${artist.name} (${artist.id}) : ${result.message}`);
-        }
+        await importArtistTracks(artist.id, artistListingUrl(artist.channel_id));
+        // A successful resync also clears an earlier failed import.
+        db.prepare("UPDATE music_artists SET import_status = 'done', import_error = NULL WHERE id = ? AND import_status = 'failed'").run(artist.id);
+        startWorkerIfDownloading(db, artist.id);
       } catch (err: any) {
-        addLog(`Error while resyncing artist ${artist.name} (${artist.id}) : ${err.message || err}`);
+        addLog(`Failed to resync artist ${artist.name} (${artist.id}) : ${err.message || err}`);
       }
     },
     onStart: (count) => addLog(`Starting automatic resync of ${count} music artist(s)...`),

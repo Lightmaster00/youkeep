@@ -2,7 +2,7 @@ import { defineNitroPlugin } from 'nitropack/dist/runtime/plugin';
 import { initScheduler, resetStaleDownloads, startQueueWorker, updateYtdl } from '../utils/downloader';
 import { backfillMissingVideoDurations } from '../utils/videoDurations';
 import { getDb } from '../utils/db';
-import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler } from '../utils/musicDownloader';
+import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports } from '../utils/musicDownloader';
 import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler } from '../utils/podcastDownloader';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
@@ -10,6 +10,15 @@ function runDurationBackfill() {
   backfillMissingVideoDurations(getDb())
     .then((r) => { if (r.checked > 0) console.log(`YouKeep Scheduler Plugin: duration backfill checked ${r.checked}, updated ${r.updated}`); })
     .catch((err) => console.error('YouKeep Scheduler Plugin: duration backfill failed:', err));
+}
+
+// Follows whose background listing a restart interrupted are queued again.
+function resumeInterruptedImports() {
+  try {
+    resumeInterruptedArtistImports();
+  } catch (err) {
+    console.error('YouKeep Scheduler Plugin: could not resume interrupted imports:', err);
+  }
 }
 
 export default defineNitroPlugin((nitroApp) => {
@@ -36,6 +45,7 @@ export default defineNitroPlugin((nitroApp) => {
         startMusicQueueWorker();
         startPodcastQueueWorker();
         runDurationBackfill();
+        resumeInterruptedImports();
       })
       .catch((err) => {
         console.error('YouKeep Scheduler Plugin: yt-dlp auto-update check failed, starting queue anyway:', err);
@@ -43,6 +53,7 @@ export default defineNitroPlugin((nitroApp) => {
         startMusicQueueWorker();
         startPodcastQueueWorker();
         runDurationBackfill();
+        resumeInterruptedImports();
       });
   } catch (err) {
     console.error('Failed to run startup tasks:', err);

@@ -569,13 +569,24 @@ export function runProcessAsync(
   commandPath: string,
   args: string[],
   env: any,
-  maxBuffer: number = 1024 * 1024 * 50
+  maxBuffer: number = 1024 * 1024 * 50,
+  timeoutMs?: number
 ): Promise<{ stdout: string; stderr: string; status: number | null }> {
   return new Promise((resolve, reject) => {
     try {
       const child = spawn(commandPath, args, { env });
       let stdout = '';
       let stderr = '';
+
+      // Optional hard limit: the process is killed and the call fails with a clear message.
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      if (timeoutMs && timeoutMs > 0) {
+        timer = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch (e) {}
+          reject(new Error(`Timed out after ${Math.round(timeoutMs / 1000)} s`));
+        }, timeoutMs);
+        child.on('close', () => { if (timer) clearTimeout(timer); });
+      }
 
       child.stdout?.on('data', (data) => {
         stdout += data.toString();
@@ -594,6 +605,7 @@ export function runProcessAsync(
       });
 
       child.on('error', (err) => {
+        if (timer) clearTimeout(timer);
         reject(err);
       });
 

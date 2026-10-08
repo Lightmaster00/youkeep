@@ -74,6 +74,8 @@ export function createTestDb(): Database.Database {
       avatar_url TEXT,
       custom_save_path TEXT,
       sync_status TEXT DEFAULT 'paused',
+      import_status TEXT,
+      import_error TEXT,
       created_at INTEGER NOT NULL
     );
 
@@ -140,6 +142,8 @@ export function createTestDb(): Database.Database {
       banner_url TEXT,
       sync_status TEXT DEFAULT 'paused',
       visibility TEXT DEFAULT 'public',
+      import_status TEXT,
+      import_error TEXT,
       created_at INTEGER NOT NULL
     );
 
@@ -163,6 +167,8 @@ export function createTestDb(): Database.Database {
       genre TEXT,
       language TEXT,
       duration INTEGER,
+      view_count INTEGER,
+      upload_date TEXT,
       download_status TEXT DEFAULT 'completed',
       download_progress INTEGER DEFAULT 0,
       download_speed TEXT,

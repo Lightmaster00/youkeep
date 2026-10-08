@@ -397,6 +397,11 @@ export function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE videos ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE music_tracks ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE podcast_episodes ADD COLUMN retry_count INTEGER DEFAULT 0;`); } catch (e) {}
+  // Background listing after a follow: 'importing' | 'done' | 'failed' (NULL = done before this existed).
+  try { db.exec(`ALTER TABLE music_artists ADD COLUMN import_status TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_artists ADD COLUMN import_error TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE channels ADD COLUMN import_status TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE channels ADD COLUMN import_error TEXT;`); } catch (e) {}
   ensurePodcastPubTs(db);
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
