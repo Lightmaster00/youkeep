@@ -12,9 +12,9 @@ describe('buildSidebarGroups', () => {
     expect(groups.map((g) => g.label)).toEqual(['Video', 'Music', 'Podcasts']);
     expect(groups[0]!.links.map((l) => l.to)).toEqual(['/', '/shorts', '/channels', '/subscriptions', '/playlists']);
     expect(groups[1]!.links.map((l) => [l.to, l.label])).toEqual([
-      ['/music', 'Library'], ['/music/discover', 'Discover'], ['/music/liked', 'Liked songs'], ['/music/playlists', 'Playlists'], ['/music/recent', 'Recent'],
+      ['/music', 'Library'], ['/music/discover', 'Discover'], ['/music/liked', 'Liked songs'], ['/music/playlists', 'Playlists'], ['/music/recent', 'Recent'], ['/music/history', 'History'],
     ]);
-    expect(groups[2]!.links.map((l) => [l.to, l.label])).toEqual([['/podcasts', 'Library'], ['/podcasts/discover', 'Discover'], ['/podcasts/subscribed', 'Subscribed'], ['/podcasts/recent', 'Recent']]);
+    expect(groups[2]!.links.map((l) => [l.to, l.label])).toEqual([['/podcasts', 'Library'], ['/podcasts/discover', 'Discover'], ['/podcasts/subscribed', 'Subscribed'], ['/podcasts/recent', 'Recent'], ['/podcasts/history', 'History']]);
     expect(groups.every((g) => g.enabled)).toBe(true);
   });
 
@@ -35,19 +35,21 @@ describe('buildSidebarGroups', () => {
   });
 
   it('never hides the links of Music and Podcasts', () => {
-    const groups = buildSidebarGroups(spaces, { ...base, hiddenNavLinks: ['/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent', '/podcasts/discover', '/podcasts/recent'] });
-    expect(groups[1]!.links.map((l) => l.to)).toEqual(['/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent']);
-    expect(groups[2]!.links.map((l) => l.to)).toEqual(['/podcasts', '/podcasts/discover', '/podcasts/subscribed', '/podcasts/recent']);
+    const groups = buildSidebarGroups(spaces, { ...base, hiddenNavLinks: ['/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent', '/music/history', '/podcasts/discover', '/podcasts/recent', '/podcasts/history'] });
+    expect(groups[1]!.links.map((l) => l.to)).toEqual(['/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent', '/music/history']);
+    expect(groups[2]!.links.map((l) => l.to)).toEqual(['/podcasts', '/podcasts/discover', '/podcasts/subscribed', '/podcasts/recent', '/podcasts/history']);
   });
 
-  it('hides Liked songs and music Playlists from guests only', () => {
+  it('hides Liked songs, music Playlists, Subscribed and History from guests only', () => {
     const guest = buildSidebarGroups(spaces, { ...base, isGuest: true });
     expect(guest[1]!.links.map((l) => l.to)).toEqual(['/music', '/music/discover', '/music/recent']);
     expect(guest[0]!.links.map((l) => l.to)).toEqual(['/', '/shorts', '/channels', '/subscriptions', '/playlists']);
     const member = buildSidebarGroups(spaces, { ...base, isGuest: false });
     expect(member[1]!.links.map((l) => l.to)).toContain('/music/liked');
+    expect(member[1]!.links.map((l) => l.to)).toContain('/music/history');
     expect(guest[2]!.links.map((l) => l.to)).toEqual(['/podcasts', '/podcasts/discover', '/podcasts/recent']);
     expect(member[2]!.links.map((l) => l.to)).toContain('/podcasts/subscribed');
+    expect(member[2]!.links.map((l) => l.to)).toContain('/podcasts/history');
   });
 
   it('yields no groups while a password change is required', () => {

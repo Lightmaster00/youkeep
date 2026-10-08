@@ -43,6 +43,13 @@ export function usePodcastProgress() {
     cache()[episodeId] = progress;
   }
 
+  // Drops every cached progress (the user's history was cleared): rows ask
+  // the server again when they next mount.
+  function forgetAll() {
+    if (!user.value) return;
+    state.value = { owner: user.value.id, progress: {} };
+  }
+
   // Records progress that came with a list (Continue, Subscribed episodes).
   function seed(episodes: Array<{ id: string; progress?: EpisodeProgress | null }>) {
     if (!user.value) return;
@@ -129,5 +136,5 @@ export function usePodcastProgress() {
     }
   }
 
-  return { get, isKnown, record, seed, ensure, lookup, setPlayed };
+  return { get, isKnown, record, forgetAll, seed, ensure, lookup, setPlayed };
 }

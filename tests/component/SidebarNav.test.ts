@@ -42,11 +42,11 @@ describe('default layout sidebar', () => {
     const hrefs = w.findAll('.sidebar-link').map((a) => a.attributes('href'));
     expect(hrefs).toEqual([
       '/', '/shorts', '/channels', '/subscriptions', '/playlists',
-      '/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent',
-      '/podcasts', '/podcasts/discover', '/podcasts/subscribed', '/podcasts/recent',
+      '/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent', '/music/history',
+      '/podcasts', '/podcasts/discover', '/podcasts/subscribed', '/podcasts/recent', '/podcasts/history',
     ]);
     const music = w.findAll('.sidebar-group')[1]!;
-    expect(music.findAll('.sidebar-link').map((a) => a.text())).toEqual(['Library', 'Discover', 'Liked songs', 'Playlists', 'Recent']);
+    expect(music.findAll('.sidebar-link').map((a) => a.text())).toEqual(['Library', 'Discover', 'Liked songs', 'Playlists', 'Recent', 'History']);
     expect(w.find('.space-switcher').exists()).toBe(false);
   });
 
@@ -58,7 +58,7 @@ describe('default layout sidebar', () => {
     expect(hrefs).toContain('/channels');
   });
 
-  it('hides Liked songs and music Playlists from a guest', async () => {
+  it('hides Liked songs, music Playlists, Subscribed and History from a guest', async () => {
     setUp('user');
     useState('auth_user').value = null;
     const w = await mountLayout();
@@ -70,6 +70,8 @@ describe('default layout sidebar', () => {
     expect(hrefs).not.toContain('/music/liked');
     expect(hrefs).not.toContain('/music/playlists');
     expect(hrefs).not.toContain('/podcasts/subscribed');
+    expect(hrefs).not.toContain('/music/history');
+    expect(hrefs).not.toContain('/podcasts/history');
     expect(hrefs).toContain('/podcasts/recent');
   });
 

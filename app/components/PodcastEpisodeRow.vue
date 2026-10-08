@@ -26,6 +26,7 @@
       <button v-if="canEdit" @click.stop="emit('edit', episode)" class="edit-btn" title="Edit" aria-label="Edit episode">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
       </button>
+      <slot name="actions" :episode="episode" />
     </div>
   </div>
 </template>
@@ -36,7 +37,8 @@ import { computed } from 'vue';
 // One episode of the show detail list: title, meta, the user's progress, and
 // the play / status / "Mark as played" / admin edit actions. On phones the
 // actions move to their own line under the title. `context` adds a line under
-// the title (Discover: show title and listener count).
+// the title (Discover: show title and listener count). The `actions` slot adds
+// buttons after the built-in ones (History: remove from history).
 const props = defineProps<{ episode: any; canEdit?: boolean; context?: string }>();
 const emit = defineEmits<{ play: [episode: any]; edit: [episode: any] }>();
 
