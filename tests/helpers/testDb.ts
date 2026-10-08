@@ -214,6 +214,7 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (playlist_id) REFERENCES music_user_playlists(id) ON DELETE CASCADE,
       FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE
     );
+    CREATE INDEX idx_music_play_history_user_played ON music_play_history(user_id, played_at DESC);
     CREATE INDEX idx_music_favorites_user_created ON music_favorites(user_id, created_at DESC);
 
     CREATE TABLE podcast_shows (

@@ -410,6 +410,7 @@ export function getDb(): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_user_history_video_id ON user_history(video_id);
     CREATE INDEX IF NOT EXISTS idx_personal_playlist_videos_playlist_id ON personal_playlist_videos(playlist_id);
     CREATE INDEX IF NOT EXISTS idx_music_play_history_user_track ON music_play_history(user_id, track_id);
+    CREATE INDEX IF NOT EXISTS idx_music_play_history_user_played ON music_play_history(user_id, played_at DESC);
     CREATE INDEX IF NOT EXISTS idx_music_tracks_artist_id ON music_tracks(artist_id);
     CREATE INDEX IF NOT EXISTS idx_music_tracks_album_id ON music_tracks(album_id);
     CREATE INDEX IF NOT EXISTS idx_comments_video_id ON comments(video_id);
