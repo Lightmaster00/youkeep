@@ -47,6 +47,8 @@ export default defineEventHandler(async (event) => {
       a.avatar_url,
       a.sync_status,
       a.visibility,
+      a.import_status,
+      a.import_error,
       COUNT(t.id) as track_count
     FROM music_artists a
     LEFT JOIN music_tracks t ON t.artist_id = a.id

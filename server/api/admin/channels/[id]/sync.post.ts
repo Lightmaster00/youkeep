@@ -1,4 +1,5 @@
 import { defineEventHandler, createError } from 'h3';
+import { startChannelImport, startQueueWorker } from '../../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -19,16 +20,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Channel not found.' });
   }
 
-  // Start the channel ingestion asynchronously in the background to fetch new videos
-  const url = `https://www.youtube.com/channel/${channelId}`;
-  setTimeout(async () => {
-    try {
-      console.log(`Starting background ingestion for channel ${channelId} triggered by manual sync start`);
-      await ingestUrl(url);
-    } catch (err) {
-      console.error(`Failed background ingestion for channel ${channelId}:`, err);
-    }
-  }, 100);
+  // The channel's tabs are listed in the background import queue (the channel shows "Importing…").
+  startChannelImport(channelId);
 
   // Wakes up queue worker to process any pending downloads for this channel
   startQueueWorker();

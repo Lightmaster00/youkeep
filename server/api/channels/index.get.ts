@@ -41,6 +41,8 @@ export default defineEventHandler(async (event) => {
       c.banner_url, 
       c.sync_status,
       c.visibility,
+      c.import_status,
+      ${session?.role === 'admin' ? 'c.import_error,' : ''}
       c.created_at,
       COUNT(CASE WHEN v.download_status = 'completed' THEN 1 END) as completed_count,
       COUNT(v.id) as total_count

@@ -1,5 +1,5 @@
 import { defineNitroPlugin } from 'nitropack/dist/runtime/plugin';
-import { initScheduler, resetStaleDownloads, startQueueWorker, updateYtdl } from '../utils/downloader';
+import { initScheduler, resetStaleDownloads, startQueueWorker, updateYtdl, resumeInterruptedChannelImports } from '../utils/downloader';
 import { backfillMissingVideoDurations } from '../utils/videoDurations';
 import { getDb } from '../utils/db';
 import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports } from '../utils/musicDownloader';
@@ -14,10 +14,12 @@ function runDurationBackfill() {
 
 // Follows whose background listing a restart interrupted are queued again.
 function resumeInterruptedImports() {
-  try {
-    resumeInterruptedArtistImports();
-  } catch (err) {
-    console.error('YouKeep Scheduler Plugin: could not resume interrupted imports:', err);
+  for (const resume of [resumeInterruptedArtistImports, resumeInterruptedChannelImports]) {
+    try {
+      resume();
+    } catch (err) {
+      console.error('YouKeep Scheduler Plugin: could not resume interrupted imports:', err);
+    }
   }
 }
 

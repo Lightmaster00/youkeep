@@ -3,8 +3,9 @@ import Database from 'better-sqlite3';
 import ingestHandler from '../../server/api/admin/music/ingest.post';
 import reimportHandler from '../../server/api/admin/music/artists/[id]/reimport.post';
 import {
-  ingestMusicUrl, musicImportDeps, resumeInterruptedArtistImports, CHANNEL_METADATA_TIMEOUT_MS,
+  ingestMusicUrl, musicImportDeps, resumeInterruptedArtistImports,
 } from '../../server/utils/musicDownloader';
+import { CHANNEL_METADATA_TIMEOUT_MS } from '../../server/utils/downloader';
 import { backgroundImportsIdle, runningImportCount, MAX_CONCURRENT_IMPORTS } from '../../server/utils/backgroundImports';
 import { createTestDb, mockEvent } from '../helpers/testDb';
 

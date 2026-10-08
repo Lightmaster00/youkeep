@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { getDataDir } from './dataDir';
-import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, isFfmpegAvailable } from './downloader';
+import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, isFfmpegAvailable, usableChannelHints, CHANNEL_METADATA_TIMEOUT_MS, type ChannelFollowHints } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
@@ -160,9 +160,6 @@ export function deleteMusicArtist(artistId: string, opts: { baseDir?: string } =
 }
 
 const CHANNEL_URL_PATTERN = /youtube\.com\/(channel\/[a-zA-Z0-9_-]+|@[a-zA-Z0-9._-]+|c\/[a-zA-Z0-9_-]+|user\/[a-zA-Z0-9_-]+)\/?$/;
-
-/** Hard limit for the quick "who is this channel" lookup of a pasted URL. */
-export const CHANNEL_METADATA_TIMEOUT_MS = 20_000;
 
 /**
  * The yt-dlp runner and the queue worker starter used by follow/import.
@@ -382,22 +379,6 @@ export function resumeInterruptedArtistImports(): number {
   return resumed;
 }
 
-export interface FollowHints {
-  channelId?: string;
-  name?: string;
-  avatarUrl?: string | null;
-}
-
-/** Hints are used only when they carry a plausible channel id and a name. */
-function usableHints(hints: FollowHints | undefined): { channelId: string; name: string; avatarUrl: string | null } | null {
-  if (!hints) return null;
-  const channelId = typeof hints.channelId === 'string' ? hints.channelId.trim() : '';
-  const name = typeof hints.name === 'string' ? hints.name.trim() : '';
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(channelId) || !name) return null;
-  const avatarUrl = typeof hints.avatarUrl === 'string' && /^https:\/\//i.test(hints.avatarUrl.trim()) ? hints.avatarUrl.trim() : null;
-  return { channelId, name: name.slice(0, 300), avatarUrl };
-}
-
 /**
  * Metadata Ingestion for music.
  * Following a channel answers at once: the artist row is created (from the
@@ -412,7 +393,7 @@ export async function ingestMusicUrl(
   options: {
     sync_status?: string;
     visibility?: string;
-    hints?: FollowHints;
+    hints?: ChannelFollowHints;
   } = {}
 ): Promise<{ success: boolean; message: string; count: number; importing?: boolean; artistId?: string }> {
   const db = getDb();
@@ -420,7 +401,7 @@ export async function ingestMusicUrl(
   const trimmedUrl = url.trim();
   const isChannelUrl = CHANNEL_URL_PATTERN.test(trimmedUrl);
   const fetchUrl = isChannelUrl ? `${trimmedUrl.replace(/\/$/, '')}/videos` : trimmedUrl;
-  const hints = usableHints(options.hints);
+  const hints = usableChannelHints(options.hints);
 
   if (hints || isChannelUrl) {
     let meta: { channelId: string; name: string; description?: string | null; avatarUrl: string | null; bannerUrl?: string | null };

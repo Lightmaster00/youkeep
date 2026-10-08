@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
+import { ingestUrl, syncAllChannels } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -12,7 +13,10 @@ export default defineEventHandler(async (event) => {
     sync_status,
     visibility,
     custom_save_path,
-    start_sync
+    start_sync,
+    channelId,
+    name,
+    avatarUrl
   } = body;
 
   if (!url) {
@@ -30,7 +34,11 @@ export default defineEventHandler(async (event) => {
       date_after: date_after !== undefined ? date_after : undefined,
       sync_status: sync_status !== undefined ? sync_status : undefined,
       visibility: visibility !== undefined ? visibility : undefined,
-      custom_save_path: custom_save_path !== undefined ? custom_save_path : undefined
+      custom_save_path: custom_save_path !== undefined ? custom_save_path : undefined,
+      // A channel answers at once; its videos are listed in the background.
+      background: true,
+      // Optional hints from a search result: skip even the quick channel lookup.
+      hints: { channelId, name, avatarUrl },
     });
 
     if (!result.success) {

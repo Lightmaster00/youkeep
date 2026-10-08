@@ -9,6 +9,7 @@ import { getDataDir } from './dataDir';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { extractInfoFields } from './videoInfo';
+import { enqueueBackgroundImport } from './backgroundImports';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { channelBaseDirs, isContained, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
 
@@ -1185,6 +1186,101 @@ const MAX_PLAYLIST_IMPORT_SIZE = 500;
  * Metadata Ingestion
  * Fetches playlist/video/channel JSON from yt-dlp and writes it to DB.
  */
+/** Hard limit for the quick "who is this channel" lookup (one-entry listing). */
+export const CHANNEL_METADATA_TIMEOUT_MS = 20_000;
+
+/**
+ * The yt-dlp runner, queue worker starter and playlist sync used by channel
+ * ingestion. Tests replace these so no real yt-dlp process or worker starts.
+ */
+export const videoImportDeps = {
+  runYtdl: async (args: string[], timeoutMs?: number): Promise<{ stdout: string; stderr: string; status: number | null }> => {
+    const ytdlPath = await getYtdlPath();
+    return runProcessAsync(ytdlPath, args, buildSpawnEnv(), undefined, timeoutMs);
+  },
+  startWorker: (): void => { startQueueWorker(); },
+  syncPlaylists: (channelId: string): Promise<void> => syncChannelPlaylists(channelId),
+};
+
+/**
+ * Marks the channel as importing and queues the listing of its Videos and
+ * Shorts tabs (as chosen in its options) in the background, at most
+ * MAX_CONCURRENT_IMPORTS at once. Ends as 'done', or 'failed' with the error
+ * when the main listing fails (a Shorts failure is only logged, as before).
+ * Never throws. Returns false when the channel does not exist.
+ */
+export function startChannelImport(channelId: string): boolean {
+  const db = getDb();
+  const exists = db.prepare('SELECT 1 FROM channels WHERE id = ?').get(channelId);
+  if (!exists) return false;
+
+  db.prepare("UPDATE channels SET import_status = 'importing', import_error = NULL WHERE id = ?").run(channelId);
+  enqueueBackgroundImport(`video:${channelId}`, async () => {
+    const db = getDb();
+    try {
+      const prefs = db.prepare('SELECT download_videos, download_shorts FROM channels WHERE id = ?').get(channelId) as { download_videos: number | null; download_shorts: number | null } | undefined;
+      // Unfollowed while queued: nothing to import.
+      if (!prefs) return;
+      const baseUrl = `https://www.youtube.com/channel/${channelId}`;
+      let added = 0;
+      if (prefs.download_videos !== 0) {
+        const res = await ingestUrl(`${baseUrl}/videos`, {});
+        if (!res.success) throw new Error(res.message);
+        added += res.count;
+      }
+      if (prefs.download_shorts !== 0) {
+        try {
+          const res = await ingestUrl(`${baseUrl}/shorts`, {});
+          if (res.success) added += res.count;
+          else addLog(`Shorts ingestion failed for channel ${channelId}: ${res.message}`);
+        } catch (e: any) {
+          addLog(`Shorts ingestion failed for channel ${channelId}: ${e?.message || e}`);
+        }
+      }
+      db.prepare("UPDATE channels SET import_status = 'done', import_error = NULL WHERE id = ?").run(channelId);
+      addLog(`Channel ${channelId} imported in the background: ${added} new video(s).`);
+    } catch (err: any) {
+      const message = err?.message || String(err);
+      addLog(`Background import of channel ${channelId} failed: ${message}`);
+      try {
+        db.prepare("UPDATE channels SET import_status = 'failed', import_error = ? WHERE id = ?").run(message.slice(0, 1000), channelId);
+      } catch (dbErr) {
+        console.error(`[import] Could not record the failed import of channel ${channelId}:`, dbErr);
+      }
+    }
+  });
+  return true;
+}
+
+/** Queues again every channel import a restart interrupted. Returns how many were queued. */
+export function resumeInterruptedChannelImports(): number {
+  const db = getDb();
+  const rows = db.prepare("SELECT id FROM channels WHERE import_status = 'importing'").all() as { id: string }[];
+  let resumed = 0;
+  for (const row of rows) {
+    if (startChannelImport(row.id)) resumed++;
+  }
+  if (resumed > 0) addLog(`Resuming ${resumed} interrupted channel import(s).`);
+  return resumed;
+}
+
+/** Search-result hints sent with a follow (music artists and video channels). */
+export interface ChannelFollowHints {
+  channelId?: string;
+  name?: string;
+  avatarUrl?: string | null;
+}
+
+/** Hints are used only when they carry a plausible channel id and a name. */
+export function usableChannelHints(hints: ChannelFollowHints | undefined): { channelId: string; name: string; avatarUrl: string | null } | null {
+  if (!hints) return null;
+  const channelId = typeof hints.channelId === 'string' ? hints.channelId.trim() : '';
+  const name = typeof hints.name === 'string' ? hints.name.trim() : '';
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(channelId) || !name) return null;
+  const avatarUrl = typeof hints.avatarUrl === 'string' && /^https:\/\//i.test(hints.avatarUrl.trim()) ? hints.avatarUrl.trim() : null;
+  return { channelId, name: name.slice(0, 300), avatarUrl };
+}
+
 /**
  * Creates or updates a followed channel's row from an ingest. custom_save_path is
  * only set when the row is created: following an existing channel again never
@@ -1244,14 +1340,59 @@ export async function ingestUrl(
     sync_status?: string;
     visibility?: string;
     custom_save_path?: string | null;
+    /** Follow from the admin screen: answer at once and list the tabs in the background. */
+    background?: boolean;
+    /** Optional search-result hints (channel id, name, avatar): skip even the quick lookup. */
+    hints?: ChannelFollowHints;
   } = {}
-): Promise<{ success: boolean; message: string; count: number; savePathKept?: boolean }> {
+): Promise<{ success: boolean; message: string; count: number; savePathKept?: boolean; importing?: boolean; channelId?: string }> {
   const db = getDb();
   
   // If this is a base channel URL, split it into videos and shorts calls to ensure we retrieve everything.
   const channelPattern = /youtube\.com\/(channel\/[a-zA-Z0-9_-]+|@[a-zA-Z0-9._-]+|c\/[a-zA-Z0-9_-]+|user\/[a-zA-Z0-9_-]+)\/?$/;
   if (channelPattern.test(url.trim()) && !options.channelMetadataOnly) {
     const baseUrl = url.trim().replace(/\/$/, '');
+
+    if (options.background) {
+      const { background, hints: rawHints, ...rest } = options;
+      const hints = usableChannelHints(rawHints);
+      let channelId: string;
+      let channelTitle: string;
+      let savePathKept = false;
+      if (hints) {
+        const existing = db.prepare('SELECT description FROM channels WHERE id = ?').get(hints.channelId) as { description: string | null } | undefined;
+        ({ savePathKept } = upsertIngestedChannel(db, {
+          id: hints.channelId, title: hints.name, description: existing?.description ?? '', avatarUrl: hints.avatarUrl, bannerUrl: null,
+          syncStatus: rest.sync_status || 'paused', visibility: rest.visibility || 'public',
+          downloadVideos: rest.download_videos !== undefined ? rest.download_videos : 1,
+          downloadShorts: rest.download_shorts !== undefined ? rest.download_shorts : 0,
+          downloadLives: rest.download_lives !== undefined ? rest.download_lives : 0,
+          dateAfter: rest.date_after !== undefined ? rest.date_after : null,
+          customSavePath: rest.custom_save_path !== undefined ? rest.custom_save_path : null,
+        }, rest));
+        channelId = hints.channelId;
+        channelTitle = hints.name;
+      } else {
+        const metadata = await ingestUrl(baseUrl, { ...rest, channelMetadataOnly: true });
+        if (!metadata.success) return metadata;
+        if (!metadata.channelId || metadata.channelId === 'unknown-channel') {
+          return { success: false, message: 'Could not find the channel behind this address.', count: 0 };
+        }
+        channelId = metadata.channelId;
+        channelTitle = (db.prepare('SELECT title FROM channels WHERE id = ?').get(channelId) as { title: string } | undefined)?.title || channelId;
+        savePathKept = !!metadata.savePathKept;
+      }
+      startChannelImport(channelId);
+      return {
+        success: true,
+        message: `Now following "${channelTitle}". Its videos are being imported in the background.`,
+        count: 0,
+        importing: true,
+        channelId,
+        ...(savePathKept ? { savePathKept: true } : {}),
+      };
+    }
+
     console.log(`Base channel URL detected: ${baseUrl}. Ingesting requested tabs...`);
     
     // First ingest metadata to register/update the channel
@@ -1297,11 +1438,7 @@ export async function ingestUrl(
     };
   }
 
-  const ytdlPath = await getYtdlPath();
-  
   console.log(`Ingesting URL: ${url}`);
-  
-  const env = buildSpawnEnv();
 
   // Run with dump-json to inspect what we are dealing with.
   // We use --flat-playlist to get entries quickly.
@@ -1315,7 +1452,7 @@ export async function ingestUrl(
   let stderr = '';
   let status: number | null = null;
   try {
-    const child = await runProcessAsync(ytdlPath, args, env);
+    const child = await videoImportDeps.runYtdl(args, options.channelMetadataOnly ? CHANNEL_METADATA_TIMEOUT_MS : undefined);
     stdout = child.stdout;
     stderr = child.stderr;
     status = child.status;
@@ -1401,7 +1538,7 @@ export async function ingestUrl(
 
     // Trigger queue processing unconditionally, same as single-video ingestion —
     // this is a deliberate, manual, one-time import, not a passive subscription.
-    startQueueWorker();
+    videoImportDeps.startWorker();
 
     const truncationNote = totalEntries > MAX_PLAYLIST_IMPORT_SIZE
       ? ` Playlist has ${totalEntries} entries — only the first ${MAX_PLAYLIST_IMPORT_SIZE} were processed.`
@@ -1483,6 +1620,7 @@ export async function ingestUrl(
         success: true, 
         message: `Channel metadata for "${channelTitle}" has been updated.`, 
         count: 0,
+        channelId,
         ...(savePathKept ? { savePathKept: true } : {}),
       };
     }
@@ -1577,11 +1715,11 @@ export async function ingestUrl(
     // Only trigger queue processing if the channel is already set to 'downloading'
     const channelState = db.prepare('SELECT sync_status FROM channels WHERE id = ?').get(channelId) as { sync_status: string } | undefined;
     if (channelState?.sync_status === 'downloading') {
-      startQueueWorker();
+      videoImportDeps.startWorker();
     }
 
     // Automatically synchronize playlists for this channel in the background
-    syncChannelPlaylists(channelId).catch(err => {
+    videoImportDeps.syncPlaylists(channelId).catch(err => {
       console.error(`Error during automatic playlists sync for channel ${channelId}:`, err);
     });
 
@@ -1633,7 +1771,7 @@ export async function ingestUrl(
   );
 
   // Trigger queue processing unconditionally since this is a manual ingest
-  startQueueWorker();
+  videoImportDeps.startWorker();
 
   if (!priorStatus) {
     return { success: true, message: `Video "${data.title}" has been added to the download queue.`, count: 1 };
