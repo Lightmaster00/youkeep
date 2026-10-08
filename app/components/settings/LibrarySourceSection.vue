@@ -128,6 +128,20 @@
           <div class="following-info">
             <NuxtLink :to="row.href" class="following-name">{{ row.name }}</NuxtLink>
             <span class="section-desc">{{ row.countLabel }}</span>
+            <span v-if="row.importStatus === 'importing'" class="import-state" :data-testid="`importing-${row.id}`">
+              <span class="badge import-badge">Importing…</span>
+            </span>
+            <span v-else-if="row.importStatus === 'failed'" class="import-state">
+              <span class="badge import-failed-badge" :title="row.importError || undefined" :data-testid="`import-failed-${row.id}`">Import failed</span>
+              <button
+                v-if="config.reimportUrl"
+                type="button"
+                class="btn btn-secondary-dark btn-xs"
+                :disabled="isBusy(row.id)"
+                :data-testid="`retry-import-${row.id}`"
+                @click="onRetryImport(row)"
+              >Retry</button>
+            </span>
           </div>
           <label class="following-sync" :title="row.syncActive ? 'New items download automatically' : 'Nothing new is downloaded'">
             <input
@@ -181,11 +195,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useToast } from '~/composables/useToast';
 import ChannelOptionsModal from '~/components/settings/ChannelOptionsModal.vue';
 import {
-  DEFAULT_SAVE_FOLDER, defaultFollowOptions, visibilityLabel,
+  DEFAULT_SAVE_FOLDER, IMPORT_POLL_MS, defaultFollowOptions, visibilityLabel,
   type FollowedSource, type FollowOptions, type LibrarySourceConfig,
 } from '~/utils/librarySources';
 
@@ -272,6 +286,19 @@ function onImageError(event: Event) {
   if (target) target.src = '/img/default-avatar.png';
 }
 
+// While a source is still being imported in the background, the list is
+// reloaded every IMPORT_POLL_MS so its count and state update by themselves.
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let unmounted = false;
+
+function schedulePoll() {
+  if (unmounted || pollTimer || !rows.value.some((r) => r.importStatus === 'importing')) return;
+  pollTimer = setTimeout(() => {
+    pollTimer = null;
+    loadFollowing();
+  }, IMPORT_POLL_MS);
+}
+
 async function loadFollowing() {
   try {
     const data = await $fetch<any>(props.config.listEndpoint);
@@ -281,6 +308,22 @@ async function loadFollowing() {
     listError.value = true;
   } finally {
     loaded.value = true;
+    schedulePoll();
+  }
+}
+
+async function onRetryImport(row: FollowedSource) {
+  const url = props.config.reimportUrl;
+  if (!url || busyRows.has(row.id)) return;
+  busyRows.add(row.id);
+  try {
+    await $fetch(url(row.id), { method: 'POST' });
+    toast.success(`Importing ${row.name} again.`);
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || `Could not import ${row.name} again.`);
+  } finally {
+    busyRows.delete(row.id);
+    await loadFollowing();
   }
 }
 
@@ -400,6 +443,12 @@ onMounted(() => {
   if (props.config.hasVideoOptions) loadDefaultFolder();
 });
 
+onBeforeUnmount(() => {
+  unmounted = true;
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = null;
+});
+
 defineExpose({ loadFollowing });
 </script>
 
@@ -422,6 +471,9 @@ details[open] > .library-section-summary > .library-chevron { transform: rotate(
 .following-name:hover { text-decoration: underline; }
 .following-sync { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
 .visibility-badge { font-size: 12px; }
+.import-state { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; }
+.import-badge, .import-failed-badge { font-size: 12px; align-self: flex-start; }
+.import-failed-badge { color: #f87171; background: rgba(239, 68, 68, 0.1); }
 .follow-options-checks { display: flex; gap: 16px; flex-wrap: wrap; }
 .following-visibility { width: auto; min-width: 120px; }
 </style>

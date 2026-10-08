@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   musicSource, podcastsSource, defaultFollowOptions, youtubeChannelUrl, youtubeDirectTarget,
-  feedDirectTarget, visibilityLabel, plural, videosSource,
+  feedDirectTarget, visibilityLabel, plural, videosSource, channelHints,
 } from '../../app/utils/librarySources';
 
 describe('youtubeChannelUrl', () => {
@@ -55,9 +55,9 @@ describe('musicSource', () => {
       { id: 'a3', name: 'Three', sync_status: 'active', visibility: 'public', track_count: 0 },
     ] });
     expect(rows).toEqual([
-      { id: 'a1', name: 'One', imageUrl: 'x.jpg', countLabel: '3 tracks', syncActive: true, visibility: 'private', href: '/music?artistId=a1' },
-      { id: 'a2', name: 'Two', imageUrl: '', countLabel: '1 track', syncActive: false, visibility: 'public', href: '/music?artistId=a2' },
-      { id: 'a3', name: 'Three', imageUrl: '', countLabel: '0 tracks', syncActive: false, visibility: 'public', href: '/music?artistId=a3' },
+      { id: 'a1', name: 'One', imageUrl: 'x.jpg', countLabel: '3 tracks', syncActive: true, visibility: 'private', href: '/music?artistId=a1', importStatus: null, importError: '' },
+      { id: 'a2', name: 'Two', imageUrl: '', countLabel: '1 track', syncActive: false, visibility: 'public', href: '/music?artistId=a2', importStatus: null, importError: '' },
+      { id: 'a3', name: 'Three', imageUrl: '', countLabel: '0 tracks', syncActive: false, visibility: 'public', href: '/music?artistId=a3', importStatus: null, importError: '' },
     ]);
     expect(musicSource.readFollowing({})).toEqual([]);
   });
@@ -79,8 +79,38 @@ describe('podcastsSource', () => {
   });
   it('maps followed shows', () => {
     expect(podcastsSource.readFollowing({ shows: [{ id: 's1', title: 'Show', cover_url: 'c.jpg', sync_status: 'downloading', visibility: 'public', episode_count: 2 }] })).toEqual([
-      { id: 's1', name: 'Show', imageUrl: 'c.jpg', countLabel: '2 episodes', syncActive: true, visibility: 'public', href: '/podcasts?showId=s1' },
+      { id: 's1', name: 'Show', imageUrl: 'c.jpg', countLabel: '2 episodes', syncActive: true, visibility: 'public', href: '/podcasts?showId=s1', importStatus: null, importError: '' },
     ]);
+  });
+});
+
+describe('background import', () => {
+  it('sends the search result as hints, and nothing extra for a pasted address', () => {
+    const o = defaultFollowOptions('music');
+    expect(musicSource.buildIngestBody('u', o, { id: 'UC9', title: 'Nine', avatarUrl: 'https://img/9.jpg', handle: '/@nine' })).toEqual({
+      url: 'u', sync_status: 'downloading', channelId: 'UC9', name: 'Nine', avatarUrl: 'https://img/9.jpg',
+    });
+    expect(channelHints({ id: 'UC9', title: 'Nine' })).toEqual({ channelId: 'UC9', name: 'Nine' });
+    expect(channelHints({ id: '', title: 'Nine' })).toEqual({});
+    expect(channelHints({ id: 'UC9' })).toEqual({});
+    expect(channelHints(null)).toEqual({});
+    expect(videosSource.buildIngestBody('u', defaultFollowOptions('videos'), null)).not.toHaveProperty('channelId');
+  });
+
+  it('maps the import state of artists and channels', () => {
+    const rows = musicSource.readFollowing({ artists: [
+      { id: 'a1', name: 'A', import_status: 'importing' },
+      { id: 'a2', name: 'B', import_status: 'failed', import_error: 'HTTP 429' },
+      { id: 'a3', name: 'C', import_status: 'done' },
+    ] });
+    expect(rows.map((r) => [r.importStatus, r.importError])).toEqual([['importing', ''], ['failed', 'HTTP 429'], [null, '']]);
+    expect(videosSource.readFollowing({ channels: [{ id: 'UC1', title: 'X', import_status: 'importing' }] })[0].importStatus).toBe('importing');
+  });
+
+  it('has a retry route for artists and channels only', () => {
+    expect(musicSource.reimportUrl?.('a 1')).toBe('/api/admin/music/artists/a%201/reimport');
+    expect(videosSource.reimportUrl?.('UC1')).toBe('/api/admin/channels/UC1/reimport');
+    expect(podcastsSource.reimportUrl).toBeNull();
   });
 });
 
@@ -114,6 +144,8 @@ describe('videosSource', () => {
       sync_status: 'downloading',
       visibility: 'public',
       custom_save_path: '/data/videos',
+      channelId: 'UC1',
+      name: 'My Channel',
     });
     // The default folder itself is not sent, so the channel keeps following the default.
     expect(videosSource.buildIngestBody('u', { ...o, defaultFolder: '/data/videos/' }, raw)).not.toHaveProperty('custom_save_path');
@@ -139,8 +171,8 @@ describe('videosSource', () => {
       { id: 'UC1', title: 'Chan', avatar_url: 'a.jpg', sync_status: 'downloading', visibility: 'private', completed_count: 12, total_count: 20 },
       { id: 'UC2', title: 'Old', avatar_url: null, sync_status: 'active', visibility: 'public', completed_count: 1, total_count: 1 },
     ] })).toEqual([
-      { id: 'UC1', name: 'Chan', imageUrl: 'a.jpg', countLabel: '12 videos', syncActive: true, visibility: 'private', href: '/channels?channelId=UC1' },
-      { id: 'UC2', name: 'Old', imageUrl: '', countLabel: '1 video', syncActive: false, visibility: 'public', href: '/channels?channelId=UC2' },
+      { id: 'UC1', name: 'Chan', imageUrl: 'a.jpg', countLabel: '12 videos', syncActive: true, visibility: 'private', href: '/channels?channelId=UC1', importStatus: null, importError: '' },
+      { id: 'UC2', name: 'Old', imageUrl: '', countLabel: '1 video', syncActive: false, visibility: 'public', href: '/channels?channelId=UC2', importStatus: null, importError: '' },
     ]);
   });
 

@@ -19,6 +19,16 @@ export interface FollowedSource {
   syncActive: boolean;
   visibility: string;
   href: string;
+  /** 'importing' while the background listing runs, 'failed' when it failed, null otherwise. */
+  importStatus: ImportStatus;
+  /** Why the last import failed ('' otherwise). */
+  importError: string;
+}
+
+export type ImportStatus = 'importing' | 'failed' | null;
+
+export function readImportStatus(raw: any): ImportStatus {
+  return raw?.import_status === 'importing' || raw?.import_status === 'failed' ? raw.import_status : null;
 }
 
 export interface FollowOptions {
@@ -61,10 +71,15 @@ export interface LibrarySourceConfig {
   syncAllStartedMessage: string;
   /** Only channels have a visibility route. */
   visibilityUrl: ((id: string) => string) | null;
+  /** Runs a failed background import again (sources listed in the background only). */
+  reimportUrl: ((id: string) => string) | null;
   hasVideoOptions: boolean;
 }
 
 export const DEFAULT_SAVE_FOLDER = '/downloads/videos';
+
+/** How often a Following list reloads while one of its sources is importing. */
+export const IMPORT_POLL_MS = 3000;
 
 export function defaultFollowOptions(kind: SourceKind): FollowOptions {
   return {
@@ -132,6 +147,19 @@ export function channelResultView(raw: any): SearchResultView {
   };
 }
 
+/**
+ * Search-result hints sent with a follow: with them the server creates the
+ * source at once and lists its content in the background. Empty for a pasted
+ * address (no search result).
+ */
+export function channelHints(raw: any): { channelId?: string; name?: string; avatarUrl?: string } {
+  const channelId = typeof raw?.id === 'string' ? raw.id.trim() : '';
+  const name = typeof raw?.title === 'string' ? raw.title.trim() : '';
+  if (!channelId || !name) return {};
+  const avatarUrl = typeof raw?.avatarUrl === 'string' && raw.avatarUrl ? raw.avatarUrl : '';
+  return { channelId, name, ...(avatarUrl ? { avatarUrl } : {}) };
+}
+
 function syncBody(options: FollowOptions) {
   return {
     sync_status: options.autoSync ? 'downloading' : 'paused',
@@ -154,7 +182,7 @@ export const musicSource: LibrarySourceConfig = {
   noTargetMessage: "This result has no channel address, so it can't be followed.",
   noResultsMessage: 'No artists found for this search.',
   ingestEndpoint: '/api/admin/music/ingest',
-  buildIngestBody: (target, options) => ({ url: target, ...syncBody(options) }),
+  buildIngestBody: (target, options, raw) => ({ url: target, ...syncBody(options), ...channelHints(raw) }),
   listEndpoint: '/api/admin/music/queue',
   readFollowing: (data) => (Array.isArray(data?.artists) ? data.artists : []).map((a: any) => ({
     id: String(a.id),
@@ -164,6 +192,8 @@ export const musicSource: LibrarySourceConfig = {
     syncActive: a.sync_status === 'downloading',
     visibility: String(a.visibility || 'public'),
     href: `/music?artistId=${enc(String(a.id))}`,
+    importStatus: readImportStatus(a),
+    importError: String(a.import_error || ''),
   })),
   emptyFollowingMessage: "You're not following any artist yet.",
   pauseUrl: (id) => `/api/admin/music/artists/${enc(id)}/pause`,
@@ -171,6 +201,7 @@ export const musicSource: LibrarySourceConfig = {
   syncAllEndpoint: '/api/admin/music/sync-all',
   syncAllStartedMessage: 'Sync started for every followed artist.',
   visibilityUrl: null,
+  reimportUrl: (id) => `/api/admin/music/artists/${enc(id)}/reimport`,
   hasVideoOptions: false,
 };
 
@@ -202,6 +233,8 @@ export const podcastsSource: LibrarySourceConfig = {
     syncActive: s.sync_status === 'downloading',
     visibility: String(s.visibility || 'public'),
     href: `/podcasts?showId=${enc(String(s.id))}`,
+    importStatus: null,
+    importError: '',
   })),
   emptyFollowingMessage: "You're not following any podcast yet.",
   pauseUrl: (id) => `/api/admin/podcasts/shows/${enc(id)}/pause`,
@@ -209,6 +242,7 @@ export const podcastsSource: LibrarySourceConfig = {
   syncAllEndpoint: '/api/admin/podcasts/sync-all',
   syncAllStartedMessage: 'Sync started for every followed podcast.',
   visibilityUrl: null,
+  reimportUrl: null,
   hasVideoOptions: false,
 };
 
@@ -225,7 +259,7 @@ export const videosSource: LibrarySourceConfig = {
   noTargetMessage: "This result has no channel address, so it can't be followed.",
   noResultsMessage: 'No channels found for this search.',
   ingestEndpoint: '/api/admin/downloader/ingest',
-  buildIngestBody: (target, options) => {
+  buildIngestBody: (target, options, raw) => {
     // The base folder only: the downloader adds the channel folder and one
     // folder per video inside it. Sent only when it differs from the default,
     // so the channel keeps following the default folder (and a channel that is
@@ -241,6 +275,7 @@ export const videosSource: LibrarySourceConfig = {
       sync_status: options.autoSync ? 'downloading' : 'paused',
       visibility: options.visibility || 'public',
       ...(custom ? { custom_save_path: custom } : {}),
+      ...channelHints(raw),
     };
   },
   listEndpoint: '/api/channels',
@@ -252,6 +287,8 @@ export const videosSource: LibrarySourceConfig = {
     syncActive: c.sync_status === 'downloading',
     visibility: String(c.visibility || 'public'),
     href: `/channels?channelId=${enc(String(c.id))}`,
+    importStatus: readImportStatus(c),
+    importError: String(c.import_error || ''),
   })),
   emptyFollowingMessage: "You're not following any channel yet.",
   pauseUrl: (id) => `/api/admin/channels/${enc(id)}/pause`,
@@ -259,6 +296,7 @@ export const videosSource: LibrarySourceConfig = {
   syncAllEndpoint: '/api/admin/downloader/sync-all',
   syncAllStartedMessage: 'Sync started for every followed channel.',
   visibilityUrl: (id) => `/api/admin/channels/${enc(id)}/visibility`,
+  reimportUrl: (id) => `/api/admin/channels/${enc(id)}/reimport`,
   hasVideoOptions: true,
 };
 

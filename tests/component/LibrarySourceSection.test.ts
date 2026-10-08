@@ -72,7 +72,8 @@ describe('LibrarySourceSection — Music', () => {
 
     const calls = posts('/api/admin/music/ingest');
     expect(calls).toHaveLength(1);
-    expect(calls[0][1].body).toEqual({ url: 'https://www.youtube.com/@artist', sync_status: 'downloading' });
+    // The search result goes along as hints so the server can answer at once.
+    expect(calls[0][1].body).toEqual({ url: 'https://www.youtube.com/@artist', sync_status: 'downloading', channelId: 'UC1', name: 'Artist' });
     expect(followButtons(w)).toHaveLength(0);
     expect(gets('/api/admin/music/queue').length).toBe(listCallsBefore + 1);
     expect(toastMessages()).toContain('Now following Artist.');
@@ -148,7 +149,7 @@ describe('LibrarySourceSection — Music', () => {
     await w.find('[data-testid="option-visibility"]').setValue('private');
     await followButtons(w)[0].trigger('click');
     await flushPromises();
-    expect(posts('/api/admin/music/ingest')[0][1].body).toEqual({ url: 'https://www.youtube.com/@a', sync_status: 'paused', visibility: 'private' });
+    expect(posts('/api/admin/music/ingest')[0][1].body).toEqual({ url: 'https://www.youtube.com/@a', sync_status: 'paused', visibility: 'private', channelId: 'UC1', name: 'A' });
   });
 
   it('follows a pasted @handle directly without searching', async () => {
@@ -385,5 +386,99 @@ describe('LibrarySourceSection — Podcasts following', () => {
     await flushPromises();
     expect(posts('/api/admin/podcasts/sync-all')).toHaveLength(1);
     expect(toastMessages()).toContain('Sync started for every followed podcast.');
+  });
+});
+
+describe('LibrarySourceSection — background import', () => {
+  const mountMusic = () => mountSuspended(LibrarySourceSection, { props: { config: musicSource } });
+  const artistRow = (extra: Record<string, unknown>) => ({ artists: [{ id: 'a1', name: 'Art', sync_status: 'downloading', visibility: 'public', track_count: 0, ...extra }] });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('answers the follow at once, shows "Importing…" and reloads the list every 3 s until the import is done', async () => {
+    searchPayload = { channels: [{ id: 'UC1', handle: '/@art', title: 'Art', avatarUrl: 'https://img/a.jpg' }] };
+    const w = await mountMusic();
+    await flushPromises();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+
+    listPayload = artistRow({ import_status: 'importing' });
+    await search(w);
+    await followButtons(w)[0].trigger('click');
+    await flushPromises();
+    expect(posts('/api/admin/music/ingest')[0][1].body).toMatchObject({ channelId: 'UC1', name: 'Art', avatarUrl: 'https://img/a.jpg' });
+    expect(w.find('[data-testid="importing-a1"]').text()).toBe('Importing…');
+    const listCalls = gets('/api/admin/music/queue').length;
+
+    // Still importing: one more reload after 3 s.
+    await vi.advanceTimersByTimeAsync(2999);
+    expect(gets('/api/admin/music/queue').length).toBe(listCalls);
+    await vi.advanceTimersByTimeAsync(1);
+    await flushPromises();
+    expect(gets('/api/admin/music/queue').length).toBe(listCalls + 1);
+
+    // The import ends: the row updates and polling stops.
+    listPayload = artistRow({ import_status: 'done', track_count: 42 });
+    await vi.advanceTimersByTimeAsync(3000);
+    await flushPromises();
+    expect(gets('/api/admin/music/queue').length).toBe(listCalls + 2);
+    expect(w.find('[data-testid="importing-a1"]').exists()).toBe(false);
+    expect(w.find('[data-testid="following-a1"]').text()).toContain('42 tracks');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(gets('/api/admin/music/queue').length).toBe(listCalls + 2);
+  });
+
+  it('does not poll when nothing is importing, and stops polling once unmounted', async () => {
+    listPayload = artistRow({});
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const w = await mountMusic();
+    await flushPromises();
+    const before = gets('/api/admin/music/queue').length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(gets('/api/admin/music/queue').length).toBe(before);
+
+    listPayload = artistRow({ import_status: 'importing' });
+    await (w.vm as any).loadFollowing();
+    await flushPromises();
+    const polled = gets('/api/admin/music/queue').length;
+    w.unmount();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(gets('/api/admin/music/queue').length).toBe(polled);
+  });
+
+  it('shows "Import failed" with the error and Retry runs the import again', async () => {
+    listPayload = artistRow({ import_status: 'failed', import_error: 'HTTP Error 429' });
+    const w = await mountMusic();
+    await flushPromises();
+    const badge = w.find('[data-testid="import-failed-a1"]');
+    expect(badge.text()).toBe('Import failed');
+    expect(badge.attributes('title')).toBe('HTTP Error 429');
+
+    listPayload = artistRow({ import_status: 'importing' });
+    await w.find('[data-testid="retry-import-a1"]').trigger('click');
+    await flushPromises();
+    expect(posts('/api/admin/music/artists/a1/reimport')).toHaveLength(1);
+    expect(toastMessages()).toContain('Importing Art again.');
+    expect(w.find('[data-testid="retry-import-a1"]').exists()).toBe(false);
+    expect(w.find('[data-testid="importing-a1"]').exists()).toBe(true);
+    w.unmount();
+  });
+
+  it('podcasts never show an import state', async () => {
+    listPayload = { shows: [{ id: 's1', title: 'Show', import_status: 'importing', episode_count: 1 }] };
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: podcastsSource } });
+    await flushPromises();
+    expect(w.find('[data-testid="importing-s1"]').exists()).toBe(false);
+  });
+});
+
+describe('LibrarySourceSection — slow search', () => {
+  it('shows the server\'s time limit message', async () => {
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: musicSource } });
+    fetchMock.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('504'), { data: { statusMessage: 'The search took too long. Try again.' } });
+    });
+    await search(w);
+    expect(toastMessages()).toContain('The search took too long. Try again.');
+    expect(w.find('[data-testid="follow-search-submit"]').text()).toBe('Search');
   });
 });

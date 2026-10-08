@@ -77,6 +77,8 @@ describe('LibrarySourceSection — Videos', () => {
       download_lives: false,
       sync_status: 'downloading',
       visibility: 'public',
+      channelId: 'UC1',
+      name: 'My Channel',
     }); // the pre-filled default folder is not sent: the channel follows the default
     expect(w.find('[data-testid="follow-result-0"]').exists()).toBe(false);
   });
@@ -116,6 +118,8 @@ describe('LibrarySourceSection — Videos', () => {
       sync_status: 'paused',
       visibility: 'private',
       custom_save_path: '/mnt/yt',
+      channelId: 'UC1',
+      name: 'My Channel',
     });
   });
 
