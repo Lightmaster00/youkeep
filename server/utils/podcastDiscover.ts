@@ -2,7 +2,7 @@ import type Database from 'better-sqlite3';
 import { podcastVisibilityClause } from './podcastVisibility';
 import type { SessionForVisibility } from './musicVisibility';
 import type { PodcastUserSession } from './podcastFollows';
-import { mergeSpellings } from './musicDiscover';
+import { mergeSpellings, normaliseLabelKey, rawValuesForKeys } from './musicDiscover';
 
 // Queries behind the Podcasts Discover page. Every list only holds shows the
 // caller may see. Follower and listener figures are plain counts: no list
@@ -16,10 +16,26 @@ function visibleShowWhere(session: SessionForVisibility | null): string {
   return clause || '1 = 1';
 }
 
-// Optional "same language" filter (case and surrounding spaces ignored).
-function languageFilter(language: string | null): { sql: string; params: string[] } {
-  if (!language || !language.trim()) return { sql: '', params: [] };
-  return { sql: ' AND LOWER(TRIM(s.language)) = LOWER(TRIM(?))', params: [language] };
+// Every distinct non-empty language spelling of the shows (any visibility):
+// only used to turn normalised keys back into raw values.
+function allLanguageSpellings(db: Database.Database): string[] {
+  return (db.prepare(`SELECT DISTINCT language FROM podcast_shows WHERE language IS NOT NULL AND TRIM(language) != ''`)
+    .all() as Array<{ language: string }>).map((r) => r.language);
+}
+
+// `AND s.language IN (...)` for the raw spellings of the given normalised
+// keys; matches nothing when no show has any of them.
+function languageInClause(db: Database.Database, keys: string[]): { sql: string; params: string[] } {
+  const values = rawValuesForKeys(allLanguageSpellings(db), keys);
+  if (values.length === 0) return { sql: ' AND 0', params: [] };
+  return { sql: ` AND s.language IN (${values.map(() => '?').join(',')})`, params: values };
+}
+
+// Optional "same language" filter (Unicode case and surrounding spaces ignored).
+function languageFilter(db: Database.Database, language: string | null): { sql: string; params: string[] } {
+  const key = normaliseLabelKey(language ?? '');
+  if (!key) return { sql: '', params: [] };
+  return languageInClause(db, [key]);
 }
 
 // The fields of the shows index (what PodcastShowCard shows), aliases s.
@@ -37,7 +53,7 @@ const LATEST_EPISODE_TS_SQL = `(SELECT MAX(COALESCE(e.pub_ts, e.created_at)) FRO
 // "Popular with listeners": shows with at least one follower, most followed
 // first, then the biggest catalogues.
 export function listPopularShows(db: Database.Database, session: SessionForVisibility | null, limit: number, language: string | null): any[] {
-  const lang = languageFilter(language);
+  const lang = languageFilter(db, language);
   return db.prepare(`
     SELECT * FROM (
       SELECT ${SHOW_COLUMNS}, ${FOLLOWER_COUNT_SQL} as followerCount
@@ -53,7 +69,7 @@ export function listPopularShows(db: Database.Database, session: SessionForVisib
 // "Recently updated": shows ordered by their newest playable episode, with
 // that episode's title and date.
 export function listRecentlyUpdatedShows(db: Database.Database, session: SessionForVisibility | null, limit: number, language: string | null): any[] {
-  const lang = languageFilter(language);
+  const lang = languageFilter(db, language);
   return db.prepare(`
     SELECT * FROM (
       SELECT ${SHOW_COLUMNS},
@@ -105,29 +121,29 @@ export function listBecauseYouFollow(
   if (followed.length === 0) return { basedOn: null, shows: [] };
   const basedOn = { id: followed[0]!.id, title: followed[0]!.title };
 
-  const languages = [...new Set(followed.map((s) => (s.language ?? '').trim().toLowerCase()).filter(Boolean))];
-  if (languages.length === 0) return { basedOn, shows: [] };
+  const languageKeys = followed.map((s) => normaliseLabelKey(s.language ?? '')).filter(Boolean);
+  if (languageKeys.length === 0) return { basedOn, shows: [] };
+  const lang = languageInClause(db, languageKeys);
   const shows = db.prepare(`
     SELECT ${SHOW_COLUMNS}, ${FOLLOWER_COUNT_SQL} as followerCount
     FROM podcast_shows s
     WHERE ${visibleShowWhere(session)}
-      AND LOWER(TRIM(s.language)) IN (${languages.map(() => '?').join(',')})
+      ${lang.sql}
       AND s.id NOT IN (SELECT show_id FROM podcast_show_follows WHERE user_id = ?)
     ORDER BY followerCount DESC, COALESCE(${LATEST_EPISODE_TS_SQL}, s.created_at) DESC, s.id ASC
     LIMIT ?
-  `).all(...languages, session.id, Math.trunc(limit));
+  `).all(...lang.params, session.id, Math.trunc(limit));
   return { basedOn, shows };
 }
 
-// Languages of the visible shows (case and surrounding spaces ignored, each
+// Languages of the visible shows (Unicode case and surrounding spaces ignored, each
 // labelled with its most common spelling), most shows first.
 export function listShowLanguages(db: Database.Database, session: SessionForVisibility | null): Array<{ language: string; showCount: number }> {
   const rows = db.prepare(`
-    SELECT LOWER(TRIM(s.language)) as key, TRIM(s.language) as spelling, COUNT(*) as cnt
+    SELECT s.language as value, COUNT(*) as cnt
     FROM podcast_shows s
     WHERE ${visibleShowWhere(session)} AND s.language IS NOT NULL AND TRIM(s.language) != ''
-    GROUP BY key, spelling
-    ORDER BY key, cnt DESC, spelling
-  `).all() as Array<{ key: string; spelling: string; cnt: number }>;
+    GROUP BY s.language
+  `).all() as Array<{ value: string; cnt: number }>;
   return mergeSpellings(rows).map(({ label, count }) => ({ language: label, showCount: count }));
 }

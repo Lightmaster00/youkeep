@@ -185,6 +185,41 @@ describe('GET /api/podcasts/discover/because-you-follow', () => {
   });
 });
 
+describe('accented podcast languages', () => {
+  beforeEach(() => {
+    insertPodcastShow(db, { id: 'fr1', language: 'Français', createdAt: 1 });
+    insertPodcastShow(db, { id: 'fr2', language: 'FRANÇAIS', createdAt: 1 });
+    insertPodcastShow(db, { id: 'fr3', language: 'franc\u0327ais ', createdAt: 1 });
+    insertPodcastShow(db, { id: 'plain', language: 'francais', createdAt: 1 });
+    insertPodcastEpisode(db, { id: 'ep1', showId: 'fr1', pubTs: 300 });
+    insertPodcastEpisode(db, { id: 'ep2', showId: 'fr2', pubTs: 200 });
+    insertPodcastEpisode(db, { id: 'ep3', showId: 'fr3', pubTs: 100 });
+    insertPodcastEpisode(db, { id: 'ep4', showId: 'plain', pubTs: 400 });
+    ['a', 'b'].forEach(user);
+    follow('a', 'fr1'); follow('a', 'fr2'); follow('b', 'fr2'); follow('a', 'fr3'); follow('a', 'plain');
+  });
+
+  it('merges spellings into one language chip', async () => {
+    const r: any = await languagesHandler(ev('/api/podcasts/discover/languages'));
+    expect(r.languages).toEqual([{ language: 'FRANÇAIS', showCount: 3 }, { language: 'francais', showCount: 1 }]);
+  });
+
+  it('filters popular and recently updated shows by any spelling', async () => {
+    for (const lang of ['français', 'FRANÇAIS', encodeURIComponent('franc\u0327ais')]) {
+      const popular: any = await popularHandler(ev(`/api/podcasts/discover/popular?language=${lang}`));
+      expect(ids(popular.shows)).toEqual(['fr2', 'fr1', 'fr3']);
+      const recent: any = await recentlyUpdatedHandler(ev(`/api/podcasts/discover/recently-updated?language=${lang}`));
+      expect(ids(recent.shows)).toEqual(['fr1', 'fr2', 'fr3']);
+    }
+  });
+
+  it('suggests shows of the same language in another spelling', async () => {
+    const c = login('u1');
+    follow('u1', 'fr1');
+    expect(ids((await becauseHandler(ev('/api/podcasts/discover/because-you-follow', c)) as any).shows)).toEqual(['fr2', 'fr3']);
+  });
+});
+
 describe('GET /api/podcasts/discover/languages', () => {
   it('counts visible shows per language, grouped without regard to case', async () => {
     insertPodcastShow(db, { id: 'a', language: 'en' });

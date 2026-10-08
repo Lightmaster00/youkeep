@@ -32,8 +32,31 @@ function visibleTrackWhere(session: SessionForVisibility | null): string {
   return `t.download_status = 'completed'${clause ? ` AND ${clause}` : ''}`;
 }
 
-// The normalised form genres are grouped and matched by (SQL side).
-const GENRE_KEY_SQL = 'LOWER(TRIM(t.genre))';
+// The form genres and podcast languages are grouped and matched by: trimmed,
+// NFC-normalised and lower-cased with full Unicode rules (SQLite's LOWER only
+// folds ASCII letters, so accented spellings would stay apart).
+export function normaliseLabelKey(value: string): string {
+  return value.trim().normalize('NFC').toLocaleLowerCase('en-US');
+}
+
+// Those of `rawValues` whose normalised key is one of `keys`, for a
+// parameterised `IN (...)` on the raw column.
+export function rawValuesForKeys(rawValues: string[], keys: Iterable<string>): string[] {
+  const wanted = new Set(keys);
+  return rawValues.filter((v) => wanted.has(normaliseLabelKey(v)));
+}
+
+// Every distinct non-empty genre spelling in the library (any visibility):
+// only used to turn normalised keys back into raw values, so the result never
+// reaches the caller.
+function allGenreSpellings(db: Database.Database): string[] {
+  return (db.prepare(`SELECT DISTINCT genre FROM music_tracks WHERE genre IS NOT NULL AND TRIM(genre) != ''`)
+    .all() as Array<{ genre: string }>).map((r) => r.genre);
+}
+
+function placeholders(values: unknown[]): string {
+  return values.map(() => '?').join(',');
+}
 
 // A small seeded generator (mulberry32 over a string hash), so a given seed
 // always produces the same mix.
@@ -82,11 +105,12 @@ export function buildLikedMix(db: Database.Database, session: DiscoverUserSessio
   const picked = likedSample.slice(0, LIKED_MIX_MAX_LIKED);
 
   const artistIds = [...new Set(liked.map((t) => t.artist_id))];
-  const genreKeys = [...new Set(liked.map((t) => (t.genre ?? '').trim().toLowerCase()).filter(Boolean))];
+  const genreKeys = liked.map((t) => normaliseLabelKey(t.genre ?? '')).filter(Boolean);
+  const genreValues = genreKeys.length > 0 ? rawValuesForKeys(allGenreSpellings(db), genreKeys) : [];
   const related: any[] = [];
   if (artistIds.length > 0) {
-    const artistMarks = artistIds.map(() => '?').join(',');
-    const genreSql = genreKeys.length > 0 ? ` OR ${GENRE_KEY_SQL} IN (${genreKeys.map(() => '?').join(',')})` : '';
+    const artistMarks = placeholders(artistIds);
+    const genreSql = genreValues.length > 0 ? ` OR t.genre IN (${placeholders(genreValues)})` : '';
     related.push(...db.prepare(`
       SELECT ${MUSIC_TRACK_COLUMNS}
       FROM music_tracks t
@@ -95,7 +119,7 @@ export function buildLikedMix(db: Database.Database, session: DiscoverUserSessio
         AND (t.artist_id IN (${artistMarks})${genreSql})
         AND t.id NOT IN (SELECT track_id FROM music_favorites WHERE user_id = ?)
       ORDER BY t.id
-    `).all(...artistIds, ...genreKeys, session.id) as any[]);
+    `).all(...artistIds, ...genreValues, session.id) as any[]);
   }
 
   const mix = [...picked, ...shuffleWith(related, random).slice(0, LIKED_MIX_SIZE - picked.length)];
@@ -104,30 +128,40 @@ export function buildLikedMix(db: Database.Database, session: DiscoverUserSessio
   return shuffleWith(mix, random);
 }
 
-// Folds `(key, spelling, count)` rows, sorted by key then most common
-// spelling first, into one entry per key labelled with that spelling, biggest
-// first (ties by label). Used for genres and podcast languages.
-export function mergeSpellings(rows: Array<{ key: string; spelling: string; cnt: number }>): Array<{ label: string; count: number }> {
-  const groups = new Map<string, { label: string; count: number }>();
+// Folds `(raw value, count)` rows into one entry per normalised key, labelled
+// with its most common trimmed spelling (ties: alphabetical), biggest first
+// (ties by label). Used for genres and podcast languages.
+export function mergeSpellings(rows: Array<{ value: string; cnt: number }>): Array<{ label: string; count: number }> {
+  const groups = new Map<string, { count: number; spellings: Map<string, number> }>();
   for (const row of rows) {
-    const group = groups.get(row.key);
-    if (group) group.count += row.cnt;
-    else groups.set(row.key, { label: row.spelling, count: row.cnt });
+    const spelling = row.value.trim();
+    if (!spelling) continue;
+    const key = normaliseLabelKey(spelling);
+    const group = groups.get(key) ?? { count: 0, spellings: new Map<string, number>() };
+    group.count += row.cnt;
+    group.spellings.set(spelling, (group.spellings.get(spelling) ?? 0) + row.cnt);
+    groups.set(key, group);
   }
-  return [...groups.values()].sort((x, y) => y.count - x.count || x.label.localeCompare(y.label));
+  const byLabel = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+  return [...groups.values()]
+    .map(({ count, spellings }) => {
+      const [label] = [...spellings].sort(([a, n], [b, m]) => m - n || byLabel(a, b))[0]!;
+      return { label, count };
+    })
+    .sort((x, y) => y.count - x.count || byLabel(x.label, y.label));
 }
 
-// Genres of the visible library, grouped without regard to case or
-// surrounding spaces; each is labelled with its most common spelling.
+// Genres of the visible library, grouped without regard to case, accents'
+// composition or surrounding spaces; each is labelled with its most common
+// spelling.
 export function listGenres(db: Database.Database, session: SessionForVisibility | null): Array<{ genre: string; trackCount: number }> {
   const rows = db.prepare(`
-    SELECT ${GENRE_KEY_SQL} as key, TRIM(t.genre) as spelling, COUNT(*) as cnt
+    SELECT t.genre as value, COUNT(*) as cnt
     FROM music_tracks t
     JOIN music_artists a ON t.artist_id = a.id
     WHERE ${visibleTrackWhere(session)} AND t.genre IS NOT NULL AND TRIM(t.genre) != ''
-    GROUP BY key, spelling
-    ORDER BY key, cnt DESC, spelling
-  `).all() as Array<{ key: string; spelling: string; cnt: number }>;
+    GROUP BY t.genre
+  `).all() as Array<{ value: string; cnt: number }>;
   return mergeSpellings(rows)
     .map(({ label, count }) => ({ genre: label, trackCount: count }))
     .slice(0, GENRE_TILE_LIMIT);
@@ -141,7 +175,10 @@ export function listGenreTracks(
   limit: number,
   offset: number
 ): { items: any[]; total: number } {
-  const where = `${visibleTrackWhere(session)} AND ${GENRE_KEY_SQL} = LOWER(TRIM(?))`;
+  const key = normaliseLabelKey(genre);
+  const values = key ? rawValuesForKeys(allGenreSpellings(db), [key]) : [];
+  if (values.length === 0) return { items: [], total: 0 };
+  const where = `${visibleTrackWhere(session)} AND t.genre IN (${placeholders(values)})`;
   const items = db.prepare(`
     SELECT ${MUSIC_TRACK_COLUMNS}
     FROM music_tracks t
@@ -149,10 +186,10 @@ export function listGenreTracks(
     WHERE ${where}
     ORDER BY t.created_at DESC, t.id DESC
     LIMIT ? OFFSET ?
-  `).all(genre, Math.trunc(limit), Math.trunc(offset));
+  `).all(...values, Math.trunc(limit), Math.trunc(offset));
   const total = (db.prepare(`
     SELECT COUNT(*) as cnt FROM music_tracks t JOIN music_artists a ON t.artist_id = a.id WHERE ${where}
-  `).get(genre) as { cnt: number }).cnt;
+  `).get(...values) as { cnt: number }).cnt;
   return { items, total };
 }
 

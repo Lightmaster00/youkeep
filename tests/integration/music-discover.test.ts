@@ -63,6 +63,16 @@ describe('GET /api/music/playlists/liked-mix', () => {
     expect(tracks[0]).toHaveProperty('local_file_path');
   });
 
+  it('tops up with tracks of the same accented genre in another spelling', async () => {
+    const c = login('u1');
+    insertMusicArtist(db, { id: 'other', visibility: 'public' });
+    insertMusicTrack(db, { id: 'liked1', artistId: 'pub', genre: 'Électro' });
+    insertMusicTrack(db, { id: 'sameGenre', artistId: 'other', genre: 'ÉLECTRO' });
+    insertMusicTrack(db, { id: 'otherGenre', artistId: 'other', genre: 'Electro' });
+    like('u1', 'liked1');
+    expect(ids(await mix(c)).sort()).toEqual(['liked1', 'sameGenre']);
+  });
+
   it('ignores liked tracks the user can no longer see', async () => {
     const c = login('u1');
     insertMusicTrack(db, { id: 'hidden', artistId: 'ultra', genre: 'Rock' });
@@ -122,6 +132,21 @@ describe('GET /api/music/genres', () => {
     expect((await genres(login('boss', 'admin'))).map((g: any) => g.genre)).toEqual(['hip hop', 'Jazz', 'Metal']);
   });
 
+  it('merges accented spellings that differ in case or composition, labelled with the most common one', async () => {
+    insertMusicTrack(db, { id: 'e1', artistId: 'pub', genre: 'Électro' });
+    insertMusicTrack(db, { id: 'e2', artistId: 'pub', genre: 'Électro' });
+    insertMusicTrack(db, { id: 'e3', artistId: 'pub', genre: 'électro' });
+    insertMusicTrack(db, { id: 'e4', artistId: 'pub', genre: 'ÉLECTRO ' });
+    insertMusicTrack(db, { id: 'e5', artistId: 'pub', genre: 'E\u0301lectro' });
+    insertMusicTrack(db, { id: 'j1', artistId: 'pub', genre: 'jazz' });
+    insertMusicTrack(db, { id: 'j2', artistId: 'pub', genre: 'Jazz' });
+    expect(await genres()).toEqual([
+      { genre: 'Électro', trackCount: 5 },
+      // Tie between spellings: alphabetical.
+      { genre: 'Jazz', trackCount: 2 },
+    ]);
+  });
+
   it('returns the biggest genres first, at most the tile limit', async () => {
     for (let i = 0; i < GENRE_TILE_LIMIT + 5; i++) {
       for (let j = 0; j <= i; j++) insertMusicTrack(db, { id: `t${i}-${j}`, artistId: 'pub', genre: `G${i}` });
@@ -159,6 +184,19 @@ describe('GET /api/music/genres/:name/tracks', () => {
 
   it('answers an empty list for an unknown genre', async () => {
     expect(await tracks('Polka')).toEqual({ tracks: [], total: 0 });
+  });
+
+  it('returns the tracks of every spelling of an accented genre, whichever spelling is asked', async () => {
+    insertMusicTrack(db, { id: 'e1', artistId: 'pub', genre: 'Électro', createdAt: 10 });
+    insertMusicTrack(db, { id: 'e2', artistId: 'pub', genre: 'électro', createdAt: 20 });
+    insertMusicTrack(db, { id: 'e3', artistId: 'pub', genre: 'E\u0301LECTRO', createdAt: 30 });
+    insertMusicTrack(db, { id: 'e4', artistId: 'ultra', genre: 'électro', createdAt: 40 });
+    for (const name of ['Électro', 'électro', 'ÉLECTRO', ' e\u0301lectro ']) {
+      const r = await tracks(name);
+      expect(ids(r.tracks)).toEqual(['e3', 'e2', 'e1']);
+      expect(r.total).toBe(3);
+    }
+    expect(ids((await tracks('electro')).tracks)).toEqual([]);
   });
 
   it('decodes an encoded name', async () => {
