@@ -104,26 +104,32 @@ export function buildLikedMix(db: Database.Database, session: DiscoverUserSessio
   return shuffleWith(mix, random);
 }
 
+// Folds `(key, spelling, count)` rows, sorted by key then most common
+// spelling first, into one entry per key labelled with that spelling, biggest
+// first (ties by label). Used for genres and podcast languages.
+export function mergeSpellings(rows: Array<{ key: string; spelling: string; cnt: number }>): Array<{ label: string; count: number }> {
+  const groups = new Map<string, { label: string; count: number }>();
+  for (const row of rows) {
+    const group = groups.get(row.key);
+    if (group) group.count += row.cnt;
+    else groups.set(row.key, { label: row.spelling, count: row.cnt });
+  }
+  return [...groups.values()].sort((x, y) => y.count - x.count || x.label.localeCompare(y.label));
+}
+
 // Genres of the visible library, grouped without regard to case or
 // surrounding spaces; each is labelled with its most common spelling.
 export function listGenres(db: Database.Database, session: SessionForVisibility | null): Array<{ genre: string; trackCount: number }> {
   const rows = db.prepare(`
-    SELECT ${GENRE_KEY_SQL} as genre_key, TRIM(t.genre) as spelling, COUNT(*) as cnt
+    SELECT ${GENRE_KEY_SQL} as key, TRIM(t.genre) as spelling, COUNT(*) as cnt
     FROM music_tracks t
     JOIN music_artists a ON t.artist_id = a.id
     WHERE ${visibleTrackWhere(session)} AND t.genre IS NOT NULL AND TRIM(t.genre) != ''
-    GROUP BY genre_key, spelling
-    ORDER BY genre_key, cnt DESC, spelling
-  `).all() as Array<{ genre_key: string; spelling: string; cnt: number }>;
-  const groups = new Map<string, { genre: string; trackCount: number }>();
-  for (const row of rows) {
-    const group = groups.get(row.genre_key);
-    // Rows of a group arrive most common spelling first.
-    if (group) group.trackCount += row.cnt;
-    else groups.set(row.genre_key, { genre: row.spelling, trackCount: row.cnt });
-  }
-  return [...groups.values()]
-    .sort((x, y) => y.trackCount - x.trackCount || x.genre.localeCompare(y.genre))
+    GROUP BY key, spelling
+    ORDER BY key, cnt DESC, spelling
+  `).all() as Array<{ key: string; spelling: string; cnt: number }>;
+  return mergeSpellings(rows)
+    .map(({ label, count }) => ({ genre: label, trackCount: count }))
     .slice(0, GENRE_TILE_LIMIT);
 }
 

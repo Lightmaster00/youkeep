@@ -504,17 +504,20 @@ export function insertPodcastShow(db: Database.Database, opts: {
   title?: string;
   syncStatus?: string;
   visibility?: string;
+  language?: string | null;
+  createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO podcast_shows (id, feed_url, title, sync_status, visibility, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO podcast_shows (id, feed_url, title, sync_status, visibility, language, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.feedUrl ?? `https://example.com/feeds/${opts.id}.xml`,
     opts.title ?? `Show ${opts.id}`,
     opts.syncStatus ?? 'paused',
     opts.visibility ?? 'public',
-    Date.now()
+    opts.language ?? null,
+    opts.createdAt ?? Date.now()
   );
 }
 
