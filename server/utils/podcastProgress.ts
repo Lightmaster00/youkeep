@@ -174,3 +174,37 @@ export function listSubscribedEpisodes(
   const total = (db.prepare(`SELECT COUNT(*) as cnt ${from}`).get(session.id) as { cnt: number }).cnt;
   return { items: withProgress(rows), total };
 }
+
+// Listening history: every episode the caller started or marked as played
+// (one progress row each), most recently updated first, with its progress and
+// download status. Only episodes of shows the caller may currently see.
+export function listPodcastHistory(
+  db: Database.Database,
+  session: PodcastUserSession,
+  limit: number,
+  offset: number
+): { items: any[]; total: number } {
+  const from = `
+    FROM podcast_episode_progress p
+    JOIN podcast_episodes e ON e.id = p.episode_id
+    JOIN podcast_shows s ON s.id = e.show_id
+    WHERE p.user_id = ?${visibleWhere(session)}`;
+  const rows = db.prepare(`
+    SELECT ${EPISODE_COLUMNS}, e.download_status, ${PROGRESS_COLUMNS}
+    ${from}
+    ORDER BY p.updated_at DESC, p.episode_id DESC
+    LIMIT ? OFFSET ?
+  `).all(session.id, Math.trunc(limit), Math.trunc(offset));
+  const total = (db.prepare(`SELECT COUNT(*) as cnt ${from}`).get(session.id) as { cnt: number }).cnt;
+  return { items: withProgress(rows), total };
+}
+
+// Removing an episode from the history deletes its progress row, so its
+// resume position is lost. Works even if the show has since become hidden.
+export function removeEpisodeFromHistory(db: Database.Database, userId: string, episodeId: string): number {
+  return db.prepare('DELETE FROM podcast_episode_progress WHERE user_id = ? AND episode_id = ?').run(userId, episodeId).changes;
+}
+
+export function clearPodcastHistory(db: Database.Database, userId: string): number {
+  return db.prepare('DELETE FROM podcast_episode_progress WHERE user_id = ?').run(userId).changes;
+}
