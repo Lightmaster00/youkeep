@@ -247,6 +247,9 @@ export function stripHtmlToPlainText(raw: string | null | undefined): string | n
  * always by feed_url. There is no channel/single-item split like YouTube
  * ingestion — a feed always describes exactly one show plus its episode list.
  */
+/** A feed that has not answered after this long fails with a clear message. */
+export const PODCAST_FEED_TIMEOUT_MS = 15_000;
+
 export async function ingestPodcastFeed(
   feedUrl: string,
   options: {
@@ -258,6 +261,7 @@ export async function ingestPodcastFeed(
   const trimmedFeedUrl = feedUrl.trim();
 
   const parser = new Parser({
+    timeout: PODCAST_FEED_TIMEOUT_MS,
     customFields: {
       feed: [['itunes:author', 'itunesAuthor'], ['itunes:image', 'itunesImage']],
       item: [
@@ -272,6 +276,9 @@ export async function ingestPodcastFeed(
   try {
     feed = await parser.parseURL(trimmedFeedUrl);
   } catch (err: any) {
+    if (/timed out/i.test(String(err?.message || ''))) {
+      return { success: false, message: `The feed did not answer within ${PODCAST_FEED_TIMEOUT_MS / 1000} s. Check the address or try again later.`, count: 0 };
+    }
     return { success: false, message: `Failed to fetch/parse RSS feed: ${err.message || err}`, count: 0 };
   }
 
