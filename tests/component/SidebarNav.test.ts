@@ -43,7 +43,7 @@ describe('default layout sidebar', () => {
     expect(hrefs).toEqual([
       '/', '/shorts', '/channels', '/subscriptions', '/playlists',
       '/music', '/music/liked', '/music/playlists', '/music/recent',
-      '/podcasts', '/podcasts/recent',
+      '/podcasts', '/podcasts/subscribed', '/podcasts/recent',
     ]);
     const music = w.findAll('.sidebar-group')[1]!;
     expect(music.findAll('.sidebar-link').map((a) => a.text())).toEqual(['Library', 'Liked songs', 'Playlists', 'Recent']);
@@ -67,6 +67,8 @@ describe('default layout sidebar', () => {
     expect(hrefs).toContain('/music/recent');
     expect(hrefs).not.toContain('/music/liked');
     expect(hrefs).not.toContain('/music/playlists');
+    expect(hrefs).not.toContain('/podcasts/subscribed');
+    expect(hrefs).toContain('/podcasts/recent');
   });
 
   it('hides a disabled module from a user', async () => {

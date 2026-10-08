@@ -34,6 +34,8 @@
       </template>
 
       <template v-else>
+        <PodcastContinueRow />
+
         <div v-if="gridPending" class="podcast-loading">Loading...</div>
 
         <div v-else-if="gridError" class="podcast-error">Failed to load podcasts.</div>

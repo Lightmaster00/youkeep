@@ -19,7 +19,7 @@ interface Options {
 
 // One sidebar group per space. Disabled modules are hidden from regular users;
 // admins still see them (flagged enabled:false). Links that need an account
-// (Liked songs, music Playlists) are hidden from guests. Empty groups are omitted.
+// (Liked songs, music Playlists, podcast Subscribed) are hidden from guests. Empty groups are omitted.
 export function buildSidebarGroups(spaces: Space[], opts: Options): SidebarGroup[] {
   const groups: SidebarGroup[] = [];
   for (const space of spaces) {

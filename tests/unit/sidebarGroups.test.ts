@@ -14,7 +14,7 @@ describe('buildSidebarGroups', () => {
     expect(groups[1]!.links.map((l) => [l.to, l.label])).toEqual([
       ['/music', 'Library'], ['/music/liked', 'Liked songs'], ['/music/playlists', 'Playlists'], ['/music/recent', 'Recent'],
     ]);
-    expect(groups[2]!.links.map((l) => [l.to, l.label])).toEqual([['/podcasts', 'Library'], ['/podcasts/recent', 'Recent']]);
+    expect(groups[2]!.links.map((l) => [l.to, l.label])).toEqual([['/podcasts', 'Library'], ['/podcasts/subscribed', 'Subscribed'], ['/podcasts/recent', 'Recent']]);
     expect(groups.every((g) => g.enabled)).toBe(true);
   });
 
@@ -37,7 +37,7 @@ describe('buildSidebarGroups', () => {
   it('never hides the links of Music and Podcasts', () => {
     const groups = buildSidebarGroups(spaces, { ...base, hiddenNavLinks: ['/music', '/music/liked', '/music/playlists', '/music/recent', '/podcasts/recent'] });
     expect(groups[1]!.links.map((l) => l.to)).toEqual(['/music', '/music/liked', '/music/playlists', '/music/recent']);
-    expect(groups[2]!.links.map((l) => l.to)).toEqual(['/podcasts', '/podcasts/recent']);
+    expect(groups[2]!.links.map((l) => l.to)).toEqual(['/podcasts', '/podcasts/subscribed', '/podcasts/recent']);
   });
 
   it('hides Liked songs and music Playlists from guests only', () => {
@@ -46,6 +46,8 @@ describe('buildSidebarGroups', () => {
     expect(guest[0]!.links.map((l) => l.to)).toEqual(['/', '/shorts', '/channels', '/subscriptions', '/playlists']);
     const member = buildSidebarGroups(spaces, { ...base, isGuest: false });
     expect(member[1]!.links.map((l) => l.to)).toContain('/music/liked');
+    expect(guest[2]!.links.map((l) => l.to)).toEqual(['/podcasts', '/podcasts/recent']);
+    expect(member[2]!.links.map((l) => l.to)).toContain('/podcasts/subscribed');
   });
 
   it('yields no groups while a password change is required', () => {

@@ -131,5 +131,17 @@ function visibilityBadgeClass(vis: string): string {
 
 .show-card-follow {
   margin-top: 6px;
+  max-width: 100%;
+}
+
+/* Two cards per row on phones: tighter padding so the follow button fits. */
+@media (max-width: 640px) {
+  .show-card {
+    padding: 12px;
+  }
+
+  .show-card-follow {
+    padding: 4px 10px;
+  }
 }
 </style>
