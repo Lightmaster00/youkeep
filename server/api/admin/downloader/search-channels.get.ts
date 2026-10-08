@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
-import { normalizeYoutubeDataApiChannel } from '../../../utils/youtubeSearch';
+import { normalizeYoutubeDataApiChannel, extractYtInitialData, parseChannelSearchResults, type ChannelCandidate } from '../../../utils/youtubeSearch';
+import { cachedSearch, isSearchTimeout, SEARCH_TIMEOUT_MS, SEARCH_TIMEOUT_MESSAGE } from '../../../utils/searchCache';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -19,15 +20,17 @@ export default defineEventHandler(async (event) => {
 
   if (youtubeApiKey) {
     try {
-      const data = await globalThis.$fetch<any>('https://www.googleapis.com/youtube/v3/search', {
-        params: { part: 'snippet', type: 'channel', q, key: youtubeApiKey, maxResults: 25 },
-        parseResponse: JSON.parse,
-        timeout: 8000,
+      const channels = await cachedSearch<ChannelCandidate>('youtube-api', q, async () => {
+        const data = await globalThis.$fetch<any>('https://www.googleapis.com/youtube/v3/search', {
+          params: { part: 'snippet', type: 'channel', q, key: youtubeApiKey, maxResults: 25 },
+          parseResponse: JSON.parse,
+          timeout: SEARCH_TIMEOUT_MS,
+        });
+        const items = Array.isArray(data?.items) ? data.items : [];
+        return items
+          .map(normalizeYoutubeDataApiChannel)
+          .filter((c: any): c is ChannelCandidate => c !== null);
       });
-      const items = Array.isArray(data?.items) ? data.items : [];
-      const channels = items
-        .map(normalizeYoutubeDataApiChannel)
-        .filter((c: any): c is NonNullable<typeof c> => c !== null);
       return { channels };
     } catch (err: any) {
       console.error('[admin/downloader/search-channels] YouTube Data API failed, falling back to scraping:', err?.statusCode || err?.status || 'unknown status', err?.statusMessage || err?.message || '');
@@ -37,48 +40,21 @@ export default defineEventHandler(async (event) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
 
   try {
-    const response = await globalThis.$fetch<string>(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7'
-      }
+    const channels = await cachedSearch<ChannelCandidate>('youtube-scrape', q, async () => {
+      const response = await globalThis.$fetch<string>(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7'
+        },
+        timeout: SEARCH_TIMEOUT_MS,
+      });
+      return parseChannelSearchResults(extractYtInitialData(String(response)));
     });
-
-    const match = response.match(/var ytInitialData = ({.*?});/s) || response.match(/window\["ytInitialData"\] = ({.*?});/s);
-    if (!match || !match[1]) {
-      return { channels: [] };
-    }
-
-    const data = JSON.parse(match[1]);
-    const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents;
-    if (!contents || !Array.isArray(contents)) {
-      return { channels: [] };
-    }
-
-    const channels: any[] = [];
-    for (const item of contents) {
-      if (item.channelRenderer) {
-        const cr = item.channelRenderer;
-
-        let avatarUrl = cr.thumbnail?.thumbnails?.[cr.thumbnail.thumbnails.length - 1]?.url || cr.thumbnail?.thumbnails?.[0]?.url;
-        if (avatarUrl && avatarUrl.startsWith('//')) {
-          avatarUrl = 'https:' + avatarUrl;
-        }
-
-        channels.push({
-          id: cr.channelId,
-          title: cr.title?.simpleText || cr.title?.runs?.[0]?.text || 'Sans nom',
-          description: cr.descriptionSnippet?.runs?.[0]?.text || '',
-          avatarUrl,
-          subscriberCount: cr.subscriberCountText?.simpleText || cr.subscriberCountText?.runs?.[0]?.text || '',
-          videoCount: cr.videoCountText?.simpleText || cr.videoCountText?.runs?.[0]?.text || '',
-          handle: cr.canonicalBaseUrl || ''
-        });
-      }
-    }
-
     return { channels };
   } catch (err: any) {
+    if (isSearchTimeout(err)) {
+      throw createError({ statusCode: 504, statusMessage: SEARCH_TIMEOUT_MESSAGE });
+    }
     console.error('[admin/downloader/search-channels]', err);
     throw createError({
       statusCode: 500,
