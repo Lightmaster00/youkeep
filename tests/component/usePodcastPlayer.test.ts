@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { defineComponent, h } from 'vue';
 import {
@@ -12,6 +12,7 @@ import {
   type PlayableEpisode
 } from '../../app/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '../../app/composables/useActiveMiniPlayer';
+import { usePodcastProgress } from '../../app/composables/usePodcastProgress';
 
 // usePodcastPlayer() is built on Nuxt's useState(), which is a singleton keyed
 // by string and SHARED across every it() block in this file (@nuxt/test-utils
@@ -413,5 +414,162 @@ describe('usePodcastPlayer', () => {
       player.togglePlay();
       expect(player.lastPlayedAt.value).toBeGreaterThan(1);
     });
+  });
+});
+
+describe('usePodcastPlayer server progress', () => {
+  let player: ReturnType<typeof usePodcastPlayer>;
+  const fetchMock = vi.fn();
+  let serverProgress: Record<string, any> = {};
+
+  const progressCalls = () => fetchMock.mock.calls.filter(([url, o]) => /\/progress$/.test(url) && o?.method === 'PUT');
+  const login = (id: string | null) => {
+    useState<any>('auth_user').value = id ? { id, username: id, role: 'user' } : null;
+  };
+
+  beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1_000_000);
+    fetchMock.mockReset();
+    serverProgress = {};
+    fetchMock.mockImplementation(async (url: string, opts: any) => {
+      if (url === '/api/podcasts/episodes/progress/status') {
+        return { progress: Object.fromEntries(opts.body.ids.filter((id: string) => serverProgress[id]).map((id: string) => [id, serverProgress[id]])) };
+      }
+      return undefined;
+    });
+    vi.stubGlobal('$fetch', fetchMock);
+    useState('podcast_progress').value = { owner: null, progress: {} };
+    login('u1');
+    player = await setupPlayer();
+    player.currentEpisode.value = null;
+    player.isPlaying.value = false;
+    player.currentTime.value = 0;
+    player.duration.value = 0;
+    player.audioEl.value = null;
+    useState('podcast_player_last_sync_at').value = 0;
+    useState('podcast_player_saved_at').value = 0;
+    window.localStorage.removeItem(STORAGE_KEY);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    login(null);
+  });
+
+  it('syncs at most every 15 seconds unless forced, and records the position for the progress bars', () => {
+    player.currentEpisode.value = episode('e1', { duration: 3600 });
+    player.currentTime.value = 30.7;
+    player.syncProgress();
+    expect(progressCalls()).toEqual([['/api/podcasts/episodes/e1/progress', { method: 'PUT', body: { positionSeconds: 30, durationSeconds: 3600 } }]]);
+    vi.setSystemTime(1_000_000 + 14_999);
+    player.currentTime.value = 45;
+    player.syncProgress();
+    expect(progressCalls()).toHaveLength(1);
+    vi.setSystemTime(1_000_000 + 15_000);
+    player.syncProgress();
+    expect(progressCalls()).toHaveLength(2);
+    player.currentTime.value = 50;
+    player.syncProgress({ force: true });
+    expect(progressCalls()).toHaveLength(3);
+    expect(usePodcastProgress().get('e1')).toMatchObject({ positionSeconds: 50, completed: false });
+    player.syncProgress({ force: true, completed: true });
+    expect(progressCalls()[3]![1].body).toEqual({ positionSeconds: 50, durationSeconds: 3600, completed: true });
+  });
+
+  it('sends nothing for a guest or at position 0', () => {
+    player.currentEpisode.value = episode('e1');
+    player.currentTime.value = 0.4;
+    player.syncProgress({ force: true });
+    login(null);
+    player.currentTime.value = 100;
+    player.syncProgress({ force: true });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses a keepalive window.fetch (CSRF-patched) on page hide instead of $fetch', () => {
+    const winFetch = vi.fn(() => Promise.resolve(new Response(null)));
+    const original = window.fetch;
+    window.fetch = winFetch as any;
+    try {
+      player.currentEpisode.value = episode('e1', { duration: 3600 });
+      player.currentTime.value = 120;
+      player.syncProgress({ force: true, keepalive: true });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(winFetch).toHaveBeenCalledWith('/api/podcasts/episodes/e1/progress', {
+        method: 'PUT', keepalive: true, credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ positionSeconds: 120, durationSeconds: 3600 }),
+      });
+    } finally {
+      window.fetch = original;
+    }
+  });
+
+  it('flushes the previous episode before switching to another one', () => {
+    player.audioEl.value = fakeAudio() as unknown as HTMLMediaElement;
+    player.currentEpisode.value = episode('e1');
+    player.currentTime.value = 600;
+    useState('podcast_player_last_sync_at').value = Date.now(); // a throttled sync just happened
+    player.play(episode('e2'));
+    expect(progressCalls()[0]).toEqual(['/api/podcasts/episodes/e1/progress', { method: 'PUT', body: { positionSeconds: 600, durationSeconds: 3600 } }]);
+  });
+
+  it('starts at a cached server position newer than the local one, and at the local one otherwise', () => {
+    const el = fakeAudio();
+    player.audioEl.value = el as unknown as HTMLMediaElement;
+    usePodcastProgress().record('e2', { positionSeconds: 900, durationSeconds: 3600, completed: false, updatedAt: 5 });
+    player.play(episode('e2'));
+    el.fire('loadedmetadata');
+    expect(el.currentTime).toBe(900);
+
+    // Same episode, local position saved after the server one: local wins.
+    player.currentTime.value = 1200;
+    player.saveToLocalStorage();
+    usePodcastProgress().record('e2', { positionSeconds: 900, durationSeconds: 3600, completed: false, updatedAt: Date.now() - 1 });
+    player.play(episode('e2'));
+    el.fire('loadedmetadata');
+    expect(el.currentTime).toBe(1200);
+
+    // A completed episode at its end restarts from 0.
+    usePodcastProgress().record('e3', { positionSeconds: 3600, durationSeconds: 3600, completed: true, updatedAt: 5 });
+    player.play(episode('e3'));
+    expect(el.currentTime).toBe(0);
+  });
+
+  it('looks an unknown server position up after play and applies it unless the user seeked meanwhile', async () => {
+    const el = fakeAudio();
+    player.audioEl.value = el as unknown as HTMLMediaElement;
+    serverProgress = { e4: { positionSeconds: 700, durationSeconds: 3600, completed: false, updatedAt: 5 } };
+    player.play(episode('e4'));
+    expect(el.play).toHaveBeenCalledTimes(1); // playback did not wait for the server
+    await vi.waitFor(() => expect(player.currentTime.value).toBe(700));
+    el.fire('loadedmetadata');
+    expect(el.currentTime).toBe(700);
+
+    serverProgress = { e5: { positionSeconds: 800, durationSeconds: 3600, completed: false, updatedAt: 5 } };
+    player.play(episode('e5'));
+    player.seek(42);
+    await new Promise((r) => setTimeout(r, 0));
+    await Promise.resolve();
+    expect(player.currentTime.value).toBe(42);
+  });
+
+  it('restores the server position when it is newer than the saved local one', async () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ episode: episode('e6'), currentTime: 100, playbackRate: 1, savedAt: 10 }));
+    serverProgress = { e6: { positionSeconds: 2000, durationSeconds: 3600, completed: false, updatedAt: 20 } };
+    const el = fakeAudio();
+    player.audioEl.value = el as unknown as HTMLMediaElement;
+    player.restoreFromLocalStorage();
+    expect(player.currentTime.value).toBe(100);
+    await vi.waitFor(() => expect(player.currentTime.value).toBe(2000));
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ episode: episode('e7'), currentTime: 100, playbackRate: 1, savedAt: 30 }));
+    serverProgress = { e7: { positionSeconds: 2000, durationSeconds: 3600, completed: false, updatedAt: 20 } };
+    player.restoreFromLocalStorage();
+    await new Promise((r) => setTimeout(r, 0));
+    await Promise.resolve();
+    expect(player.currentTime.value).toBe(100);
   });
 });

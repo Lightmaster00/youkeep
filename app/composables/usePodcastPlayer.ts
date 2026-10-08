@@ -1,4 +1,8 @@
 import { useActiveMiniPlayer } from './useActiveMiniPlayer';
+import { useAuth } from './useAuth';
+import { usePodcastProgress } from './usePodcastProgress';
+import { chooseResumePosition, reachesEnd } from '#shared/podcastProgress';
+import type { EpisodeProgress, LocalPosition } from '#shared/podcastProgress';
 
 export interface PlayableEpisode {
   id: string;
@@ -14,6 +18,13 @@ const STORAGE_KEY = 'podcast_player_state';
 export const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5, 1.75, 2] as const;
 export const SKIP_BACK_SECONDS = 15;
 export const SKIP_FORWARD_SECONDS = 30;
+// Minimum gap between two progress syncs while playing (pause, end, episode
+// change and page hide always sync at once).
+export const PROGRESS_SYNC_INTERVAL_MS = 15000;
+
+// Bumped by every load and seek: a server position that arrives late is only
+// applied when nothing moved the playhead in the meantime.
+let positionSeq = 0;
 
 // Pure. Podcast episodes routinely run past an hour, so this renders H:MM:SS
 // above 3600s and M:SS below it. Every component is floored because the value
@@ -74,6 +85,12 @@ export function usePodcastPlayer() {
   const playbackRate = useState<number>('podcast_player_rate', () => 1);
   const audioEl = useState<HTMLMediaElement | null>('podcast_player_audio_el', () => null);
   const lastPlayedAt = useState<number>('podcast_player_last_played_at', () => 0);
+  // When the local position was last written to localStorage, to compare it
+  // with the server position (the newer one wins on play/restore).
+  const localSavedAt = useState<number>('podcast_player_saved_at', () => 0);
+  const lastSyncAt = useState<number>('podcast_player_last_sync_at', () => 0);
+  const { user } = useAuth();
+  const progressStore = usePodcastProgress();
 
   // Effective duration: the element's reported duration once metadata has
   // loaded, otherwise the RSS-provided duration from podcast_episodes.
@@ -90,6 +107,7 @@ export function usePodcastPlayer() {
   // PodcastMiniPlayer.vue's own @error listener) never goes through this
   // path and never wipes localStorage.
   function loadEpisode(episode: PlayableEpisode, startAt: number, isRestore = false) {
+    positionSeq++;
     currentEpisode.value = episode;
     currentTime.value = startAt;
     duration.value = 0;
@@ -143,27 +161,78 @@ export function usePodcastPlayer() {
     el.addEventListener('error', cleanup);
   }
 
+  // Moves the playhead of the loaded `episode` to a position that arrived
+  // after the load (the server one), waiting for metadata when needed.
+  function applyLatePosition(episode: PlayableEpisode, target: number) {
+    const el = audioEl.value;
+    if (!el || currentEpisode.value?.id !== episode.id) return;
+    const apply = () => {
+      if (currentEpisode.value?.id !== episode.id) return;
+      el.currentTime = target;
+      currentTime.value = target;
+    };
+    currentTime.value = target;
+    if ((el as any).readyState >= 1) {
+      apply();
+      return;
+    }
+    const onMeta = () => {
+      el.removeEventListener('loadedmetadata', onMeta);
+      apply();
+    };
+    el.addEventListener('loadedmetadata', onMeta);
+  }
+
+  // For a logged-in user, looks the server position up (unless already
+  // cached) and moves to it when it is newer than `local` and nothing moved
+  // the playhead since the load.
+  function reconcileWithServer(episode: PlayableEpisode, local: LocalPosition | null, startedAt: number, onlyWhilePaused = false) {
+    if (!user.value) return;
+    const seq = positionSeq;
+    progressStore.lookup(episode.id).then((server) => {
+      if (!server || seq !== positionSeq || currentEpisode.value?.id !== episode.id) return;
+      if (onlyWhilePaused && isPlaying.value) return;
+      const target = chooseResumePosition(local, server, episode.duration);
+      if (Math.abs(target - startedAt) >= 1) applyLatePosition(episode, target);
+    });
+  }
+
   function play(episode: PlayableEpisode) {
     // Activation happens here and nowhere else — see the matching comment in
     // useMusicPlayer.ts's play().
     useActiveMiniPlayer().setActive('podcast');
     lastPlayedAt.value = Date.now();
 
+    // Leaving another episode: record where it was left first.
+    if (currentEpisode.value && currentEpisode.value.id !== episode.id) {
+      syncProgress({ force: true });
+    }
+
     // Replaying the episode already loaded picks up where it left off (that
     // is what makes the restored "resume" state resume) — UNLESS that held
     // position is at (or within a couple seconds of) the episode's end, in
     // which case it already finished and should restart from 0 instead of
     // seeking straight back to the end. Any other episode starts from the
-    // beginning.
-    const resumeAt =
-      currentEpisode.value?.id === episode.id && !isFinishedPosition(currentTime.value, effectiveDuration())
-        ? currentTime.value
-        : 0;
+    // beginning, unless the server knows a position (logged-in users): the
+    // server position is used when it is newer than the local one.
+    const local: LocalPosition | null = currentEpisode.value?.id === episode.id
+      ? {
+          positionSeconds: isFinishedPosition(currentTime.value, effectiveDuration()) ? 0 : currentTime.value,
+          savedAt: localSavedAt.value,
+        }
+      : null;
+    const cached: EpisodeProgress | null | undefined = user.value && progressStore.isKnown(episode.id)
+      ? progressStore.get(episode.id)
+      : undefined;
+    const resumeAt = cached !== undefined
+      ? chooseResumePosition(local, cached, episode.duration)
+      : (local?.positionSeconds ?? 0);
     loadEpisode(episode, resumeAt);
     const el = audioEl.value;
     if (el) {
       el.play().then(() => { isPlaying.value = true; }).catch(() => { isPlaying.value = false; });
     }
+    if (cached === undefined) reconcileWithServer(episode, local, resumeAt);
     // Flush immediately — same reason as useMusicPlayer.ts's play().
     saveToLocalStorage();
   }
@@ -182,6 +251,7 @@ export function usePodcastPlayer() {
   function seek(seconds: number) {
     if (!audioEl.value) return;
     const target = clampSeekTime(seconds, effectiveDuration());
+    positionSeq++;
     audioEl.value.currentTime = target;
     currentTime.value = target;
   }
@@ -203,18 +273,65 @@ export function usePodcastPlayer() {
 
   function saveToLocalStorage() {
     if (typeof window === 'undefined' || !currentEpisode.value) return;
+    localSavedAt.value = Date.now();
     const state = {
       episode: currentEpisode.value,
       currentTime: currentTime.value,
       playbackRate: playbackRate.value,
       lastPlayedAt: lastPlayedAt.value,
+      savedAt: localSavedAt.value,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  // No server call: the whole PlayableEpisode is stored client-side, since
-  // podcasts have no by-ids rehydration endpoint (and adding one is out of
-  // scope). Never auto-plays — it only primes the mini-player.
+  // Sends the current position to the server for a logged-in user, at most
+  // once per PROGRESS_SYNC_INTERVAL_MS unless `force`. `completed` marks the
+  // end of the episode. `keepalive` is for page hide: the request must
+  // outlive the page, so it goes through window.fetch (patched by
+  // csrf.client.ts to carry the CSRF header) with keepalive set.
+  function syncProgress(opts: { force?: boolean; completed?: boolean; keepalive?: boolean } = {}) {
+    const episode = currentEpisode.value;
+    if (!episode || !user.value || typeof window === 'undefined') return;
+    const now = Date.now();
+    if (!opts.force && now - lastSyncAt.value < PROGRESS_SYNC_INTERVAL_MS) return;
+    const positionSeconds = Math.floor(currentTime.value);
+    if (positionSeconds <= 0 && !opts.completed) return;
+    lastSyncAt.value = now;
+
+    const durationSeconds = Math.round(effectiveDuration()) || null;
+    const body: Record<string, unknown> = { positionSeconds };
+    if (durationSeconds) body.durationSeconds = durationSeconds;
+    if (opts.completed) body.completed = true;
+
+    // Progress bars follow along at once.
+    const previous = progressStore.get(episode.id);
+    progressStore.record(episode.id, {
+      positionSeconds: durationSeconds ? Math.min(positionSeconds, durationSeconds) : positionSeconds,
+      durationSeconds,
+      completed: !!opts.completed || !!previous?.completed || reachesEnd(positionSeconds, durationSeconds),
+      updatedAt: now,
+    });
+
+    const url = `/api/podcasts/episodes/${encodeURIComponent(episode.id)}/progress`;
+    if (opts.keepalive) {
+      window.fetch(url, {
+        method: 'PUT',
+        keepalive: true,
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).catch(() => {});
+      return;
+    }
+    $fetch<EpisodeProgress>(url, { method: 'PUT', body })
+      .then((saved) => { if (saved) progressStore.record(episode.id, saved); })
+      .catch(() => {});
+  }
+
+  // No server call for the episode itself: the whole PlayableEpisode is
+  // stored client-side, since podcasts have no by-ids rehydration endpoint.
+  // Only the position may be replaced by a newer server one (logged-in
+  // users). Never auto-plays — it only primes the mini-player.
   function restoreFromLocalStorage() {
     if (typeof window === 'undefined') return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -240,17 +357,19 @@ export function usePodcastPlayer() {
     lastPlayedAt.value = typeof saved.lastPlayedAt === 'number' && Number.isFinite(saved.lastPlayedAt)
       ? saved.lastPlayedAt
       : 0;
+    localSavedAt.value = typeof saved.savedAt === 'number' && Number.isFinite(saved.savedAt) ? saved.savedAt : 0;
 
     const restoreTime =
       typeof saved.currentTime === 'number' && Number.isFinite(saved.currentTime) && saved.currentTime > 0
         ? saved.currentTime
         : 0;
     loadEpisode(saved.episode, restoreTime, true);
+    reconcileWithServer(saved.episode, { positionSeconds: restoreTime, savedAt: localSavedAt.value }, restoreTime, true);
   }
 
   return {
     currentEpisode, isPlaying, currentTime, duration, playbackRate, audioEl, lastPlayedAt,
     play, togglePlay, seek, skipBack, skipForward, setPlaybackRate,
-    saveToLocalStorage, restoreFromLocalStorage,
+    saveToLocalStorage, restoreFromLocalStorage, syncProgress,
   };
 }

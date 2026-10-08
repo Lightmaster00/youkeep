@@ -8,7 +8,7 @@
     @durationchange="onLoadedMetadata"
     @ended="onEnded"
     @play="onPlay"
-    @pause="isPlaying = false"
+    @pause="onPause"
     @error="onAudioError"
   ></audio>
 
@@ -67,7 +67,7 @@ import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 const {
   currentEpisode, isPlaying, currentTime, duration, playbackRate, audioEl,
   togglePlay, seek, skipBack, skipForward, setPlaybackRate,
-  saveToLocalStorage, restoreFromLocalStorage,
+  saveToLocalStorage, restoreFromLocalStorage, syncProgress,
 } = usePodcastPlayer();
 
 // Read-only here: currentTrack drives the single-visible-bar rule, and the
@@ -95,6 +95,13 @@ function onTimeUpdate() {
   if (!audioElRef.value) return;
   currentTime.value = audioElRef.value.currentTime;
   debouncedSave();
+  // Throttled inside: at most one server sync per 15 seconds while playing.
+  if (isPlaying.value) syncProgress();
+}
+
+function onPause() {
+  isPlaying.value = false;
+  syncProgress({ force: true });
 }
 
 function onLoadedMetadata() {
@@ -112,6 +119,7 @@ function onLoadedMetadata() {
 function onEnded() {
   isPlaying.value = false;
   saveToLocalStorage();
+  syncProgress({ force: true, completed: true });
 }
 
 function onPlay() {
@@ -182,6 +190,17 @@ function flushSaveOnUnload() {
   saveToLocalStorage();
 }
 
+// The page is going away (tab closed, app switched on a phone): record the
+// position locally and on the server with a request that outlives the page.
+function flushOnPageHide() {
+  saveToLocalStorage();
+  syncProgress({ force: true, keepalive: true });
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === 'hidden') flushOnPageHide();
+}
+
 onMounted(() => {
   // audioElRef is populated synchronously by Vue during mount, but the
   // `watch(audioElRef, ...)` callback above only runs on the next reactivity
@@ -191,11 +210,15 @@ onMounted(() => {
   audioEl.value = audioElRef.value;
   restoreFromLocalStorage();
   window.addEventListener('beforeunload', flushSaveOnUnload);
+  window.addEventListener('pagehide', flushOnPageHide);
+  document.addEventListener('visibilitychange', onVisibilityChange);
 });
 
 onBeforeUnmount(() => {
   flushSaveOnUnload();
   window.removeEventListener('beforeunload', flushSaveOnUnload);
+  window.removeEventListener('pagehide', flushOnPageHide);
+  document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 </script>
 
