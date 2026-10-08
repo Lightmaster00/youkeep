@@ -13,6 +13,9 @@ describe('moduleForPagePath', () => {
     ['/podcasts/shows', 'podcasts'],
     ['/music/recent', 'music'],
     ['/podcasts/recent', 'podcasts'],
+    ['/music/discover', 'music'],
+    ['/music/genre/Hip%20Hop', 'music'],
+    ['/podcasts/discover', 'podcasts'],
   ])('%s belongs to %s', (path, expected) => {
     expect(moduleForPagePath(path)).toBe(expected);
   });

@@ -14,6 +14,7 @@
     <div class="show-card-body">
       <h3 class="show-card-title">{{ show.title }}</h3>
       <p class="show-card-meta">{{ show.episode_count }} episode(s)</p>
+      <p v-if="detail" class="show-card-detail">{{ detail }}</p>
       <span v-if="showVisibility" class="badge" :class="visibilityBadgeClass(show.visibility)">{{ formatVisibility(show.visibility) }}</span>
       <ShowFollowButton :show-id="show.id" :show-title="show.title" class="show-card-follow" />
     </div>
@@ -25,7 +26,8 @@ import { useRouter } from 'vue-router';
 
 // One show of the Podcasts library grid or of the Subscribed page: cover,
 // title, episode count, the follow toggle, and (Subscribed) the "N new" badge.
-const props = defineProps<{ show: any; showVisibility?: boolean; newCount?: number }>();
+// `detail` adds one more line (Discover: follower count, latest episode).
+const props = defineProps<{ show: any; showVisibility?: boolean; newCount?: number; detail?: string }>();
 
 const router = useRouter();
 
@@ -127,6 +129,13 @@ function visibilityBadgeClass(vis: string): string {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 4px;
+}
+
+.show-card-detail {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .show-card-follow {

@@ -2,6 +2,7 @@
   <div class="episode-row">
     <div class="episode-main">
       <h4 class="episode-title">{{ episode.title }}</h4>
+      <p v-if="context" class="episode-context">{{ context }}</p>
       <p class="episode-meta">
         <span v-if="episode.season_number">S{{ episode.season_number }}</span>
         <span v-if="episode.episode_number">E{{ episode.episode_number }}</span>
@@ -34,8 +35,9 @@ import { computed } from 'vue';
 
 // One episode of the show detail list: title, meta, the user's progress, and
 // the play / status / "Mark as played" / admin edit actions. On phones the
-// actions move to their own line under the title.
-const props = defineProps<{ episode: any; canEdit?: boolean }>();
+// actions move to their own line under the title. `context` adds a line under
+// the title (Discover: show title and listener count).
+const props = defineProps<{ episode: any; canEdit?: boolean; context?: string }>();
 const emit = defineEmits<{ play: [episode: any]; edit: [episode: any] }>();
 
 const playable = computed(() => props.episode.download_status === 'completed' && !!props.episode.local_file_path);
@@ -102,6 +104,12 @@ function statusBadgeClass(status: string): string {
 .episode-title {
   font-size: 14px;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.episode-context {
+  font-size: 13px;
+  color: var(--text-secondary);
   overflow-wrap: anywhere;
 }
 

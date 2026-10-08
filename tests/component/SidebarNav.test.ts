@@ -42,11 +42,11 @@ describe('default layout sidebar', () => {
     const hrefs = w.findAll('.sidebar-link').map((a) => a.attributes('href'));
     expect(hrefs).toEqual([
       '/', '/shorts', '/channels', '/subscriptions', '/playlists',
-      '/music', '/music/liked', '/music/playlists', '/music/recent',
-      '/podcasts', '/podcasts/subscribed', '/podcasts/recent',
+      '/music', '/music/discover', '/music/liked', '/music/playlists', '/music/recent',
+      '/podcasts', '/podcasts/discover', '/podcasts/subscribed', '/podcasts/recent',
     ]);
     const music = w.findAll('.sidebar-group')[1]!;
-    expect(music.findAll('.sidebar-link').map((a) => a.text())).toEqual(['Library', 'Liked songs', 'Playlists', 'Recent']);
+    expect(music.findAll('.sidebar-link').map((a) => a.text())).toEqual(['Library', 'Discover', 'Liked songs', 'Playlists', 'Recent']);
     expect(w.find('.space-switcher').exists()).toBe(false);
   });
 
@@ -65,6 +65,8 @@ describe('default layout sidebar', () => {
     const hrefs = w.findAll('.sidebar-link').map((a) => a.attributes('href'));
     expect(hrefs).toContain('/music');
     expect(hrefs).toContain('/music/recent');
+    expect(hrefs).toContain('/music/discover');
+    expect(hrefs).toContain('/podcasts/discover');
     expect(hrefs).not.toContain('/music/liked');
     expect(hrefs).not.toContain('/music/playlists');
     expect(hrefs).not.toContain('/podcasts/subscribed');
