@@ -155,8 +155,12 @@ export function createTestDb(): Database.Database {
       cover_url TEXT,
       source TEXT NOT NULL DEFAULT 'youtube',
       created_at INTEGER NOT NULL,
+      external_id TEXT,
+      album_type TEXT,
+      matched_by TEXT,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE
     );
+    CREATE UNIQUE INDEX idx_music_albums_artist_external ON music_albums(artist_id, external_id) WHERE external_id IS NOT NULL;
 
     CREATE TABLE music_tracks (
       id TEXT PRIMARY KEY,
@@ -178,9 +182,20 @@ export function createTestDb(): Database.Database {
       has_clip INTEGER DEFAULT 0,
       retry_count INTEGER DEFAULT 0,
       last_error TEXT,
+      size_bytes INTEGER,
+      album_match_status TEXT,
+      album_match_at INTEGER,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (artist_id) REFERENCES music_artists(id) ON DELETE CASCADE,
       FOREIGN KEY (album_id) REFERENCES music_albums(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE music_track_artists (
+      track_id TEXT NOT NULL,
+      artist_id TEXT NOT NULL,
+      role TEXT,
+      PRIMARY KEY (track_id, artist_id),
+      FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE
     );
 
     CREATE TABLE music_play_history (
@@ -468,6 +483,7 @@ export function insertMusicTrack(db: Database.Database, opts: {
   id: string;
   artistId: string;
   albumId?: string | null;
+  title?: string;
   trackNumber?: number | null;
   genre?: string | null;
   language?: string | null;
@@ -476,16 +492,17 @@ export function insertMusicTrack(db: Database.Database, opts: {
   localFilePath?: string | null;
   localThumbnailPath?: string | null;
   hasClip?: boolean;
+  albumMatchStatus?: string | null;
   createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, has_clip, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, has_clip, album_match_status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.artistId,
     opts.albumId ?? null,
-    `Track ${opts.id}`,
+    opts.title ?? `Track ${opts.id}`,
     opts.trackNumber ?? null,
     opts.genre ?? null,
     opts.language ?? null,
@@ -494,6 +511,7 @@ export function insertMusicTrack(db: Database.Database, opts: {
     opts.localFilePath ?? null,
     opts.localThumbnailPath ?? null,
     opts.hasClip ? 1 : 0,
+    opts.albumMatchStatus ?? null,
     opts.createdAt ?? Date.now()
   );
 }

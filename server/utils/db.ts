@@ -402,6 +402,16 @@ export function getDb(): Database.Database {
   try { db.exec(`ALTER TABLE music_artists ADD COLUMN import_error TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE channels ADD COLUMN import_status TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE channels ADD COLUMN import_error TEXT;`); } catch (e) {}
+  // Album matching (iTunes): see server/utils/albumMatch.ts.
+  try { db.exec(`ALTER TABLE music_albums ADD COLUMN external_id TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_albums ADD COLUMN album_type TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_albums ADD COLUMN matched_by TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_tracks ADD COLUMN album_match_status TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE music_tracks ADD COLUMN album_match_at INTEGER;`); } catch (e) {}
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_music_albums_artist_external ON music_albums(artist_id, external_id) WHERE external_id IS NOT NULL;`);
+  // A track whose album came from yt-dlp metadata (or an older manual edit) is
+  // never matched: mark it 'manual' the first time it is seen.
+  db.exec(`UPDATE music_tracks SET album_match_status = 'manual' WHERE album_id IS NOT NULL AND album_match_status IS NULL;`);
   ensurePodcastPubTs(db);
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
@@ -768,6 +778,12 @@ export function getDb(): Database.Database {
   if (musicDownloadClipsCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('music_download_clips', '0')").run();
     console.log('Seeded setting music_download_clips: 0');
+  }
+
+  const albumMatchingCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'album_matching_enabled'").get() as { count: number };
+  if (albumMatchingCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('album_matching_enabled', '1')").run();
+    console.log('Seeded setting album_matching_enabled: 1');
   }
 
   // Backfill size_bytes for completed videos if null
