@@ -90,4 +90,33 @@ describe('default layout sidebar', () => {
     expect(groups[1]!.find('.badge').text()).toBe('Off');
     expect(groups[0]!.classes()).not.toContain('is-off');
   });
+
+  it('renders each space as a panel header button with exactly the route space open', async () => {
+    setUp('user');
+    await useRouter().push('/');
+    const w = await mountLayout();
+    const headers = w.findAll('.sidebar-panel-header');
+    expect(headers.map((b) => b.element.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON']);
+    expect(headers.map((b) => b.attributes('aria-expanded'))).toEqual(['true', 'false', 'false']);
+  });
+
+  it('opens the Music panel when the route moves to a Music page', async () => {
+    setUp('user');
+    await useRouter().push('/');
+    const w = await mountLayout();
+    await useRouter().push('/music/discover');
+    await flushPromises();
+    const expanded = w.findAll('.sidebar-panel-header').map((b) => b.attributes('aria-expanded'));
+    expect(expanded).toEqual(['false', 'true', 'false']);
+    await useRouter().push('/');
+  });
+
+  it('opens the first enabled space on a module-less page when a user has Video disabled', async () => {
+    setUp('user', { video: false, music: true, podcasts: true });
+    await useRouter().push('/account');
+    const w = await mountLayout();
+    expect(w.findAll('.sidebar-divider-title').map((t) => t.text())).toEqual(['Music', 'Podcasts']);
+    expect(w.findAll('.sidebar-panel-header').map((b) => b.attributes('aria-expanded'))).toEqual(['true', 'false']);
+    await useRouter().push('/');
+  });
 });

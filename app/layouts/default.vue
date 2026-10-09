@@ -89,28 +89,8 @@
       <!-- Sidebar Navigation -->
       <aside class="sidebar">
         <div class="sidebar-inner">
-          <nav class="sidebar-nav">
-            <div
-              v-for="group in sidebarGroups"
-              :key="group.id"
-              class="sidebar-group"
-              :class="{ 'is-off': !group.enabled }"
-            >
-              <div class="sidebar-divider-title">
-                {{ group.label }}
-                <span v-if="!group.enabled" class="badge badge-failed">Off</span>
-              </div>
-              <NuxtLink
-                v-for="link in group.links"
-                :key="link.to"
-                :to="link.to"
-                class="sidebar-link"
-                active-class="active"
-              >
-                <i class="sidebar-link-icon" v-html="link.icon"></i>
-                <span>{{ link.label }}</span>
-              </NuxtLink>
-            </div>
+          <nav class="sidebar-nav" aria-label="Main">
+            <SidebarPanels :groups="sidebarGroups" :active-space-id="activeSpace.id" />
           </nav>
         </div>
       </aside>
@@ -251,8 +231,9 @@ const activeSpace = computed(() => {
   return spaces.find((s) => s.id === id) ?? spaces[0]!;
 });
 
-// One sidebar: every space is a group. Disabled modules are hidden from users
-// and shown dimmed (Off) to admins; hidden-link prefs apply to the Video group.
+// One sidebar: every space is an accordion panel (SidebarPanels). Disabled modules
+// are hidden from users and shown dimmed (Off) to admins; hidden-link prefs apply
+// to the Video group.
 const sidebarGroups = computed(() =>
   buildSidebarGroups(spaces, {
     isAdmin: isAdmin.value,
@@ -719,78 +700,6 @@ onUnmounted(() => {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 16px;
-  border-radius: var(--border-radius-md);
-  font-size: 14.5px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-  margin-bottom: 2px;
-  white-space: nowrap;
-}
-
-.sidebar-link svg {
-  flex-shrink: 0;
-}
-
-.sidebar-link span {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.sidebar-inner:hover .sidebar-link span {
-  opacity: 1;
-}
-
-.sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-primary);
-  transform: translateX(4px);
-}
-
-.sidebar-link.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  font-weight: 600;
-}
-
-.sidebar-link.active svg {
-  color: white;
-}
-
-.sidebar-group + .sidebar-group {
-  margin-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.sidebar-group.is-off {
-  opacity: 0.5;
-}
-
-.sidebar-divider-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  padding: 16px 16px 6px 16px;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  letter-spacing: 0.1em;
-}
-
-.sidebar-inner:hover .sidebar-divider-title {
-  opacity: 1;
 }
 
 .content-area {
@@ -814,18 +723,6 @@ onUnmounted(() => {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow: none;
-  }
-  .sidebar-link span, .sidebar-divider-title {
-    display: none;
-  }
-  .sidebar-link {
-    justify-content: center;
-    padding: 12px 0;
-    border-left: none;
-    border-bottom: 2px solid transparent;
-  }
-  .sidebar-link.active {
-    border-bottom-color: var(--accent-primary);
   }
   .search-form {
     width: 200px;
