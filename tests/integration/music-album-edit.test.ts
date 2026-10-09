@@ -63,4 +63,13 @@ describe('PATCH /api/admin/music/albums/[id]', () => {
       await expect(handler(eventFor('al1', body, cookie)), JSON.stringify(body)).rejects.toMatchObject({ statusCode: 400 });
     }
   });
+
+  it('marks the album\'s tracks as manual so the album matcher leaves them alone', async () => {
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', albumId: 'al1', albumMatchStatus: 'matched' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1' });
+    await handler(eventFor('al1', { title: 'Fixed' }, loginAs('admin1', 'admin')));
+    const status = (id: string) => (db.prepare('SELECT album_match_status FROM music_tracks WHERE id = ?').get(id) as any).album_match_status;
+    expect(status('t1')).toBe('manual');
+    expect(status('t2')).toBeNull();
+  });
 });

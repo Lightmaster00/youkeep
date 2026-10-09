@@ -61,4 +61,9 @@ describe('PATCH /api/admin/music/tracks/[id]', () => {
       await expect(handler(eventFor('t1', body, cookie)), JSON.stringify(body)).rejects.toMatchObject({ statusCode: 400 });
     }
   });
+
+  it('marks the edited track as manual so the album matcher leaves it alone', async () => {
+    await handler(eventFor('t1', { genre: 'Jazz' }, loginAs('admin1', 'admin')));
+    expect((db.prepare('SELECT album_match_status FROM music_tracks WHERE id = ?').get('t1') as any).album_match_status).toBe('manual');
+  });
 });

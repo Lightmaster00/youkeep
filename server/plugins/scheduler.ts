@@ -4,6 +4,7 @@ import { backfillMissingVideoDurations } from '../utils/videoDurations';
 import { getDb } from '../utils/db';
 import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports } from '../utils/musicDownloader';
 import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler } from '../utils/podcastDownloader';
+import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
 function runDurationBackfill() {
@@ -20,6 +21,12 @@ function resumeInterruptedImports() {
     } catch (err) {
       console.error('YouKeep Scheduler Plugin: could not resume interrupted imports:', err);
     }
+  }
+  // Tracks not checked for an album yet (an interrupted run, older downloads) are matched after a short delay.
+  try {
+    scheduleStartupAlbumMatch();
+  } catch (err) {
+    console.error('YouKeep Scheduler Plugin: could not schedule album matching:', err);
   }
 }
 

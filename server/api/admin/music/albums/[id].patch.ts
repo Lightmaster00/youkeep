@@ -60,7 +60,11 @@ export default defineEventHandler(async (event) => {
   }
 
   params.push(albumId);
-  db.prepare(`UPDATE music_albums SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
+  db.transaction(() => {
+    db.prepare(`UPDATE music_albums SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
+    // An admin edit is final: the album matcher never touches these tracks again.
+    db.prepare("UPDATE music_tracks SET album_match_status = 'manual' WHERE album_id = ?").run(albumId);
+  })();
 
   const updated = db.prepare(`
     SELECT

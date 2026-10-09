@@ -11,6 +11,7 @@ import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDisk
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 import { enqueueBackgroundImport } from './backgroundImports';
+import { enqueueAlbumMatch } from './albumMatchRunner';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -649,7 +650,10 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
               genre = parsed.genre;
               trackNumber = parsed.trackNumber;
 
-              if (parsed.album) {
+              // A matched or manually edited album is never replaced by yt-dlp's.
+              const matchRow = db.prepare('SELECT album_match_status FROM music_tracks WHERE id = ?').get(trackId) as { album_match_status: string | null } | undefined;
+              const albumIsSettled = matchRow?.album_match_status === 'matched' || matchRow?.album_match_status === 'manual';
+              if (parsed.album && !albumIsSettled) {
                 const existingAlbum = db.prepare('SELECT id FROM music_albums WHERE artist_id = ? AND title = ?').get(artistId, parsed.album) as { id: string } | undefined;
                 if (existingAlbum) {
                   albumId = existingAlbum.id;
@@ -674,9 +678,10 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
             db.prepare(`
               UPDATE music_tracks
               SET local_file_path = ?, local_thumbnail_path = ?, album_id = COALESCE(?, album_id),
-                  genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?, has_clip = ?
+                  genre = COALESCE(?, genre), track_number = COALESCE(?, track_number), size_bytes = ?, has_clip = ?,
+                  album_match_status = CASE WHEN ? IS NOT NULL THEN 'manual' ELSE album_match_status END
               WHERE id = ?
-            `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, wantClip ? 1 : 0, trackId);
+            `).run(localFilePath, thumbnailUrlPath, albumId, genre, trackNumber, fileSize, wantClip ? 1 : 0, albumId, trackId);
 
             db.prepare(`
               INSERT INTO music_track_artists (track_id, artist_id, role)
@@ -910,6 +915,23 @@ export function recordFailedMusicAttempt(trackId: string, trackTitle: string, er
 }
 
 /**
+ * Records a finished track download, then queues the track for album
+ * matching (a matching problem never affects the download).
+ */
+export function markMusicTrackCompleted(trackId: string, lastError: string | null): void {
+  getDb().prepare(`
+    UPDATE music_tracks
+    SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?, retry_count = 0
+    WHERE id = ?
+  `).run(lastError, trackId);
+  try {
+    enqueueAlbumMatch(trackId);
+  } catch (err) {
+    console.error(`[album-match] Could not queue track ${trackId}:`, err);
+  }
+}
+
+/**
  * Runs a single track download to completion and updates its DB status accordingly.
  * Not awaited by the orchestrator loop above — mirrors runSingleDownload in downloader.ts.
  */
@@ -947,11 +969,7 @@ async function runSingleMusicDownload(trackId: string, trackTitle: string, artis
       result = await downloadMusicTrackFile(trackId, artistId, { wantClip: false });
     }
 
-    db.prepare(`
-      UPDATE music_tracks
-      SET download_status = 'completed', download_progress = 100, download_speed = null, download_eta = null, last_error = ?, retry_count = 0
-      WHERE id = ?
-    `).run(clipFallbackError ? `Clip unavailable, falling back to audio only: ${clipFallbackError}` : null, trackId);
+    markMusicTrackCompleted(trackId, clipFallbackError ? `Clip unavailable, falling back to audio only: ${clipFallbackError}` : null);
     addLog(`${result.hasClip ? 'Clip' : 'Audio'} download SUCCEEDED: "${trackTitle}"`);
   } catch (err: any) {
     recordFailedMusicAttempt(trackId, trackTitle, err.message || String(err));

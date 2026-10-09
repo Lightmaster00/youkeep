@@ -64,6 +64,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'No fields to update.' });
   }
 
+  // An admin edit is final: the album matcher never touches this track again.
+  setClauses.push("album_match_status = 'manual'");
   params.push(trackId);
   db.prepare(`UPDATE music_tracks SET ${setClauses.join(', ')} WHERE id = ?`).run(...params);
 
