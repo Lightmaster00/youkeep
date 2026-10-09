@@ -5,6 +5,7 @@ import { filterNavLinks } from './displayPrefs';
 export interface SidebarGroup {
   id: string;
   label: string;
+  icon: string; // raw inline-SVG markup of the space, rendered via v-html
   enabled: boolean;
   links: SpaceNavLink[];
 }
@@ -30,7 +31,30 @@ export function buildSidebarGroups(spaces: Space[], opts: Options): SidebarGroup
       (l) => !(opts.mustChangePassword && l.hideWhenMustChangePassword) && !(opts.isGuest && l.requiresUser)
     );
     if (links.length === 0) continue;
-    groups.push({ id: space.id, label: space.label, enabled, links });
+    groups.push({ id: space.id, label: space.label, icon: space.icon, enabled, links });
   }
   return groups;
+}
+
+// A panel choice made by hand: the panel id (null = all closed) and the space
+// the route was in when the choice was made.
+export interface ManualPanelChoice {
+  id: string | null;
+  spaceId: string;
+}
+
+interface OpenPanelInput {
+  activeSpaceId: string;
+  manual: ManualPanelChoice | undefined;
+  groupIds: string[];
+}
+
+// Which sidebar panel is open (null = none). A manual choice wins only while the
+// route is still in the space it was made in; otherwise the route space opens.
+export function resolveOpenPanel({ activeSpaceId, manual, groupIds }: OpenPanelInput): string | null {
+  if (manual && manual.spaceId === activeSpaceId) {
+    if (manual.id === null) return null;
+    if (groupIds.includes(manual.id)) return manual.id;
+  }
+  return groupIds.includes(activeSpaceId) ? activeSpaceId : null;
 }
