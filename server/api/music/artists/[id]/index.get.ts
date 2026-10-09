@@ -29,6 +29,10 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // `standaloneTrackCount` is deprecated: the artist page no longer shows a
+  // separate bucket for album-less tracks (see the overview/songs routes); it
+  // stays in the response for older clients.
+  //
   // SQLite sorts NULLs first in ascending order, which means they sort last
   // in descending order — so plain "DESC" here already puts unknown release
   // years at the end without a separate CASE expression.

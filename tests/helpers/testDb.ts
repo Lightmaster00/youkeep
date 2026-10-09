@@ -464,17 +464,21 @@ export function insertMusicAlbum(db: Database.Database, opts: {
   title?: string;
   releaseYear?: number | null;
   source?: string;
+  albumType?: string | null;
+  coverUrl?: string | null;
   createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO music_albums (id, artist_id, title, release_year, source, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO music_albums (id, artist_id, title, release_year, source, album_type, cover_url, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.artistId,
     opts.title ?? `Album ${opts.id}`,
     opts.releaseYear ?? null,
     opts.source ?? 'youtube',
+    opts.albumType ?? null,
+    opts.coverUrl ?? null,
     opts.createdAt ?? Date.now()
   );
 }
@@ -493,11 +497,13 @@ export function insertMusicTrack(db: Database.Database, opts: {
   localThumbnailPath?: string | null;
   hasClip?: boolean;
   albumMatchStatus?: string | null;
+  viewCount?: number | null;
+  uploadDate?: string | null;
   createdAt?: number;
 }) {
   db.prepare(`
-    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, has_clip, album_match_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO music_tracks (id, artist_id, album_id, title, track_number, genre, language, duration, download_status, local_file_path, local_thumbnail_path, has_clip, album_match_status, view_count, upload_date, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.artistId,
@@ -512,6 +518,8 @@ export function insertMusicTrack(db: Database.Database, opts: {
     opts.localThumbnailPath ?? null,
     opts.hasClip ? 1 : 0,
     opts.albumMatchStatus ?? null,
+    opts.viewCount ?? null,
+    opts.uploadDate ?? null,
     opts.createdAt ?? Date.now()
   );
 }
