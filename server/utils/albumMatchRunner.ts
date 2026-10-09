@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { getDb } from './db';
 import { addLog } from './downloader';
-import { applyAlbumMatch, backoffDelayMs, isTransientMatchError, RequestThrottle, searchItunesSong, type ApplyOutcome, type ItunesMatch } from './albumMatch';
+import { applyAlbumMatch, backoffDelayMs, defaultItunesClient, isTransientMatchError, RequestThrottle, searchItunesSong, throttledItunesClient, type ApplyOutcome, type ItunesClient, type ItunesMatch } from './albumMatch';
 
 /**
  * The album matcher's background queue: at most one run at a time, fed by
@@ -78,9 +78,14 @@ function wakeableSleep(ms: number): Promise<void> {
 
 /** Swappable in tests: no real HTTP and no real waiting. */
 export const albumMatchDeps = {
-  search: (artistName: string, title: string): Promise<ItunesMatch | null> => searchItunesSong(artistName, title),
+  /** The raw iTunes endpoints (no spacing). */
+  client: defaultItunesClient as ItunesClient,
+  /** Waits for the process-wide request spacing; called before every iTunes request. */
   throttle: (): Promise<void> => (_g[G_THROTTLE] as RequestThrottle).wait(),
   sleep: (ms: number): Promise<void> => wakeableSleep(ms),
+  /** One lookup: the search, then (when needed) the collection lookup, each request throttled. */
+  search: (artistName: string, title: string): Promise<ItunesMatch | null> =>
+    searchItunesSong(artistName, title, throttledItunesClient(albumMatchDeps.client, () => albumMatchDeps.throttle())),
 };
 
 export function isAlbumMatchingEnabled(db: Database.Database): boolean {
@@ -200,9 +205,7 @@ export function scheduleStartupAlbumMatch(delayMs: number = STARTUP_ALBUM_MATCH_
   return timer;
 }
 
-type TrackOutcome = ApplyOutcome | 'cancelled';
-
-async function matchOne(db: Database.Database, item: QueueItem): Promise<TrackOutcome> {
+async function matchOne(db: Database.Database, item: QueueItem): Promise<ApplyOutcome> {
   const allowUnmatched = item.scope === 'unmatched';
   const track = db.prepare(`
     SELECT t.id, t.title, t.album_id, t.album_match_status, t.download_status, a.name AS artist_name
@@ -214,8 +217,6 @@ async function matchOne(db: Database.Database, item: QueueItem): Promise<TrackOu
   // Not matchable: no request; the apply step only marks a yt-dlp album track 'manual'.
   if (!matchable) return applyAlbumMatch(db, track.id, null, { allowUnmatched });
 
-  await albumMatchDeps.throttle();
-  if (_g[G_CANCEL]) return 'cancelled';
   const match = await albumMatchDeps.search(track.artist_name, track.title);
   return applyAlbumMatch(db, track.id, match, { allowUnmatched });
 }
@@ -237,7 +238,7 @@ async function runAlbumMatchLoop(db: Database.Database): Promise<void> {
         break;
       }
       const item = queue().items.shift()!;
-      let outcome: TrackOutcome;
+      let outcome: ApplyOutcome;
       try {
         outcome = await matchOne(db, item);
       } catch (err: any) {
@@ -260,10 +261,6 @@ async function runAlbumMatchLoop(db: Database.Database): Promise<void> {
         addLog(`Album matching: iTunes is unavailable (${message}); waiting ${Math.round(delay / 1000)} s.`);
         await albumMatchDeps.sleep(delay);
         continue;
-      }
-      if (outcome === 'cancelled') {
-        s.state = 'cancelled';
-        break;
       }
       consecutiveFailures = 0;
       s.processed++;

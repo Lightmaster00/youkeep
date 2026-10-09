@@ -19,7 +19,6 @@ let db: Database.Database;
 const realDeps = { ...albumMatchDeps };
 let searchCalls: Array<[string, string]>;
 let sleeps: number[];
-let throttles: number;
 let search: (artist: string, title: string) => Promise<ItunesMatch | null>;
 
 const match = (collectionId: string, collectionName = `Album ${collectionId}`): ItunesMatch => ({
@@ -42,13 +41,12 @@ beforeEach(async () => {
   insertMusicArtist(db, { id: 'a1', name: 'Daft Punk' });
   searchCalls = [];
   sleeps = [];
-  throttles = 0;
   search = async (_artist, title) => (title.includes('Lucky') ? match('1', 'Random Access Memories') : null);
   albumMatchDeps.search = async (artist, title) => {
     searchCalls.push([artist, title]);
     return search(artist, title);
   };
-  albumMatchDeps.throttle = async () => { throttles++; };
+  albumMatchDeps.throttle = async () => {};
   albumMatchDeps.sleep = async (ms) => { sleeps.push(ms); };
 });
 
@@ -60,7 +58,7 @@ afterEach(async () => {
 });
 
 describe('album matching runs', () => {
-  it('matches the backlog of unchecked completed tracks only, one throttled request each', async () => {
+  it('matches the backlog of unchecked completed tracks only', async () => {
     insertMusicAlbum(db, { id: 'yt', artistId: 'a1', title: 'From yt-dlp' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', title: 'Get Lucky (Official Video)' });
     insertMusicTrack(db, { id: 't2', artistId: 'a1', title: 'Unknown Song' });
@@ -76,12 +74,46 @@ describe('album matching runs', () => {
     const status = await waitIdle();
     expect(status).toMatchObject({ state: 'done', scope: 'unchecked', total: 2, processed: 2, matched: 1, unmatched: 1, errors: 0 });
     expect(searchCalls).toEqual([['Daft Punk', 'Get Lucky (Official Video)'], ['Daft Punk', 'Unknown Song']]);
-    expect(throttles).toBe(2);
     expect(track('t1')).toMatchObject({ album_match_status: 'matched' });
     expect(track('t2')).toMatchObject({ album_match_status: 'unmatched', album_id: null });
     expect(track('manual')).toMatchObject({ album_match_status: 'manual', album_id: null });
     expect(track('ytdlp')).toMatchObject({ album_id: 'yt' });
     expect(track('pending').album_match_status).toBeNull();
+  });
+
+  it('spaces every iTunes request (search and collection lookup) through the throttle', async () => {
+    const order: string[] = [];
+    albumMatchDeps.search = realDeps.search;
+    albumMatchDeps.throttle = async () => { order.push('throttle'); };
+    albumMatchDeps.client = {
+      search: async (term) => {
+        order.push(`search ${term}`);
+        return [1, 2].map((n) => ({ wrapperType: 'track', kind: 'song', artistName: 'Daft Punk', trackName: 'Get Lucky', collectionId: n, collectionName: `Album ${n}`, releaseDate: '2013-05-17T07:00:00Z' }));
+      },
+      lookup: async (ids) => {
+        order.push(`lookup ${ids.join(',')}`);
+        return [{ wrapperType: 'collection', collectionId: 2, collectionType: 'Album', releaseDate: '2001-01-01T00:00:00Z', trackCount: 10 }];
+      },
+    };
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', title: 'Get Lucky (Official Video)' });
+    startAlbumMatchRun('unchecked', db);
+    expect(await waitIdle()).toMatchObject({ state: 'done', matched: 1 });
+    expect(order).toEqual(['throttle', 'search Daft Punk Get Lucky', 'throttle', 'lookup 1,2']);
+    expect((db.prepare('SELECT a.title, a.release_year FROM music_tracks t JOIN music_albums a ON a.id = t.album_id').get() as any))
+      .toEqual({ title: 'Album 2', release_year: 2001 });
+  });
+
+  it('a transient lookup failure backs off and leaves the track unchecked', async () => {
+    albumMatchDeps.search = realDeps.search;
+    albumMatchDeps.client = {
+      search: async () => [1, 2].map((n) => ({ wrapperType: 'track', kind: 'song', artistName: 'Daft Punk', trackName: 'Get Lucky', collectionId: n, collectionName: `Album ${n}` })),
+      lookup: async () => { throw Object.assign(new Error('Too Many Requests'), { statusCode: 429 }); },
+    };
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', title: 'Get Lucky' });
+    startAlbumMatchRun('unchecked', db);
+    expect(await waitIdle()).toMatchObject({ state: 'done', errors: 1, matched: 0 });
+    expect(sleeps).toEqual([30_000]);
+    expect(track('t1').album_match_status).toBeNull();
   });
 
   it('retries only the unmatched tracks when asked', async () => {

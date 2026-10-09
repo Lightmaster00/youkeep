@@ -1,0 +1,29 @@
+{
+ "resultCount": 2,
+ "results": [
+  {
+   "wrapperType": "track",
+   "kind": "song",
+   "artistName": "Daft Punk",
+   "trackName": "End of Line",
+   "collectionId": 1543824814,
+   "collectionName": "TRON: Legacy - The Complete Edition (Original Motion Picture Soundtrack)",
+   "releaseDate": "2010-12-03T12:00:00Z",
+   "trackNumber": 12,
+   "primaryGenreName": "Original Score",
+   "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ad/8c/1c/ad8c1cf2-e8d9-8bdd-13cc-7532736484a3/20UM1IM11916.rgb.jpg/100x100bb.jpg"
+  },
+  {
+   "wrapperType": "track",
+   "kind": "song",
+   "artistName": "Daft Punk",
+   "trackName": "Sea of Simulation",
+   "collectionId": 1543824814,
+   "collectionName": "TRON: Legacy - The Complete Edition (Original Motion Picture Soundtrack)",
+   "releaseDate": "2010-12-03T08:00:00Z",
+   "trackNumber": 23,
+   "primaryGenreName": "Original Score",
+   "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ad/8c/1c/ad8c1cf2-e8d9-8bdd-13cc-7532736484a3/20UM1IM11916.rgb.jpg/100x100bb.jpg"
+  }
+ ]
+}

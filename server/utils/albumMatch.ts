@@ -22,8 +22,12 @@ export interface ItunesMatch {
 }
 
 export const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
+export const ITUNES_LOOKUP_URL = 'https://itunes.apple.com/lookup';
 export const ITUNES_TIMEOUT_MS = 8_000;
-export const ITUNES_RESULT_LIMIT = 8;
+// High enough that the original album is among the results, next to compilations and covers.
+export const ITUNES_RESULT_LIMIT = 25;
+// Distinct collections whose own release date is looked up (in one request).
+export const MAX_COLLECTION_LOOKUPS = 4;
 export const TITLE_SIMILARITY_THRESHOLD = 0.9;
 
 /** Case-, diacritics- and punctuation-insensitive comparison key. */
@@ -38,16 +42,51 @@ export function normaliseKey(value: string | null | undefined): string {
     .trim();
 }
 
-// Bracketed groups that only describe the upload, never the song itself.
-const NOISE_GROUP = /\s*[(\[](?:[^)\]]*\b(?:official|video|audio|lyrics?|visuali[sz]er|hd|hq|4k|mv)\b[^)\]]*)[)\]]/giu;
+// Words of a bracketed tag that only describes the upload or the edition, never the song.
+const NOISE_WORDS = /\b(?:official|video|audio|lyrics?|visuali[sz]er|hd|hq|4k|mv|explicit|clean|dirty|uncensored|censored|remaster(?:ed)?|radio edit|edit|edited version|album version|single version|soundtrack version|explicit version|clean version|mono|stereo)\b/iu;
+const LIVE_WORDS = /\blive\b/iu;
+// Innermost bracketed group: "(...)" or "[...]" without nested brackets.
+const INNER_GROUP = /\s*[(\[]([^()\[\]]*)[)\]]/gu;
+// A " - Remastered 2011" / " - Live" style suffix, as stores write tags.
+const DASH_TAG = /\s+[-–—]\s+([^-–—]+)$/u;
 const FEAT_TAIL = /\s*[(\[]?\s*\b(?:feat\.?|ft\.?|featuring)(?=\s|$)[\s\S]*$/iu;
 const PIPE_TAIL = /\s*\|[\s\S]*$/u;
 const DASH_SEPARATOR = /\s+[-–—]\s+/u;
 
+function isDroppableTag(content: string, dropLive: boolean): boolean {
+  return NOISE_WORDS.test(content) || (dropLive && LIVE_WORDS.test(content));
+}
+
+/** Removes bracketed and " - " suffixed tags that describe the upload (and, if asked, live recordings). */
+function stripTags(title: string, dropLive: boolean): string {
+  let result = title;
+  let previous: string;
+  do {
+    previous = result;
+    result = result.replace(INNER_GROUP, (group, content: string) => (isDroppableTag(content, dropLive) ? '' : group));
+    const dash = result.match(DASH_TAG);
+    if (dash && dash.index !== undefined && isDroppableTag(dash[1]!, dropLive)) result = result.slice(0, dash.index);
+  } while (result !== previous);
+  return result.replace(/\s+/g, ' ').trim();
+}
+
+/** The title without any bracketed group at all. */
+function withoutGroups(title: string): string {
+  let result = title;
+  let previous: string;
+  do {
+    previous = result;
+    result = result.replace(INNER_GROUP, '');
+  } while (result !== previous);
+  return result.replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Strips what YouTube uploads add around a song title: "(Official Video)",
- * "[HD]", "[Lyrics]", "| Official ..." and "feat. ..." tails, and an
- * "Artist - " prefix. The result is NFC-normalised with single spaces.
+ * "[HD]", "(Explicit)", "(Remastered 2011)", "(Radio Edit)", "(Live ...)",
+ * "| Official ..." and "feat. ..." tails, and an "Artist - " prefix. Other
+ * groups, like "(Interlude)", are kept. The result is NFC-normalised with
+ * single spaces.
  */
 export function cleanTrackTitle(title: string, artistName: string): string {
   let result = String(title ?? '').normalize('NFC').replace(/\s+/g, ' ').trim();
@@ -63,9 +102,9 @@ export function cleanTrackTitle(title: string, artistName: string): string {
   }
 
   result = result.replace(PIPE_TAIL, '');
-  result = result.replace(NOISE_GROUP, '');
+  result = stripTags(result, true);
   result = result.replace(FEAT_TAIL, '');
-  result = result.replace(NOISE_GROUP, '');
+  result = stripTags(result, true);
   result = result.replace(/\s+/g, ' ').replace(/[\s\-–—]+$/u, '').trim();
   // Never clean a title down to nothing.
   return result || String(title ?? '').normalize('NFC').trim();
@@ -103,6 +142,31 @@ export function parseCollectionName(name: string): { title: string; type: AlbumT
   return { title: raw.slice(0, match.index).trim(), type: match[1]!.toLowerCase() === 'ep' ? 'ep' : 'single' };
 }
 
+const EDITION_WORDS = /\b(?:deluxe|edition|anniversary|remaster(?:ed)?|expanded|explicit|clean|bonus|special|version|reissue)\b/iu;
+
+/**
+ * The album's name without edition tags: "Homework (25th Anniversary
+ * Edition)" and "Homework" are the same album.
+ */
+export function stripEditionSuffix(name: string): string {
+  let result = String(name ?? '').trim();
+  let previous: string;
+  do {
+    previous = result;
+    result = result.replace(INNER_GROUP, (group, content: string) => (EDITION_WORDS.test(content) ? '' : group));
+  } while (result !== previous);
+  return result.replace(/\s+/g, ' ').trim() || String(name ?? '').trim();
+}
+
+const DERIVATIVE_COLLECTION = /\b(?:greatest hits|hits|best of|collection|anthology|essentials?|complete|the very best|live|karaoke|tribute|mix|mixes)\b/iu;
+const REMIX_WORDS = /\bremix(?:es)?\b/iu;
+
+/** Compilations and derivative releases are only chosen when nothing else matches. */
+export function isDerivativeCollection(name: string, trackTitle: string): boolean {
+  if (DERIVATIVE_COLLECTION.test(name)) return true;
+  return REMIX_WORDS.test(name) && !REMIX_WORDS.test(trackTitle);
+}
+
 /** iTunes artwork comes as 100x100; the same URL serves 600x600. */
 export function largeArtworkUrl(url: string | null | undefined): string | null {
   if (typeof url !== 'string' || !url) return null;
@@ -115,22 +179,48 @@ function artistMatches(candidateArtist: string, trackArtistKey: string): boolean
   return candidateKey === trackArtistKey || candidateKey.includes(trackArtistKey) || trackArtistKey.includes(candidateKey);
 }
 
-function releaseTime(raw: any): number {
-  const t = Date.parse(raw?.releaseDate ?? '');
+function dateTime(value: unknown): number {
+  const t = Date.parse(typeof value === 'string' ? value : '');
   return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY;
 }
 
+/** What a collection lookup tells about an album. */
+export interface CollectionInfo {
+  releaseDate: string | null;
+  trackCount: number | null;
+  collectionType: string | null;
+}
+
+interface Candidate {
+  raw: any;
+  collectionId: string;
+  hasEditionTag: boolean;
+  trackTime: number;
+}
+
+export interface CandidateGroup {
+  key: string;
+  label: string;
+  type: AlbumType;
+  derivative: boolean;
+  members: Candidate[];
+  order: number;
+}
+
 /**
- * Picks the best iTunes song result for a track, or null. The artist must be
- * equal to, contain or be contained in the track's artist; the cleaned title
- * must have the same key (or, when no result does, a similarity of at least
- * 0.9). Among accepted results: albums before singles/EPs, then the earliest
- * release.
+ * The accepted search results, grouped by album (editions of one album are
+ * one group) and ordered before any lookup: original releases first, albums
+ * before singles/EPs, then the earliest song date. A result is accepted when
+ * its artist is equal to, contains or is contained in the track's artist,
+ * and its title (upload tags removed) has the same key as the track's, with
+ * or without the track's own bracketed groups; when no result does, a
+ * similarity of at least 0.9 is enough.
  */
-export function pickBestCandidate(results: any[], artistName: string, cleanedTitle: string): any | null {
+export function candidateGroups(results: any[], artistName: string, cleanedTitle: string): CandidateGroup[] {
   const artistKey = normaliseKey(artistName);
   const titleKey = normaliseKey(cleanedTitle);
-  if (!artistKey || !titleKey || !Array.isArray(results)) return null;
+  const bareTitleKey = normaliseKey(withoutGroups(cleanedTitle));
+  if (!artistKey || !titleKey || !Array.isArray(results)) return [];
 
   const exact: any[] = [];
   const close: any[] = [];
@@ -138,28 +228,91 @@ export function pickBestCandidate(results: any[], artistName: string, cleanedTit
     if (!raw || (raw.wrapperType && raw.wrapperType !== 'track') || (raw.kind && raw.kind !== 'song')) continue;
     if (raw.collectionId === undefined || raw.collectionId === null || !raw.collectionName) continue;
     if (!artistMatches(raw.artistName, artistKey)) continue;
-    const candidateKey = normaliseKey(cleanTrackTitle(String(raw.trackName ?? ''), String(raw.artistName ?? '')));
+    const songTitle = stripTags(String(raw.trackName ?? '').normalize('NFC').replace(FEAT_TAIL, ''), false);
+    const candidateKey = normaliseKey(songTitle);
     if (!candidateKey) continue;
-    if (candidateKey === titleKey) exact.push(raw);
+    if (candidateKey === titleKey || (bareTitleKey && candidateKey === bareTitleKey)) exact.push(raw);
     else if (keySimilarity(candidateKey, titleKey) >= TITLE_SIMILARITY_THRESHOLD) close.push(raw);
   }
 
-  const pool = exact.length ? exact : close;
-  if (!pool.length) return null;
-  const rank = (raw: any) => (parseCollectionName(raw.collectionName).type === 'album' ? 0 : 1);
-  return [...pool].sort((a, b) => rank(a) - rank(b) || releaseTime(a) - releaseTime(b))[0];
+  const groups = new Map<string, CandidateGroup>();
+  (exact.length ? exact : close).forEach((raw, index) => {
+    const { title, type } = parseCollectionName(raw.collectionName);
+    const label = stripEditionSuffix(title);
+    const key = `${type}\u0000${normaliseKey(label)}`;
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, label, type, derivative: isDerivativeCollection(label, cleanedTitle), members: [], order: index };
+      groups.set(key, group);
+    }
+    group.members.push({ raw, collectionId: String(raw.collectionId), hasEditionTag: label !== title, trackTime: dateTime(raw.releaseDate) });
+  });
+
+  const typeRank = (g: CandidateGroup) => (g.type === 'album' ? 0 : 1);
+  const earliest = (g: CandidateGroup) => Math.min(...g.members.map((m) => m.trackTime));
+  return [...groups.values()].sort((a, b) =>
+    Number(a.derivative) - Number(b.derivative) || typeRank(a) - typeRank(b) || earliest(a) - earliest(b) || a.order - b.order);
 }
 
-/** Maps an iTunes song result to what the database stores. */
-export function toItunesMatch(raw: any): ItunesMatch {
-  const { title, type } = parseCollectionName(raw.collectionName);
-  const year = Number.parseInt(String(raw.releaseDate ?? '').slice(0, 4), 10);
+function memberOrder(collections: Map<string, CollectionInfo>) {
+  return (a: Candidate, b: Candidate) =>
+    dateTime(collections.get(a.collectionId)?.releaseDate) - dateTime(collections.get(b.collectionId)?.releaseDate)
+    || Number(a.hasEditionTag) - Number(b.hasEditionTag)
+    || (collections.get(a.collectionId)?.trackCount ?? Infinity) - (collections.get(b.collectionId)?.trackCount ?? Infinity)
+    || a.trackTime - b.trackTime;
+}
+
+/** The distinct collections of the best groups whose release date is worth looking up (none when only one is possible). */
+export function collectionsToLookUp(groups: CandidateGroup[], max = MAX_COLLECTION_LOOKUPS): string[] {
+  const ids: string[] = [];
+  for (const group of groups) {
+    for (const member of [...group.members].sort(memberOrder(new Map()))) {
+      if (!ids.includes(member.collectionId)) ids.push(member.collectionId);
+    }
+  }
+  return ids.length > 1 ? ids.slice(0, max) : [];
+}
+
+/**
+ * Picks the album among the groups, using the looked-up collections: an
+ * original release (not a compilation, not a non-"Album" collection type)
+ * before a derivative one, an album before a single/EP, a looked-up
+ * collection before one that was not, then the earliest collection release.
+ * Within the group, the earliest edition (the one without an edition tag on
+ * a tie) gives the collection id; the group's label is the album title.
+ */
+export function chooseMatch(groups: CandidateGroup[], collections: Map<string, CollectionInfo> = new Map()): ItunesMatch | null {
+  if (!groups.length) return null;
+  const sortMembers = memberOrder(collections);
+  const scored = groups.map((group) => {
+    const members = [...group.members].sort(sortMembers);
+    const best = members[0]!;
+    const info = collections.get(best.collectionId);
+    const unknownType = !!info?.collectionType && info.collectionType !== 'Album';
+    return {
+      group,
+      best,
+      info,
+      derivative: group.derivative || unknownType,
+      lookedUp: info ? 0 : 1,
+      collectionTime: info ? dateTime(info.releaseDate) : best.trackTime,
+    };
+  });
+  scored.sort((a, b) =>
+    Number(a.derivative) - Number(b.derivative)
+    || (a.group.type === 'album' ? 0 : 1) - (b.group.type === 'album' ? 0 : 1)
+    || a.lookedUp - b.lookedUp
+    || a.collectionTime - b.collectionTime
+    || a.group.order - b.group.order);
+  const winner = scored[0]!;
+  const raw = winner.best.raw;
+  const year = Number.parseInt(String(winner.info?.releaseDate ?? raw.releaseDate ?? '').slice(0, 4), 10);
   const trackNumber = Number(raw.trackNumber);
   const genre = typeof raw.primaryGenreName === 'string' && raw.primaryGenreName.trim() ? raw.primaryGenreName.trim() : null;
   return {
-    collectionId: String(raw.collectionId),
-    collectionName: title,
-    albumType: type,
+    collectionId: winner.best.collectionId,
+    collectionName: winner.group.label,
+    albumType: winner.group.type,
     artworkUrl: largeArtworkUrl(raw.artworkUrl100),
     releaseYear: Number.isInteger(year) && year > 1800 ? year : null,
     trackNumber: Number.isInteger(trackNumber) && trackNumber > 0 ? trackNumber : null,
@@ -167,26 +320,73 @@ export function toItunesMatch(raw: any): ItunesMatch {
   };
 }
 
-/** Runs one iTunes search and returns its raw results. Throws on HTTP or network errors. */
-export type ItunesFetcher = (term: string) => Promise<any[]>;
+/** Selection without lookups (the song dates stand in for the collection dates). */
+export function pickBestCandidate(results: any[], artistName: string, cleanedTitle: string, collections: Map<string, CollectionInfo> = new Map()): ItunesMatch | null {
+  return chooseMatch(candidateGroups(results, artistName, cleanedTitle), collections);
+}
 
-export const defaultItunesFetcher: ItunesFetcher = async (term) => {
-  const data = await (globalThis as any).$fetch(ITUNES_SEARCH_URL, {
-    params: { term, entity: 'song', media: 'music', limit: ITUNES_RESULT_LIMIT, country: 'US', lang: 'en_us' },
-    // iTunes answers with a text/javascript content type; an error page is not JSON.
-    parseResponse: (text: string) => { try { return JSON.parse(text); } catch { return null; } },
-    timeout: ITUNES_TIMEOUT_MS,
-    retry: 0,
-  });
+/** The two iTunes endpoints used. Both throw on HTTP or network errors. */
+export interface ItunesClient {
+  search(term: string): Promise<any[]>;
+  lookup(collectionIds: string[]): Promise<any[]>;
+}
+
+// iTunes answers with a text/javascript content type; an error page is not JSON.
+const parseItunesJson = (text: string) => { try { return JSON.parse(text); } catch { return null; } };
+
+async function itunesGet(url: string, params: Record<string, string | number>): Promise<any[]> {
+  const data = await (globalThis as any).$fetch(url, { params, parseResponse: parseItunesJson, timeout: ITUNES_TIMEOUT_MS, retry: 0 });
   return Array.isArray(data?.results) ? data.results : [];
+}
+
+export const defaultItunesClient: ItunesClient = {
+  search: (term) => itunesGet(ITUNES_SEARCH_URL, { term, entity: 'song', media: 'music', limit: ITUNES_RESULT_LIMIT, country: 'US', lang: 'en_us' }),
+  lookup: (ids) => itunesGet(ITUNES_LOOKUP_URL, { id: ids.join(','), entity: 'album', country: 'US' }),
 };
 
-/** Searches iTunes for one track; null when no result is a match. */
-export async function searchItunesSong(artistName: string, title: string, fetcher: ItunesFetcher = defaultItunesFetcher): Promise<ItunesMatch | null> {
+/** Wraps every request of a client in `throttle` (the process-wide request spacing). */
+export function throttledItunesClient(client: ItunesClient, throttle: () => Promise<void>): ItunesClient {
+  return {
+    search: async (term) => { await throttle(); return client.search(term); },
+    lookup: async (ids) => { await throttle(); return client.lookup(ids); },
+  };
+}
+
+function toCollectionInfos(results: any[]): Map<string, CollectionInfo> {
+  const map = new Map<string, CollectionInfo>();
+  for (const raw of results) {
+    if (!raw || raw.wrapperType !== 'collection' || raw.collectionId === undefined || raw.collectionId === null) continue;
+    map.set(String(raw.collectionId), {
+      releaseDate: typeof raw.releaseDate === 'string' ? raw.releaseDate : null,
+      trackCount: Number.isInteger(raw.trackCount) ? raw.trackCount : null,
+      collectionType: typeof raw.collectionType === 'string' ? raw.collectionType : null,
+    });
+  }
+  return map;
+}
+
+/**
+ * Searches iTunes for one track; null when no result is a match. When
+ * several albums are possible, their collections are looked up (one more
+ * request) so the original release wins over later compilations. A
+ * transient lookup failure is thrown (the caller backs off); any other
+ * lookup failure falls back to the song dates.
+ */
+export async function searchItunesSong(artistName: string, title: string, client: ItunesClient = defaultItunesClient): Promise<ItunesMatch | null> {
   const cleaned = cleanTrackTitle(title, artistName);
-  const results = await fetcher(`${artistName} ${cleaned}`);
-  const best = pickBestCandidate(results, artistName, cleaned);
-  return best ? toItunesMatch(best) : null;
+  const results = await client.search(`${artistName} ${withoutGroups(cleaned) || cleaned}`);
+  const groups = candidateGroups(results, artistName, cleaned);
+  if (!groups.length) return null;
+  const ids = collectionsToLookUp(groups);
+  let collections = new Map<string, CollectionInfo>();
+  if (ids.length) {
+    try {
+      collections = toCollectionInfos(await client.lookup(ids));
+    } catch (err) {
+      if (isTransientMatchError(err)) throw err;
+    }
+  }
+  return chooseMatch(groups, collections);
 }
 
 /** HTTP status of a failed request, when it has one. */
