@@ -1,16 +1,26 @@
 <template>
-  <NuxtLink :to="{ path: '/music', query: { artistId: album.artist_id } }" class="album-tile">
+  <NuxtLink :to="`/music/album/${album.id}`" class="album-tile">
     <img :src="album.cover_url || fallbackCover" class="album-tile-cover" alt="" loading="lazy" @error="onCoverError" />
     <span class="album-tile-title">{{ album.title }}</span>
-    <span class="album-tile-meta">{{ album.artist_name }}<template v-if="album.release_year"> · {{ album.release_year }}</template></span>
-    <span class="album-tile-meta">{{ album.trackCount === 1 ? '1 track' : `${album.trackCount} tracks` }}</span>
+    <span v-if="metaLine" class="album-tile-meta">{{ metaLine }}</span>
+    <span v-if="trackCount != null" class="album-tile-meta">{{ trackCount === 1 ? '1 track' : `${trackCount} tracks` }}</span>
   </NuxtLink>
 </template>
 
 <script setup lang="ts">
-// One "New albums" tile of the Music Discover page; opens the album's artist
-// in the Library.
-defineProps<{ album: any }>();
+import { computed } from 'vue';
+
+// One album tile (Discover "New albums", the artist page rows); opens the
+// album page. The artist name is left out on the artist's own page.
+const props = withDefaults(defineProps<{ album: any; showArtist?: boolean }>(), { showArtist: true });
+
+const ALBUM_TYPE_LABELS: Record<string, string> = { single: 'Single', ep: 'EP' };
+
+const metaLine = computed(() => [
+  props.showArtist ? props.album.artist_name : ALBUM_TYPE_LABELS[props.album.album_type],
+  props.album.release_year,
+].filter(Boolean).join(' · '));
+const trackCount = computed(() => props.album.trackCount ?? props.album.track_count ?? null);
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><circle cx=\'12\' cy=\'12\' r=\'3\'></circle></svg>';
 

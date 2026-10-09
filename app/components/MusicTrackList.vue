@@ -10,13 +10,23 @@
       @click="emit('play', track)"
       @keydown.enter.self.prevent="emit('play', track)"
     >
-      <span class="mtl-index">{{ index + 1 }}</span>
+      <span class="mtl-index">{{ trackNumbers ? (track.track_number ?? '–') : index + 1 }}</span>
       <img :src="coverOf(track)" class="mtl-cover" alt="" loading="lazy" @error="onCoverError" />
       <span class="mtl-text">
         <span class="mtl-title">{{ track.title }}</span>
         <span class="mtl-artist">{{ track.artist_name }}</span>
       </span>
-      <span class="mtl-album">{{ track.album_title || '' }}</span>
+      <span class="mtl-album">
+        <template v-if="hideAlbum" />
+        <NuxtLink
+          v-else-if="track.album_id && track.album_title"
+          :to="`/music/album/${track.album_id}`"
+          class="mtl-album-link"
+          @click.stop
+          @keydown.stop
+        >{{ track.album_title }}</NuxtLink>
+        <template v-else>{{ track.album_title || '' }}</template>
+      </span>
       <span class="mtl-duration">{{ formatDuration(track.duration) }}</span>
       <span class="mtl-actions" @click.stop @keydown.stop>
         <MusicTrackActions :track-id="track.id" />
@@ -27,9 +37,11 @@
 </template>
 
 <script setup lang="ts">
-// Numbered track list for Liked songs and personal playlists. Clicking a row
-// emits `play`; the `actions` slot adds per-row buttons after like/add.
-defineProps<{ tracks: any[]; activeId?: string | null }>();
+// Numbered track list for Liked songs, playlists and the artist/album pages.
+// Clicking a row emits `play`; the `actions` slot adds per-row buttons after
+// like/add. `trackNumbers` numbers rows by album track number instead of
+// position; `hideAlbum` leaves out the album column link (album page).
+defineProps<{ tracks: any[]; activeId?: string | null; trackNumbers?: boolean; hideAlbum?: boolean }>();
 const emit = defineEmits<{ play: [track: any] }>();
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M9 18V5l12-2v13\'></path><circle cx=\'6\' cy=\'18\' r=\'3\'></circle><circle cx=\'18\' cy=\'16\' r=\'3\'></circle></svg>';
@@ -122,6 +134,16 @@ function formatDuration(seconds: number | null | undefined): string {
 .mtl-album {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.mtl-album-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mtl-album-link:hover,
+.mtl-album-link:focus-visible {
+  text-decoration: underline;
 }
 
 .mtl-duration {

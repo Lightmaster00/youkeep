@@ -53,7 +53,7 @@ describe('/music/discover', () => {
     expect(w.findAll('.genre-tile').map((a) => a.attributes('href'))).toEqual([
       '/music/genre/Hip%20Hop', '/music/genre/R%26B%20%2F%20Soul',
     ]);
-    expect(w.find('.album-tile').attributes('href')).toBe('/music?artistId=a9');
+    expect(w.find('.album-tile').attributes('href')).toBe('/music/album/al1');
     expect(w.find('.album-tile').text()).toContain('Nine · 2020');
     expect(w.find('.artist-tile').attributes('href')).toBe('/music?artistId=a7');
 
