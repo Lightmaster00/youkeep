@@ -987,7 +987,7 @@ onUnmounted(() => {
    that gap, because the fixed-size siblings are the problem, not the
    flexible text column. Stacking removes the side-by-side constraint
    entirely, mirroring the identical fix already used for
-   .artist-detail-header / .show-detail-header. */
+   .show-detail-header. */
 @media (max-width: 480px) {
   .settings-container .search-channel-card {
     flex-direction: column;

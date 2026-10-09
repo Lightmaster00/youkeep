@@ -89,193 +89,28 @@
             <div class="artist-card-body">
               <h3 class="artist-card-name">{{ a.name }}</h3>
               <p class="artist-card-meta">{{ a.track_count }} track(s)</p>
-              <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(a.visibility)">{{ formatVisibility(a.visibility) }}</span>
+              <span v-if="isAdmin" class="badge" :class="visibilityBadgeClass(a.visibility)">{{ formatVisibility(a.visibility) }}</span>
             </div>
           </div>
         </div>
       </template>
     </div>
 
-    <!-- DETAIL VIEW -->
-    <div v-else class="artist-detail-view">
-      <button @click="goBack" class="btn btn-secondary back-btn">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        Music
-      </button>
-
-      <div v-if="detailPending" class="music-loading">Loading...</div>
-      <div v-else-if="detailError" class="music-error">Artist not found or access denied.</div>
-
-      <template v-else-if="artist">
-        <div class="artist-detail-header">
-          <img :src="artist.avatar_url || fallbackAvatar" @error="handleAvatarError" class="artist-detail-avatar" alt="" />
-          <div class="artist-detail-info">
-            <div class="title-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-              <h1 class="artist-detail-name">{{ artist.name }}</h1>
-              <span v-if="isAdmin" class="badge" :class="getVisBadgeClass(artist.visibility)">{{ formatVisibility(artist.visibility) }}</span>
-            </div>
-            <p v-if="artist.description" class="artist-detail-desc">{{ artist.description }}</p>
-            <button @click="playArtistMix" class="btn btn-secondary artist-mix-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              Shuffle play
-            </button>
-          </div>
-        </div>
-
-        <EmptyState
-          v-if="albums.length === 0 && standaloneTrackCount === 0"
-          icon="music"
-          title="No tracks archived"
-          description="No completed tracks for this artist yet."
-        />
-
-        <div v-for="album in albums" :key="album.id" class="album-group">
-          <div class="album-header" @click="toggleAlbumExpand(album.id)">
-            <img :src="album.cover_url || fallbackCover" class="album-cover" alt="" />
-            <div class="album-info">
-              <h3 class="album-title">{{ album.title }}</h3>
-              <p class="album-meta">{{ album.release_year || 'Unknown year' }} &bull; {{ album.track_count }} track(s)</p>
-            </div>
-            <button v-if="isAdmin" @click.stop="openAlbumEdit(album)" class="edit-btn" title="Edit">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-            </button>
-          </div>
-          <div v-if="expandedAlbums[album.id]" class="album-tracks">
-            <div
-              v-for="track in trackGroups[album.id]?.tracks || []"
-              :key="track.id"
-              class="track-row"
-              :class="{ 'now-playing': currentTrack?.id === track.id }"
-              @click="playTrack(track, album.id)"
-            >
-              <span class="track-number">{{ track.track_number || '–' }}</span>
-              <span class="track-title">{{ track.title }}</span>
-              <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
-              <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
-              <button
-                v-if="track.has_clip"
-                @click="toggleTrackClipMode($event, track, album.id)"
-                class="badge badge-clip"
-                title="Watch the clip"
-              >
-                🎬 Clip
-              </button>
-              <button
-                v-else-if="isAdmin"
-                @click.stop="downloadClip(track)"
-                :disabled="downloadingClipIds.has(track.id)"
-                class="btn btn-secondary clip-download-btn"
-              >
-                {{ downloadingClipIds.has(track.id) ? 'Downloading…' : 'Download clip' }}
-              </button>
-              <MusicTrackActions :track-id="track.id" />
-              <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-              <button v-if="isAdmin" @click.stop="openTrackEdit(track, album.id)" class="edit-btn" title="Edit">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-              </button>
-            </div>
-            <div v-if="trackGroups[album.id]?.loading" class="music-loading">Loading...</div>
-            <div v-if="trackGroups[album.id]?.error" class="music-error">
-              Failed to load tracks.
-              <button @click="loadTracks(album.id)" class="btn btn-secondary load-more-btn">Retry</button>
-            </div>
-            <button
-              v-if="(trackGroups[album.id]?.tracks.length || 0) < (trackGroups[album.id]?.total || 0)"
-              @click="loadTracks(album.id)"
-              :disabled="trackGroups[album.id]?.loading"
-              class="btn btn-secondary load-more-btn"
-            >
-              Load more
-            </button>
-          </div>
-        </div>
-
-        <div v-if="standaloneTrackCount > 0" class="album-group">
-          <div class="album-header" @click="toggleStandalone">
-            <div class="album-cover album-cover-placeholder"></div>
-            <div class="album-info">
-              <h3 class="album-title">Tracks without an album</h3>
-              <p class="album-meta">{{ standaloneTrackCount }} track(s)</p>
-            </div>
-          </div>
-          <div v-if="standaloneExpanded" class="album-tracks">
-            <div
-              v-for="track in trackGroups['none']?.tracks || []"
-              :key="track.id"
-              class="track-row"
-              :class="{ 'now-playing': currentTrack?.id === track.id }"
-              @click="playTrack(track, 'none')"
-            >
-              <span class="track-number">{{ track.track_number || '–' }}</span>
-              <span class="track-title">{{ track.title }}</span>
-              <span v-if="track.genre" class="badge badge-pending">{{ track.genre }}</span>
-              <span v-if="track.language" class="badge badge-pending">{{ track.language }}</span>
-              <button
-                v-if="track.has_clip"
-                @click="toggleTrackClipMode($event, track, 'none')"
-                class="badge badge-clip"
-                title="Watch the clip"
-              >
-                🎬 Clip
-              </button>
-              <button
-                v-else-if="isAdmin"
-                @click.stop="downloadClip(track)"
-                :disabled="downloadingClipIds.has(track.id)"
-                class="btn btn-secondary clip-download-btn"
-              >
-                {{ downloadingClipIds.has(track.id) ? 'Downloading…' : 'Download clip' }}
-              </button>
-              <MusicTrackActions :track-id="track.id" />
-              <span class="track-duration">{{ formatDuration(track.duration) }}</span>
-              <button v-if="isAdmin" @click.stop="openTrackEdit(track, 'none')" class="edit-btn" title="Edit">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
-              </button>
-            </div>
-            <div v-if="trackGroups['none']?.loading" class="music-loading">Loading...</div>
-            <div v-if="trackGroups['none']?.error" class="music-error">
-              Failed to load tracks.
-              <button @click="loadTracks('none')" class="btn btn-secondary load-more-btn">Retry</button>
-            </div>
-            <button
-              v-if="(trackGroups['none']?.tracks.length || 0) < (trackGroups['none']?.total || 0)"
-              @click="loadTracks('none')"
-              :disabled="trackGroups['none']?.loading"
-              class="btn btn-secondary load-more-btn"
-            >
-              Load more
-            </button>
-          </div>
-        </div>
-      </template>
-    </div>
-
-    <MusicTrackEditModal
-      :show="!!editingTrack"
-      :track="editingTrack?.track ?? null"
-      @close="closeTrackEdit"
-      @saved="handleTrackSaved"
-    />
-    <MusicAlbumEditModal
-      :show="!!editingAlbum"
-      :album="editingAlbum"
-      @close="closeAlbumEdit"
-      @saved="handleAlbumSaved"
-    />
+    <!-- ARTIST PAGE -->
+    <MusicArtistPage v-else :key="artistId" :artist-id="artistId" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
-import { useToast } from '~/composables/useToast';
 import { highlightMatch } from '../../utils/highlightMatch';
+import { formatVisibility, visibilityBadgeClass } from '../../utils/musicVisibilityBadge';
 
 const { isAdmin } = useAuth();
-const { currentTrack, clipMode, play: playMusicTrack, setClipMode } = useMusicPlayer();
-const toast = useToast();
+const { currentTrack, play: playMusicTrack } = useMusicPlayer();
 const route = useRoute();
 const router = useRouter();
 
@@ -335,23 +170,6 @@ async function fetchPlaylists() {
 function playPlaylist(playlist: { tracks: any[] }) {
   if (playlist.tracks.length === 0) return;
   playMusicTrack(playlist.tracks[0], playlist.tracks);
-}
-
-let artistMixRequestId = 0;
-
-async function playArtistMix() {
-  if (!artistId.value) return;
-  const requestId = ++artistMixRequestId;
-  try {
-    const data = await $fetch<any>('/api/music/playlists/artist-mix', { params: { artistId: artistId.value } });
-    if (requestId !== artistMixRequestId) return;
-    if (data.tracks?.length > 0) {
-      playMusicTrack(data.tracks[0], data.tracks);
-    }
-  } catch (e) {
-    // Fail silently — consistent with fetchPlaylists() treating each
-    // automatic-playlist fetch as independently best-effort.
-  }
 }
 
 let artistsRequestId = 0;
@@ -440,212 +258,22 @@ watch(
   { immediate: true }
 );
 
-// --- Detail view state ---
-const artist = ref<any>(null);
-const albums = ref<any[]>([]);
-const standaloneTrackCount = ref(0);
-const detailPending = ref(false);
-const detailError = ref(false);
-
-const expandedAlbums = reactive<Record<string, boolean>>({});
-const standaloneExpanded = ref(false);
-const trackGroups = reactive<Record<string, { tracks: any[]; total: number; loaded: boolean; loading: boolean; error: boolean }>>({});
-
-function ensureGroup(key: string) {
-  if (!trackGroups[key]) {
-    trackGroups[key] = { tracks: [], total: 0, loaded: false, loading: false, error: false };
-  }
-  return trackGroups[key];
-}
-
-async function loadTracks(albumIdKey: string) {
-  const group = ensureGroup(albumIdKey);
-  group.loading = true;
-  group.error = false;
-  try {
-    const data = await $fetch<any>(`/api/music/artists/${artistId.value}/tracks`, {
-      params: { albumId: albumIdKey, limit: 50, offset: group.tracks.length }
-    });
-    group.tracks.push(...(data.tracks || []));
-    group.total = data.total || 0;
-    group.loaded = true;
-    group.error = false;
-  } catch (e) {
-    group.error = true;
-  } finally {
-    group.loading = false;
-  }
-}
-
-function toggleAlbumExpand(albumId: string) {
-  expandedAlbums[albumId] = !expandedAlbums[albumId];
-  if (expandedAlbums[albumId]) {
-    const group = ensureGroup(albumId);
-    if (!group.loaded && !group.loading) loadTracks(albumId);
-  }
-}
-
-function toggleStandalone() {
-  standaloneExpanded.value = !standaloneExpanded.value;
-  if (standaloneExpanded.value) {
-    const group = ensureGroup('none');
-    if (!group.loaded && !group.loading) loadTracks('none');
-  }
-}
-
-function playTrack(track: any, groupKey: string) {
-  if (!track.local_file_path) return;
-  const group = trackGroups[groupKey];
-  if (!group) return;
-  playMusicTrack(track, group.tracks);
-}
-
-const downloadingClipIds = ref<Set<string>>(new Set());
-
-async function downloadClip(track: any) {
-  if (downloadingClipIds.value.has(track.id)) return;
-  downloadingClipIds.value = new Set([...downloadingClipIds.value, track.id]);
-  try {
-    await $fetch(`/api/admin/music/tracks/${track.id}/download-clip`, { method: 'POST' });
-    toast.success('Clip download started — reload the page in a few minutes to see the badge.');
-  } catch (e: any) {
-    toast.error(e?.data?.statusMessage || 'Failed to start the clip download.');
-  } finally {
-    downloadingClipIds.value = new Set([...downloadingClipIds.value].filter((id) => id !== track.id));
-  }
-}
-
-function toggleTrackClipMode(e: Event, track: any, groupKey: string) {
-  e.stopPropagation();
-  if (currentTrack.value?.id !== track.id) {
-    playTrack(track, groupKey);
-    setClipMode(true);
-  } else {
-    setClipMode(!clipMode.value);
-  }
-}
-
-const editingTrack = ref<{ track: any; groupKey: string } | null>(null);
-const editingAlbum = ref<any | null>(null);
-
-function openTrackEdit(track: any, groupKey: string) {
-  editingTrack.value = { track, groupKey };
-}
-
-function closeTrackEdit() {
-  editingTrack.value = null;
-}
-
-function handleTrackSaved(updated: any) {
-  if (!editingTrack.value) return;
-  const group = trackGroups[editingTrack.value.groupKey];
-  if (group) {
-    const existing = group.tracks.find((t: any) => t.id === updated.id);
-    if (existing) Object.assign(existing, updated);
-  }
-  closeTrackEdit();
-}
-
-function openAlbumEdit(album: any) {
-  editingAlbum.value = album;
-}
-
-function closeAlbumEdit() {
-  editingAlbum.value = null;
-}
-
-function handleAlbumSaved(updated: any) {
-  const existing = albums.value.find((a: any) => a.id === updated.id);
-  if (existing) Object.assign(existing, updated);
-  closeAlbumEdit();
-}
-
-let detailRequestId = 0;
-
-async function fetchArtistDetail() {
-  const requestId = ++detailRequestId;
-  detailPending.value = true;
-  detailError.value = false;
-  artist.value = null;
-  albums.value = [];
-  standaloneTrackCount.value = 0;
-  Object.keys(expandedAlbums).forEach((k) => delete expandedAlbums[k]);
-  Object.keys(trackGroups).forEach((k) => delete trackGroups[k]);
-  standaloneExpanded.value = false;
-  try {
-    const data = await $fetch<any>(`/api/music/artists/${artistId.value}`);
-    if (requestId !== detailRequestId) return;
-    artist.value = data.artist;
-    albums.value = data.albums || [];
-    standaloneTrackCount.value = data.standaloneTrackCount || 0;
-  } catch (e) {
-    if (requestId !== detailRequestId) return;
-    detailError.value = true;
-  } finally {
-    if (requestId !== detailRequestId) return;
-    detailPending.value = false;
-  }
-}
-
-function goBack() {
-  router.push('/music');
-}
-
+// The artist page (MusicArtistPage) loads itself; the library grid is
+// (re)loaded when it is shown.
 watch(artistId, (newId, oldId) => {
-  if (newId && newId !== oldId) {
-    fetchArtistDetail();
-  } else if (!newId && oldId) {
-    fetchArtists();
-  }
+  if (!newId && oldId) fetchArtists();
 });
 
-onMounted(async () => {
-  if (artistId.value) {
-    fetchArtistDetail();
-  } else {
-    fetchArtists();
-  }
+onMounted(() => {
+  if (!artistId.value) fetchArtists();
 });
 
-// --- Shared formatters (duplicated per-page, matching this codebase's
-// existing convention — see channels.vue / watch/[id].vue / index.vue,
-// none of which share a formatting util module) ---
 const fallbackAvatar = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>';
-const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M9 18V5l12-2v13\'></path><circle cx=\'6\' cy=\'18\' r=\'3\'></circle><circle cx=\'18\' cy=\'16\' r=\'3\'></circle></svg>';
 
 const handleAvatarError = (event: Event) => {
   const target = event.target as HTMLImageElement;
   if (target && target.src !== fallbackAvatar) {
     target.src = fallbackAvatar;
-  }
-};
-
-const formatDuration = (seconds: number | null): string => {
-  if (!seconds) return '--:--';
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hrs > 0) {
-    return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-};
-
-const formatVisibility = (vis: string): string => {
-  switch (vis) {
-    case 'public': return 'Public';
-    case 'private': return 'Private';
-    case 'ultra_private': return 'Ultra Private';
-    default: return vis || 'Public';
-  }
-};
-
-const getVisBadgeClass = (vis: string): string => {
-  switch (vis) {
-    case 'public': return 'badge-completed';
-    case 'private': return 'badge-downloading';
-    case 'ultra_private': return 'badge-failed';
-    default: return 'badge-completed';
   }
 };
 </script>
@@ -779,100 +407,6 @@ const getVisBadgeClass = (vis: string): string => {
   margin-bottom: 8px;
 }
 
-.back-btn {
-  margin-bottom: 20px;
-}
-
-.artist-detail-header {
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  margin-bottom: 32px;
-}
-
-/* Mirrors channels.vue's .channel-profile-header stacking (same avatar+info
-   header shape, already shipped and proven). Below 480px the 96px avatar +
-   20px gap leave too little width for the info column to hold real content
-   (a bio with an unbroken URL/email, or the "Shuffle play" button) —
-   no single child-level fix (word-break, button wrapping) closes the gap
-   for every kind of content, but stacking the header removes the
-   side-by-side width constraint entirely. */
-@media (max-width: 480px) {
-  .artist-detail-header {
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-}
-
-.artist-detail-avatar {
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.artist-detail-name {
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.artist-detail-desc {
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-.artist-mix-btn {
-  margin-top: 10px;
-}
-
-.album-group {
-  margin-bottom: 16px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-lg);
-  overflow: hidden;
-}
-
-.album-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  cursor: pointer;
-  background: rgba(17, 17, 34, 0.4);
-}
-
-.album-header:hover {
-  background: rgba(17, 17, 34, 0.6);
-}
-
-.album-cover {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--border-radius-md);
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.album-cover-placeholder {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.album-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.album-meta {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.album-tracks {
-  padding: 8px 16px 16px;
-}
-
 .track-row {
   display: flex;
   align-items: center;
@@ -881,12 +415,7 @@ const getVisBadgeClass = (vis: string): string => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 14px;
   cursor: pointer;
-  /* .album-group (the ancestor card) has overflow: hidden, so without this
-     a row whose fixed-size children (track number, duration, edit button,
-     and — for an admin viewing a track with no clip yet — the wide
-     "Download clip" button) exceed the available width gets its
-     trailing controls silently clipped and unreachable. overflow-x: auto
-     makes them reachable by scrolling the row instead. */
+  /* Keeps trailing actions reachable on a narrow row by scrolling it. */
   overflow-x: auto;
 }
 
@@ -898,38 +427,8 @@ const getVisBadgeClass = (vis: string): string => {
   color: var(--accent-primary);
 }
 
-.track-row.now-playing .track-number,
-.track-row.now-playing .track-duration {
-  color: var(--accent-primary);
-}
-
 .track-row:last-child {
   border-bottom: none;
-}
-
-.track-number {
-  width: 24px;
-  text-align: right;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.track-title {
-  flex: 1;
-  /* Without min-width: 0 the title's automatic minimum size floors at its
-     longest unbreakable word, which combined with the row's other
-     flex-shrink: 0 children can still exceed the content box. Truncating
-     with ellipsis instead of the current multi-line wrap also keeps the
-     row a single, predictable height. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.track-duration {
-  color: var(--text-secondary);
-  flex-shrink: 0;
 }
 
 .track-search-results {
@@ -950,43 +449,5 @@ const getVisBadgeClass = (vis: string): string => {
 
 .track-search-actions {
   margin-left: auto;
-}
-
-.badge-clip {
-  cursor: pointer;
-  border: none;
-  background: rgba(139, 92, 246, 0.15);
-  color: var(--accent-primary);
-}
-
-.badge-clip:hover {
-  background: rgba(139, 92, 246, 0.25);
-}
-
-.load-more-btn {
-  margin-top: 12px;
-}
-
-.clip-download-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.edit-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
-  display: inline-flex;
-  align-items: center;
-  transition: color 0.2s;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.edit-btn:hover {
-  color: var(--text-primary);
 }
 </style>

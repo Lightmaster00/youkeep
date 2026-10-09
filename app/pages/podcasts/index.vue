@@ -408,8 +408,7 @@ const getVisBadgeClass = (vis: string): string => {
   margin-bottom: 32px;
 }
 
-/* Same fix as music/index.vue's .artist-detail-header, mirroring
-   channels.vue's existing .channel-profile-header stacking. Below 480px
+/* Mirrors channels.vue's existing .channel-profile-header stacking. Below 480px
    the 140px cover + 20px gap leave too little width for the info column
    (title, author, description) to hold real content without overflowing. */
 @media (max-width: 480px) {
