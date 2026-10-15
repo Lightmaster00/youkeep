@@ -12,6 +12,7 @@ import { extractInfoFields } from './videoInfo';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { channelBaseDirs, isContained, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
+import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -770,7 +771,8 @@ function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPa
   });
 }
 
-function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
+/** Exported for tests only (the queue worker is its one caller). */
+export function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
   return new Promise<void>(async (resolve, reject) => {
     try {
       const ytdlPath = await getYtdlPath();
@@ -842,6 +844,9 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     const child = spawn(ytdlPath, args, { env });
     activeProcesses.set(videoId, child);
     keepFilesOnExit.delete(videoId); // a fresh attempt: no pause pending for it
+    // Progress is persisted at most once per second (see progressWriter.ts).
+    const progressWriter = startProgressWriter(db, 'videos', videoId);
+    const endProgress = () => finishProgressWriter('videos', videoId, progressWriter);
 
     // Start parallel comment extraction in parallel background thread
     const commentsPromise = extractCommentsParallel(videoId, targetVideoUrl, ytdlPath, env);
@@ -858,6 +863,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
     // Watchdog: kill and fail if download hangs for too long
     const watchdog = setTimeout(() => {
       if (!settled) {
+        endProgress();
         addLog(`yt-dlp [${videoId}] timed out after ${DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
         try { child.kill('SIGKILL'); } catch (e) {}
         activeProcesses.delete(videoId);
@@ -868,6 +874,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
 
     child.on('error', (err) => {
       clearTimeout(watchdog);
+      endProgress();
       addLog(`yt-dlp [${videoId}] process error : ${err.message || err}`);
       activeProcesses.delete(videoId);
       cleanupPartialFiles(videoId, channelId);
@@ -914,11 +921,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
             }
           }
 
-          db.prepare(`
-            UPDATE videos 
-            SET download_progress = ?, download_speed = ?, download_eta = ?
-            WHERE id = ?
-          `).run(progress, displaySpeed, displayEta, videoId);
+          progressWriter.update({ progress, speed: displaySpeed, eta: displayEta });
           break;
         }
 
@@ -931,11 +934,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
           } else if (commentMatch[2]) {
             statusText = `Comments: ${commentMatch[2]}`;
           }
-          db.prepare(`
-            UPDATE videos 
-            SET download_speed = ?, download_eta = 'Waiting...'
-            WHERE id = ?
-          `).run(statusText, videoId);
+          progressWriter.update({ progress: null, speed: statusText, eta: 'Waiting...' });
           break;
         }
       }
@@ -952,6 +951,7 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
 
     child.on('close', (code) => {
       clearTimeout(watchdog);
+      endProgress();
       activeProcesses.delete(videoId);
       if (settled) return; // Already resolved/rejected by watchdog or error handler
       const keptAfterError = code !== 0 && keepFinishedOutputAfterError(videoId, channelId, code, paths);
@@ -1100,7 +1100,9 @@ function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
 export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pending' = 'pending', keepProgressAndFiles = false): boolean {
   const child = activeProcesses.get(videoId);
   const db = getDb();
-  
+  // A pause keeps the latest progress: write what the throttle still holds first.
+  stopProgressWriter('videos', videoId);
+
   if (child) {
     // A pause keeps the partial files: the process's exit must not remove them.
     if (keepProgressAndFiles) keepFilesOnExit.add(videoId);

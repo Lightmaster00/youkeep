@@ -12,6 +12,7 @@ import { addLog, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
+import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -460,9 +461,13 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
     // cleanupPartialPodcastFiles() would then be unlinking the file out from
     // under a still-open handle.
     let fileStream: fs.WriteStream | undefined;
+    // Progress is persisted at most once per second (see progressWriter.ts).
+    const progressWriter = startProgressWriter(db, 'podcast_episodes', episodeId);
+    const endProgress = () => finishProgressWriter('podcast_episodes', episodeId, progressWriter);
 
     const watchdog = setTimeout(() => {
       if (!settled) {
+        endProgress();
         addLog(`Podcast download [${episodeId}] timed out after ${PODCAST_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
         try { controller.abort(); } catch (e) {}
         activePodcastAbortControllers.delete(episodeId);
@@ -498,60 +503,39 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
 
       const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
       let receivedBytes = 0;
-      let lastDbWrite = 0;
       fileStream = fs.createWriteStream(outputPath);
 
-      // Passes bytes through unchanged while doing the throttled progress-DB-write
-      // side effect. Using stream.promises.pipeline (instead of a manual
-      // for-await + fileStream.write loop) gives us backpressure for free —
-      // pipeline() pauses the readable when the writable's internal buffer is
-      // full instead of buffering the whole remainder of the episode in memory —
+      // Passes bytes through unchanged while reporting progress. Using
+      // stream.promises.pipeline (instead of a manual for-await +
+      // fileStream.write loop) gives us backpressure for free — pipeline()
+      // pauses the readable when the writable's internal buffer is full
+      // instead of buffering the whole remainder of the episode in memory —
       // and it also attaches the error handling we need: a write-stream error
-      // (ENOSPC/EACCES/EIO) now rejects the pipeline promise into the catch
-      // block below instead of throwing uncaught and killing the process.
+      // (ENOSPC/EACCES/EIO) rejects the pipeline promise into the catch block
+      // below instead of throwing uncaught and killing the process.
+      //
+      // A throw inside this callback would NOT be routed into pipeline()'s
+      // rejection (only callback(err) is), so nothing here may throw: the
+      // progress writer throttles database writes to once per second and
+      // swallows a failed write itself (progress is cosmetic).
       const progressTransform = new Transform({
         transform(chunk, _encoding, callback) {
           receivedBytes += chunk.length;
-          const now = Date.now();
-          // Throttled — matches the ~yt-dlp-progress-line cadence, not on every chunk.
-          if (now - lastDbWrite > 500) {
-            // A thrown error here (SQLITE_BUSY, disk I/O error, DB closed
-            // during shutdown/HMR) does NOT propagate into pipeline()'s
-            // rejection the way a stream-level error would — Transform's
-            // _transform errors are only routed through the callback, not
-            // via synchronous throw. Left unguarded, this becomes an
-            // unhandled rejection that crashes the process, exactly the
-            // failure mode the pipeline() refactor was meant to eliminate.
-            // Progress tracking is cosmetic, so swallow and let the download
-            // continue via the unconditional callback(null, chunk) below.
-            try {
-              const elapsedSec = (now - attemptStartedAt) / 1000;
-              const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
-              const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
-              if (totalBytes > 0) {
-                const progress = Math.round((receivedBytes / totalBytes) * 100);
-                const remainingBytes = totalBytes - receivedBytes;
-                const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
-                db.prepare(`
-                  UPDATE podcast_episodes
-                  SET download_progress = ?, download_speed = ?, download_eta = ?
-                  WHERE id = ?
-                `).run(progress, speed, eta, episodeId);
-              } else {
-                // Content-Length wasn't sent (e.g. chunked transfer encoding), so
-                // there's no total to compute a percentage or ETA against.
-                // podcast_episodes has no bytes-downloaded column to fall back on,
-                // so per this codebase's convention of not fabricating a fake
-                // percentage, we still surface *some* liveness signal (speed) and
-                // leave download_progress/download_eta untouched rather than lying.
-                db.prepare(`
-                  UPDATE podcast_episodes
-                  SET download_speed = ?
-                  WHERE id = ?
-                `).run(speed, episodeId);
-              }
-            } catch (e) {}
-            lastDbWrite = now;
+          const elapsedSec = (Date.now() - attemptStartedAt) / 1000;
+          const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
+          const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
+          if (totalBytes > 0) {
+            const progress = Math.round((receivedBytes / totalBytes) * 100);
+            const remainingBytes = totalBytes - receivedBytes;
+            const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
+            progressWriter.update({ progress, speed, eta });
+          } else {
+            // Content-Length wasn't sent (e.g. chunked transfer encoding), so
+            // there's no total to compute a percentage or ETA against. Per this
+            // codebase's convention of not fabricating a fake percentage, only
+            // the speed is surfaced as a liveness signal; null keeps the stored
+            // download_progress/download_eta untouched.
+            progressWriter.update({ progress: null, speed, eta: null });
           }
           callback(null, chunk);
         },
@@ -560,6 +544,7 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       await pipeline(Readable.fromWeb(response.body as any), progressTransform, fileStream);
 
       clearTimeout(watchdog);
+      endProgress();
       activePodcastAbortControllers.delete(episodeId);
       activePodcastDownloadStartTimes.delete(episodeId);
 
@@ -579,6 +564,7 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       }
     } catch (err: any) {
       clearTimeout(watchdog);
+      endProgress();
       activePodcastAbortControllers.delete(episodeId);
       activePodcastDownloadStartTimes.delete(episodeId);
       // Release the fd before cleanup unlinks the partial file — otherwise
@@ -760,6 +746,8 @@ export function cancelPodcastDownload(episodeId: string, targetStatus: 'failed' 
   const controller = activePodcastAbortControllers.get(episodeId);
   const startedAt = activePodcastDownloadStartTimes.get(episodeId);
   const db = getDb();
+  // A pause keeps the latest progress: write what the throttle still holds first.
+  stopProgressWriter('podcast_episodes', episodeId);
 
   if (controller) {
     try {

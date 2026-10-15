@@ -12,6 +12,7 @@ import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { enqueueAlbumMatch } from './albumMatchRunner';
+import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -501,7 +502,8 @@ export async function ingestMusicUrl(
  * `wantClip` option, this either does audio-only extraction or downloads a
  * merged video+audio clip. Mirrors downloadVideoFile in downloader.ts.
  */
-function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantClip?: boolean } = {}): Promise<{ hasClip: boolean }> {
+/** Exported for tests only. */
+export function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantClip?: boolean } = {}): Promise<{ hasClip: boolean }> {
   const wantClip = opts.wantClip === true;
   const attemptStartedAt = Date.now();
   return new Promise<{ hasClip: boolean }>(async (resolve, reject) => {
@@ -551,12 +553,16 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
       const child = spawn(ytdlPath, args, { env });
       activeMusicProcesses.set(trackId, child);
       activeMusicDownloadStartTimes.set(trackId, attemptStartedAt);
+      // Progress is persisted at most once per second (see progressWriter.ts).
+      const progressWriter = startProgressWriter(db, 'music_tracks', trackId);
+      const endProgress = () => finishProgressWriter('music_tracks', trackId, progressWriter);
 
       let settled = false;
       const settle = (fn: () => void) => { if (!settled) { settled = true; fn(); } };
 
       const watchdog = setTimeout(() => {
         if (!settled) {
+          endProgress();
           addLog(`yt-dlp [${trackId}] timed out after ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
           try { child.kill('SIGKILL'); } catch (e) {}
           activeMusicProcesses.delete(trackId);
@@ -568,6 +574,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
 
       child.on('error', (err) => {
         clearTimeout(watchdog);
+        endProgress();
         addLog(`yt-dlp [${trackId}] process error : ${err.message || err}`);
         activeMusicProcesses.delete(trackId);
         activeMusicDownloadStartTimes.delete(trackId);
@@ -586,11 +593,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
             const progress = Math.round(parseFloat(progressMatch[1]));
             const speed = progressMatch[4];
             const eta = progressMatch[5];
-            db.prepare(`
-              UPDATE music_tracks
-              SET download_progress = ?, download_speed = ?, download_eta = ?
-              WHERE id = ?
-            `).run(progress, speed, eta, trackId);
+            progressWriter.update({ progress, speed, eta });
             break;
           }
         }
@@ -605,6 +608,7 @@ function downloadMusicTrackFile(trackId: string, artistId: string, opts: { wantC
 
       child.on('close', (code) => {
         clearTimeout(watchdog);
+        endProgress();
         activeMusicProcesses.delete(trackId);
         activeMusicDownloadStartTimes.delete(trackId);
         if (settled) return;
@@ -988,6 +992,8 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
   const child = activeMusicProcesses.get(trackId);
   const startedAt = activeMusicDownloadStartTimes.get(trackId);
   const db = getDb();
+  // A pause keeps the latest progress: write what the throttle still holds first.
+  stopProgressWriter('music_tracks', trackId);
 
   if (child) {
     try {
