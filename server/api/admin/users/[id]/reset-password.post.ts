@@ -1,8 +1,10 @@
 import { defineEventHandler, createError } from 'h3';
 import crypto from 'crypto';
+import { getDb } from '../../../../utils/db';
+import { requireAdmin, hashPassword } from '../../../../utils/auth';
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event);
+  const currentAdmin = await requireAdmin(event);
   const userId = event.context.params?.id;
 
   if (!userId) {
@@ -22,10 +24,12 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (user.username === 'admin') {
+  // An admin changes their own password from the account page (which asks
+  // for the current one), not by issuing themselves a temporary password.
+  if (userId === currentAdmin.id) {
     throw createError({
-      statusCode: 403,
-      statusMessage: 'Cannot reset the main admin account password from here.'
+      statusCode: 400,
+      statusMessage: 'Change your own password from your account page.'
     });
   }
 

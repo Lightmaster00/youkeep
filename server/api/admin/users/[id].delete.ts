@@ -1,4 +1,7 @@
 import { defineEventHandler, createError } from 'h3';
+import { getDb } from '../../../utils/db';
+import { requireAdmin } from '../../../utils/auth';
+import { assertNotLastAdmin } from '../../../utils/userAdmin';
 
 export default defineEventHandler(async (event) => {
   const currentAdmin = await requireAdmin(event);
@@ -20,24 +23,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb();
-  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
-
-  if (!user) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'User not found.'
-    });
-  }
-
-  // Safeguard: Prevent deleting the default seed admin
-  if (user.username === 'admin') {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'The primary seed admin account cannot be deleted.'
-    });
-  }
-
-  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  db.transaction(() => {
+    const user = db.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
+    if (!user) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'User not found.'
+      });
+    }
+    // Never leave the instance without an admin.
+    assertNotLastAdmin(db, userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  })();
 
   return { success: true };
 });
