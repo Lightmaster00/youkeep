@@ -1,25 +1,21 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import crypto from 'crypto';
+import { getDb } from '../../utils/db';
+import { hashPassword, createSession } from '../../utils/auth';
+import { readJsonObject, validateUsername, validatePassword } from '../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   const db = getDb();
 
-  const body = await readBody(event);
-  const { username, password } = body;
-
-  if (!username || !password) {
+  const body = await readJsonObject(event);
+  if (body.username === undefined || body.password === undefined || body.username === '' || body.password === '') {
     throw createError({
       statusCode: 400,
       statusMessage: 'Username and password are required.'
     });
   }
-
-  if (password.length < 8) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Password must be at least 8 characters.'
-    });
-  }
+  const username = validateUsername(body.username);
+  const password = validatePassword(body.password);
 
   const passwordHash = await hashPassword(password);
   const adminId = crypto.randomUUID();

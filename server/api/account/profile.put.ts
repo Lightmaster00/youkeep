@@ -1,14 +1,19 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import { requireUser } from '../../utils/auth';
 import { getDb } from '../../utils/db';
+import { readJsonObject, optionalString } from '../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   const userSession = await requireUser(event);
-  const body = await readBody(event);
-  const { firstName, lastName, email, phone, dob } = body;
+  const body = await readJsonObject(event);
+  const firstName = optionalString(body, 'firstName', { max: 100 });
+  const lastName = optionalString(body, 'lastName', { max: 100 });
+  const email = optionalString(body, 'email', { max: 254 });
+  const phone = optionalString(body, 'phone', { max: 32 });
+  const dob = optionalString(body, 'dob', { max: 10 });
 
   // Server-side validation
-  if (email && email.trim() !== '') {
+  if (email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       throw createError({
@@ -18,7 +23,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (phone && phone.trim() !== '') {
+  if (phone) {
     // Basic phone pattern validation (digits, optional +, space, dash, parenthesis)
     const phoneRegex = /^[+]*[(]{0,1}[0-9]{1,4}[)]{0,1}[-\s\./0-9]*$/;
     if (!phoneRegex.test(phone)) {
@@ -29,7 +34,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  if (dob && dob.trim() !== '') {
+  if (dob) {
     // Date of Birth format YYYY-MM-DD validation
     const dobRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!dobRegex.test(dob)) {
@@ -46,11 +51,11 @@ export default defineEventHandler(async (event) => {
     SET first_name = ?, last_name = ?, email = ?, phone = ?, dob = ?
     WHERE id = ?
   `).run(
-    firstName?.trim() || null,
-    lastName?.trim() || null,
-    email?.trim() || null,
-    phone?.trim() || null,
-    dob?.trim() || null,
+    firstName || null,
+    lastName || null,
+    email || null,
+    phone || null,
+    dob || null,
     userSession.id
   );
 
