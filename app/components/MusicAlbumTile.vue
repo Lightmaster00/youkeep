@@ -1,6 +1,6 @@
 <template>
   <NuxtLink :to="`/music/album/${album.id}`" class="album-tile">
-    <img :src="album.cover_url || fallbackCover" class="album-tile-cover" alt="" loading="lazy" @error="onCoverError" />
+    <img :src="thumbUrl(album.cover_url, 320) || fallbackCover" class="album-tile-cover" alt="" width="320" height="320" loading="lazy" decoding="async" @error="onCoverError" />
     <span class="album-tile-title">{{ album.title }}</span>
     <span v-if="metaLine" class="album-tile-meta">{{ metaLine }}</span>
     <span v-if="trackCount != null" class="album-tile-meta">{{ trackCount === 1 ? '1 track' : `${trackCount} tracks` }}</span>
@@ -8,6 +8,7 @@
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
 
 // One album tile (Discover "New albums", the artist page rows); opens the

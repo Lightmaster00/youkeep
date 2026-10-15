@@ -11,7 +11,7 @@
       @keydown.enter.self.prevent="emit('play', track)"
     >
       <span class="mtl-index">{{ trackNumbers ? (track.track_number ?? '–') : index + 1 }}</span>
-      <img :src="coverOf(track)" class="mtl-cover" alt="" loading="lazy" @error="onCoverError" />
+      <img :src="coverOf(track)" class="mtl-cover" alt="" width="40" height="40" loading="lazy" decoding="async" @error="onCoverError" />
       <span class="mtl-text">
         <span class="mtl-title">{{ track.title }}</span>
         <span class="mtl-artist">{{ track.artist_name }}</span>
@@ -37,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 // Numbered track list for Liked songs, playlists and the artist/album pages.
 // Clicking a row emits `play`; the `actions` slot adds per-row buttons after
 // like/add. `trackNumbers` numbers rows by album track number instead of
@@ -47,7 +48,7 @@ const emit = defineEmits<{ play: [track: any] }>();
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M9 18V5l12-2v13\'></path><circle cx=\'6\' cy=\'18\' r=\'3\'></circle><circle cx=\'18\' cy=\'16\' r=\'3\'></circle></svg>';
 
 function coverOf(track: any): string {
-  return track.local_thumbnail_path || track.album_cover_url || fallbackCover;
+  return thumbUrl(track.local_thumbnail_path, 160) || track.album_cover_url || fallbackCover;
 }
 
 function onCoverError(event: Event) {

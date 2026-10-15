@@ -8,7 +8,7 @@
     @click="emit('play', track)"
     @keydown.enter.prevent="emit('play', track)"
   >
-    <img :src="cover" @error="onCoverError" class="media-card-cover" alt="" />
+    <img :src="cover" @error="onCoverError" class="media-card-cover" alt="" width="320" height="320" loading="lazy" decoding="async" />
     <div class="media-card-body">
       <h3 class="media-card-title" :title="track.title">{{ track.title }}</h3>
       <NuxtLink
@@ -24,6 +24,7 @@
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
 
 // Card for one track (Home "Recently added music" row, /music/recent). Same
@@ -34,7 +35,7 @@ const emit = defineEmits<{ play: [track: any] }>();
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M9 18V5l12-2v13\'></path><circle cx=\'6\' cy=\'18\' r=\'3\'></circle><circle cx=\'18\' cy=\'16\' r=\'3\'></circle></svg>';
 
-const cover = computed(() => props.track.local_thumbnail_path || props.track.album_cover_url || fallbackCover);
+const cover = computed(() => thumbUrl(props.track.local_thumbnail_path, 320) || props.track.album_cover_url || fallbackCover);
 
 function onCoverError(event: Event) {
   const target = event.target as HTMLImageElement;

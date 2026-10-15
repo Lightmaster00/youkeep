@@ -74,7 +74,7 @@
       <div v-if="featuredLarge" class="featured-bento">
         <div class="featured-large" @click="navigateTo(`/watch/${featuredLarge.id}`)">
           <div class="hero-backdrop">
-            <img :src="featuredLarge.local_thumbnail_path || `https://i.ytimg.com/vi/${featuredLarge.id}/maxresdefault.jpg`" @error="handleHeroError" class="hero-bg-img" alt="" />
+            <img :src="featuredLarge.local_thumbnail_path || `https://i.ytimg.com/vi/${featuredLarge.id}/maxresdefault.jpg`" @error="handleHeroError" class="hero-bg-img" alt="" fetchpriority="high" />
             <div class="hero-gradient-left"></div>
             <div class="hero-gradient-bottom"></div>
           </div>

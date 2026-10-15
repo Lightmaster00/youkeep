@@ -1,12 +1,13 @@
 <template>
   <NuxtLink :to="{ path: '/music', query: { artistId: artist.id } }" class="artist-tile">
-    <img :src="artist.avatar_url || fallbackAvatar" class="artist-tile-avatar" alt="" loading="lazy" @error="onAvatarError" />
+    <img :src="thumbUrl(artist.avatar_url, 320) || fallbackAvatar" class="artist-tile-avatar" alt="" width="320" height="320" loading="lazy" decoding="async" @error="onAvatarError" />
     <span class="artist-tile-name">{{ artist.name }}</span>
     <span class="artist-tile-meta">{{ artist.track_count === 1 ? '1 track' : `${artist.track_count} tracks` }}</span>
   </NuxtLink>
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 // One "Artists to explore" tile of the Music Discover page; opens the artist
 // in the Library.
 defineProps<{ artist: any }>();

@@ -8,7 +8,7 @@
     @click="emit('play', episode)"
     @keydown.enter.prevent="emit('play', episode)"
   >
-    <img :src="cover" @error="onCoverError" class="media-card-cover" alt="" />
+    <img :src="cover" @error="onCoverError" class="media-card-cover" alt="" width="320" height="320" loading="lazy" decoding="async" />
     <div class="media-card-body">
       <h3 class="media-card-title" :title="episode.title">{{ episode.title }}</h3>
       <NuxtLink
@@ -25,6 +25,7 @@
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
 
 // Card for one episode (Home "New podcast episodes" row, /podcasts/recent,
@@ -36,7 +37,7 @@ const emit = defineEmits<{ play: [episode: any] }>();
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z\'></path><path d=\'M19 10v2a7 7 0 0 1-14 0v-2\'></path><line x1=\'12\' y1=\'19\' x2=\'12\' y2=\'23\'></line><line x1=\'8\' y1=\'23\' x2=\'16\' y2=\'23\'></line></svg>';
 
-const cover = computed(() => props.episode.local_thumbnail_path || props.episode.show_cover_url || fallbackCover);
+const cover = computed(() => thumbUrl(props.episode.local_thumbnail_path, 320) || props.episode.show_cover_url || fallbackCover);
 
 // pub_date is the raw RSS string: show it as a date when it parses, as is otherwise.
 const published = computed(() => {

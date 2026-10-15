@@ -9,11 +9,14 @@
     <!-- Thumbnail Wrapper -->
     <div class="thumbnail-wrapper">
       <img
-        :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`"
+        :src="thumbUrl(video.local_thumbnail_path, 480) || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`"
         @error="handleThumbnailError"
         class="thumbnail-img"
         alt="Thumbnail"
+        width="480"
+        height="270"
         loading="lazy"
+        decoding="async"
         referrerpolicy="no-referrer"
       />
       <video
@@ -66,6 +69,7 @@
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useVideoPreview } from '~/composables/useVideoPreview';
 import { highlightMatch } from '../utils/highlightMatch';

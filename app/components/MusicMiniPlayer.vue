@@ -15,7 +15,7 @@
   ></video>
 
   <div v-if="showBar" class="mini-player">
-    <img :style="{ visibility: clipMode ? 'hidden' : 'visible' }" :src="currentTrack.local_thumbnail_path || fallbackCover" class="mini-player-cover" alt="" />
+    <img :style="{ visibility: clipMode ? 'hidden' : 'visible' }" :src="thumbUrl(currentTrack.local_thumbnail_path, 160) || fallbackCover" class="mini-player-cover" alt="" decoding="async" />
 
     <div class="mini-player-info">
       <span class="mini-player-title">{{ currentTrack.title }}</span>
@@ -87,6 +87,7 @@
 </template>
 
 <script setup lang="ts">
+import { thumbUrl } from '~/utils/thumb';
 import { ref, computed, onMounted, watch } from 'vue';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useToast } from '~/composables/useToast';
