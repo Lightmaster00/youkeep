@@ -4,6 +4,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getDataDir } from './dataDir';
 import { ensurePodcastPubTs } from './podcastPubDate';
+import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers } from './dbTuning';
 
 let dbInstance: Database.Database | null = null;
 
@@ -15,13 +16,23 @@ export function getDb(): Database.Database {
     fs.mkdirSync(dataDir, { recursive: true });
   }
 
-  const dbPath = path.join(dataDir, 'youkeep.db');
+  dbInstance = openDatabase(path.join(dataDir, 'youkeep.db'));
+  return dbInstance;
+}
+
+/**
+ * Opens (creating or migrating as needed) the database file at `dbPath`. The
+ * app uses it once, through getDb(); tests use it to check the real init path
+ * on a database file of their own.
+ */
+export function openDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
-  
+
   // Enable foreign keys
   db.pragma('foreign_keys = ON');
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
+  applyPerformancePragmas(db);
 
   // Create tables
   db.exec(`
@@ -466,20 +477,8 @@ export function getDb(): Database.Database {
       CREATE TRIGGER IF NOT EXISTS videos_ad AFTER DELETE ON videos BEGIN
         DELETE FROM videos_fts WHERE rowid = old.rowid;
       END;
-
-      CREATE TRIGGER IF NOT EXISTS videos_au AFTER UPDATE ON videos BEGIN
-        DELETE FROM videos_fts WHERE rowid = old.rowid;
-        
-        INSERT INTO videos_fts(rowid, id, title, description, channel_title)
-        VALUES (
-          new.rowid, 
-          new.id, 
-          new.title, 
-          new.description, 
-          (SELECT title FROM channels WHERE id = new.channel_id)
-        );
-      END;
     `);
+    db.exec(FTS_UPDATE_TRIGGERS.videos_au);
 
     // Backfill any missing entries in FTS index
     db.exec(`
@@ -521,21 +520,8 @@ export function getDb(): Database.Database {
       CREATE TRIGGER IF NOT EXISTS music_tracks_ad AFTER DELETE ON music_tracks BEGIN
         DELETE FROM music_tracks_fts WHERE rowid = old.rowid;
       END;
-
-      CREATE TRIGGER IF NOT EXISTS music_tracks_au AFTER UPDATE ON music_tracks BEGIN
-        DELETE FROM music_tracks_fts WHERE rowid = old.rowid;
-
-        INSERT INTO music_tracks_fts(rowid, id, title, artist_name, album_title, genre)
-        VALUES (
-          new.rowid,
-          new.id,
-          new.title,
-          (SELECT name FROM music_artists WHERE id = new.artist_id),
-          (SELECT title FROM music_albums WHERE id = new.album_id),
-          new.genre
-        );
-      END;
     `);
+    db.exec(FTS_UPDATE_TRIGGERS.music_tracks_au);
 
     db.exec(`
       INSERT INTO music_tracks_fts(rowid, id, title, artist_name, album_title, genre)
@@ -577,20 +563,8 @@ export function getDb(): Database.Database {
       CREATE TRIGGER IF NOT EXISTS podcast_episodes_ad AFTER DELETE ON podcast_episodes BEGIN
         DELETE FROM podcast_episodes_fts WHERE rowid = old.rowid;
       END;
-
-      CREATE TRIGGER IF NOT EXISTS podcast_episodes_au AFTER UPDATE ON podcast_episodes BEGIN
-        DELETE FROM podcast_episodes_fts WHERE rowid = old.rowid;
-
-        INSERT INTO podcast_episodes_fts(rowid, id, title, description, show_title)
-        VALUES (
-          new.rowid,
-          new.id,
-          new.title,
-          new.description,
-          (SELECT title FROM podcast_shows WHERE id = new.show_id)
-        );
-      END;
     `);
+    db.exec(FTS_UPDATE_TRIGGERS.podcast_episodes_au);
 
     db.exec(`
       INSERT INTO podcast_episodes_fts(rowid, id, title, description, show_title)
@@ -601,6 +575,14 @@ export function getDb(): Database.Database {
     `);
   } catch (err) {
     console.error('FTS5 virtual table initialization warning (podcast_episodes_fts):', err);
+  }
+
+  // Older databases still have full-text update triggers that fire on every
+  // column (each download progress tick re-indexed the description).
+  try {
+    migrateFtsTriggers(db);
+  } catch (err) {
+    console.error('[Database] Could not migrate the full-text update triggers:', err);
   }
 
   // Seed settings if missing
@@ -806,6 +788,5 @@ export function getDb(): Database.Database {
     console.error('[Database] Failed to backfill video sizes:', err);
   }
 
-  dbInstance = db;
   return db;
 }
