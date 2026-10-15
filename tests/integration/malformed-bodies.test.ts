@@ -5,6 +5,7 @@ import setupHandler from '../../server/api/auth/setup.post';
 import profileHandler from '../../server/api/account/profile.put';
 import preferencesHandler from '../../server/api/account/preferences.put';
 import tokensPostHandler from '../../server/api/account/tokens/index.post';
+import passwordHandler from '../../server/api/account/password.put';
 import { resetAllLoginAttempts } from '../../server/utils/rateLimit';
 import { createTestDb, insertUser, insertSession, mockEvent, sessionCookie } from '../helpers/testDb';
 
@@ -57,5 +58,8 @@ describe('malformed request bodies are a 400, never a 500', () => {
     expect400(call(profileHandler, body, sessionCookie('sess-u1'))));
 
   it.each(NON_OBJECT_BODIES)('preferences: %j', async (body) => expect400(call(preferencesHandler, body, sessionCookie('sess-u1'))));
+  it.each(NON_OBJECT_BODIES)('password change: %j', async (body) => expect400(call(passwordHandler, body, sessionCookie('sess-u1'))));
+  it.each([{ currentPassword: 1, password: 'long-enough-pw' }, { currentPassword: 'x', password: 12345678 }, { currentPassword: ['x'], password: ['y'] }])(
+    'password change fields: %j', async (body) => expect400(call(passwordHandler, body, sessionCookie('sess-u1'))));
   it.each(NON_OBJECT_BODIES)('token creation: %j', async (body) => expect400(call(tokensPostHandler, body, sessionCookie('sess-u1'))));
 });

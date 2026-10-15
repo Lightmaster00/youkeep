@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
 import passwordHandler from '../../server/api/account/password.put';
 import { createApiToken, getUserFromApiToken } from '../../server/utils/apiTokens';
 import {
@@ -30,6 +31,7 @@ beforeEach(() => {
 describe('PUT /api/account/password', () => {
   it('revokes all of the caller\'s API tokens when the password is changed', async () => {
     insertUser(db, { id: 'u1', role: 'user' });
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(bcrypt.hashSync('the-old-password', 4), 'u1');
     const sessionId = 'sess-u1';
     insertSession(db, { id: sessionId, userId: 'u1' });
     const created = createApiToken('u1', 'My Phone');
@@ -38,7 +40,7 @@ describe('PUT /api/account/password', () => {
 
     const event = mockEvent(sessionCookie(sessionId), {
       path: '/api/account/password',
-      body: { password: 'a-new-long-password' }
+      body: { currentPassword: 'the-old-password', password: 'a-new-long-password' }
     });
     const result: any = await passwordHandler(event);
     expect(result.success).toBe(true);

@@ -38,6 +38,10 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  if (userId === currentAdmin.id && newPassword) {
+    // Your own password is changed from the account page, which asks for the current one.
+    throw createError({ statusCode: 400, statusMessage: 'Change your own password from your account page.' });
+  }
   if (userId === currentAdmin.id && role === 'user') {
     throw createError({ statusCode: 409, statusMessage: 'You cannot remove your own admin role.' });
   }
@@ -60,6 +64,8 @@ export default defineEventHandler(async (event) => {
     if (newPasswordHash) {
       db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(newPasswordHash, userId);
       db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
+      // The old password may be compromised: sign the user out everywhere.
+      db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
     }
 
     const activeRole = role || current.role;

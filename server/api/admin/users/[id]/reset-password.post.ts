@@ -36,12 +36,16 @@ export default defineEventHandler(async (event) => {
   const tempPassword = crypto.randomBytes(6).toString('hex');
   const passwordHash = await hashPassword(tempPassword);
 
-  db.prepare(`
-    UPDATE users
-    SET password_hash = ?, must_change_password = 1
-    WHERE id = ?
-  `).run(passwordHash, userId);
-  db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE users
+      SET password_hash = ?, must_change_password = 1
+      WHERE id = ?
+    `).run(passwordHash, userId);
+    db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
+    // Sign the user out everywhere: they log in again with the temporary password.
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  })();
 
   return {
     success: true,
