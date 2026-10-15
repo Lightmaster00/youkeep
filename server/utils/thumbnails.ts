@@ -13,7 +13,7 @@ import { buildSpawnEnv } from './downloader';
  * The cache can be deleted at any time; files are regenerated on demand.
  */
 export const THUMB_WIDTHS = [160, 320, 480, 640, 960] as const;
-export const THUMB_CACHE_CONTROL = 'private, max-age=31536000, immutable';
+export const THUMB_CACHE_CONTROL = 'private, max-age=86400';
 export const THUMB_FFMPEG_TIMEOUT_MS = 10_000;
 export const THUMB_MAX_CONCURRENT = 2;
 export const THUMB_CACHE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000;
