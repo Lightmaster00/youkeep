@@ -102,7 +102,7 @@
         <span class="system-chevron" aria-hidden="true"></span>
         <span class="system-summary-text">
           <span class="system-summary-title">Tools &amp; logs</span>
-          <span class="section-desc">Check and update the download engine (yt-dlp and FFmpeg), tidy the video files on disk, match music albums and read the server's recent log.</span>
+          <span class="section-desc">Check and update the download engine (yt-dlp and FFmpeg), tidy the video files on disk, match music albums, see how responsive the server is and read its recent log.</span>
         </span>
       </summary>
       <div class="system-tools-body">
@@ -161,6 +161,8 @@
     <TidyLibraryPanel class="mt-3" />
 
     <AlbumMatchPanel v-if="modules.music" class="mt-3" />
+
+    <ServerResponsivenessPanel class="mt-3" />
 
   <div class="logs-container glass-panel">
     <div class="logs-header">
@@ -255,6 +257,7 @@ import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import TidyLibraryPanel from '~/components/settings/TidyLibraryPanel.vue';
 import AlbumMatchPanel from '~/components/settings/AlbumMatchPanel.vue';
+import ServerResponsivenessPanel from '~/components/settings/ServerResponsivenessPanel.vue';
 
 const toast = useToast();
 const WIPE_CONFIRM_WORD = 'DELETE';
