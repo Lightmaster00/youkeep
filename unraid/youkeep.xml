@@ -31,4 +31,5 @@
   <Config Name="TZ" Target="TZ" Default="Etc/UTC" Mode="" Description="Timezone, e.g. Europe/Paris. Download schedules (cron) run in this timezone." Type="Variable" Display="always" Required="false" Mask="false">Etc/UTC</Config>
   <Config Name="UMASK" Target="UMASK" Default="022" Mode="" Description="Permissions of created files: 022 = 644 (owner writes, others read), 000 = 666." Type="Variable" Display="advanced" Required="false" Mask="false">022</Config>
   <Config Name="COOKIE_SECURE" Target="COOKIE_SECURE" Default="" Mode="" Description="Leave empty for auto-detection (Secure cookies only over HTTPS / X-Forwarded-Proto). Set true or false to force." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="TRUST_PROXY" Target="TRUST_PROXY" Default="" Mode="" Description="Number of reverse proxies in front of YouKeep (e.g. 1 for Nginx Proxy Manager, Traefik, Caddy or Cloudflare Tunnel). Leave empty when YouKeep is reached directly. Without it, behind a proxy every visitor shares one login rate limit." Type="Variable" Display="advanced" Required="false" Mask="false"/>
 </Container>

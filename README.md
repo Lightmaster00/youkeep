@@ -67,11 +67,14 @@ Then Docker tab -> **Add Container** -> pick **YouKeep** in the *Template* dropd
 | `TZ` | `UTC` | Timezone, e.g. `Europe/Paris`; download schedules (cron) run in it |
 | `UMASK` | `022` | Permissions of created files (`000` = world-writable) |
 | `COOKIE_SECURE` | auto | Force `Secure` cookies on (`true`) or off (`false`) |
+| `TRUST_PROXY` | empty | Number of reverse proxies in front of YouKeep (`true` = `1`). Empty: `X-Forwarded-*` headers are ignored |
 | `PORT` | `3000` | Port inside the container (usually just change the host port instead) |
 
 ### HTTPS / reverse proxy
 
-Session cookies are marked `Secure` only when the request arrives over HTTPS (directly, or through a proxy that sends `X-Forwarded-Proto: https` such as Nginx Proxy Manager, Traefik or Cloudflare Tunnel). Plain `http://<lan-ip>:3000` works too. Set `COOKIE_SECURE=true` or `false` to force the behaviour.
+Behind a reverse proxy (Nginx Proxy Manager, Traefik, Caddy, Cloudflare Tunnel...) set `TRUST_PROXY=1` (or the number of proxies chained in front of YouKeep). Without it, every visitor arrives from the proxy's address: the login rate limit then counts everyone as one client (a few wrong passwords lock everybody out for 15 minutes) and `X-Forwarded-Proto` is ignored. With `TRUST_PROXY=N` the client address is the Nth entry from the right of `X-Forwarded-For` (the entries to its left are sent by the client and can be forged). Never set it when YouKeep is reachable directly, without the proxy: anyone could then pick their own address.
+
+Session cookies are marked `Secure` only when the request arrives over HTTPS (directly, or through a trusted proxy (`TRUST_PROXY`) that sends `X-Forwarded-Proto: https`). Plain `http://<lan-ip>:3000` works too. Set `COOKIE_SECURE=true` or `false` to force the behaviour.
 
 ---
 

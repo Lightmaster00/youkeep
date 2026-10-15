@@ -1,8 +1,9 @@
-import { defineEventHandler, createError, getRequestIP } from 'h3';
+import { defineEventHandler, createError } from 'h3';
 import { readJsonObject, normalizeUsername } from '../../utils/validation';
 import { getDb } from '../../utils/db';
 import { verifyPassword, createSession } from '../../utils/auth';
-import { isLoginLocked, recordFailedLogin, clearLoginAttempts } from '../../utils/rateLimit';
+import { loginLockStatus, recordFailedLoginAttempt, clearLoginAttemptsFor } from '../../utils/rateLimit';
+import { getClientIp, trustedProxyHops } from '../../utils/trustProxy';
 
 export default defineEventHandler(async (event) => {
   const body = await readJsonObject(event);
@@ -21,18 +22,22 @@ export default defineEventHandler(async (event) => {
   // Same normalization as when the account was created (NFKC + trim).
   const username = normalizeUsername(rawUsername);
 
-  // Only trust X-Forwarded-For when explicitly running behind a reverse proxy
-  // that overwrites/strips it; otherwise a client can set it to any value and
-  // get a fresh rate-limit bucket on every attempt.
-  const trustProxy = process.env.TRUST_PROXY === 'true';
-  const ip = getRequestIP(event, { xForwardedFor: trustProxy }) || 'unknown';
-  const rateLimitKey = `${ip}:${username.toLowerCase()}`;
+  // X-Forwarded-For is only honoured when TRUST_PROXY is set (otherwise a
+  // client could pick a fresh rate-limit bucket on every attempt).
+  const ip = getClientIp(event);
 
-  const { locked, retryAfterMs } = isLoginLocked(rateLimitKey);
+  // A locked-out attempt is refused even with the right password.
+  const { locked, retryAfterMs } = loginLockStatus(ip, username);
   if (locked) {
+    const minutes = Math.ceil((retryAfterMs || 0) / 1000 / 60);
+    // Behind a reverse proxy without TRUST_PROXY every visitor shares the
+    // proxy's address, so one person's failures lock everyone out.
+    const proxyHint = trustedProxyHops() === 0
+      ? ' If YouKeep runs behind a reverse proxy, the administrator must set TRUST_PROXY so visitors are not all counted as one.'
+      : '';
     throw createError({
       statusCode: 429,
-      statusMessage: `Too many failed login attempts. Try again in ${Math.ceil((retryAfterMs || 0) / 1000 / 60)} minute(s).`
+      statusMessage: `Too many failed login attempts. Try again in ${minutes} minute(s).${proxyHint}`
     });
   }
 
@@ -47,15 +52,28 @@ export default defineEventHandler(async (event) => {
   // verifyPassword runs a full bcrypt comparison even for an unknown user, so
   // the response time does not reveal whether the username exists.
   const passwordOk = await verifyPassword(password, user?.password_hash);
+
+  // Parallel attempts all pass the check above before any of them is
+  // recorded: check again now, so a burst cannot exceed the limit. Refused
+  // with the same 429 whether or not this password was the right one.
+  const after = loginLockStatus(ip, username);
+  if (after.locked) {
+    if (!user || !passwordOk) recordFailedLoginAttempt(ip, username);
+    throw createError({
+      statusCode: 429,
+      statusMessage: `Too many failed login attempts. Try again in ${Math.ceil((after.retryAfterMs || 0) / 1000 / 60)} minute(s).`
+    });
+  }
+
   if (!user || !passwordOk) {
-    recordFailedLogin(rateLimitKey);
+    recordFailedLoginAttempt(ip, username);
     throw createError({
       statusCode: 401,
       statusMessage: 'Invalid username or password.'
     });
   }
 
-  clearLoginAttempts(rateLimitKey);
+  clearLoginAttemptsFor(ip, username);
   await createSession(user.id, event);
 
   return {

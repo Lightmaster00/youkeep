@@ -32,7 +32,16 @@ describe('securityHeaders middleware', () => {
   });
 
   it('sends HSTS only for HTTPS requests, never on plain HTTP', () => {
-    expect(headersFor()['strict-transport-security']).toBeUndefined();
-    expect(headersFor({ headers: { 'x-forwarded-proto': 'https' } })['strict-transport-security']).toContain('max-age=');
+    const originalTrust = process.env.TRUST_PROXY;
+    try {
+      expect(headersFor()['strict-transport-security']).toBeUndefined();
+      // X-Forwarded-Proto is only believed behind a declared proxy.
+      delete process.env.TRUST_PROXY;
+      expect(headersFor({ headers: { 'x-forwarded-proto': 'https' } })['strict-transport-security']).toBeUndefined();
+      process.env.TRUST_PROXY = 'true';
+      expect(headersFor({ headers: { 'x-forwarded-proto': 'https' } })['strict-transport-security']).toContain('max-age=');
+    } finally {
+      if (originalTrust === undefined) delete process.env.TRUST_PROXY; else process.env.TRUST_PROXY = originalTrust;
+    }
   });
 });

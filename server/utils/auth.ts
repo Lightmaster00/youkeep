@@ -1,7 +1,8 @@
-import { H3Event, getCookie, getHeader, getRequestProtocol, setCookie, deleteCookie, createError } from 'h3';
+import { H3Event, getCookie, getHeader, setCookie, deleteCookie, createError } from 'h3';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { getUserFromApiToken } from './apiTokens';
+import { getForwardedProto } from './trustProxy';
 
 export interface UserSession {
   id: string;
@@ -15,7 +16,8 @@ export const CSRF_COOKIE_NAME = 'csrf_token';
 export const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 // Cookies are marked Secure only when the request actually arrived over HTTPS
-// (directly, or via a reverse proxy sending X-Forwarded-Proto: https). A
+// (directly, or via a reverse proxy sending X-Forwarded-Proto: https, which is
+// only believed when TRUST_PROXY is set, like X-Forwarded-For). A
 // Secure cookie is silently dropped by browsers on plain-HTTP LAN access
 // (e.g. http://192.168.x.x:3000), which would make login impossible.
 // COOKIE_SECURE=true|false overrides the detection.
@@ -23,7 +25,8 @@ export function isSecureRequest(event: H3Event): boolean {
   const override = process.env.COOKIE_SECURE;
   if (override === 'true') return true;
   if (override === 'false') return false;
-  return getRequestProtocol(event) === 'https';
+  if ((event.node.req as any).connection?.encrypted) return true;
+  return getForwardedProto(event) === 'https';
 }
 
 // Regenerated on every process start — invalidates in-flight CSRF tokens on

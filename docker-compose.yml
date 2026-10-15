@@ -27,5 +27,11 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - NODE_ENV=production
+      # Behind a reverse proxy (NPM, Traefik, Caddy, Cloudflare Tunnel...) set
+      # the number of proxies in front of YouKeep, usually 1. Leave it unset
+      # when the app is reached directly: X-Forwarded-For/-Proto/-Host are
+      # then ignored (clients could forge them).
+      # - TRUST_PROXY=1
       # Cookies are Secure only when the request arrives over HTTPS (direct or
-      # via X-Forwarded-Proto). Force with COOKIE_SECURE=true|false if needed.
+      # via X-Forwarded-Proto from a trusted proxy). Force with
+      # COOKIE_SECURE=true|false if needed.

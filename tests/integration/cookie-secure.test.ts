@@ -3,14 +3,19 @@ import { isSecureRequest } from '../../server/utils/auth';
 import { mockEvent } from '../helpers/testDb';
 
 const original = process.env.COOKIE_SECURE;
+const originalTrust = process.env.TRUST_PROXY;
 
 beforeEach(() => {
   delete process.env.COOKIE_SECURE;
+  // X-Forwarded-Proto is only believed behind a declared proxy.
+  process.env.TRUST_PROXY = 'true';
 });
 
 afterEach(() => {
   if (original === undefined) delete process.env.COOKIE_SECURE;
   else process.env.COOKIE_SECURE = original;
+  if (originalTrust === undefined) delete process.env.TRUST_PROXY;
+  else process.env.TRUST_PROXY = originalTrust;
 });
 
 describe('isSecureRequest', () => {
