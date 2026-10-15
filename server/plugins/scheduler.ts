@@ -5,6 +5,7 @@ import { getDb } from '../utils/db';
 import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports } from '../utils/musicDownloader';
 import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler } from '../utils/podcastDownloader';
 import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
+import { sweepThumbCache } from '../utils/thumbnails';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
 function runDurationBackfill() {
@@ -31,6 +32,14 @@ function resumeInterruptedImports() {
 }
 
 export default defineNitroPlugin((nitroApp) => {
+  // Resized thumbnails nobody asked for in 90 days (they are regenerated on demand).
+  try {
+    const removed = sweepThumbCache();
+    if (removed > 0) console.log(`YouKeep Scheduler Plugin: removed ${removed} old cached thumbnail(s).`);
+  } catch (err) {
+    console.error('YouKeep Scheduler Plugin: thumbnail cache sweep failed:', err);
+  }
+
   console.log('YouKeep Scheduler Plugin: Initializing background cron jobs...');
   initScheduler();
   initMusicScheduler();

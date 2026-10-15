@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
+import { serveResizedThumbnail } from '../../utils/thumbnails';
 import { candidateVideoDirs, channelBaseDirs, decodeUrlSegments, idFromVideoFolder, isContained, storedUrlSegments } from '../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
@@ -118,6 +119,9 @@ export default defineEventHandler(async (event) => {
   // Every file tied to a known video (video, thumbnail, subtitles, ...) was
   // authorised above, before any disk probe, with the video's own visibility rules.
   const stat = fs.statSync(absolutePath);
+  // `?w=` on an image: a resized copy, after exactly the checks above.
+  const resized = await serveResizedThumbnail(event, absolutePath, stat);
+  if (resized) return resized;
   const fileSize = stat.size;
   const range = event.node.req.headers.range;
 

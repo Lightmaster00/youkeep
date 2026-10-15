@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
 import { entityFolderName } from '../../utils/videoPaths';
+import { serveResizedThumbnail } from '../../utils/thumbnails';
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -93,6 +94,9 @@ export default defineEventHandler(async (event) => {
   const stat = fs.statSync(resolvedPath);
 
   if (!isAudio) {
+    // `?w=`: a resized copy, after exactly the checks above.
+    const resized = await serveResizedThumbnail(event, resolvedPath, stat);
+    if (resized) return resized;
     event.node.res.setHeader('Content-Type', contentType);
     event.node.res.setHeader('Cache-Control', 'private, must-revalidate');
     event.node.res.setHeader('Last-Modified', stat.mtime.toUTCString());
