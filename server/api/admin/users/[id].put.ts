@@ -24,6 +24,9 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // Hashed before the (synchronous) transaction: hashing is async.
+  const newPasswordHash = password && password.trim().length > 0 ? await hashPassword(password) : null;
+
   // DB Transaction
   const updateUserTransaction = db.transaction(() => {
     // Update role if provided and valid
@@ -32,9 +35,8 @@ export default defineEventHandler(async (event) => {
     }
 
     // Update password if a new one is provided
-    if (password && password.trim().length > 0) {
-      const passwordHash = hashPassword(password);
-      db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(passwordHash, userId);
+    if (newPasswordHash) {
+      db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(newPasswordHash, userId);
       db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userId);
     }
 

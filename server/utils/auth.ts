@@ -35,13 +35,39 @@ export function computeCsrfToken(sessionId: string): string {
   return crypto.createHmac('sha256', CSRF_SECRET).update(sessionId).digest('hex');
 }
 
-export function hashPassword(password: string): string {
-  const salt = bcrypt.genSaltSync(10);
-  return bcrypt.hashSync(password, salt);
+const BCRYPT_ROUNDS = 10;
+
+// A valid bcrypt hash of a random throwaway password. Login compares against
+// it when the username does not exist, so an unknown user costs the same time
+// as a wrong password (no timing oracle on which usernames exist).
+export const DUMMY_PASSWORD_HASH = '$2b$10$073K657YTnd.q68kw787sOXGW10kBnYDukAbbfnoGX.i8R06CQj92';
+
+// bcryptjs's async API yields to the event loop between chunks of work, but
+// several hashes started together all run their chunks back to back in the
+// same loop phase (8 parallel compares stalled the loop for ~420 ms). Running
+// them one at a time keeps every stall to a single hash (~50 ms) so health
+// checks and other requests are served in between.
+let bcryptQueue: Promise<unknown> = Promise.resolve();
+function runBcrypt<T>(task: () => Promise<T>): Promise<T> {
+  const run = bcryptQueue.then(task, task);
+  bcryptQueue = run.catch(() => undefined);
+  return run;
 }
 
-export function verifyPassword(password: string, hash: string): boolean {
-  return bcrypt.compareSync(password, hash);
+export function hashPassword(password: string): Promise<string> {
+  return runBcrypt(() => bcrypt.hash(password, BCRYPT_ROUNDS));
+}
+
+// Always performs a full bcrypt comparison: a missing hash is compared against
+// DUMMY_PASSWORD_HASH and then reported as a mismatch.
+export async function verifyPassword(password: string, hash: string | null | undefined): Promise<boolean> {
+  let ok = false;
+  try {
+    ok = await runBcrypt(() => bcrypt.compare(password, hash || DUMMY_PASSWORD_HASH));
+  } catch {
+    ok = false;
+  }
+  return ok && !!hash;
 }
 
 export async function createSession(userId: string, event: H3Event): Promise<string> {

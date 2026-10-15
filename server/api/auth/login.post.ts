@@ -1,4 +1,7 @@
 import { defineEventHandler, readBody, createError, getRequestIP } from 'h3';
+import { getDb } from '../../utils/db';
+import { verifyPassword, createSession } from '../../utils/auth';
+import { isLoginLocked, recordFailedLogin, clearLoginAttempts } from '../../utils/rateLimit';
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -29,7 +32,10 @@ export default defineEventHandler(async (event) => {
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as any;
 
-  if (!user || !verifyPassword(password, user.password_hash)) {
+  // verifyPassword runs a full bcrypt comparison even for an unknown user, so
+  // the response time does not reveal whether the username exists.
+  const passwordOk = await verifyPassword(String(password), user?.password_hash);
+  if (!user || !passwordOk) {
     recordFailedLogin(rateLimitKey);
     throw createError({
       statusCode: 401,

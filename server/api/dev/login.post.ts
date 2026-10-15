@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   if (!user) {
     const userId = crypto.randomUUID();
-    const passwordHash = hashPassword(crypto.randomUUID()); // random, unused — this endpoint bypasses password login entirely
+    const passwordHash = await hashPassword(crypto.randomUUID()); // random, unused — this endpoint bypasses password login entirely
     db.prepare(`
       INSERT INTO users (id, username, password_hash, role, created_at)
       VALUES (?, ?, ?, 'admin', ?)

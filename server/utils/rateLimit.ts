@@ -47,3 +47,8 @@ export function recordFailedLogin(key: string): void {
 export function clearLoginAttempts(key: string): void {
   attempts.delete(key);
 }
+
+/** Forgets every recorded attempt (tests only). */
+export function resetAllLoginAttempts(): void {
+  attempts.clear();
+}

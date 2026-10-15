@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const passwordHash = hashPassword(password);
+  const passwordHash = await hashPassword(password);
   const adminId = crypto.randomUUID();
 
   // Check-then-insert must happen inside a single synchronous transaction —

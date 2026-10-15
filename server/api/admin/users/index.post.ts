@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
 
   const finalPassword = password && password.trim().length > 0 ? password : crypto.randomBytes(6).toString('hex');
   const userId = crypto.randomUUID();
-  const passwordHash = hashPassword(finalPassword);
+  const passwordHash = await hashPassword(finalPassword);
 
   // DB transaction to guarantee atomic updates
   const createUserTransaction = db.transaction(() => {

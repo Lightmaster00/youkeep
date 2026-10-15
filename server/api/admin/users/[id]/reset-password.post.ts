@@ -30,7 +30,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const tempPassword = crypto.randomBytes(6).toString('hex');
-  const passwordHash = hashPassword(tempPassword);
+  const passwordHash = await hashPassword(tempPassword);
 
   db.prepare(`
     UPDATE users
