@@ -14,6 +14,7 @@ import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { channelBaseDirs, isContained, isValidMediaId, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
+import { isWipeInProgress } from './libraryWipe';
 
 export function sanitizeFolderName(name: string): string {
   return name

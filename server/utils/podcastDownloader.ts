@@ -16,6 +16,7 @@ import { MIN_FREE_DISK_SPACE_BYTES } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
+import { isWipeInProgress } from './libraryWipe';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.

@@ -1,6 +1,8 @@
 import { isTidyRunning } from './videoTidy';
 import { prepareChannelFilesRemoval } from './videoPaths';
-import { stopActiveDownloadsOfChannel } from './downloader';
+import { stopActiveDownloadsOfChannel, resolveChannelBaseDir, getDownloadsDir } from './downloader';
+import { deleteMusicArtist } from './musicDownloader';
+import { deletePodcastShow } from './podcastDownloader';
 
 export type WipeItemType = 'channel' | 'artist' | 'show';
 

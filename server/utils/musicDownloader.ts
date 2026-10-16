@@ -13,6 +13,7 @@ import { enqueueBackgroundImport } from './backgroundImports';
 import { enqueueAlbumMatch } from './albumMatchRunner';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
+import { isWipeInProgress } from './libraryWipe';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
