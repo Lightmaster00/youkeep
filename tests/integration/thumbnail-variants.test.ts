@@ -189,14 +189,19 @@ describe('GET /downloads/...?w= (video thumbnails)', () => {
     ffmpegImpl = async (args) => { await gate; writeOutput(args); };
     const ids = Array.from({ length: THUMB_MAX_CONCURRENT + THUMB_MAX_WAITING + 3 }, (_, i) => `q${i}`);
     for (const id of ids) seedVideoThumb(id, jpeg(1280));
-    const pending = ids.map((id) => videoRoute(videoEvent(`${id}.jpg`, '?w=160')));
-    // The overflow requests (the last ones) answer with the original while ffmpeg is still busy.
-    const overflow = await Promise.all(pending.slice(-3).map(async (p) => body(await p)));
-    expect(overflow.every((b) => b.includes('original-image-bytes'))).toBe(true);
+    const settled: string[] = [];
+    const pending = ids.map((id) => videoRoute(videoEvent(`${id}.jpg`, '?w=160')).then(async (r: any) => {
+      const text = await body(r);
+      settled.push(text);
+      return text;
+    }));
+    // The overflow requests answer with the original while ffmpeg is still busy.
+    await vi.waitFor(() => expect(settled.length).toBe(3), { timeout: 4000 });
+    expect(settled.every((b) => b.includes('original-image-bytes'))).toBe(true);
     expect(ffmpegCalls.length).toBe(THUMB_MAX_CONCURRENT);
     release();
-    const results = await Promise.all(pending.map(async (p) => body(await p)));
-    expect(results.filter((b) => b.includes('original-image-bytes')).length).toBe(3);
+    const all = await Promise.all(pending);
+    expect(all.filter((b) => b.includes('original-image-bytes')).length).toBe(3);
   });
 
   it('reads a source width once per file version, and a hit refreshes the variant\'s last access', async () => {
