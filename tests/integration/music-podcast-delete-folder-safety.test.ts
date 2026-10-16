@@ -52,12 +52,38 @@ describe('music artist delete never escapes or empties the base folder', () => {
     expect(exists(base, 'Someone Else', 'z1.opus')).toBe(true);
   });
 
-  it('a normal artist folder is still removed', () => {
+  it('a normal artist folder is removed once its own files are gone', () => {
     insertMusicArtist(db, { id: 'a1', name: 'Band' });
-    fs.mkdirSync(path.join(base, 'Band', 'sub'), { recursive: true });
-    fs.writeFileSync(path.join(base, 'Band', 'x.opus'), 'x');
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    fs.mkdirSync(path.join(base, 'Band'), { recursive: true });
+    for (const f of ['t1.opus', 't1.jpg', 't1.opus.part']) fs.writeFileSync(path.join(base, 'Band', f), 'x');
     deleteMusicArtist('a1', { baseDir: base });
     expect(exists(base, 'Band')).toBe(false);
+  });
+
+  it('never removes recursively: a folder of the admin\'s own music named like the artist keeps its files', () => {
+    insertMusicArtist(db, { id: 'a1', name: 'Queen' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    fs.mkdirSync(path.join(base, 'Queen', 'A Night at the Opera'), { recursive: true });
+    fs.writeFileSync(path.join(base, 'Queen', 'A Night at the Opera', '01.flac'), 'x');
+    fs.writeFileSync(path.join(base, 'Queen', 'cover.jpg'), 'x');
+    fs.writeFileSync(path.join(base, 'Queen', 't1.opus'), 'x');
+    deleteMusicArtist('a1', { baseDir: base });
+    expect(fs.readdirSync(path.join(base, 'Queen')).sort()).toEqual(['A Night at the Opera', 'cover.jpg']);
+    expect(exists(base, 'Queen', 'A Night at the Opera', '01.flac')).toBe(true);
+  });
+
+  it('also removes files stored under the folder of a name the artist had before a rename', () => {
+    insertMusicArtist(db, { id: 'a1', name: 'New Name' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1', localFilePath: '/downloads-music/Old Name/t1.opus', localThumbnailPath: '/downloads-music/Old Name/t1.jpg' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1', localFilePath: '/downloads-music/../outside/t2.opus' });
+    fs.mkdirSync(path.join(base, 'Old Name'));
+    for (const f of ['t1.opus', 't1.jpg']) fs.writeFileSync(path.join(base, 'Old Name', f), 'x');
+    fs.mkdirSync(path.join(root, 'outside'));
+    fs.writeFileSync(path.join(root, 'outside', 't2.opus'), 'x');
+    deleteMusicArtist('a1', { baseDir: base });
+    expect(exists(base, 'Old Name')).toBe(false);
+    expect(exists(root, 'outside', 't2.opus')).toBe(true);
   });
 });
 
@@ -81,5 +107,15 @@ describe('podcast show delete never escapes or empties the base folder', () => {
 
     deletePodcastShow('s1', { baseDir: base });
     expect(fs.readdirSync(path.join(base, 'News_ Daily'))).toEqual(['e2.mp3']);
+  });
+
+  it('also removes episode files stored under the folder of a title the show had before a rename', () => {
+    insertPodcastShow(db, { id: 's1', title: 'New Title' });
+    insertPodcastEpisode(db, { id: 'e1', showId: 's1', localFilePath: '/downloads-podcasts/Old Title/e1.mp3' });
+    fs.mkdirSync(path.join(base, 'Old Title'));
+    fs.writeFileSync(path.join(base, 'Old Title', 'e1.mp3'), 'x');
+    fs.writeFileSync(path.join(base, 'Old Title', 'mine.mp3'), 'x');
+    deletePodcastShow('s1', { baseDir: base });
+    expect(fs.readdirSync(path.join(base, 'Old Title'))).toEqual(['mine.mp3']);
   });
 });

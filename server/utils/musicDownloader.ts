@@ -13,6 +13,7 @@ import { entityFolderName, isContained, removeEntityFolder } from './videoPaths'
 import { enqueueBackgroundImport } from './backgroundImports';
 import { enqueueAlbumMatch } from './albumMatchRunner';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
+import { killProcessTree } from './processTree';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -133,9 +134,17 @@ export function deleteMusicArtist(artistId: string, opts: { baseDir?: string } =
 
   // 1. Find all tracks for this artist and kill any active downloads —
   // mirrors channels.delete.ts's identical loop for videos.
-  const tracks = db.prepare('SELECT id FROM music_tracks WHERE artist_id = ?').all(artistId) as { id: string }[];
+  // Only running downloads need killing; their partial files go with the
+  // artist's own files below (one readdir, not one per track).
+  const tracks = db.prepare('SELECT id, local_file_path, local_thumbnail_path FROM music_tracks WHERE artist_id = ?').all(artistId) as
+    { id: string; local_file_path: string | null; local_thumbnail_path: string | null }[];
   for (const t of tracks) {
-    cancelMusicDownload(t.id);
+    const child = activeMusicProcesses.get(t.id);
+    if (!child) continue;
+    stopProgressWriter('music_tracks', t.id);
+    killProcessTree(child);
+    activeMusicProcesses.delete(t.id);
+    activeMusicDownloadStartTimes.delete(t.id);
   }
 
   // 2. Delete the artist row (cascades to music_albums, music_tracks,
@@ -156,6 +165,7 @@ export function deleteMusicArtist(artistId: string, opts: { baseDir?: string } =
     ownIds: tracks.map((t) => t.id),
     otherFolders: others.map((o) => entityFolderName(o.name, o.id)),
     label: `Artist "${artist.name}"`,
+    storedFiles: tracks.flatMap((t) => [t.local_file_path, t.local_thumbnail_path]),
   });
 
   return { success: true };

@@ -169,20 +169,57 @@ describe('a channel folder that holds another channel\'s files', () => {
     expect(tree(path.join(base, 'music'))).toEqual(['Artist', path.join('Artist', 'track.mp3')]);
   });
 
-  it('still removes an unshared channel folder entirely, and a wipe of every channel removes the shared folder too', async () => {
+  it('never removes files it did not create: a channel folder with foreign files keeps them, a wipe too', async () => {
     insertChannel(db, { id: 'c1', title: 'Chan', customSavePath: path.join(dir, 'solo') });
     fs.mkdirSync(path.join(dir, 'solo', 'Chan', 'unknown-subfolder'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'solo', 'Chan', 'notes.txt'), 'n');
     await deleteById('c1');
-    expect(fs.readdirSync(path.join(dir, 'solo'))).toEqual([]);
+    expect(tree(path.join(dir, 'solo'))).toEqual(['Chan', path.join('Chan', 'notes.txt'), path.join('Chan', 'unknown-subfolder')]);
 
     const youtubeDir = repairedThenShared(path.join(dir, 'X', 'YouTube'));
-    fs.writeFileSync(path.join(youtubeDir, 'notes.txt'), 'n'); // only a recursive removal takes this
+    fs.writeFileSync(path.join(youtubeDir, 'notes.txt'), 'n'); // only a recursive removal would take this
     expect(startLibraryWipe()).toEqual({ started: true });
     await vi.waitFor(() => expect(isWipeInProgress()).toBe(false));
-    // Nothing is left; the empty folder is Other's save folder, re-created as it always
-    // was by resolveChannelBaseDir when Other is deleted.
-    expect(tree(path.join(dir, 'X'))).toEqual(['YouTube']);
+    // Every video folder is gone; the foreign file (and so its folder) stays.
+    expect(tree(path.join(dir, 'X'))).toEqual(['YouTube', path.join('YouTube', 'notes.txt')]);
+  });
+
+  it('a channel named like a folder the admin already had (a share) only loses its own video folders', async () => {
+    // The default downloads folder is a share; a passive channel "Photos" exists.
+    insertChannel(db, { id: 'UCphotos', title: 'Photos' });
+    insertVideo(db, { id: 'p1', channelId: 'UCphotos', title: 'Clip', localVideoPath: `/downloads/Photos/${encodeURIComponent('Clip [p1]')}/${encodeURIComponent('Clip [p1].mp4')}`, localThumbnailPath: null });
+    insertVideo(db, { id: 'p2', channelId: 'UCphotos', title: 'Pending', localVideoPath: null, localThumbnailPath: null, downloadStatus: 'pending' });
+    insertVideo(db, { id: 'p3', channelId: 'UCphotos', title: 'Legacy', localVideoPath: '/downloads/Photos/p3.mp4', localThumbnailPath: null });
+    const photos = path.join(dir, 'Photos');
+    fs.mkdirSync(path.join(photos, '2024'), { recursive: true });
+    fs.writeFileSync(path.join(photos, '2024', 'wedding.jpg'), 'w');
+    fs.mkdirSync(path.join(photos, 'Clip [p1]'));
+    fs.writeFileSync(path.join(photos, 'Clip [p1]', 'Clip [p1].mp4'), 'v');
+    fs.mkdirSync(path.join(photos, 'Renamed since [p2]'));
+    fs.writeFileSync(path.join(photos, 'Renamed since [p2]', 'Renamed since [p2].mp4.part'), 'v');
+    fs.writeFileSync(path.join(photos, 'p3.mp4'), 'v');
+    fs.writeFileSync(path.join(photos, 'p3.jpg'), 'v');
+    fs.mkdirSync(path.join(photos, 'Holiday [zz9]'));
+    fs.writeFileSync(path.join(photos, 'Holiday [zz9]', 'Holiday [zz9].mp4'), 'not ours');
+
+    await deleteById('UCphotos');
+
+    expect(tree(photos)).toEqual(['2024', path.join('2024', 'wedding.jpg'), 'Holiday [zz9]', path.join('Holiday [zz9]', 'Holiday [zz9].mp4')]);
+  });
+
+  it('removes legacy files left under the folder of a name the channel had before a rename', async () => {
+    insertChannel(db, { id: 'cr', title: 'New Name' });
+    insertVideo(db, { id: 'r1', channelId: 'cr', title: 'Old', localVideoPath: '/downloads/Old Name/r1.mp4', localThumbnailPath: '/downloads/Old Name/r1.jpg' });
+    fs.mkdirSync(path.join(dir, 'Old Name'));
+    fs.writeFileSync(path.join(dir, 'Old Name', 'r1.mp4'), 'v');
+    fs.writeFileSync(path.join(dir, 'Old Name', 'r1.jpg'), 'j');
+    fs.mkdirSync(path.join(dir, 'Other Name'));
+    fs.writeFileSync(path.join(dir, 'Other Name', 'r1.mp4'), 'not named by the stored path');
+
+    await deleteById('cr');
+
+    expect(fs.existsSync(path.join(dir, 'Old Name'))).toBe(false);
+    expect(fs.readFileSync(path.join(dir, 'Other Name', 'r1.mp4'), 'utf8')).toBe('not named by the stored path');
   });
 });
 

@@ -132,9 +132,17 @@ export function deletePodcastShow(showId: string, opts: { baseDir?: string } = {
   }
 
   // 1. Find all episodes for this show and kill any active downloads.
-  const episodes = db.prepare('SELECT id FROM podcast_episodes WHERE show_id = ?').all(showId) as { id: string }[];
+  // Only running downloads need aborting; their partial files go with the
+  // show's own files below (one readdir, not one per episode).
+  const episodes = db.prepare('SELECT id, local_file_path, local_thumbnail_path FROM podcast_episodes WHERE show_id = ?').all(showId) as
+    { id: string; local_file_path: string | null; local_thumbnail_path: string | null }[];
   for (const e of episodes) {
-    cancelPodcastDownload(e.id);
+    const controller = activePodcastAbortControllers.get(e.id);
+    if (!controller) continue;
+    stopProgressWriter('podcast_episodes', e.id);
+    try { controller.abort(); } catch {}
+    activePodcastAbortControllers.delete(e.id);
+    activePodcastDownloadStartTimes.delete(e.id);
   }
 
   // 2. Delete the show row (cascades to podcast_episodes via ON DELETE CASCADE).
@@ -143,7 +151,7 @@ export function deletePodcastShow(showId: string, opts: { baseDir?: string } = {
     return { success: false, error: 'Show not found.' };
   }
 
-  // 3. Delete the show's media folder recursively. Podcasts have no
+  // 3. Delete the show's own files, then its folder when empty. Podcasts have no
   // custom_save_path equivalent, so this is always relative to
   // getPodcastDownloadsDir(). A removal failure here is logged but does NOT
   // make this function report failure — the DB row (the real "this content
@@ -160,6 +168,7 @@ export function deletePodcastShow(showId: string, opts: { baseDir?: string } = {
     ownIds: episodes.map((e) => e.id),
     otherFolders: others.map((o) => entityFolderName(o.title, o.id)),
     label: `Show "${show.title}"`,
+    storedFiles: episodes.flatMap((e) => [e.local_file_path, e.local_thumbnail_path]),
   });
 
   return { success: true };
