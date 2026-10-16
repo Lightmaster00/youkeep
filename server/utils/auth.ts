@@ -1,6 +1,6 @@
 import { H3Event, getCookie, getHeader, setCookie, deleteCookie, createError } from 'h3';
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import { bcryptHash, bcryptCompare } from './passwordWorker';
 import { getUserFromApiToken } from './apiTokens';
 import { getForwardedProto } from './trustProxy';
 
@@ -109,20 +109,9 @@ const BCRYPT_ROUNDS = 10;
 // as a wrong password (no timing oracle on which usernames exist).
 export const DUMMY_PASSWORD_HASH = '$2b$10$073K657YTnd.q68kw787sOXGW10kBnYDukAbbfnoGX.i8R06CQj92';
 
-// bcryptjs's async API yields to the event loop between chunks of work, but
-// several hashes started together all run their chunks back to back in the
-// same loop phase (8 parallel compares stalled the loop for ~420 ms). Running
-// them one at a time keeps every stall to a single hash (~50 ms) so health
-// checks and other requests are served in between.
-let bcryptQueue: Promise<unknown> = Promise.resolve();
-function runBcrypt<T>(task: () => Promise<T>): Promise<T> {
-  const run = bcryptQueue.then(task, task);
-  bcryptQueue = run.catch(() => undefined);
-  return run;
-}
-
+// Hashing runs off the main event loop (see passwordWorker.ts).
 export function hashPassword(password: string): Promise<string> {
-  return runBcrypt(() => bcrypt.hash(password, BCRYPT_ROUNDS));
+  return bcryptHash(password, BCRYPT_ROUNDS);
 }
 
 // Always performs a full bcrypt comparison: a missing hash is compared against
@@ -130,7 +119,7 @@ export function hashPassword(password: string): Promise<string> {
 export async function verifyPassword(password: string, hash: string | null | undefined): Promise<boolean> {
   let ok = false;
   try {
-    ok = await runBcrypt(() => bcrypt.compare(password, hash || DUMMY_PASSWORD_HASH));
+    ok = await bcryptCompare(password, hash || DUMMY_PASSWORD_HASH);
   } catch {
     ok = false;
   }
