@@ -67,12 +67,23 @@ const POPULAR_ORDER: Record<PopularRanking, string> = {
 };
 
 // The one metric column each ranking orders by (youtubeViews uses a plain
-// column). Keyed by the validated enum, so no user input reaches the SQL.
-const POPULAR_METRIC = (cutoff: number): Record<PopularRanking, string> => ({
-  localViewers: '(SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id) as local_viewers',
-  youtubeViews: '',
-  trending7d: `(SELECT COUNT(DISTINCT user_id) FROM user_history WHERE video_id = v.id AND watched_at >= ${cutoff}) as recent_viewers`,
-  watchTime: '(SELECT COALESCE(SUM(watch_time_seconds), 0) FROM user_history WHERE video_id = v.id) as watch_total',
+// column), and the grouped aggregate it comes from. Keyed by the validated
+// enum, so no user input reaches the SQL. Each aggregate reads user_history
+// once and is joined, instead of a correlated count per video.
+const POPULAR_METRIC = (cutoff: number): Record<PopularRanking, { column: string; join: string }> => ({
+  localViewers: {
+    column: 'COALESCE(pm.n, 0) as local_viewers',
+    join: 'LEFT JOIN (SELECT video_id, COUNT(DISTINCT user_id) as n FROM user_history GROUP BY video_id) pm ON pm.video_id = v.id',
+  },
+  youtubeViews: { column: '', join: '' },
+  trending7d: {
+    column: 'COALESCE(pm.n, 0) as recent_viewers',
+    join: `LEFT JOIN (SELECT video_id, COUNT(DISTINCT user_id) as n FROM user_history WHERE watched_at >= ${Math.trunc(cutoff)} GROUP BY video_id) pm ON pm.video_id = v.id`,
+  },
+  watchTime: {
+    column: 'COALESCE(pm.n, 0) as watch_total',
+    join: 'LEFT JOIN (SELECT video_id, SUM(watch_time_seconds) as n FROM user_history GROUP BY video_id) pm ON pm.video_id = v.id',
+  },
 });
 
 const POOL_SIZE = 100;
@@ -100,11 +111,12 @@ export default defineEventHandler(async (event) => {
   const queryPool = (kind: 'popular' | 'recent', limit: number): FeedVideo[] => {
     const popular = kind === 'popular';
     const ranking: PopularRanking = POPULAR_ORDER[prefs.popularRanking] ? prefs.popularRanking : 'localViewers';
-    const metric = popular ? POPULAR_METRIC(cutoff)[ranking] : '';
+    const metric = popular ? POPULAR_METRIC(cutoff)[ranking] : { column: '', join: '' };
     return db.prepare(`
-      SELECT ${FEED_VIDEO_COLUMNS}${metric ? `,\n             ${metric}` : ''}
+      SELECT ${FEED_VIDEO_COLUMNS}${metric.column ? `,\n             ${metric.column}` : ''}
       FROM videos v
       JOIN channels c ON v.channel_id = c.id
+      ${metric.join}
       WHERE v.download_status = 'completed'
         AND ${visibility.sql}
         ${hidden.sql}
