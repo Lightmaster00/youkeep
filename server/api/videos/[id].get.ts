@@ -1,6 +1,7 @@
 import { defineEventHandler, createError, getQuery } from 'h3';
 import crypto from 'crypto';
 import { listSubtitleFiles, resolveStoredPath } from '../../utils/videoPaths';
+import { videoColumnsSql } from '../../utils/videoAccess';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
@@ -14,9 +15,10 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb();
 
+  // Explicit columns: queue internals and the share token are admin-only.
   const video = db.prepare(`
-    SELECT 
-      v.*,
+    SELECT
+      ${videoColumnsSql(session)},
       c.title as channel_title,
       c.avatar_url as channel_avatar,
       c.description as channel_description
@@ -25,17 +27,9 @@ export default defineEventHandler(async (event) => {
     WHERE v.id = ?
   `).get(videoId) as any;
 
-  if (!video) {
+  // A video the viewer may not see answers exactly like a missing one.
+  if (!video || !(await canAccessVideo(videoId, event, token))) {
     throw createError({ statusCode: 404, statusMessage: 'Video not found.' });
-  }
-
-  // Permission check
-  const hasAccess = await canAccessVideo(videoId, event, token);
-  if (!hasAccess) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Access denied. You do not have permission to view this video.'
-    });
   }
   
   // Record in the watch history if the user is logged in
@@ -60,7 +54,8 @@ export default defineEventHandler(async (event) => {
 
   // Fetch the associated comments
   const comments = db.prepare(`
-    SELECT * FROM comments
+    SELECT id, video_id, author, author_thumbnail, text, time_text, like_count, created_at
+    FROM comments
     WHERE video_id = ?
     ORDER BY like_count DESC, created_at DESC
   `).all(videoId);

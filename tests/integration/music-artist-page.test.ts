@@ -38,12 +38,12 @@ const album = (albumId: string, cookie?: string) =>
 const ids = (list: any[]) => list.map((x) => x.id);
 
 describe('GET /api/music/artists/[id]/overview', () => {
-  it('returns 404 for a missing artist, 403 for a guest on a private artist, and admits an admin on ultra_private', async () => {
+  it('returns 404 for a missing artist, 404 (like a missing one) for a guest on a private artist, and admits an admin on ultra_private', async () => {
     await expect(overview('missing')).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'priv', visibility: 'private' });
-    await expect(overview('priv')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(overview('priv')).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'ultra', visibility: 'ultra_private' });
-    await expect(overview('ultra', loginAs('member'))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(overview('ultra', loginAs('member'))).rejects.toMatchObject({ statusCode: 404 });
     const result = await overview('ultra', loginAs('boss', 'admin'));
     expect(result.artist.id).toBe('ultra');
   });
@@ -164,7 +164,7 @@ describe('GET /api/music/artists/[id]/songs', () => {
   it('applies the artist access rules', async () => {
     await expect(songs('missing')).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'priv', visibility: 'private' });
-    await expect(songs('priv')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(songs('priv')).rejects.toMatchObject({ statusCode: 404 });
     expect((await songs('priv', '', loginAs('member'))).total).toBe(0);
   });
 });
@@ -201,7 +201,7 @@ describe('GET /api/music/albums/[id]', () => {
     await expect(album('missing')).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'priv', visibility: 'private' });
     insertMusicAlbum(db, { id: 'al-priv', artistId: 'priv' });
-    await expect(album('al-priv')).rejects.toMatchObject({ statusCode: 403 });
+    await expect(album('al-priv')).rejects.toMatchObject({ statusCode: 404 });
     expect((await album('al-priv', loginAs('member'))).album.id).toBe('al-priv');
   });
 });

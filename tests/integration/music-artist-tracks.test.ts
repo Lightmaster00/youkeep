@@ -33,10 +33,10 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 const ids = (r: any) => r.tracks.map((t: any) => t.id);
 
 describe('GET /api/music/artists/[id]/tracks', () => {
-  it('returns 404 for a nonexistent artist, 403 for a private artist requested by a guest, 400 without albumId', async () => {
+  it('returns 404 for a nonexistent artist, 404 for a private artist requested by a guest (same as missing), 400 without albumId', async () => {
     await expect(handler(eventFor('missing', '?albumId=none'))).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    await expect(handler(eventFor('a1', '?albumId=none'))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(handler(eventFor('a1', '?albumId=none'))).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'a2' });
     await expect(handler(eventFor('a2', ''))).rejects.toMatchObject({ statusCode: 400 });
   });

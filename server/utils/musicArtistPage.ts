@@ -44,10 +44,8 @@ export async function requireMusicArtistAccess(db: Database.Database, artistId: 
     throw createError({ statusCode: 404, statusMessage: 'Artist not found.' });
   }
   if (!(await canAccessMusicArtist(artistId, event))) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Access denied. You do not have permission to view this artist.'
-    });
+    // Hidden from this viewer: same answer as a missing artist.
+    throw createError({ statusCode: 404, statusMessage: 'Artist not found.' });
   }
   return artist;
 }

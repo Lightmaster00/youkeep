@@ -1,4 +1,5 @@
-import { defineEventHandler } from 'h3';
+import { defineEventHandler, getQuery } from 'h3';
+import { videoVisibilitySql } from '../../utils/videoAccess';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
@@ -32,6 +33,8 @@ export default defineEventHandler(async (event) => {
 
   const whereSql = baseWhereClauses.length > 0 ? `WHERE ${baseWhereClauses.join(' AND ')}` : '';
 
+  // The counts only cover the videos this viewer may see.
+  const visible = videoVisibilitySql(session);
   const channelsQuery = `
     SELECT 
       c.id, 
@@ -47,12 +50,12 @@ export default defineEventHandler(async (event) => {
       COUNT(CASE WHEN v.download_status = 'completed' THEN 1 END) as completed_count,
       COUNT(v.id) as total_count
     FROM channels c
-    LEFT JOIN videos v ON c.id = v.channel_id
+    LEFT JOIN videos v ON c.id = v.channel_id AND ${visible.sql}
     ${whereSql}
     GROUP BY c.id
     ORDER BY c.title ASC
   `;
 
-  const channels = db.prepare(channelsQuery).all(...params);
+  const channels = db.prepare(channelsQuery).all(...visible.params, ...params);
   return { channels };
 });

@@ -17,10 +17,8 @@ export default defineEventHandler(async (event) => {
 
   const hasAccess = await canAccessPodcastShow(showId, event);
   if (!hasAccess) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Access denied. You do not have permission to view this show.'
-    });
+    // Hidden from this viewer: same answer as a missing show.
+    throw createError({ statusCode: 404, statusMessage: 'Show not found.' });
   }
 
   const query = getQuery(event);

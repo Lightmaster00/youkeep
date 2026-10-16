@@ -1,4 +1,5 @@
 import { defineEventHandler, createError } from 'h3';
+import { channelColumnsSql, videoVisibilitySql } from '../../utils/videoAccess';
 
 export default defineEventHandler(async (event) => {
   const channelId = event.context.params?.id;
@@ -8,23 +9,20 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb();
+  const session = await getUserFromSession(event);
 
+  // Explicit columns: server paths, import errors and download options are admin-only.
   const channel = db.prepare(`
-    SELECT * FROM channels WHERE id = ?
+    SELECT ${channelColumnsSql(session)} FROM channels c WHERE c.id = ?
   `).get(channelId);
 
-  if (!channel) {
+  // A channel the viewer may not see answers exactly like a missing one.
+  if (!channel || !(await canAccessChannel(channelId, event))) {
     throw createError({ statusCode: 404, statusMessage: 'Channel not found.' });
   }
 
-  // Check access rights
-  const hasAccess = await canAccessChannel(channelId, event);
-  if (!hasAccess) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Access denied. You do not have permission to view this channel.'
-    });
-  }
+  // Stats only count the videos this viewer may see.
+  const visible = videoVisibilitySql(session);
 
   const stats = db.prepare(`
     SELECT 
@@ -45,9 +43,10 @@ export default defineEventHandler(async (event) => {
       SUM(CASE WHEN download_status = 'completed' THEN duration ELSE 0 END) as total_duration,
       SUM(CASE WHEN download_status = 'completed' THEN view_count ELSE 0 END) as total_views,
       SUM(CASE WHEN download_status = 'completed' THEN size_bytes ELSE 0 END) as total_size
-    FROM videos
-    WHERE channel_id = ?
-  `).get(channelId) as any;
+    FROM videos v
+    JOIN channels c ON c.id = v.channel_id
+    WHERE v.channel_id = ? AND ${visible.sql}
+  `).get(channelId, ...visible.params) as any;
 
   return { 
     channel,

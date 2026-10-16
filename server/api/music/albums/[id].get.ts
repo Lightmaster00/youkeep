@@ -15,10 +15,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Album not found.' });
   }
   if (!(await canAccessMusicArtist(result.album.artistId, event))) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Access denied. You do not have permission to view this album.'
-    });
+    // Hidden from this viewer: same answer as a missing album.
+    throw createError({ statusCode: 404, statusMessage: 'Album not found.' });
   }
   return result;
 });

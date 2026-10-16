@@ -31,10 +31,10 @@ function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
 }
 
 describe('GET /api/music/artists/[id]', () => {
-  it('returns 404 for a nonexistent artist and 403 for a private artist requested by a guest', async () => {
+  it('returns 404 for a nonexistent artist and 404 for a private artist requested by a guest (same as missing)', async () => {
     await expect(handler(eventFor('missing'))).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
-    await expect(handler(eventFor('a1'))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(handler(eventFor('a1'))).rejects.toMatchObject({ statusCode: 404 });
   });
 
   it('returns the artist and groups albums correctly for an accessible artist', async () => {

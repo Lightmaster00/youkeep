@@ -17,10 +17,8 @@ export default defineEventHandler(async (event) => {
 
   const hasAccess = await canAccessMusicArtist(artistId, event);
   if (!hasAccess) {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Access denied. You do not have permission to view this artist.'
-    });
+    // Hidden from this viewer: same answer as a missing artist.
+    throw createError({ statusCode: 404, statusMessage: 'Artist not found.' });
   }
 
   const query = getQuery(event);
