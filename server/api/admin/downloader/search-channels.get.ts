@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { normalizeYoutubeDataApiChannel, extractYtInitialData, parseChannelSearchResults, type ChannelCandidate } from '../../../utils/youtubeSearch';
+import { describeErrorForLog } from '../../../utils/redact';
 import { cachedSearch, isSearchTimeout, SEARCH_TIMEOUT_MS, SEARCH_TIMEOUT_MESSAGE } from '../../../utils/searchCache';
 
 export default defineEventHandler(async (event) => {
@@ -33,7 +34,8 @@ export default defineEventHandler(async (event) => {
       });
       return { channels };
     } catch (err: any) {
-      console.error('[admin/downloader/search-channels] YouTube Data API failed, falling back to scraping:', err?.statusCode || err?.status || 'unknown status', err?.statusMessage || err?.message || '');
+      // The key travels in the query string: never log the raw message.
+      console.error('[admin/downloader/search-channels] YouTube Data API failed, falling back to scraping:', describeErrorForLog(err, [youtubeApiKey]));
     }
   }
 
@@ -55,7 +57,7 @@ export default defineEventHandler(async (event) => {
     if (isSearchTimeout(err)) {
       throw createError({ statusCode: 504, statusMessage: SEARCH_TIMEOUT_MESSAGE });
     }
-    console.error('[admin/downloader/search-channels]', err);
+    console.error('[admin/downloader/search-channels]', describeErrorForLog(err, [youtubeApiKey]));
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to search YouTube channels. Check the server logs for details.'

@@ -1,5 +1,11 @@
 import { defineEventHandler } from 'h3';
+import { requireAdmin } from '../../../utils/auth';
+import { getDb } from '../../../utils/db';
+import { maskSecret, secretHint } from '../../../utils/redact';
 
+// Stored keys are never sent back: only whether one is configured and a
+// short hint. apiKey/apiSecret carry the masked form for the current settings
+// form, which posts them back unchanged (treated as "keep").
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
   const db = getDb();
@@ -9,8 +15,12 @@ export default defineEventHandler(async (event) => {
   return {
     platforms: rows.map((row) => ({
       id: row.id,
-      apiKey: row.api_key,
-      apiSecret: row.api_secret
+      apiKeyConfigured: !!row.api_key,
+      apiKeyHint: secretHint(row.api_key || ''),
+      apiSecretConfigured: !!row.api_secret,
+      apiSecretHint: secretHint(row.api_secret || ''),
+      apiKey: maskSecret(row.api_key || ''),
+      apiSecret: maskSecret(row.api_secret || '')
     }))
   };
 });

@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3';
 import { ingestPodcastFeed } from '../../../utils/podcastDownloader';
+import { describeErrorForLog } from '../../../utils/redact';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -27,7 +28,8 @@ export default defineEventHandler(async (event) => {
 
     return result;
   } catch (err: any) {
-    console.error('[admin/podcasts/ingest]', err);
+    // Private feed URLs often carry a token in the query string.
+    console.error('[admin/podcasts/ingest]', describeErrorForLog(err));
     throw createError({ statusCode: 500, statusMessage: 'An error occurred during podcast ingestion. Check the server logs for details.' });
   }
 });

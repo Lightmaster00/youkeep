@@ -7,6 +7,7 @@ import {
   computePodcastIndexAuthHeaders,
 } from '../../../utils/podcastSearch';
 import { cachedSearch, isSearchTimeout, SEARCH_TIMEOUT_MS, SEARCH_TIMEOUT_MESSAGE } from '../../../utils/searchCache';
+import { describeErrorForLog } from '../../../utils/redact';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -72,14 +73,16 @@ export default defineEventHandler(async (event) => {
       fetchListenNotes(),
     ]);
 
+    // Redacted one-line summaries: never the raw error (URLs, provider keys).
+    const secrets = [podcastIndexApiKey, podcastIndexApiSecret, listenNotesApiKey];
     if (itunesResult.status === 'rejected') {
-      console.error('[admin/podcasts/search-shows] iTunes fetch failed', itunesResult.reason);
+      console.error('[admin/podcasts/search-shows] iTunes fetch failed:', describeErrorForLog(itunesResult.reason, secrets));
     }
     if (podcastIndexResult.status === 'rejected') {
-      console.error('[admin/podcasts/search-shows] PodcastIndex fetch failed', podcastIndexResult.reason);
+      console.error('[admin/podcasts/search-shows] PodcastIndex fetch failed:', describeErrorForLog(podcastIndexResult.reason, secrets));
     }
     if (listenNotesResult.status === 'rejected') {
-      console.error('[admin/podcasts/search-shows] Listen Notes fetch failed', listenNotesResult.reason);
+      console.error('[admin/podcasts/search-shows] Listen Notes fetch failed:', describeErrorForLog(listenNotesResult.reason, secrets));
     }
 
     // Every provider that was asked failed, at least one on its time limit: say so.
@@ -104,7 +107,7 @@ export default defineEventHandler(async (event) => {
 
     shows = mergeShowCandidates(itunesCandidates, podcastIndexCandidates, listenNotesCandidates);
   } catch (err) {
-    console.error('[admin/podcasts/search-shows]', err);
+    console.error('[admin/podcasts/search-shows]', describeErrorForLog(err));
     return { shows: [] };
   }
   if (timedOut) {
