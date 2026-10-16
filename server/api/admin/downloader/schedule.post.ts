@@ -1,24 +1,9 @@
-import { defineEventHandler, readBody, createError } from 'h3';
-import { Cron } from 'croner';
+import { defineEventHandler } from 'h3';
+import { readJsonObject, readScheduleFields } from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const body = await readBody(event);
-  const { enabled, schedule } = body;
-
-  if (enabled && !schedule) {
-    throw createError({ statusCode: 400, statusMessage: 'Cron schedule expression is required when enabled.' });
-  }
-
-  // Validate cron expression if enabled
-  if (enabled) {
-    try {
-      // Create a test instance to validate syntax
-      new Cron(schedule);
-    } catch (err) {
-      throw createError({ statusCode: 400, statusMessage: `Invalid cron expression: ${err}` });
-    }
-  }
+  const { enabled, schedule } = readScheduleFields(await readJsonObject(event));
 
   const db = getDb();
   

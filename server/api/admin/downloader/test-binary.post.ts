@@ -1,13 +1,13 @@
-import { defineEventHandler, createError } from 'h3';
+import { defineEventHandler } from 'h3';
+import { upstreamFailure } from '../../../utils/validation';
 import { getYtdlPath, isFfmpegAvailable, runProcessAsync, buildSpawnEnv } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
 
-  const ytdlPath = await getYtdlPath();
-  const env = buildSpawnEnv();
-
   try {
+    const ytdlPath = await getYtdlPath();
+    const env = buildSpawnEnv();
     const child = await runProcessAsync(ytdlPath, ['--version'], env, undefined, 30_000);
     const stdout = child.stdout?.trim();
     const stderr = child.stderr?.trim();
@@ -24,10 +24,7 @@ export default defineEventHandler(async (event) => {
       status,
       command: `${ytdlPath} --version`
     };
-  } catch (err: any) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: `Could not run yt-dlp: ${err.message || err}`
-    });
+  } catch (err) {
+    upstreamFailure('admin/downloader/test-binary', err, 'Could not run yt-dlp. Check the server logs for details.');
   }
 });

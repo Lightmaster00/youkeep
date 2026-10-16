@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     }
     console.error('[admin/downloader/search-channels]', describeErrorForLog(err, [youtubeApiKey]));
     throw createError({
-      statusCode: 500,
+      statusCode: 502,
       statusMessage: 'Failed to search YouTube channels. Check the server logs for details.'
     });
   }

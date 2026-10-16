@@ -1,13 +1,15 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import { readJsonObject, optionalString } from '../../../utils/validation';
 import fs from 'fs';
 import path from 'path';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const body = await readBody(event);
-  const { path: dirPath } = body;
-
-  const trimmed = (dirPath || '').trim();
+  // An empty or missing path means "back to the built-in default".
+  const trimmed = optionalString(await readJsonObject(event), 'path', { max: 1024 }) ?? '';
+  if (trimmed.includes('\0')) {
+    throw createError({ statusCode: 400, statusMessage: 'The path contains an invalid character.' });
+  }
 
   if (trimmed.length > 0) {
     // Validate that it's an absolute path

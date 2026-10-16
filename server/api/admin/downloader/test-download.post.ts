@@ -1,20 +1,19 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import { readJsonObject, upstreamFailure } from '../../../utils/validation';
 import { getYtdlPath, runProcessAsync, buildSpawnEnv, YTDL_METADATA_TIMEOUT_MS } from '../../../utils/downloader';
 import { isValidMediaId } from '../../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const body = await readBody(event);
-  const { videoId } = body || {};
+  const { videoId } = await readJsonObject(event);
 
   if (!isValidMediaId(videoId)) {
     throw createError({ statusCode: 400, statusMessage: 'A valid video ID is required for the test.' });
   }
 
-  const ytdlPath = await getYtdlPath();
-  const env = buildSpawnEnv();
-
   try {
+    const ytdlPath = await getYtdlPath();
+    const env = buildSpawnEnv();
     // Run yt-dlp asynchronously to dump json for the single video (very fast check)
     const child = await runProcessAsync(ytdlPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`], env, undefined, YTDL_METADATA_TIMEOUT_MS);
     const stdout = child.stdout?.trim();
@@ -36,10 +35,7 @@ export default defineEventHandler(async (event) => {
       stderr,
       status
     };
-  } catch (err: any) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: `yt-dlp test failed: ${err.message || err}`
-    });
+  } catch (err) {
+    upstreamFailure('admin/downloader/test-download', err, 'The yt-dlp test failed. Check the server logs for details.');
   }
 });

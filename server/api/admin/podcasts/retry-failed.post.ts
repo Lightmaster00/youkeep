@@ -1,16 +1,18 @@
-import { defineEventHandler, readBody } from 'h3';
+import { defineEventHandler } from 'h3';
+import { readOptionalJsonObject, optionalString } from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
   const db = getDb();
-  const body = await readBody(event);
+  // No body: retry every failed download; with an id: just that one.
+  const id = optionalString(await readOptionalJsonObject(event), 'episodeId', { max: 200 });
 
-  if (body?.episodeId) {
+  if (id) {
     db.prepare(`
       UPDATE podcast_episodes
       SET download_status = 'pending', download_progress = 0, download_speed = NULL, download_eta = NULL, last_error = NULL, retry_count = 0
       WHERE id = ? AND download_status = 'failed'
-    `).run(body.episodeId);
+    `).run(id);
   } else {
     db.prepare(`
       UPDATE podcast_episodes

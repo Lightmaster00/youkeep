@@ -52,9 +52,9 @@ describe('GET /api/admin/downloader/search-channels (scrape)', () => {
     expect(res.channels).toHaveLength(2);
   });
 
-  it('keeps answering 500 for other failures and does not cache empty pages', async () => {
+  it('answers 502 (upstream failure) for other failures and does not cache empty pages', async () => {
     fetchMock.mockRejectedValueOnce(new Error('ECONNRESET'));
-    await expect(searchChannels(ev('x'))).rejects.toMatchObject({ statusCode: 500 });
+    await expect(searchChannels(ev('x'))).rejects.toMatchObject({ statusCode: 502 });
     fetchMock.mockResolvedValueOnce('<html></html>');
     expect(await searchChannels(ev('x'))).toEqual({ channels: [] });
     fetchMock.mockResolvedValueOnce(fixture);

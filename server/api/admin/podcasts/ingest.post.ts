@@ -1,35 +1,28 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler } from 'h3';
 import { ingestPodcastFeed } from '../../../utils/podcastDownloader';
 import { describeErrorForLog } from '../../../utils/redact';
+import {
+  readJsonObject, requiredUrl, optionalEnum, badRequest, upstreamFailure, isHttpError, SYNC_STATUSES, VISIBILITIES,
+} from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const body = await readBody(event);
-  const { feedUrl, sync_status, visibility } = body;
+  const body = await readJsonObject(event);
+  const feedUrl = requiredUrl(body, 'feedUrl');
+  const sync_status = optionalEnum(body, 'sync_status', SYNC_STATUSES);
+  const visibility = optionalEnum(body, 'visibility', VISIBILITIES);
 
-  if (!feedUrl) {
-    throw createError({ statusCode: 400, statusMessage: 'feedUrl is required.' });
-  }
-
-  const VALID_VISIBILITIES = ['public', 'private', 'ultra_private'];
-  if (visibility !== undefined && !VALID_VISIBILITIES.includes(visibility)) {
-    throw createError({ statusCode: 400, statusMessage: `Invalid visibility value: ${visibility}` });
-  }
-
+  let result: Awaited<ReturnType<typeof ingestPodcastFeed>>;
   try {
-    const result = await ingestPodcastFeed(feedUrl, {
-      sync_status: sync_status !== undefined ? sync_status : undefined,
-      visibility: visibility !== undefined ? visibility : undefined,
-    });
-
-    if (!result.success) {
-      throw createError({ statusCode: 500, statusMessage: result.message });
-    }
-
-    return result;
-  } catch (err: any) {
+    result = await ingestPodcastFeed(feedUrl, { sync_status, visibility });
+  } catch (err) {
+    if (isHttpError(err) && err.statusCode < 500) throw err;
     // Private feed URLs often carry a token in the query string.
-    console.error('[admin/podcasts/ingest]', describeErrorForLog(err));
-    throw createError({ statusCode: 500, statusMessage: 'An error occurred during podcast ingestion. Check the server logs for details.' });
+    upstreamFailure('admin/podcasts/ingest', describeErrorForLog(err), 'The feed could not be read. Check the server logs for details.');
   }
+  if (!result.success) {
+    if (result.message.startsWith('This feed address is not allowed')) badRequest('This feed address is not allowed.');
+    upstreamFailure('admin/podcasts/ingest', describeErrorForLog(result.message), 'The feed could not be read. Check the server logs for details.');
+  }
+  return result;
 });

@@ -1,16 +1,9 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler } from 'h3';
+import { readJsonObject, requiredString } from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const body = await readBody(event);
-  const { videoId } = body;
-
-  if (!videoId) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Video ID is required.'
-    });
-  }
+  const videoId = requiredString(await readJsonObject(event), 'videoId', { max: 200 });
 
   const db = getDb();
 

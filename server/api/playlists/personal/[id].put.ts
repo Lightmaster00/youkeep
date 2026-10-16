@@ -1,4 +1,5 @@
-import { defineEventHandler, readBody } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import { readJsonObject, optionalEnum, badRequest } from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event);
@@ -9,12 +10,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Playlist ID required' });
   }
 
-  const body = await readBody(event);
-  const { visibility } = body;
-
-  if (!visibility || !['public', 'unlisted', 'private'].includes(visibility)) {
-    throw createError({ statusCode: 400, statusMessage: 'Valid visibility is required' });
-  }
+  const visibility = optionalEnum(await readJsonObject(event), 'visibility', ['public', 'unlisted', 'private'] as const);
+  if (!visibility) badRequest('Valid visibility is required');
 
   // Verify ownership
   const playlist = db.prepare('SELECT id FROM personal_playlists WHERE id = ? AND user_id = ?').get(id, user.id);

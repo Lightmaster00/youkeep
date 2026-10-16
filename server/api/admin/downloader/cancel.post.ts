@@ -1,4 +1,5 @@
-import { defineEventHandler, readBody, createError } from 'h3';
+import { defineEventHandler } from 'h3';
+import { readJsonObject, requiredString } from '../../../utils/validation';
 import { CANCELLED_BY_ADMIN_MESSAGE } from '../../../utils/downloader';
 
 /**
@@ -9,12 +10,7 @@ import { CANCELLED_BY_ADMIN_MESSAGE } from '../../../utils/downloader';
  */
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
-  const body = await readBody(event);
-  const { videoId } = body;
-
-  if (!videoId) {
-    throw createError({ statusCode: 400, statusMessage: 'Video ID is required.' });
-  }
+  const videoId = requiredString(await readJsonObject(event), 'videoId', { max: 200 });
 
   const db = getDb();
   const video = db.prepare('SELECT download_status FROM videos WHERE id = ?').get(videoId) as { download_status: string } | undefined;

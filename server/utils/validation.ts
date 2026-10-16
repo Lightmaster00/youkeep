@@ -1,5 +1,6 @@
 import { createError, readBody, type H3Event } from 'h3';
 import type Database from 'better-sqlite3';
+import { Cron } from 'croner';
 
 // Shared request-body validation. Every helper throws a 400 (never lets a
 // malformed value reach SQLite or a string method and turn into a 500).
@@ -29,6 +30,22 @@ export async function readJsonObject(event: H3Event): Promise<Record<string, unk
   return body;
 }
 
+/**
+ * Like readJsonObject for routes whose body is optional: no body (or an empty
+ * one) is `{}`; anything present must still be a JSON object.
+ */
+export async function readOptionalJsonObject(event: H3Event): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await readBody(event, { strict: true });
+  } catch {
+    badRequest('The request body must be a JSON object.');
+  }
+  if (body === undefined || body === '') return {};
+  if (!isPlainObject(body)) badRequest('The request body must be a JSON object.');
+  return body;
+}
+
 /** Optional string field: undefined/null when absent, 400 when present but not a string or too long. */
 export function optionalString(body: Record<string, unknown>, key: string, opts: { max: number; trim?: boolean }): string | undefined {
   const value = body[key];
@@ -51,6 +68,85 @@ export function optionalStringArray(body: Record<string, unknown>, key: string, 
     }
   }
   return [...new Set(value as string[])];
+}
+
+/** Required non-empty string field (trimmed): 400 when missing, empty, not a string or too long. */
+export function requiredString(body: Record<string, unknown>, key: string, opts: { max: number; trim?: boolean }): string {
+  const value = optionalString(body, key, opts);
+  if (!value) badRequest(`${key} is required.`);
+  return value;
+}
+
+/** Optional boolean field (true/false, or 0/1): undefined when absent or null, 400 otherwise. */
+export function optionalBoolean(body: Record<string, unknown>, key: string): boolean | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (value === true || value === 1) return true;
+  if (value === false || value === 0) return false;
+  badRequest(`${key} must be true or false.`);
+}
+
+/** Optional field restricted to `allowed` values: undefined when absent or null, 400 otherwise. */
+export function optionalEnum<T extends string>(body: Record<string, unknown>, key: string, allowed: readonly T[]): T | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
+    badRequest(`${key} must be one of: ${allowed.join(', ')}.`);
+  }
+  return value as T;
+}
+
+/** Optional integer field within [min, max]: undefined when absent or null, 400 otherwise. */
+export function optionalInteger(body: Record<string, unknown>, key: string, opts: { min: number; max: number }): number | undefined {
+  const value = body[key];
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < opts.min || value > opts.max) {
+    badRequest(`${key} must be an integer between ${opts.min} and ${opts.max}.`);
+  }
+  return value;
+}
+
+/** A URL field: required, a string of at most 2048 characters without control characters. */
+export function requiredUrl(body: Record<string, unknown>, key: string): string {
+  const value = requiredString(body, key, { max: 2048 });
+  if (/[\u0000-\u001f\u007f]/.test(value)) badRequest(`${key} contains invalid characters.`);
+  return value;
+}
+
+/**
+ * The body of the three schedule routes: { enabled, schedule }. When enabled,
+ * the schedule must be a valid cron expression (400 with a generic message
+ * otherwise; the parser's own error text never reaches the client).
+ */
+export function readScheduleFields(body: Record<string, unknown>): { enabled: boolean; schedule: string | undefined } {
+  const enabled = optionalBoolean(body, 'enabled') ?? false;
+  const schedule = optionalString(body, 'schedule', { max: 100 }) || undefined;
+  if (enabled && !schedule) badRequest('Cron schedule expression is required when enabled.');
+  if (schedule) {
+    try {
+      new Cron(schedule).stop();
+    } catch {
+      badRequest('Invalid cron expression.');
+    }
+  }
+  return { enabled, schedule };
+}
+
+export const SYNC_STATUSES = ['downloading', 'paused'] as const;
+export const VISIBILITIES = ['public', 'private', 'ultra_private'] as const;
+
+/**
+ * An upstream service (yt-dlp, a feed host, a search API) failed: 502 with a
+ * generic message; the details go to the server log only.
+ */
+export function upstreamFailure(context: string, err: unknown, message = 'The remote source could not be reached or returned an error.'): never {
+  console.error(`[${context}]`, err);
+  throw createError({ statusCode: 502, statusMessage: message });
+}
+
+/** True for an error already shaped for the client (has a 4xx/5xx statusCode). */
+export function isHttpError(err: unknown): err is { statusCode: number } {
+  return typeof err === 'object' && err !== null && typeof (err as any).statusCode === 'number';
 }
 
 // --- Usernames ---------------------------------------------------------------

@@ -1,4 +1,5 @@
-import { defineEventHandler, createError, readBody } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import { readOptionalJsonObject, optionalBoolean } from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   const videoId = event.context.params?.id;
@@ -8,8 +9,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Video ID required' });
   }
 
-  const { hide } = await readBody(event) || { hide: true };
+  // No body means "hide".
+  const hide = optionalBoolean(await readOptionalJsonObject(event), 'hide') ?? true;
   const db = getDb();
+
+  if (hide && (!db.prepare('SELECT 1 FROM videos WHERE id = ?').get(videoId) || !(await canAccessVideo(videoId, event)))) {
+    throw createError({ statusCode: 404, statusMessage: 'Video not found.' });
+  }
 
   try {
     if (hide) {
@@ -21,6 +27,7 @@ export default defineEventHandler(async (event) => {
     }
     return { success: true };
   } catch (error: any) {
-    throw createError({ statusCode: 500, statusMessage: 'Internal server error' });
+    console.error('[videos/hide]', error);
+    throw createError({ statusCode: 500, statusMessage: 'Could not update the hidden videos.' });
   }
 });
