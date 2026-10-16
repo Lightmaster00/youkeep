@@ -9,7 +9,8 @@ import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers } from
 let dbInstance: Database.Database | null = null;
 
 export function getDb(): Database.Database {
-  if (dbInstance) return dbInstance;
+  // Graceful shutdown closes the connection: only an open one is reused.
+  if (dbInstance?.open) return dbInstance;
 
   const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) {
@@ -449,6 +450,48 @@ export function openDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_podcast_episode_progress_user_updated ON podcast_episode_progress(user_id, updated_at DESC);
   `);
 
+  // Child-side indexes of foreign keys whose primary key starts with another
+  // column: without them every cascade (deleting an artist, a show, a video,
+  // a channel or a user) scanned the whole child table once per deleted row.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_music_play_history_track_id ON music_play_history(track_id);
+    CREATE INDEX IF NOT EXISTS idx_music_favorites_track_id ON music_favorites(track_id);
+    CREATE INDEX IF NOT EXISTS idx_music_track_artists_artist_id ON music_track_artists(artist_id);
+    CREATE INDEX IF NOT EXISTS idx_music_albums_artist_id ON music_albums(artist_id);
+    CREATE INDEX IF NOT EXISTS idx_podcast_episode_progress_episode_id ON podcast_episode_progress(episode_id);
+    CREATE INDEX IF NOT EXISTS idx_podcast_show_follows_show_id ON podcast_show_follows(show_id);
+    CREATE INDEX IF NOT EXISTS idx_personal_playlist_videos_video_id ON personal_playlist_videos(video_id);
+    CREATE INDEX IF NOT EXISTS idx_playlist_videos_video_id ON playlist_videos(video_id);
+    CREATE INDEX IF NOT EXISTS idx_user_hidden_videos_video_id ON user_hidden_videos(video_id);
+    CREATE INDEX IF NOT EXISTS idx_reports_video_id ON reports(video_id);
+    CREATE INDEX IF NOT EXISTS idx_user_channel_access_channel_id ON user_channel_access(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_user_subscriptions_channel_id ON user_subscriptions(channel_id);
+    CREATE INDEX IF NOT EXISTS idx_api_tokens_user_id ON api_tokens(user_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_music_tracks_artist_status ON music_tracks(artist_id, download_status);
+    CREATE INDEX IF NOT EXISTS idx_podcast_episodes_show_status ON podcast_episodes(show_id, download_status);
+  `);
+
+  // A row without an id cannot be updated or deleted by id (TEXT PRIMARY KEY
+  // accepts NULL in SQLite): a worker would retry it forever.
+  for (const table of ['videos', 'music_tracks', 'podcast_episodes']) {
+    db.exec(`
+      CREATE TRIGGER IF NOT EXISTS ${table}_require_id BEFORE INSERT ON ${table}
+      WHEN new.id IS NULL OR new.id = ''
+      BEGIN
+        SELECT RAISE(ABORT, '${table}: id is required');
+      END;
+    `);
+  }
+
+  // Usernames are unique without regard to case. An older database that
+  // already holds such duplicates keeps working; an admin has to rename one.
+  try {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_nocase ON users(lower(username));');
+  } catch (err) {
+    console.warn('[Database] Some usernames differ only by case; rename them to enable the case-insensitive uniqueness check:', (err as Error).message);
+  }
+
   // Setup FTS5 Virtual Table for Search (if not exists)
   try {
     db.exec(`
@@ -766,26 +809,6 @@ export function openDatabase(dbPath: string): Database.Database {
   if (albumMatchingCheck.count === 0) {
     db.prepare("INSERT INTO settings (key, value) VALUES ('album_matching_enabled', '1')").run();
     console.log('Seeded setting album_matching_enabled: 1');
-  }
-
-  // Backfill size_bytes for completed videos if null
-  try {
-    const completedVideos = db.prepare("SELECT id, channel_id FROM videos WHERE download_status = 'completed' AND size_bytes IS NULL").all() as any[];
-    if (completedVideos.length > 0) {
-      const updateSize = db.prepare("UPDATE videos SET size_bytes = ? WHERE id = ?");
-      db.transaction((videos) => {
-        for (const v of videos) {
-          const mp4Path = path.join(getDataDir(), 'downloads', v.channel_id, `${v.id}.mp4`);
-          if (fs.existsSync(mp4Path)) {
-            const size = fs.statSync(mp4Path).size;
-            updateSize.run(size, v.id);
-          }
-        }
-      })(completedVideos);
-      console.log(`[Database] Backfilled size_bytes for ${completedVideos.length} completed videos.`);
-    }
-  } catch (err) {
-    console.error('[Database] Failed to backfill video sizes:', err);
   }
 
   return db;
