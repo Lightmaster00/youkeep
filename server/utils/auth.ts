@@ -9,6 +9,8 @@ export interface UserSession {
   username: string;
   role: 'admin' | 'user';
   mustChangePassword: boolean;
+  /** How the request authenticated: a browser session cookie or an API token. */
+  via: 'session' | 'token';
 }
 
 export const SESSION_COOKIE_NAME = 'youkeep_session';
@@ -117,18 +119,21 @@ export async function destroySession(event: H3Event): Promise<void> {
   }
 }
 
+function getUserFromBearer(event: H3Event): UserSession | null {
+  const authHeader = getHeader(event, 'authorization');
+  // RFC 7235: the auth scheme is case-insensitive.
+  const bearer = authHeader?.match(/^Bearer\s+(.+)$/i);
+  const token = bearer?.[1]?.trim();
+  if (!token) return null;
+  return getUserFromApiToken(token);
+}
+
 export async function getUserFromSession(event: H3Event): Promise<UserSession | null> {
   const sessionId = getCookie(event, SESSION_COOKIE_NAME);
 
   if (!sessionId) {
     // No session cookie — fall back to an API token, if one was supplied.
-    const authHeader = getHeader(event, 'authorization');
-    // RFC 7235: the auth scheme is case-insensitive.
-    const bearer = authHeader?.match(/^Bearer\s+(.+)$/i);
-    const token = bearer?.[1]?.trim();
-    if (!token) return null;
-
-    return getUserFromApiToken(token);
+    return getUserFromBearer(event);
   }
 
   const db = getDb();
@@ -141,22 +146,49 @@ export async function getUserFromSession(event: H3Event): Promise<UserSession | 
 
   if (!session) {
     deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
-    return null;
+    // A stale cookie must not hide a valid Bearer token sent alongside it.
+    return getUserFromBearer(event);
   }
 
   // Check expiration
   if (Date.now() > session.expires_at) {
     db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
     deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
-    return null;
+    return getUserFromBearer(event);
   }
 
   return {
     id: session.id,
     username: session.username,
     role: session.role,
-    mustChangePassword: session.must_change_password === 1
+    mustChangePassword: session.must_change_password === 1,
+    via: 'session'
   };
+}
+
+export const API_TOKEN_FORBIDDEN_MESSAGE = 'Not available with an API token.';
+
+/**
+ * Routes that mint credentials or manage identities (tokens, passwords,
+ * users, search-platform keys) need a real browser session: a leaked API
+ * token must not be able to create more credentials or accounts.
+ */
+export function assertNotApiToken(user: UserSession): void {
+  if (user.via === 'token') {
+    throw createError({ statusCode: 403, statusMessage: API_TOKEN_FORBIDDEN_MESSAGE });
+  }
+}
+
+export async function requireSessionUser(event: H3Event): Promise<UserSession> {
+  const user = await requireUser(event);
+  assertNotApiToken(user);
+  return user;
+}
+
+export async function requireSessionAdmin(event: H3Event): Promise<UserSession> {
+  const user = await requireAdmin(event);
+  assertNotApiToken(user);
+  return user;
 }
 
 export async function requireUser(event: H3Event): Promise<UserSession> {

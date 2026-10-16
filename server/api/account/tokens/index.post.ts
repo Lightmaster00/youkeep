@@ -1,10 +1,10 @@
 import { defineEventHandler, createError } from 'h3';
-import { requireUser } from '../../../utils/auth';
+import { requireSessionUser } from '../../../utils/auth';
 import { createApiToken } from '../../../utils/apiTokens';
 import { readJsonObject } from '../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
-  const userSession = await requireUser(event);
+  const userSession = await requireSessionUser(event);
   const body = await readJsonObject(event);
   const label = typeof body.label === 'string' ? body.label.trim() : '';
 

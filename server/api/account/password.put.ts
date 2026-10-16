@@ -1,5 +1,5 @@
 import { defineEventHandler, createError, getCookie } from 'h3';
-import { requireUser, hashPassword, verifyPassword, createSession, SESSION_COOKIE_NAME } from '../../utils/auth';
+import { requireSessionUser, hashPassword, verifyPassword, createSession, SESSION_COOKIE_NAME } from '../../utils/auth';
 import { getDb } from '../../utils/db';
 import { readJsonObject, validatePassword } from '../../utils/validation';
 import { isLoginLocked, recordFailedLogin, clearLoginAttempts } from '../../utils/rateLimit';
@@ -8,7 +8,7 @@ import { isLoginLocked, recordFailedLogin, clearLoginAttempts } from '../../util
 // must_change_password the "current" password is the temporary one an admin
 // handed out, so the forced-change flow goes through the same check.
 export default defineEventHandler(async (event) => {
-  const userSession = await requireUser(event);
+  const userSession = await requireSessionUser(event);
   const body = await readJsonObject(event);
 
   const currentPassword = body.currentPassword;

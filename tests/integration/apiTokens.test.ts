@@ -76,7 +76,7 @@ describe('getUserFromApiToken', () => {
     const created = createApiToken('u1', 'My Phone');
 
     const result = getUserFromApiToken(created.token);
-    expect(result).toEqual({ id: 'u1', username: 'user_u1', role: 'admin', mustChangePassword: false });
+    expect(result).toEqual({ id: 'u1', username: 'user_u1', role: 'admin', mustChangePassword: false, via: 'token' });
   });
 
   it('returns null for a token that does not exist', () => {

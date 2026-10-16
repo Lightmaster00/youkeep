@@ -1,12 +1,12 @@
 import { defineEventHandler, createError } from 'h3';
 import crypto from 'crypto';
 import { getDb } from '../../../utils/db';
-import { requireAdmin, hashPassword } from '../../../utils/auth';
+import { requireSessionAdmin, hashPassword } from '../../../utils/auth';
 import { readJsonObject, validateUsername, validatePassword, isUsernameTaken, optionalStringArray } from '../../../utils/validation';
 import { assertChannelsExist, replaceChannelAccess, CHANNEL_ACCESS_MAX } from '../../../utils/userAdmin';
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event);
+  await requireSessionAdmin(event);
   const body = await readJsonObject(event);
 
   if (body.username === undefined || body.username === '' || body.role === undefined) {

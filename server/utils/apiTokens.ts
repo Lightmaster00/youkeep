@@ -71,6 +71,7 @@ export function getUserFromApiToken(token: string): UserSession | null {
     id: row.id,
     username: row.username,
     role: row.role,
-    mustChangePassword: row.must_change_password === 1
+    mustChangePassword: row.must_change_password === 1,
+    via: 'token'
   };
 }

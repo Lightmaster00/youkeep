@@ -30,7 +30,7 @@ describe('getUserFromSession with a Bearer token', () => {
     const created = createApiToken('u1', 'My Phone');
 
     const result = await getUserFromSession(bearerEvent(created.token));
-    expect(result).toEqual({ id: 'u1', username: 'user_u1', role: 'user', mustChangePassword: false });
+    expect(result).toEqual({ id: 'u1', username: 'user_u1', role: 'user', mustChangePassword: false, via: 'token' });
   });
 
   it('returns null for an invalid token', async () => {

@@ -1,9 +1,11 @@
 import { defineEventHandler, readBody, createError } from 'h3';
+import { requireSessionAdmin } from '../../../utils/auth';
+import { getDb } from '../../../utils/db';
 
 const KNOWN_PLATFORM_IDS = ['podcastindex', 'listennotes', 'youtube_data_api'];
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event);
+  await requireSessionAdmin(event);
   const body = await readBody(event);
   const id = typeof body?.id === 'string' ? body.id.trim() : '';
 

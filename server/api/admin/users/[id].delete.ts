@@ -1,10 +1,10 @@
 import { defineEventHandler, createError } from 'h3';
 import { getDb } from '../../../utils/db';
-import { requireAdmin } from '../../../utils/auth';
+import { requireSessionAdmin } from '../../../utils/auth';
 import { assertNotLastAdmin } from '../../../utils/userAdmin';
 
 export default defineEventHandler(async (event) => {
-  const currentAdmin = await requireAdmin(event);
+  const currentAdmin = await requireSessionAdmin(event);
   const userId = event.context.params?.id;
 
   if (!userId) {

@@ -1,10 +1,10 @@
 import { defineEventHandler, createError } from 'h3';
-import { requireUser } from '../../utils/auth';
+import { requireSessionUser } from '../../utils/auth';
 import { getDb } from '../../utils/db';
 import { readJsonObject, optionalString } from '../../utils/validation';
 
 export default defineEventHandler(async (event) => {
-  const userSession = await requireUser(event);
+  const userSession = await requireSessionUser(event);
   const body = await readJsonObject(event);
   const firstName = optionalString(body, 'firstName', { max: 100 });
   const lastName = optionalString(body, 'lastName', { max: 100 });

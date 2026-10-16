@@ -1,11 +1,11 @@
 import { defineEventHandler, createError } from 'h3';
 import { getDb } from '../../../utils/db';
-import { requireAdmin, hashPassword } from '../../../utils/auth';
+import { requireSessionAdmin, hashPassword } from '../../../utils/auth';
 import { readJsonObject, validatePassword, optionalStringArray } from '../../../utils/validation';
 import { assertNotLastAdmin, assertChannelsExist, replaceChannelAccess, CHANNEL_ACCESS_MAX } from '../../../utils/userAdmin';
 
 export default defineEventHandler(async (event) => {
-  const currentAdmin = await requireAdmin(event);
+  const currentAdmin = await requireSessionAdmin(event);
   const userId = event.context.params?.id;
 
   if (!userId) {
