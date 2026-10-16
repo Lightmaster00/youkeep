@@ -103,17 +103,18 @@ describe('album matching runs', () => {
       .toEqual({ title: 'Album 2', release_year: 2001 });
   });
 
-  it('a transient lookup failure backs off and leaves the track unchecked', async () => {
-    albumMatchDeps.search = realDeps.search;
-    albumMatchDeps.client = {
-      search: async () => [1, 2].map((n) => ({ wrapperType: 'track', kind: 'song', artistName: 'Daft Punk', trackName: 'Get Lucky', collectionId: n, collectionName: `Album ${n}` })),
-      lookup: async () => { throw Object.assign(new Error('Too Many Requests'), { statusCode: 429 }); },
+  it('a transient lookup failure backs off, then tries the same track again (it is not dropped)', async () => {
+    let failures = 1;
+    search = async (_artist, title) => {
+      if (failures-- > 0) throw Object.assign(new Error('Too Many Requests'), { statusCode: 429 });
+      return title.includes('Lucky') ? match('1', 'Random Access Memories') : null;
     };
     insertMusicTrack(db, { id: 't1', artistId: 'a1', title: 'Get Lucky' });
     startAlbumMatchRun('unchecked', db);
-    expect(await waitIdle()).toMatchObject({ state: 'done', errors: 1, matched: 0 });
+    expect(await waitIdle()).toMatchObject({ state: 'done', errors: 1, matched: 1, processed: 1 });
     expect(sleeps).toEqual([30_000]);
-    expect(track('t1').album_match_status).toBeNull();
+    expect(searchCalls).toEqual([['Daft Punk', 'Get Lucky'], ['Daft Punk', 'Get Lucky']]);
+    expect(track('t1').album_match_status).toBe('matched');
   });
 
   it('retries only the unmatched tracks when asked', async () => {
@@ -179,7 +180,9 @@ describe('album matching runs', () => {
     for (let i = 1; i <= 6; i++) insertMusicTrack(db, { id: `t${i}`, artistId: 'a1', title: `Song ${i}`, createdAt: i });
     startAlbumMatchRun('unchecked', db);
     const status = await waitIdle();
-    expect(status).toMatchObject({ state: 'failed', processed: 5, errors: 5 });
+    // The first track is retried after each backoff; nothing is skipped.
+    expect(status).toMatchObject({ state: 'failed', processed: 0, errors: 5 });
+    expect(new Set(searchCalls.map((c) => c[1]))).toEqual(new Set(['Song 1']));
     expect(status.lastError).toContain('did not answer 5 times in a row');
     expect(sleeps).toEqual([30_000, 60_000, 120_000, 240_000]);
     for (let i = 1; i <= 6; i++) expect(track(`t${i}`).album_match_status).toBeNull();
@@ -191,11 +194,13 @@ describe('album matching runs', () => {
       () => null,
       () => { throw Object.assign(new Error('Too Many Requests'), { statusCode: 429 }); },
       () => { throw Object.assign(new Error('Bad Request'), { statusCode: 400 }); },
+      () => null,
+      () => null,
     ];
     search = async () => replies.shift()!();
     for (let i = 1; i <= 4; i++) insertMusicTrack(db, { id: `t${i}`, artistId: 'a1', title: `Song ${i}`, createdAt: i });
     startAlbumMatchRun('unchecked', db);
-    expect(await waitIdle()).toMatchObject({ state: 'done', processed: 4, errors: 3, unmatched: 1, lastError: 'Bad Request' });
+    expect(await waitIdle()).toMatchObject({ state: 'done', processed: 4, errors: 3, unmatched: 3, lastError: 'Bad Request' });
     expect(sleeps).toEqual([30_000, 30_000]);
   });
 
@@ -205,7 +210,7 @@ describe('album matching runs', () => {
     startAlbumMatchRun('unchecked', db);
     const status = await waitIdle();
     expect(['done', 'failed']).toContain(status.state);
-    expect(status.errors).toBe(1);
+    expect(status.errors).toBeGreaterThanOrEqual(1);
   });
 
   it('respects the setting: refuses to start, ignores downloads, and stops a running run when turned off', async () => {
@@ -248,7 +253,7 @@ describe('album matching runs', () => {
     startAlbumMatchRun('unchecked', db);
     await vi.waitFor(() => expect(getAlbumMatchStatus().errors).toBe(1));
     setAlbumMatchingEnabled(db, false);
-    expect(await waitIdle()).toMatchObject({ state: 'cancelled', processed: 1 });
+    expect(await waitIdle()).toMatchObject({ state: 'cancelled', processed: 0 });
     expect(searchCalls).toHaveLength(1);
   });
 

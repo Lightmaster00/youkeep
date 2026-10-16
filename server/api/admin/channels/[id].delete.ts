@@ -1,6 +1,7 @@
 import { defineEventHandler, createError } from 'h3';
 import { prepareChannelFilesRemoval } from '../../../utils/videoPaths';
 import { isTidyRunning } from '../../../utils/videoTidy';
+import { stopActiveDownloadsOfChannel } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -15,9 +16,6 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb();
 
-  // 1. Find all videos for this channel
-  const videos = db.prepare('SELECT id FROM videos WHERE channel_id = ?').all(channelId) as { id: string }[];
-
   // Resolve the channel's actual on-disk files *before* deleting its rows,
   // so custom_save_path channels (and videos a partly repaired doubled folder
   // moved up) get cleaned up too.
@@ -28,10 +26,8 @@ export default defineEventHandler(async (event) => {
     ? prepareChannelFilesRemoval(db, channelId, { baseDir: resolveChannelBaseDir(channel.custom_save_path), downloadsDir: getDownloadsDir() })
     : null;
 
-  // 2. Kill active downloads for these videos
-  for (const v of videos) {
-    cancelDownload(v.id);
-  }
+  // 2. Kill only the downloads actually running; their files go with the folder below.
+  stopActiveDownloadsOfChannel(channelId);
 
   // 3. Delete the channel (cascade deletes videos, video_categories, user_channel_access, etc.)
   const res = db.prepare('DELETE FROM channels WHERE id = ?').run(channelId);

@@ -1,5 +1,6 @@
 import { isTidyRunning } from './videoTidy';
 import { prepareChannelFilesRemoval } from './videoPaths';
+import { stopActiveDownloadsOfChannel } from './downloader';
 
 export type WipeItemType = 'channel' | 'artist' | 'show';
 
@@ -179,7 +180,7 @@ async function runLibraryWipeInternal(): Promise<void> {
 function deleteChannelForWipe(channelId: string, title: string, wipedChannelIds: Set<string>): WipeOutcome {
   const db = getDb();
   try {
-    const videos = db.prepare('SELECT id FROM videos WHERE channel_id = ?').all(channelId) as { id: string }[];
+    const videoCount = (db.prepare('SELECT COUNT(*) AS n FROM videos WHERE channel_id = ?').get(channelId) as { n: number }).n;
     const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as {
       title: string;
       custom_save_path: string | null;
@@ -189,9 +190,8 @@ function deleteChannelForWipe(channelId: string, title: string, wipedChannelIds:
       ? prepareChannelFilesRemoval(db, channelId, { baseDir: resolveChannelBaseDir(channel.custom_save_path), downloadsDir: getDownloadsDir(), excludeChannelIds: wipedChannelIds })
       : null;
 
-    for (const v of videos) {
-      cancelDownload(v.id);
-    }
+    // Only running downloads; their files go with the channel folder removal.
+    stopActiveDownloadsOfChannel(channelId);
 
     const res = db.prepare('DELETE FROM channels WHERE id = ?').run(channelId);
     if (res.changes === 0) {
@@ -204,7 +204,7 @@ function deleteChannelForWipe(channelId: string, title: string, wipedChannelIds:
     // only removed when it is strictly inside its base folder.
     const removal = files?.remove();
     if (removal && !removal.removedChannelDir && !removal.skippedReason) {
-      console.warn(`Wipe: channel directory not found or not removed: ${files!.channelDir} (channel "${channel?.title}", ${videos.length} video(s), custom_save_path=${channel?.custom_save_path ?? 'none'})`);
+      console.warn(`Wipe: channel directory not found or not removed: ${files!.channelDir} (channel "${channel?.title}", ${videoCount} video(s), custom_save_path=${channel?.custom_save_path ?? 'none'})`);
     }
 
     return { type: 'channel', id: channelId, name: title };

@@ -437,6 +437,7 @@ export async function startQueueWorker() {
             v.priority DESC,
             v.is_short DESC,
             CASE WHEN v.download_progress > 0 THEN 0 ELSE 1 END,
+            COALESCE(v.retry_count, 0) ASC,
             v.created_at ASC
           LIMIT 1
         `).get(JSON.stringify([...activeProcesses.keys()])) as { id: string; title: string; channel_id: string } | undefined;
@@ -482,6 +483,28 @@ export async function startQueueWorker() {
     setWorkerShouldRun(false);
     addLog('Queue worker stopped.');
   }
+}
+
+/** yt-dlp's message when `--dateafter` excludes a video. */
+const DATE_FILTER_SKIP_RE = /upload date is not in range/i;
+
+/** A download yt-dlp skipped because of the channel's date filter. */
+export class DateFilterSkipError extends Error {}
+
+/**
+ * A channel's "only after" date as stored (YYYYMMDD), from either YYYYMMDD
+ * or YYYY-MM-DD; null for anything else (no filter).
+ */
+export function normalizeDateAfter(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  const match = /^(\d{4})-?(\d{2})-?(\d{2})$/.exec(trimmed);
+  if (!match) return null;
+  const [, y, m, d] = match;
+  const month = Number(m);
+  const day = Number(d);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${y}${m}${d}`;
 }
 
 /** The last_error of a download an admin cancelled (videos and music tracks). */
@@ -533,12 +556,14 @@ export function recordFailedAttempt(videoId: string, videoTitle: string, errMsg:
       `).run(errMsg, nextRetryCount, videoId);
       addLog(`Video "${videoTitle}" (${videoId}) permanently marked as failed after ${nextRetryCount} attempts.`);
     } else {
-      // Put the video back to pending but move it to the end of the queue by updating created_at
+      // Back to pending; the worker takes videos with fewer failed attempts first,
+      // so it goes to the end of the queue without touching created_at (which
+      // is when it was added, shown as such).
       db.prepare(`
         UPDATE videos
-        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, created_at = ?, retry_count = ?
+        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, is_manually_queued = 0, last_error = ?, retry_count = ?
         WHERE id = ?
-      `).run(errMsg, Date.now(), nextRetryCount, videoId);
+      `).run(errMsg, nextRetryCount, videoId);
     }
   }
 }
@@ -551,8 +576,17 @@ export function recordFailedAttempt(videoId: string, videoTitle: string, errMsg:
 async function runSingleDownload(videoId: string, videoTitle: string, channelId: string): Promise<void> {
   const db = getDb();
   try {
-    await downloadVideoFile(videoId, channelId);
-
+    try {
+      await downloadVideoFile(videoId, channelId);
+    } catch (err) {
+      if (!(err instanceof DateFilterSkipError)) throw err;
+      // Older than the channel's date filter: it leaves the catalog like any video the
+      // filter excludes (a later sync lists it again if the filter changes).
+      cleanupPartialFiles(videoId, channelId);
+      db.prepare("DELETE FROM videos WHERE id = ? AND download_status != 'completed'").run(videoId);
+      addLog(`Skipped "${videoTitle}" (${videoId}): ${err.message}`);
+      return;
+    }
     // Mark as completed
     db.prepare(`
       UPDATE videos
@@ -886,9 +920,9 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
     const sponsorBlockMarkArgs = buildSponsorBlockMarkArgs(sponsorBlockSettings);
     const sponsorBlockRemoveArgs = buildSponsorBlockRemoveArgs(sponsorBlockSettings);
 
-    const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
+    const channel = db.prepare('SELECT * FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null; date_after?: string | null } | undefined;
     const basePath = resolveChannelBaseDir(channel?.custom_save_path);
-    const videoRow = db.prepare('SELECT is_short, title FROM videos WHERE id = ?').get(videoId) as { is_short: number; title: string } | undefined;
+    const videoRow = db.prepare('SELECT is_short, title, is_manually_queued FROM videos WHERE id = ?').get(videoId) as { is_short: number; title: string; is_manually_queued: number | null } | undefined;
     // One folder per video: <base>/<Channel>/<Title> [<id>]/<Title> [<id>].<ext>
     // An existing folder for this id is reused (resume after a title change).
     const paths = resolveVideoPaths({
@@ -928,6 +962,12 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
       args.push('--merge-output-format', 'mp4');
       args.push(...sponsorBlockRemoveArgs);
     }
+
+    // The channel's "only videos after" date: flat listings rarely carry an
+    // upload date, so it is applied here, once yt-dlp knows it. A video an
+    // admin queued by hand is always downloaded.
+    const dateAfter = normalizeDateAfter(channel?.date_after);
+    if (dateAfter && videoRow?.is_manually_queued !== 1) args.push('--dateafter', dateAfter);
 
     args.push(
       '--no-playlist',
@@ -981,7 +1021,9 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
       settle(() => reject(err));
     });
 
+    let skippedByDate = false;
     child.stdout.on('data', (data) => {
+      if (DATE_FILTER_SKIP_RE.test(data.toString())) skippedByDate = true;
       const lines = data.toString().split(/[\r\n]+/);
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i];
@@ -1043,6 +1085,7 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
     let lastStderr = '';
     child.stderr.on('data', (data) => {
       const msg = data.toString().trim();
+      if (DATE_FILTER_SKIP_RE.test(msg)) skippedByDate = true;
       addLog(`yt-dlp [${videoId}] stderr : ${msg}`);
       if (msg) {
         lastStderr = msg;
@@ -1065,6 +1108,10 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
         const videoFile = found.videoFile;
         const videoUrlPath = found.videoUrl;
 
+        if ((!videoFile || !videoUrlPath) && skippedByDate) {
+          settle(() => reject(new DateFilterSkipError(`Uploaded before the channel's date filter (${dateAfter}).`)));
+          return;
+        }
         if (!videoFile || !videoUrlPath) {
           const errorMsg = lastStderr ? `yt-dlp finished but no video file was found : ${lastStderr}` : `yt-dlp finished but no video file was found`;
           settle(() => reject(new Error(errorMsg)));
@@ -1241,6 +1288,33 @@ export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pendin
 /** A YouTube channel id as reported by yt-dlp, or null when it is not a plain one. */
 function validChannelId(value: unknown): string | null {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : null;
+}
+
+/**
+ * Before a channel (or the whole library) is deleted: kills only the
+ * downloads actually running for its videos (and their comment extraction).
+ * Their files are left to the channel folder removal, so nothing is done per
+ * video: deleting a channel with thousands of videos stays instant.
+ */
+export function stopActiveDownloadsOfChannel(channelId: string): number {
+  const ids = [...activeProcesses.keys(), ...activeCommentProcesses.keys()];
+  if (ids.length === 0) return 0;
+  const db = getDb();
+  const owner = db.prepare('SELECT 1 FROM videos WHERE id = ? AND channel_id = ?');
+  let stopped = 0;
+  for (const id of new Set(ids)) {
+    if (!owner.get(id, channelId)) continue;
+    stopProgressWriter('videos', id);
+    const child = activeProcesses.get(id);
+    if (child) {
+      keepFilesOnExit.add(id); // the folder removal takes the files
+      killProcessTree(child);
+      activeProcesses.delete(id);
+    }
+    stopCommentExtraction(id);
+    stopped++;
+  }
+  return stopped;
 }
 
 /**
@@ -1430,7 +1504,7 @@ export function upsertIngestedChannel(
     options.download_videos !== undefined ? options.download_videos : null,
     options.download_shorts !== undefined ? options.download_shorts : null,
     options.download_lives !== undefined ? options.download_lives : null,
-    options.date_after !== undefined ? options.date_after : null,
+    options.date_after !== undefined ? normalizeDateAfter(options.date_after) : null,
   );
   return { savePathKept };
 }
@@ -1473,7 +1547,7 @@ export async function ingestUrl(
           downloadVideos: rest.download_videos !== undefined ? rest.download_videos : 1,
           downloadShorts: rest.download_shorts !== undefined ? rest.download_shorts : 0,
           downloadLives: rest.download_lives !== undefined ? rest.download_lives : 0,
-          dateAfter: rest.date_after !== undefined ? rest.date_after : null,
+          dateAfter: rest.date_after !== undefined ? normalizeDateAfter(rest.date_after) : null,
           customSavePath: rest.custom_save_path !== undefined ? rest.custom_save_path : null,
         }, rest));
         channelId = hints.channelId;
@@ -1606,6 +1680,7 @@ export async function ingestUrl(
 
     let videosQueued = 0;
     let skippedInvalid = 0;
+    db.transaction(() => {
     for (const entry of entries) {
       if (!entry || !isValidMediaId(entry.id)) {
         skippedInvalid++;
@@ -1645,6 +1720,7 @@ export async function ingestUrl(
 
       if (!priorStatus || priorStatus.download_status !== 'completed') videosQueued++;
     }
+    })();
 
     if (skippedInvalid > 0) addLog(`Playlist "${playlistTitle}": skipped ${skippedInvalid} entry(ies) without a valid video id.`);
 
@@ -1718,7 +1794,7 @@ export async function ingestUrl(
     const dlVideos = options.download_videos !== undefined ? options.download_videos : 1;
     const dlShorts = options.download_shorts !== undefined ? options.download_shorts : 0;
     const dlLives = options.download_lives !== undefined ? options.download_lives : 0;
-    const dateAfter = options.date_after !== undefined ? options.date_after : null;
+    const dateAfter = options.date_after !== undefined ? normalizeDateAfter(options.date_after) : null;
     const customSavePath = options.custom_save_path !== undefined ? options.custom_save_path : null;
 
     const { savePathKept } = upsertIngestedChannel(db, {
@@ -1747,6 +1823,7 @@ export async function ingestUrl(
 
     // Collect all nested leaf video entries recursively and tag their type
     const videoEntries: any[] = [];
+    const seenIds = new Set<string>();
     function collectEntries(item: any, currentType: 'video' | 'short' | 'live' = 'video') {
       if (!item) return;
       let nextType = currentType;
@@ -1764,7 +1841,8 @@ export async function ingestUrl(
           collectEntries(entry, nextType);
         }
       } else if (item.id && (item._type === 'url' || item._type === 'url_transparent' || !item._type)) {
-        if (!videoEntries.some(v => v.id === item.id)) {
+        if (!seenIds.has(item.id)) {
+          seenIds.add(item.id);
           item.contentType = nextType;
           videoEntries.push(item);
         }
@@ -1773,20 +1851,31 @@ export async function ingestUrl(
     collectEntries(data);
 
     // Insert new entries and update metadata for existing ones
+    // A listing never erases what is known (flat entries have no description,
+    // often no title, views or date), and an unchanged row is not written at all
+    // (no FTS trigger churn on every re-sync). @listedTitle is the listed
+    // title itself (null when the listing has none).
     const upsertVideo = db.prepare(`
       INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_short, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+      VALUES (@id, @title, @description, @channelId, @uploadDate, @duration, @viewCount, 'pending', @isShort, @createdAt)
       ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title,
-        description = COALESCE(excluded.description, description),
+        title = COALESCE(@listedTitle, title),
+        description = COALESCE(NULLIF(excluded.description, ''), description),
         view_count = COALESCE(excluded.view_count, view_count),
         duration = COALESCE(excluded.duration, duration),
         upload_date = COALESCE(excluded.upload_date, upload_date)
+      WHERE COALESCE(@listedTitle, videos.title) IS NOT videos.title
+        OR COALESCE(NULLIF(excluded.description, ''), videos.description) IS NOT videos.description
+        OR COALESCE(excluded.view_count, videos.view_count) IS NOT videos.view_count
+        OR COALESCE(excluded.duration, videos.duration) IS NOT videos.duration
+        OR COALESCE(excluded.upload_date, videos.upload_date) IS NOT videos.upload_date
     `);
 
     const checkExists = db.prepare('SELECT 1 FROM videos WHERE id = ?');
 
     let skippedInvalid = 0;
+    // One transaction for the whole listing (thousands of rows): one commit, not one per row.
+    db.transaction(() => {
     for (const entry of videoEntries) {
       if (entry.id === channelId) continue;
       if (!isValidMediaId(entry.id)) {
@@ -1812,22 +1901,24 @@ export async function ingestUrl(
       // Check if this is a genuinely new video before upserting
       const exists = checkExists.get(entry.id);
       
-      upsertVideo.run(
-        entry.id,
-        entry.title || `Video ${entry.id}`,
-        entry.description || '',
+      upsertVideo.run({
+        id: entry.id,
+        title: entry.title || `Video ${entry.id}`,
+        description: typeof entry.description === 'string' ? entry.description : null,
         channelId,
         uploadDate,
         duration,
         viewCount,
-        isShortFlag,
-        Date.now()
-      );
+        isShort: isShortFlag,
+        createdAt: Date.now(),
+        listedTitle: typeof entry.title === 'string' && entry.title ? entry.title : null,
+      });
 
       if (!exists) {
         videosAdded++;
       }
     }
+    })();
 
     if (skippedInvalid > 0) addLog(`Channel "${channelTitle}": skipped ${skippedInvalid} listing entry(ies) without a valid video id.`);
 

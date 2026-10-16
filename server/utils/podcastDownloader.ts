@@ -30,6 +30,7 @@ const G_PODCAST_DOWNLOAD_START_TIMES = Symbol.for('YouKeep.activePodcastDownload
 // musicDownloader.ts's G_MUSIC_CRON — the video, music, and podcast cron
 // jobs must be independently startable/stoppable, never sharing a handle.
 const G_PODCAST_CRON = Symbol.for('YouKeep.activePodcastCronJob');
+const G_PODCAST_KEEP_FILES = Symbol.for('YouKeep.podcastKeepFilesOnExit');
 
 if (!(G_PODCAST_PROCESSING in _g)) _g[G_PODCAST_PROCESSING] = false;
 if (!(G_PODCAST_SHOULD_RUN in _g)) _g[G_PODCAST_SHOULD_RUN] = false;
@@ -37,6 +38,9 @@ if (!(G_PODCAST_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_PODCAST_ACTIVE_DOWNLOAD_COUNT
 if (!(G_PODCAST_ABORT_CONTROLLERS in _g)) _g[G_PODCAST_ABORT_CONTROLLERS] = new Map<string, AbortController>();
 if (!(G_PODCAST_DOWNLOAD_START_TIMES in _g)) _g[G_PODCAST_DOWNLOAD_START_TIMES] = new Map<string, number>();
 if (!(G_PODCAST_CRON in _g)) _g[G_PODCAST_CRON] = null;
+if (!(G_PODCAST_KEEP_FILES in _g)) _g[G_PODCAST_KEEP_FILES] = new Set<string>();
+// Episodes whose download a pause aborted: their partial file survives the abort.
+const podcastKeepFilesOnExit: Set<string> = _g[G_PODCAST_KEEP_FILES];
 
 function getActivePodcastCronJob(): Cron | null { return _g[G_PODCAST_CRON]; }
 function setActivePodcastCronJob(val: Cron | null) { _g[G_PODCAST_CRON] = val; }
@@ -308,9 +312,10 @@ export async function ingestPodcastFeed(
   const initialVisibility = options.visibility || 'public';
 
   if (existingShow) {
+    // A feed that drops a field never erases what is known.
     db.prepare(`
       UPDATE podcast_shows
-      SET title = ?, description = ?, author = ?, cover_url = COALESCE(?, cover_url), language = ?,
+      SET title = ?, description = COALESCE(?, description), author = COALESCE(?, author), cover_url = COALESCE(?, cover_url), language = COALESCE(?, language),
           sync_status = COALESCE(?, sync_status), visibility = COALESCE(?, visibility), last_checked_at = ?
       WHERE id = ?
     `).run(showTitle, showDescription, showAuthor, showCoverUrl, showLanguage, options.sync_status ?? null, options.visibility ?? null, Date.now(), showId);
@@ -324,21 +329,32 @@ export async function ingestPodcastFeed(
   const items: any[] = Array.isArray(feed.items) ? feed.items : [];
   const upsertEpisode = db.prepare(`
     INSERT INTO podcast_episodes (id, show_id, title, description, audio_url, duration, episode_number, season_number, pub_date, pub_ts, download_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    VALUES (@id, @showId, @title, @description, @audioUrl, @duration, @episodeNumber, @seasonNumber, @pubDate, @pubTs, 'pending', @createdAt)
     ON CONFLICT(id) DO UPDATE SET
-      title = excluded.title,
-      description = excluded.description,
+      title = COALESCE(@listedTitle, title),
+      description = COALESCE(excluded.description, description),
       audio_url = excluded.audio_url,
       duration = COALESCE(excluded.duration, duration),
       episode_number = COALESCE(excluded.episode_number, episode_number),
       season_number = COALESCE(excluded.season_number, season_number),
       pub_date = COALESCE(excluded.pub_date, pub_date),
       pub_ts = CASE WHEN excluded.pub_date IS NULL THEN pub_ts ELSE excluded.pub_ts END
+    -- An unchanged episode is not written (no FTS trigger churn on every re-sync).
+    WHERE COALESCE(@listedTitle, podcast_episodes.title) IS NOT podcast_episodes.title
+      OR COALESCE(excluded.description, podcast_episodes.description) IS NOT podcast_episodes.description
+      OR excluded.audio_url IS NOT podcast_episodes.audio_url
+      OR COALESCE(excluded.duration, podcast_episodes.duration) IS NOT podcast_episodes.duration
+      OR COALESCE(excluded.episode_number, podcast_episodes.episode_number) IS NOT podcast_episodes.episode_number
+      OR COALESCE(excluded.season_number, podcast_episodes.season_number) IS NOT podcast_episodes.season_number
+      OR COALESCE(excluded.pub_date, podcast_episodes.pub_date) IS NOT podcast_episodes.pub_date
+      OR (excluded.pub_date IS NOT NULL AND excluded.pub_ts IS NOT podcast_episodes.pub_ts)
   `);
   const checkExists = db.prepare('SELECT 1 FROM podcast_episodes WHERE id = ?');
 
   let episodesAdded = 0;
   let skippedNoEnclosure = 0;
+  // One transaction for the whole feed: one commit, not one per episode.
+  db.transaction(() => {
   for (const item of items) {
     // Episodes with no enclosure URL are a normal, common feed shape (show
     // notes, trailers) — skip silently, don't insert a broken row.
@@ -358,22 +374,24 @@ export async function ingestPodcastFeed(
     const seasonNumber = Number.isFinite(parsedSeasonNumber) ? parsedSeasonNumber : null;
     const duration = parseItunesDuration(item.itunesDuration);
 
-    upsertEpisode.run(
-      episodeId,
+    upsertEpisode.run({
+      id: episodeId,
       showId,
-      item.title || `Episode ${episodeId}`,
-      stripHtmlToPlainText(item.contentSnippet || item.content),
+      title: item.title || `Episode ${episodeId}`,
+      description: stripHtmlToPlainText(item.contentSnippet || item.content),
       audioUrl,
       duration,
       episodeNumber,
       seasonNumber,
-      item.pubDate || null,
-      parsePubTs(item.pubDate),
-      Date.now()
-    );
+      pubDate: item.pubDate || null,
+      pubTs: parsePubTs(item.pubDate),
+      createdAt: Date.now(),
+      listedTitle: typeof item.title === 'string' && item.title ? item.title : null,
+    });
 
     if (!exists) episodesAdded++;
   }
+  })();
 
   if (skippedNoEnclosure > 0) {
     addLog(`Ingesting feed "${showTitle}": skipped ${skippedNoEnclosure} item(s) without an audio enclosure.`);
@@ -473,6 +491,7 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
 
     const controller = new AbortController();
     activePodcastAbortControllers.set(episodeId, controller);
+    podcastKeepFilesOnExit.delete(episodeId); // a fresh attempt: no pause pending for it
     activePodcastDownloadStartTimes.set(episodeId, attemptStartedAt);
     // Hoisted out of the try block so the catch block below can still reach
     // it to close the fd on every error/abort/timeout path — a write stream
@@ -592,7 +611,8 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       fileStream?.destroy();
       if (!settled) {
         addLog(`Download failed for episode ${episodeId}: ${err.message || err}`);
-        cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
+        // A pause (or a shutdown) keeps the partial file.
+        if (!podcastKeepFilesOnExit.delete(episodeId) && !isShuttingDown()) cleanupPartialPodcastFiles(episodeId, showId, { newerThan: attemptStartedAt });
       }
       settle(() => reject(err));
     }
@@ -656,6 +676,7 @@ export async function startPodcastQueueWorker() {
             AND e.id NOT IN (SELECT value FROM json_each(?))
           ORDER BY
             CASE WHEN e.download_progress > 0 THEN 0 ELSE 1 END,
+            COALESCE(e.retry_count, 0) ASC,
             e.created_at ASC
           LIMIT 1
         `).get(JSON.stringify([...activePodcastAbortControllers.keys()])) as { id: string; title: string; show_id: string } | undefined;
@@ -746,9 +767,9 @@ async function runSinglePodcastDownload(episodeId: string, episodeTitle: string,
       } else {
         db.prepare(`
           UPDATE podcast_episodes
-          SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?, retry_count = ?
+          SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
           WHERE id = ?
-        `).run(errMsg, Date.now(), nextRetryCount, episodeId);
+        `).run(errMsg, nextRetryCount, episodeId);
       }
     }
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -771,6 +792,8 @@ export function cancelPodcastDownload(episodeId: string, targetStatus: 'failed' 
   stopProgressWriter('podcast_episodes', episodeId);
 
   if (controller) {
+    if (keepProgressAndFiles) podcastKeepFilesOnExit.add(episodeId);
+    else podcastKeepFilesOnExit.delete(episodeId);
     try {
       controller.abort();
     } catch (e) {}

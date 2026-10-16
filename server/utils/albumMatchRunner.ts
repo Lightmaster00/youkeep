@@ -243,13 +243,16 @@ async function runAlbumMatchLoop(db: Database.Database): Promise<void> {
         outcome = await matchOne(db, item);
       } catch (err: any) {
         const message = err?.message || String(err);
-        s.processed++;
         s.errors++;
         s.lastError = message;
         if (!isTransientMatchError(err)) {
+          s.processed++;
           addLog(`Album matching: track ${item.id} failed and stays unchecked: ${message}`);
           continue;
         }
+        // iTunes is unavailable: this track is tried again after the backoff (and,
+        // if the run gives up, it stays unchecked for the next run).
+        queue().items.unshift(item);
         consecutiveFailures++;
         if (consecutiveFailures >= MAX_CONSECUTIVE_TRANSIENT_FAILURES) {
           s.state = 'failed';

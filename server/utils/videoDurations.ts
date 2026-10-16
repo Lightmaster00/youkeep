@@ -114,3 +114,35 @@ export async function backfillMissingVideoDurations(
   }
   return result;
 }
+
+/**
+ * Fills NULL size_bytes of completed videos from their stored file (the same
+ * lookup as serving and deleting: resolveStoredPath, every layout and base).
+ * Asynchronous and yielding every 200 rows, so a large library never stalls
+ * the server at startup. Replaces the old synchronous backfill that looked
+ * for `<data>/downloads/<channel id>/<id>.mp4`, a layout that no longer exists.
+ */
+export async function backfillMissingVideoSizes(db: Database.Database, opts: { downloadsDir?: string } = {}): Promise<{ checked: number; updated: number }> {
+  const rows = db.prepare(`
+    SELECT id, channel_id, title, local_video_path FROM videos
+    WHERE download_status = 'completed' AND size_bytes IS NULL AND local_video_path IS NOT NULL
+  `).all() as { id: string; channel_id: string; title: string | null; local_video_path: string }[];
+  const update = db.prepare('UPDATE videos SET size_bytes = ? WHERE id = ? AND size_bytes IS NULL');
+  const downloadsDir = opts.downloadsDir ?? getDownloadsDir();
+  let updated = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    try {
+      const loc = resolveStoredPath(db, row, { downloadsDir });
+      if (loc.videoFile && isContained(loc.baseDir, loc.videoFile)) {
+        const stat = await fs.promises.stat(loc.videoFile).catch(() => null);
+        if (stat?.isFile()) {
+          update.run(stat.size, row.id);
+          updated++;
+        }
+      }
+    } catch {}
+    if (i % 200 === 199) await new Promise((resolve) => setImmediate(resolve));
+  }
+  return { checked: rows.length, updated };
+}

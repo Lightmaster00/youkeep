@@ -27,6 +27,7 @@ const G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT = Symbol.for('YouKeep.musicClipBackfillsI
 // video cron jobs must be independently startable/stoppable, never sharing
 // a handle (stopping one must never stop the other).
 const G_MUSIC_CRON = Symbol.for('YouKeep.activeMusicCronJob');
+const G_MUSIC_KEEP_FILES = Symbol.for('YouKeep.musicKeepFilesOnExit');
 
 if (!(G_MUSIC_PROCESSING in _g)) _g[G_MUSIC_PROCESSING] = false;
 if (!(G_MUSIC_SHOULD_RUN in _g)) _g[G_MUSIC_SHOULD_RUN] = false;
@@ -35,6 +36,9 @@ if (!(G_MUSIC_PROCESSES in _g)) _g[G_MUSIC_PROCESSES] = new Map<string, any>();
 if (!(G_MUSIC_DOWNLOAD_START_TIMES in _g)) _g[G_MUSIC_DOWNLOAD_START_TIMES] = new Map<string, number>();
 if (!(G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT in _g)) _g[G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT] = new Set<string>();
 if (!(G_MUSIC_CRON in _g)) _g[G_MUSIC_CRON] = null;
+if (!(G_MUSIC_KEEP_FILES in _g)) _g[G_MUSIC_KEEP_FILES] = new Set<string>();
+// Tracks whose yt-dlp process a pause killed: their partial files survive the exit.
+const musicKeepFilesOnExit: Set<string> = _g[G_MUSIC_KEEP_FILES];
 
 function getActiveMusicCronJob(): Cron | null { return _g[G_MUSIC_CRON]; }
 function setActiveMusicCronJob(val: Cron | null) { _g[G_MUSIC_CRON] = val; }
@@ -256,14 +260,20 @@ function collectTrackEntries(data: any): any[] {
 
 /** Upserts every listed track for an artist in one transaction; returns how many are new. */
 function upsertArtistTracks(db: ReturnType<typeof getDb>, artistId: string, channelId: string, entries: any[]): number {
+  // A listing never erases what is known, and an unchanged row is not written
+  // (no FTS trigger churn on every re-sync). @listedTitle is the listed title (or null).
   const upsertTrack = db.prepare(`
     INSERT INTO music_tracks (id, artist_id, title, duration, view_count, upload_date, download_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
+    VALUES (@id, @artistId, @title, @duration, @viewCount, @uploadDate, 'pending', @createdAt)
     ON CONFLICT(id) DO UPDATE SET
-      title = excluded.title,
+      title = COALESCE(@listedTitle, title),
       view_count = COALESCE(excluded.view_count, view_count),
       duration = COALESCE(excluded.duration, duration),
       upload_date = COALESCE(excluded.upload_date, upload_date)
+    WHERE COALESCE(@listedTitle, music_tracks.title) IS NOT music_tracks.title
+      OR COALESCE(excluded.view_count, music_tracks.view_count) IS NOT music_tracks.view_count
+      OR COALESCE(excluded.duration, music_tracks.duration) IS NOT music_tracks.duration
+      OR COALESCE(excluded.upload_date, music_tracks.upload_date) IS NOT music_tracks.upload_date
   `);
   const checkExists = db.prepare('SELECT 1 FROM music_tracks WHERE id = ?');
   let tracksAdded = 0;
@@ -276,7 +286,10 @@ function upsertArtistTracks(db: ReturnType<typeof getDb>, artistId: string, chan
         continue;
       }
       const exists = checkExists.get(entry.id);
-      upsertTrack.run(entry.id, artistId, entry.title || `Track ${entry.id}`, entry.duration || null, entry.view_count || null, entry.upload_date || null, Date.now());
+      upsertTrack.run({
+        id: entry.id, artistId, title: entry.title || `Track ${entry.id}`, duration: entry.duration || null, viewCount: entry.view_count || null,
+        uploadDate: entry.upload_date || null, createdAt: Date.now(), listedTitle: typeof entry.title === 'string' && entry.title ? entry.title : null,
+      });
       if (!exists) tracksAdded++;
     }
   })();
@@ -301,7 +314,7 @@ function upsertArtistRow(
   if (existingArtist) {
     db.prepare(`
       UPDATE music_artists
-      SET name = ?, description = COALESCE(?, description), avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url),
+      SET name = ?, description = COALESCE(NULLIF(?, ''), description), avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url),
           sync_status = COALESCE(?, sync_status), visibility = COALESCE(?, visibility)
       WHERE id = ?
     `).run(meta.name, meta.description ?? null, meta.avatarUrl, meta.bannerUrl ?? null, options.sync_status ?? null, options.visibility ?? null, artistId);
@@ -341,7 +354,7 @@ export async function importArtistTracks(artistId: string, fetchUrl: string): Pr
   const name = data.channel || data.uploader || data.title || artist.name;
   db.prepare(`
     UPDATE music_artists
-    SET name = ?, description = ?, avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url)
+    SET name = ?, description = COALESCE(NULLIF(?, ''), description), avatar_url = COALESCE(?, avatar_url), banner_url = COALESCE(?, banner_url)
     WHERE id = ?
   `).run(name, meta.description, meta.avatarUrl, meta.bannerUrl, artistId);
 
@@ -506,9 +519,13 @@ export async function ingestMusicUrl(
   const exists = db.prepare('SELECT 1 FROM music_tracks WHERE id = ?').get(trackId);
   db.prepare(`
     INSERT INTO music_tracks (id, artist_id, title, duration, view_count, upload_date, download_status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
-    ON CONFLICT(id) DO UPDATE SET title = excluded.title
-  `).run(trackId, artistId, data.title || `Track ${trackId}`, data.duration || null, data.view_count || null, data.upload_date || null, Date.now());
+    VALUES (@id, @artistId, @title, @duration, @viewCount, @uploadDate, 'pending', @createdAt)
+    ON CONFLICT(id) DO UPDATE SET title = COALESCE(@listedTitle, title)
+    WHERE COALESCE(@listedTitle, music_tracks.title) IS NOT music_tracks.title
+  `).run({
+    id: trackId, artistId, title: data.title || `Track ${trackId}`, duration: data.duration || null, viewCount: data.view_count || null,
+    uploadDate: data.upload_date || null, createdAt: Date.now(), listedTitle: typeof data.title === 'string' && data.title ? data.title : null,
+  });
 
   startWorkerIfDownloading(db, artistId);
 
@@ -577,6 +594,7 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
       // Own process group: killing it also kills the ffmpeg yt-dlp started.
       const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
       activeMusicProcesses.set(trackId, child);
+      musicKeepFilesOnExit.delete(trackId); // a fresh attempt: no pause pending for it
       activeMusicDownloadStartTimes.set(trackId, attemptStartedAt);
       // Progress is persisted at most once per second (see progressWriter.ts).
       const progressWriter = startProgressWriter(db, 'music_tracks', trackId);
@@ -728,7 +746,8 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
           }
         } else {
           const errorMsg = lastStderr ? `yt-dlp failed (code ${code}): ${lastStderr}` : `yt-dlp failed with code ${code}`;
-          cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
+          // A pause (or a shutdown) keeps the partial files for resume.
+          if (!musicKeepFilesOnExit.delete(trackId) && !isShuttingDown()) cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
           settle(() => reject(new Error(errorMsg)));
         }
       });
@@ -852,6 +871,7 @@ export async function startMusicQueueWorker() {
             AND t.id NOT IN (SELECT value FROM json_each(?))
           ORDER BY
             CASE WHEN t.download_progress > 0 THEN 0 ELSE 1 END,
+            COALESCE(t.retry_count, 0) ASC,
             t.created_at ASC
           LIMIT 1
         `).get(JSON.stringify([...activeMusicProcesses.keys()])) as { id: string; title: string; artist_id: string } | undefined;
@@ -939,9 +959,9 @@ export function recordFailedMusicAttempt(trackId: string, trackTitle: string, er
     } else {
       db.prepare(`
         UPDATE music_tracks
-        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, created_at = ?, retry_count = ?
+        SET download_status = 'pending', download_progress = 0, download_speed = null, download_eta = null, last_error = ?, retry_count = ?
         WHERE id = ?
-      `).run(errMsg, Date.now(), nextRetryCount, trackId);
+      `).run(errMsg, nextRetryCount, trackId);
     }
   }
 }
@@ -1024,6 +1044,8 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
   stopProgressWriter('music_tracks', trackId);
 
   if (child) {
+    if (keepProgressAndFiles) musicKeepFilesOnExit.add(trackId);
+    else musicKeepFilesOnExit.delete(trackId);
     killProcessTree(child);
     activeMusicProcesses.delete(trackId);
     activeMusicDownloadStartTimes.delete(trackId);

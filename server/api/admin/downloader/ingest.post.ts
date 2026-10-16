@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
-import { ingestUrl, syncAllChannels } from '../../../utils/downloader';
+import { ingestUrl, normalizeDateAfter, syncAllChannels } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -26,12 +26,17 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // "Only videos after": YYYY-MM-DD (the date input) or YYYYMMDD, stored as YYYYMMDD.
+  if (date_after !== undefined && date_after !== null && date_after !== '' && !normalizeDateAfter(date_after)) {
+    throw createError({ statusCode: 400, statusMessage: 'The date must be YYYY-MM-DD.' });
+  }
+
   try {
     const result = await ingestUrl(url, {
       download_videos: download_videos !== undefined ? (download_videos ? 1 : 0) : undefined,
       download_shorts: download_shorts !== undefined ? (download_shorts ? 1 : 0) : undefined,
       download_lives: download_lives !== undefined ? (download_lives ? 1 : 0) : undefined,
-      date_after: date_after !== undefined ? date_after : undefined,
+      date_after: date_after !== undefined ? (normalizeDateAfter(date_after) ?? null) : undefined,
       sync_status: sync_status !== undefined ? sync_status : undefined,
       visibility: visibility !== undefined ? visibility : undefined,
       custom_save_path: custom_save_path !== undefined ? custom_save_path : undefined,
