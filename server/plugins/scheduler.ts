@@ -5,7 +5,7 @@ import { getDb } from '../utils/db';
 import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports } from '../utils/musicDownloader';
 import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler } from '../utils/podcastDownloader';
 import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
-import { sweepThumbCache } from '../utils/thumbnails';
+import { startThumbCacheSweep, sweepThumbCache } from '../utils/thumbnails';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
 function runDurationBackfill() {
@@ -39,6 +39,8 @@ export default defineNitroPlugin((nitroApp) => {
   } catch (err) {
     console.error('YouKeep Scheduler Plugin: thumbnail cache sweep failed:', err);
   }
+  // ...and again every day while the server runs.
+  nitroApp.hooks.hook('close', startThumbCacheSweep());
 
   console.log('YouKeep Scheduler Plugin: Initializing background cron jobs...');
   initScheduler();

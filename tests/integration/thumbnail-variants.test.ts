@@ -12,7 +12,7 @@ import { getPodcastDownloadsDir } from '../../server/utils/podcastDownloader';
 import { canAccessVideo } from '../../server/utils/auth';
 import { buildVideoPaths } from '../../server/utils/videoPaths';
 import {
-  THUMB_CACHE_CONTROL, getThumbCacheDir, imageWidthFromHeader, parseThumbWidth, sweepThumbCache, thumbnailDeps,
+  THUMB_CACHE_CONTROL, THUMB_CACHE_MAX_AGE_MS, THUMB_FAILURE_TTL_MS, THUMB_MAX_CONCURRENT, THUMB_MAX_WAITING, clearThumbWidthCache, getThumbCacheDir, startThumbCacheSweep, imageWidthFromHeader, parseThumbWidth, sweepThumbCache, thumbnailDeps,
 } from '../../server/utils/thumbnails';
 import {
   assertInTmp, createTestDb, insertChannel, insertVideo, insertMusicArtist, insertMusicTrack, insertPodcastShow, insertPodcastEpisode, mockEvent,
@@ -66,6 +66,7 @@ beforeEach(() => {
   (globalThis as any).canAccessPodcastEpisode = async () => true;
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   ffmpegCalls = [];
+  clearThumbWidthCache();
   ffmpegImpl = async (args) => writeOutput(args);
   vi.spyOn(thumbnailDeps, 'runFfmpeg').mockImplementation(async (args) => { ffmpegCalls.push(args); await ffmpegImpl(args); });
   assertInTmp(getThumbCacheDir());
@@ -160,11 +161,57 @@ describe('GET /downloads/...?w= (video thumbnails)', () => {
     const event = videoEvent('v4.jpg', '?w=480');
     expect(await body(await videoRoute(event))).toContain('original-image-bytes');
     expect(event.node.res.headers['cache-control']).toBe('private, max-age=86400, must-revalidate');
-    expect(cacheFiles()).toEqual([]);
+    // Only a failure marker: no partial image.
+    expect(cacheFiles().filter((f) => !f.endsWith('.failed'))).toEqual([]);
+    expect(cacheFiles().filter((f) => f.endsWith('.failed'))).toHaveLength(1);
 
-    ffmpegImpl = async () => {}; // exits 0 without writing anything
+    // The same (corrupt) source is not handed to ffmpeg again for a while, whatever the width.
+    const calls = ffmpegCalls.length;
+    for (const w of ['?w=480', '?w=320', '?w=160']) {
+      expect(await body(await videoRoute(videoEvent('v4.jpg', w)))).toContain('original-image-bytes');
+    }
+    expect(ffmpegCalls.length).toBe(calls);
+
+    // After the failure TTL it is tried again; exiting 0 without output is a failure too.
+    for (const f of cacheFiles()) {
+      const old = new Date(Date.now() - THUMB_FAILURE_TTL_MS - 1000);
+      fs.utimesSync(path.join(getThumbCacheDir(), f), old, old);
+    }
+    ffmpegImpl = async () => {};
     expect(await body(await videoRoute(videoEvent('v4.jpg', '?w=480')))).toContain('original-image-bytes');
-    expect(cacheFiles()).toEqual([]);
+    expect(ffmpegCalls.length).toBe(calls + 1);
+    expect(cacheFiles().filter((f) => !f.endsWith('.failed'))).toEqual([]);
+  });
+
+  it('serves the original at once when too many requests already wait for ffmpeg', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    ffmpegImpl = async (args) => { await gate; writeOutput(args); };
+    const ids = Array.from({ length: THUMB_MAX_CONCURRENT + THUMB_MAX_WAITING + 3 }, (_, i) => `q${i}`);
+    for (const id of ids) seedVideoThumb(id, jpeg(1280));
+    const pending = ids.map((id) => videoRoute(videoEvent(`${id}.jpg`, '?w=160')));
+    // The overflow requests answer without waiting.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(ffmpegCalls.length).toBe(THUMB_MAX_CONCURRENT);
+    release();
+    const results = await Promise.all(pending.map(async (p) => body(await p)));
+    expect(results.filter((b) => b.includes('original-image-bytes')).length).toBe(3);
+  });
+
+  it('reads a source width once per file version, and a hit refreshes the variant\'s last access', async () => {
+    seedVideoThumb('w1', jpeg(1280));
+    const readWidth = vi.spyOn(thumbnailDeps, 'readWidth');
+    await body(await videoRoute(videoEvent('w1.jpg', '?w=480')));
+    await body(await videoRoute(videoEvent('w1.jpg', '?w=320')));
+    expect(readWidth).toHaveBeenCalledTimes(1);
+
+    // A hit on an old variant touches it, so the sweep (by last access) keeps it.
+    const variant = path.join(getThumbCacheDir(), cacheFiles().find((f) => f.endsWith('-480.jpg'))!);
+    const old = new Date(Date.now() - THUMB_CACHE_MAX_AGE_MS - 60_000);
+    fs.utimesSync(variant, old, old);
+    await body(await videoRoute(videoEvent('w1.jpg', '?w=480')));
+    expect(sweepThumbCache()).toBe(0);
+    expect(fs.existsSync(variant)).toBe(true);
   });
 
   it('is authorised exactly like the original: denied is the same 404, and a share token works for both', async () => {
@@ -328,5 +375,24 @@ describe('thumbnail cache sweep', () => {
 
   it('a missing cache folder is fine', () => {
     expect(sweepThumbCache()).toBe(0);
+  });
+});
+
+describe('daily thumbnail cache sweep', () => {
+  it('sweeps on an interval until stopped', async () => {
+    vi.useFakeTimers();
+    try {
+      fs.mkdirSync(getThumbCacheDir(), { recursive: true });
+      const stale = path.join(getThumbCacheDir(), 'old-160.jpg');
+      fs.writeFileSync(stale, 'x');
+      const old = new Date(Date.now() - THUMB_CACHE_MAX_AGE_MS - 60_000);
+      fs.utimesSync(stale, old, old);
+      const stop = startThumbCacheSweep(1000);
+      vi.advanceTimersByTime(1000);
+      expect(fs.existsSync(stale)).toBe(false);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
