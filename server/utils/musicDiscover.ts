@@ -212,16 +212,22 @@ export function listRecentAlbums(db: Database.Database, session: SessionForVisib
 // Visible artists with playable tracks that the user has played at most
 // EXPLORE_MAX_PLAYS times, biggest catalogues first.
 export function listArtistsToExplore(db: Database.Database, session: DiscoverUserSession, limit: number): any[] {
+  // The user's plays are counted per artist once, then joined: a per-artist
+  // correlated count re-read the whole play history for every track row.
   return db.prepare(`
+    WITH plays AS (
+      SELECT ht.artist_id, COUNT(*) as c
+      FROM music_play_history h
+      JOIN music_tracks ht ON ht.id = h.track_id
+      WHERE h.user_id = ?
+      GROUP BY ht.artist_id
+    )
     SELECT a.id, a.name, a.avatar_url, COUNT(t.id) as track_count
     FROM music_artists a
     JOIN music_tracks t ON t.artist_id = a.id
+    LEFT JOIN plays p ON p.artist_id = a.id
     WHERE ${visibleTrackWhere(session)}
-      AND (
-        SELECT COUNT(*) FROM music_play_history h
-        JOIN music_tracks ht ON ht.id = h.track_id
-        WHERE h.user_id = ? AND ht.artist_id = a.id
-      ) <= ?
+      AND COALESCE(p.c, 0) <= ?
     GROUP BY a.id
     ORDER BY track_count DESC, a.name ASC, a.id ASC
     LIMIT ?
