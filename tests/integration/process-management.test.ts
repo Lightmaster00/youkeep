@@ -152,12 +152,16 @@ describe('queue worker system errors', () => {
         return typeof value === 'function' ? value.bind(target) : value;
       },
     });
-    const worker = startQueueWorker();
-    for (let i = 0; i < 12; i++) await vi.advanceTimersByTimeAsync(60_000);
+    let finished = false;
+    const worker = startQueueWorker().then(() => { finished = true; });
+    // Real I/O (the free-space check) happens between fake timer steps: step until done.
+    const step = async () => { await vi.advanceTimersByTimeAsync(60_000); await new Promise((r) => setImmediate(r)); };
+    for (let i = 0; i < 200 && failures > 0; i++) await step();
     expect(failures).toBe(0);
-    // Still polling: no "worker stopped" after the errors.
+    for (let i = 0; i < 5; i++) await step();
+    expect(finished).toBe(false); // still polling after 7 errors in a row
     stopVideoWorkerNow();
-    await vi.advanceTimersByTimeAsync(10_000);
+    for (let i = 0; i < 200 && !finished; i++) await step();
     await worker;
     const logs = (console.log as any).mock.calls.map((c: any[]) => String(c[0]));
     expect(logs.some((l: string) => l.includes('7 in a row'))).toBe(true);
