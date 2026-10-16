@@ -31,13 +31,75 @@ export function isSecureRequest(event: H3Event): boolean {
   return getForwardedProto(event) === 'https';
 }
 
-// Regenerated on every process start — invalidates in-flight CSRF tokens on
-// restart/deploy, but server/middleware/csrf.ts self-heals this transparently
-// on the user's next GET request, so it is never user-visible.
-const CSRF_SECRET = crypto.randomBytes(32);
+// The HMAC secret behind CSRF tokens is stored in the settings table
+// (key csrf_secret, 32 random bytes as hex), created on first use, so tokens
+// stay valid across restarts. Read once per process. Without a settings
+// table (some tests) an in-memory secret is used instead.
+let csrfSecret: Buffer | null = null;
+
+function getCsrfSecret(): Buffer {
+  if (csrfSecret) return csrfSecret;
+  try {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'csrf_secret'").get() as { value: string } | undefined;
+    if (row && /^[0-9a-f]{64}$/.test(row.value)) {
+      csrfSecret = Buffer.from(row.value, 'hex');
+    } else {
+      const fresh = crypto.randomBytes(32);
+      db.prepare(`
+        INSERT INTO settings (key, value) VALUES ('csrf_secret', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(fresh.toString('hex'));
+      csrfSecret = fresh;
+    }
+  } catch {
+    csrfSecret = crypto.randomBytes(32);
+  }
+  return csrfSecret;
+}
+
+/** Forgets the cached CSRF secret, as a restart would (tests only). */
+export function resetCsrfSecretCacheForTests(): void {
+  csrfSecret = null;
+}
 
 export function computeCsrfToken(sessionId: string): string {
-  return crypto.createHmac('sha256', CSRF_SECRET).update(sessionId).digest('hex');
+  return crypto.createHmac('sha256', getCsrfSecret()).update(sessionId).digest('hex');
+}
+
+/** Constant-time string comparison; false for anything that is not two strings. */
+export function safeEqual(a: unknown, b: unknown): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+}
+
+/** Removes both the session cookie and its CSRF companion. */
+export function clearSessionCookies(event: H3Event): void {
+  deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
+  deleteCookie(event, CSRF_COOKIE_NAME, { path: '/' });
+}
+
+/** Deletes every expired session row; returns how many were removed. Never throws. */
+export function purgeExpiredSessions(): number {
+  try {
+    return getDb().prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now()).changes;
+  } catch (err) {
+    console.error('YouKeep: could not purge expired sessions:', err);
+    return 0;
+  }
+}
+
+export const SESSION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
+
+/** Purges expired sessions now and every hour; returns a function that stops it. */
+export function startSessionCleanup(): () => void {
+  purgeExpiredSessions();
+  const timer = setInterval(purgeExpiredSessions, SESSION_PURGE_INTERVAL_MS);
+  timer.unref?.();
+  return () => clearInterval(timer);
 }
 
 const BCRYPT_ROUNDS = 10;
@@ -114,8 +176,7 @@ export async function destroySession(event: H3Event): Promise<void> {
   if (sessionId) {
     const db = getDb();
     db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
-    deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
-    deleteCookie(event, CSRF_COOKIE_NAME, { path: '/' });
+    clearSessionCookies(event);
   }
 }
 
@@ -145,7 +206,7 @@ export async function getUserFromSession(event: H3Event): Promise<UserSession | 
   `).get(sessionId) as { expires_at: number; id: string; username: string; role: 'admin' | 'user'; must_change_password: number } | undefined;
 
   if (!session) {
-    deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
+    clearSessionCookies(event);
     // A stale cookie must not hide a valid Bearer token sent alongside it.
     return getUserFromBearer(event);
   }
@@ -153,7 +214,7 @@ export async function getUserFromSession(event: H3Event): Promise<UserSession | 
   // Check expiration
   if (Date.now() > session.expires_at) {
     db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
-    deleteCookie(event, SESSION_COOKIE_NAME, { path: '/' });
+    clearSessionCookies(event);
     return getUserFromBearer(event);
   }
 
@@ -227,7 +288,7 @@ export async function canAccessVideo(videoId: string, event: any, token?: string
   if (!video) return false;
 
   // If the share token is valid, access is granted
-  if (token && video.share_token && token === video.share_token) {
+  if (token && video.share_token && safeEqual(token, video.share_token)) {
     return true;
   }
 

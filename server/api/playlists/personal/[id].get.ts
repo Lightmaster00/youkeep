@@ -1,4 +1,5 @@
 import { defineEventHandler, createError, getQuery } from 'h3';
+import { safeEqual } from '../../../utils/auth';
 
 export default defineEventHandler(async (event) => {
   const id = event.context.params?.id;
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
   const token = query.token;
 
   const isOwner = user && (playlist.user_id === user.id || user.role === 'admin');
-  const hasValidToken = token && playlist.share_token === token;
+  const hasValidToken = !!playlist.share_token && safeEqual(token, playlist.share_token);
   const isPublic = playlist.visibility === 'public';
 
   if (!isOwner && !isPublic && !hasValidToken) {
