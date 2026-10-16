@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import handler from '../../server/api/music/tracks/[id]/play.post';
 import {
@@ -16,6 +16,9 @@ let db: Database.Database;
 beforeEach(() => {
   db = createTestDb();
   (globalThis as any).getDb = () => db;
+});
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function loginAs(userId: string, role: 'admin' | 'user' = 'user') {
@@ -56,10 +59,49 @@ describe('POST /api/music/tracks/[id]/play', () => {
     insertMusicArtist(db, { id: 'a1', visibility: 'public' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
     const cookie = loginAs('u1');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1_000_000_000_000);
 
     expect(((await handler(eventFor('t1', cookie))) as any).recorded).toBe(true);
+    vi.setSystemTime(1_000_000_000_000 + 31_000);
     await handler(eventFor('t1', cookie));
     const rows = db.prepare('SELECT track_id, user_id FROM music_play_history').all() as any[];
     expect(rows).toEqual([{ track_id: 't1', user_id: 'u1' }, { track_id: 't1', user_id: 'u1' }]);
+  });
+
+  it('ignores a replay of the same track by the same user within 30 s', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    insertMusicTrack(db, { id: 't1', artistId: 'a1' });
+    insertMusicTrack(db, { id: 't2', artistId: 'a1' });
+    const cookie = loginAs('u1');
+    const other = loginAs('u2');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(1_000_000_000_000);
+
+    expect(((await handler(eventFor('t1', cookie))) as any).recorded).toBe(true);
+    vi.setSystemTime(1_000_000_000_000 + 29_000);
+    expect(await handler(eventFor('t1', cookie))).toEqual({ recorded: false, reason: 'duplicate' });
+    // Another track, or another user, is not a duplicate.
+    expect(((await handler(eventFor('t2', cookie))) as any).recorded).toBe(true);
+    expect(((await handler(eventFor('t1', other))) as any).recorded).toBe(true);
+    expect((db.prepare('SELECT COUNT(*) as n FROM music_play_history').get() as any).n).toBe(3);
+  });
+
+  it('records at most 120 plays per user per hour', async () => {
+    insertMusicArtist(db, { id: 'a1', visibility: 'public' });
+    for (let i = 0; i < 125; i++) insertMusicTrack(db, { id: `t${i}`, artistId: 'a1' });
+    const cookie = loginAs('u1');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const start = 1_000_000_000_000;
+    let recorded = 0;
+    for (let i = 0; i < 125; i++) {
+      vi.setSystemTime(start + i * 1000);
+      if (((await handler(eventFor(`t${i}`, cookie))) as any).recorded) recorded++;
+    }
+    expect(recorded).toBe(120);
+    expect(await handler(eventFor('t124', cookie))).toEqual({ recorded: false, reason: 'rate_limited' });
+    // An hour after the first plays, there is room again.
+    vi.setSystemTime(start + 3_600_000 + 5_000);
+    expect(((await handler(eventFor('t124', cookie))) as any).recorded).toBe(true);
   });
 });
