@@ -115,3 +115,32 @@ export function recordFailedLoginAttempt(ip: string, username: string): void {
 export function clearLoginAttemptsFor(ip: string, username: string): void {
   clearLoginAttempts(loginUserKey(ip, username));
 }
+
+// --- Generic per-key action limiter ------------------------------------------
+// Sliding window of timestamps per key, e.g. "20 video reports per user per hour".
+
+const actionLog = new Map<string, number[]>();
+
+/** Records one action for `key`; false (nothing recorded) when `max` per `windowMs` is already reached. */
+export function consumeRateLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const recent = (actionLog.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) {
+    actionLog.set(key, recent);
+    return false;
+  }
+  recent.push(now);
+  actionLog.delete(key);
+  if (actionLog.size >= MAX_TRACKED_KEYS) {
+    const oldest = actionLog.keys().next().value;
+    if (oldest !== undefined) actionLog.delete(oldest);
+  }
+  actionLog.set(key, recent);
+  return true;
+}
+
+/** Forgets every login attempt and action (tests only). */
+export function resetAllRateLimits(): void {
+  resetAllLoginAttempts();
+  actionLog.clear();
+}
