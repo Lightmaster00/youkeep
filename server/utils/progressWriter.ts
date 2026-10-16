@@ -147,3 +147,11 @@ export function stopProgressWriter(table: ProgressTable, id: string): void {
   writer.stop();
   writers.delete(key);
 }
+
+/** Shutdown: flushes and stops every live writer. Returns how many there were. */
+export function stopAllProgressWriters(): number {
+  const count = writers.size;
+  for (const writer of writers.values()) writer.stop();
+  writers.clear();
+  return count;
+}

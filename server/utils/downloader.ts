@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
@@ -7,12 +7,13 @@ import { Cron } from 'croner';
 import { getDb } from './db';
 import { getDataDir } from './dataDir';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
 import { extractInfoFields } from './videoInfo';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { channelBaseDirs, isContained, isValidMediaId, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
+import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -96,6 +97,7 @@ const G_SHOULD_RUN = Symbol.for('YouKeep.workerShouldRun');
 const G_PROCESSES = Symbol.for('YouKeep.activeProcesses');
 const G_ACTIVE_DOWNLOAD_COUNT = Symbol.for('YouKeep.activeDownloadCount');
 const G_KEEP_FILES_ON_EXIT = Symbol.for('YouKeep.keepFilesOnExit');
+const G_COMMENT_PROCESSES = Symbol.for('YouKeep.activeCommentProcesses');
 
 if (!(G_CRON in _g)) _g[G_CRON] = null;
 if (!(G_PROCESSING in _g)) _g[G_PROCESSING] = false;
@@ -103,6 +105,7 @@ if (!(G_SHOULD_RUN in _g)) _g[G_SHOULD_RUN] = false;
 if (!(G_PROCESSES in _g)) _g[G_PROCESSES] = new Map<string, any>();
 if (!(G_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_ACTIVE_DOWNLOAD_COUNT] = 0;
 if (!(G_KEEP_FILES_ON_EXIT in _g)) _g[G_KEEP_FILES_ON_EXIT] = new Set<string>();
+if (!(G_COMMENT_PROCESSES in _g)) _g[G_COMMENT_PROCESSES] = new Map<string, any>();
 
 function getActiveCronJob(): Cron | null { return _g[G_CRON]; }
 function setActiveCronJob(val: Cron | null) { _g[G_CRON] = val; }
@@ -133,6 +136,8 @@ function getWorkerShouldRun(): boolean { return _g[G_SHOULD_RUN]; }
 function setWorkerShouldRun(val: boolean) { _g[G_SHOULD_RUN] = val; }
 
 export const activeProcesses: Map<string, any> = _g[G_PROCESSES];
+/** The parallel comment extraction of each running video download. */
+export const activeCommentProcesses: Map<string, any> = _g[G_COMMENT_PROCESSES];
 // Videos whose yt-dlp process was killed by a pause (cancelDownload with
 // keepProgressAndFiles): their partial files must survive the process exit.
 const keepFilesOnExit: Set<string> = _g[G_KEEP_FILES_ON_EXIT];
@@ -142,7 +147,7 @@ const keepFilesOnExit: Set<string> = _g[G_KEEP_FILES_ON_EXIT];
  * partial files, unless the exit comes from a pause that keeps them for resume.
  */
 export function cleanupAfterFailedExit(videoId: string, channelId: string): void {
-  if (keepFilesOnExit.delete(videoId)) return;
+  if (keepFilesOnExit.delete(videoId) || isShuttingDown()) return;
   cleanupPartialFiles(videoId, channelId);
 }
 
@@ -277,28 +282,54 @@ export async function getYtdlPath(): Promise<string> {
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
 
   const tmpPath = ytdlPath + '.tmp';
-  const downloadFile = (currentUrl: string): Promise<void> => {
+  // The whole download (redirects included) must finish within YTDL_UPDATE_TIMEOUT_MS.
+  const deadline = Date.now() + YTDL_UPDATE_TIMEOUT_MS;
+  const downloadFile = (currentUrl: string, redirectsLeft = 5): Promise<void> => {
     return new Promise<void>((resolve, reject) => {
-      https.get(currentUrl, { headers: { 'User-Agent': 'YouKeep-Archiver' } }, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          const redirectUrl = response.headers.location!;
-          downloadFile(redirectUrl).then(resolve).catch(reject);
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        reject(new Error(`Timed out downloading yt-dlp after ${YTDL_UPDATE_TIMEOUT_MS / 1000} s`));
+        return;
+      }
+      let file: fs.WriteStream | null = null;
+      const req = https.get(currentUrl, { headers: { 'User-Agent': 'YouKeep-Archiver' } }, (response) => {
+        if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
+          response.resume();
+          clearTimeout(timer);
+          const location = response.headers.location;
+          if (!location || redirectsLeft <= 0) {
+            reject(new Error('Too many redirects while downloading yt-dlp'));
+            return;
+          }
+          downloadFile(new URL(location, currentUrl).toString(), redirectsLeft - 1).then(resolve).catch(reject);
         } else if (response.statusCode === 200) {
-          const file = fs.createWriteStream(tmpPath);
+          file = fs.createWriteStream(tmpPath);
           response.pipe(file);
           file.on('finish', () => {
-            file.close();
+            clearTimeout(timer);
+            file!.close();
             resolve();
           });
           file.on('error', (err) => {
-            file.close();
-            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+            clearTimeout(timer);
+            file!.close();
             reject(err);
           });
         } else {
+          response.resume();
+          clearTimeout(timer);
           reject(new Error(`Server responded with status code: ${response.statusCode}`));
         }
-      }).on('error', reject);
+      });
+      const timer = setTimeout(() => {
+        req.destroy(new Error(`Timed out downloading yt-dlp after ${YTDL_UPDATE_TIMEOUT_MS / 1000} s`));
+        file?.destroy();
+      }, remaining);
+      req.on('error', (err) => {
+        clearTimeout(timer);
+        file?.destroy();
+        reject(err);
+      });
     });
   };
 
@@ -332,7 +363,7 @@ export async function updateYtdl(): Promise<string> {
   const env = buildSpawnEnv();
 
   try {
-    const res = await runProcessAsync(ytdlPath, ['-U'], env);
+    const res = await runProcessAsync(ytdlPath, ['-U'], env, undefined, YTDL_UPDATE_TIMEOUT_MS);
     const output = res.stdout || res.stderr || '';
     addLog(`yt-dlp update result: ${output.trim()}`);
     return output;
@@ -401,14 +432,16 @@ export async function startQueueWorker() {
           JOIN channels c ON v.channel_id = c.id
           WHERE v.download_status = 'pending' AND (c.sync_status = 'downloading' OR v.is_manually_queued = 1)
             AND v.id IS NOT NULL AND v.id != ''
+            AND v.id NOT IN (SELECT value FROM json_each(?))
           ORDER BY
             v.priority DESC,
             v.is_short DESC,
             CASE WHEN v.download_progress > 0 THEN 0 ELSE 1 END,
             v.created_at ASC
           LIMIT 1
-        `).get() as { id: string; title: string; channel_id: string } | undefined;
+        `).get(JSON.stringify([...activeProcesses.keys()])) as { id: string; title: string; channel_id: string } | undefined;
 
+        consecutiveSystemErrors = 0;
         if (!video) {
           // No pending videos — sleep and poll again (don't exit)
           await sleepOrWakeable(3000);
@@ -436,13 +469,10 @@ export async function startQueueWorker() {
         runSingleDownload(video.id, video.title, video.channel_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
-        addLog(`System error in the worker loop (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
-        if (consecutiveSystemErrors >= 5) {
-          addLog('Too many consecutive system errors. Stopping the worker.');
-          break;
-        }
-        // Wait before retrying to let the database/system recover
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Never stops for good: waits longer after each error in a row (at most 60 s).
+        const delay = workerErrorBackoffMs(consecutiveSystemErrors);
+        addLog(`System error in the worker loop (${consecutiveSystemErrors} in a row, retrying in ${delay / 1000} s): ${loopErr.message || loopErr}`);
+        await sleepOrWakeable(delay);
       }
     }
   } catch (err: any) {
@@ -466,6 +496,8 @@ export const CANCELLED_BY_ADMIN_MESSAGE = 'Cancelled by an admin.';
  * re-queued at the end of the queue, or marked failed after MAX_RETRY_COUNT.
  */
 export function recordFailedAttempt(videoId: string, videoTitle: string, errMsg: string): void {
+  // Killed by a server shutdown: left as is, reset to pending at the next start.
+  if (isShuttingDown()) return;
   const db = getDb();
   const MAX_RETRY_COUNT = 3;
   addLog(`Download FAILED for video "${videoTitle}" (${videoId}): ${errMsg}`);
@@ -564,65 +596,74 @@ export function resetStaleDownloads() {
 export function isFfmpegAvailable(): boolean {
   const env = buildSpawnEnv();
   try {
-    const res = spawnSync('ffmpeg', ['-version'], { env });
+    const res = spawnSync('ffmpeg', ['-version'], { env, timeout: 10_000 });
     return res.status === 0;
   } catch (e) {
     return false;
   }
 }
 
+/** Limit for a yt-dlp/ffmpeg call that sets none (a whole-channel listing can be long, never endless). */
+export const DEFAULT_PROCESS_TIMEOUT_MS = 30 * 60 * 1000;
+/** `yt-dlp -U` and the managed binary download. */
+export const YTDL_UPDATE_TIMEOUT_MS = 120_000;
+/** One video's metadata/comments refresh, or one playlist listing. */
+export const YTDL_METADATA_TIMEOUT_MS = 5 * 60 * 1000;
+
 /**
  * Executes a process asynchronously and returns stdout, stderr, and exit status.
+ * The child runs in its own process group (see processTree.ts): a timeout or an
+ * output over `maxBuffer` kills it together with everything it started, and
+ * shutdown can reach it. Every call has a time limit (DEFAULT_PROCESS_TIMEOUT_MS
+ * when none is given).
  */
 export function runProcessAsync(
   commandPath: string,
   args: string[],
   env: any,
   maxBuffer: number = 1024 * 1024 * 50,
-  timeoutMs?: number
+  timeoutMs: number = DEFAULT_PROCESS_TIMEOUT_MS
 ): Promise<{ stdout: string; stderr: string; status: number | null }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      fn();
+    };
     try {
-      const child = spawn(commandPath, args, { env });
+      const child = trackChild(spawnInGroup(commandPath, args, { env }));
       let stdout = '';
       let stderr = '';
 
-      // Optional hard limit: the process is killed and the call fails with a clear message.
-      let timer: ReturnType<typeof setTimeout> | null = null;
-      if (timeoutMs && timeoutMs > 0) {
-        timer = setTimeout(() => {
-          try { child.kill('SIGKILL'); } catch (e) {}
-          reject(new Error(`Timed out after ${Math.round(timeoutMs / 1000)} s`));
-        }, timeoutMs);
-        child.on('close', () => { if (timer) clearTimeout(timer); });
-      }
+      const limit = timeoutMs && timeoutMs > 0 ? timeoutMs : DEFAULT_PROCESS_TIMEOUT_MS;
+      timer = setTimeout(() => {
+        killProcessTree(child);
+        finish(() => reject(new Error(`Timed out after ${Math.round(limit / 1000)} s`)));
+      }, limit);
 
       child.stdout?.on('data', (data) => {
         stdout += data.toString();
         if (stdout.length > maxBuffer) {
-          child.kill('SIGKILL');
-          reject(new Error('Stdout buffer limit exceeded'));
+          killProcessTree(child);
+          finish(() => reject(new Error('Stdout buffer limit exceeded')));
         }
       });
 
       child.stderr?.on('data', (data) => {
         stderr += data.toString();
         if (stderr.length > maxBuffer) {
-          child.kill('SIGKILL');
-          reject(new Error('Stderr buffer limit exceeded'));
+          killProcessTree(child);
+          finish(() => reject(new Error('Stderr buffer limit exceeded')));
         }
       });
 
-      child.on('error', (err) => {
-        if (timer) clearTimeout(timer);
-        reject(err);
-      });
-
-      child.on('close', (code) => {
-        resolve({ stdout, stderr, status: code });
-      });
+      child.on('error', (err) => finish(() => reject(err)));
+      child.on('close', (code) => finish(() => resolve({ stdout, stderr, status: code })));
     } catch (err) {
-      reject(err);
+      finish(() => reject(err));
     }
   });
 }
@@ -686,7 +727,23 @@ function formatSecondsToETA(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
-function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPath: string, env: any): Promise<void> {
+/** Hard limit of the parallel comment extraction of one video. */
+export const COMMENTS_TIMEOUT_MS = 10 * 60 * 1000;
+/** Its output is dropped (and the process killed) beyond this size. */
+export const COMMENTS_MAX_STDOUT_BYTES = 30 * 1024 * 1024;
+/** At most this many comments are fetched per video. */
+export const COMMENTS_MAX_COUNT = 10_000;
+
+/** Kills the parallel comment extraction of a video, if one runs. */
+export function stopCommentExtraction(videoId: string): void {
+  const child = activeCommentProcesses.get(videoId);
+  if (!child) return;
+  activeCommentProcesses.delete(videoId);
+  killProcessTree(child);
+}
+
+/** Exported for tests only (downloadVideoFile is its one caller). */
+export function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPath: string, env: any): Promise<void> {
   return new Promise<void>((resolve) => {
     console.log(`Starting parallel comment extraction for video ${videoId}...`);
     // Run yt-dlp to only fetch comments and dump to stdout
@@ -694,22 +751,54 @@ function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPa
       '--skip-download',
       '--dump-json',
       '--get-comments',
+      // yt-dlp has no --max-comments flag: the YouTube extractor takes the cap.
+      '--extractor-args', `youtube:max_comments=${COMMENTS_MAX_COUNT}`,
       '--no-playlist',
       targetVideoUrl
     ];
 
-    const child = spawn(ytdlPath, args, { env });
+    // Tracked with the download: a cancel, pause, timeout or shutdown kills it.
+    stopCommentExtraction(videoId);
+    const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
+    activeCommentProcesses.set(videoId, child);
     let stdoutData = '';
+    let stdoutBytes = 0;
+    let done = false;
+    const end = (message?: string) => {
+      if (done) return false;
+      done = true;
+      clearTimeout(timer);
+      if (activeCommentProcesses.get(videoId) === child) activeCommentProcesses.delete(videoId);
+      if (message) console.warn(message);
+      return true;
+    };
+    const timer = setTimeout(() => {
+      killProcessTree(child);
+      if (end(`Parallel comment extraction for video ${videoId} timed out after ${COMMENTS_TIMEOUT_MS / 60000} minutes.`)) resolve();
+    }, COMMENTS_TIMEOUT_MS);
 
-    child.stdout.on('data', (data) => {
+    child.stdout?.on('data', (data) => {
+      if (done) return;
+      stdoutBytes += data.length;
+      if (stdoutBytes > COMMENTS_MAX_STDOUT_BYTES) {
+        killProcessTree(child);
+        stdoutData = '';
+        if (end(`Parallel comment extraction for video ${videoId} stopped: output over ${COMMENTS_MAX_STDOUT_BYTES / (1024 * 1024)} MB.`)) resolve();
+        return;
+      }
       stdoutData += data.toString();
     });
 
-    child.stderr.on('data', (data) => {
-      // Ignore or log stderr warnings
+    child.stderr?.on('data', () => {
+      // yt-dlp warnings: ignored
+    });
+
+    child.on('error', (err) => {
+      if (end(`Parallel comment extraction for video ${videoId} could not run: ${err?.message || err}`)) resolve();
     });
 
     child.on('close', (code) => {
+      if (!end()) return;
       if (code !== 0) {
         console.warn(`Parallel comment extraction failed with code ${code} for video ${videoId}`);
         resolve();
@@ -849,7 +938,8 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
     const env = buildSpawnEnv();
 
     addLog(`Starting download command (ffmpeg available: ${ffmpegAvailable}): ${ytdlPath} ${args.join(' ')}`);
-    const child = spawn(ytdlPath, args, { env });
+    // Own process group: killing it also kills the ffmpeg yt-dlp started.
+    const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
     activeProcesses.set(videoId, child);
     keepFilesOnExit.delete(videoId); // a fresh attempt: no pause pending for it
     // Progress is persisted at most once per second (see progressWriter.ts).
@@ -873,7 +963,8 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
       if (!settled) {
         endProgress();
         addLog(`yt-dlp [${videoId}] timed out after ${DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
-        try { child.kill('SIGKILL'); } catch (e) {}
+        killProcessTree(child);
+        stopCommentExtraction(videoId);
         activeProcesses.delete(videoId);
         cleanupPartialFiles(videoId, channelId);
         settle(() => reject(new Error(`Timeout: the download exceeded ${DOWNLOAD_TIMEOUT_MS / 60000} minutes`)));
@@ -884,6 +975,7 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
       clearTimeout(watchdog);
       endProgress();
       addLog(`yt-dlp [${videoId}] process error : ${err.message || err}`);
+      stopCommentExtraction(videoId);
       activeProcesses.delete(videoId);
       cleanupPartialFiles(videoId, channelId);
       settle(() => reject(err));
@@ -1115,11 +1207,10 @@ export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pendin
     // A pause keeps the partial files: the process's exit must not remove them.
     if (keepProgressAndFiles) keepFilesOnExit.add(videoId);
     else keepFilesOnExit.delete(videoId);
-    try {
-      child.kill('SIGKILL');
-    } catch (e) {}
+    killProcessTree(child);
     activeProcesses.delete(videoId);
   }
+  stopCommentExtraction(videoId);
 
   // Update status back to targetStatus
   if (keepProgressAndFiles) {
@@ -1507,7 +1598,7 @@ export async function ingestUrl(
       INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_manually_queued, is_short, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
-        download_status = CASE WHEN download_status != 'completed' THEN 'pending' ELSE download_status END,
+        download_status = CASE WHEN download_status IN ('failed', 'pending') THEN 'pending' ELSE download_status END,
         is_manually_queued = CASE WHEN download_status != 'completed' THEN 1 ELSE is_manually_queued END,
         is_short = excluded.is_short
     `);
@@ -1787,7 +1878,7 @@ export async function ingestUrl(
     INSERT INTO videos (id, title, description, channel_id, upload_date, duration, view_count, download_status, is_manually_queued, is_short, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 1, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
-      download_status = CASE WHEN download_status != 'completed' THEN 'pending' ELSE download_status END,
+      download_status = CASE WHEN download_status IN ('failed', 'pending') THEN 'pending' ELSE download_status END,
       is_manually_queued = CASE WHEN download_status != 'completed' THEN 1 ELSE is_manually_queued END,
       is_short = excluded.is_short
   `).run(
@@ -1919,7 +2010,7 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
         '--get-comments',
         '--no-playlist',
         targetUrl
-      ], env);
+      ], env, undefined, YTDL_METADATA_TIMEOUT_MS);
 
       if (child.status !== 0) {
         console.warn(`Metadata refresh failed for ${video.id}: ${child.stderr}`);
@@ -1988,6 +2079,18 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
   addLog(`Metadata refresh complete: ${updated} videos updated, ${commentsUpdated} comments refreshed.`);
 }
 
+/** Stops the video sync cron job (shutdown). */
+export function stopScheduler(): void {
+  getActiveCronJob()?.stop();
+  setActiveCronJob(null);
+}
+
+/** Tells the persistent workers to stop and wakes them, so they exit now (shutdown). */
+export function stopVideoWorkerNow(): void {
+  setWorkerShouldRun(false);
+  wakeWorker();
+}
+
 /**
  * Initializes the background scheduler from database settings.
  */
@@ -2052,7 +2155,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
   let stdout = '';
   let status: number | null = null;
   try {
-    const child = await runProcessAsync(ytdlPath, args, env);
+    const child = await runProcessAsync(ytdlPath, args, env, undefined, YTDL_METADATA_TIMEOUT_MS);
     stdout = child.stdout;
     status = child.status;
   } catch (err: any) {
@@ -2102,7 +2205,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
       const plArgs = ['--dump-single-json', '--flat-playlist', plUrl];
       
       try {
-        const plChild = await runProcessAsync(ytdlPath, plArgs, env);
+        const plChild = await runProcessAsync(ytdlPath, plArgs, env, undefined, YTDL_METADATA_TIMEOUT_MS);
         if (plChild.status === 0) {
           const plData = JSON.parse(plChild.stdout);
           const entries = plData.entries || [];

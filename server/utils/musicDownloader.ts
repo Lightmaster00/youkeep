@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
@@ -7,13 +6,13 @@ import { getDb } from './db';
 import { getDataDir } from './dataDir';
 import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, isFfmpegAvailable, usableChannelHints, CHANNEL_METADATA_TIMEOUT_MS, type ChannelFollowHints } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, isValidMediaId, removeEntityFolder } from './videoPaths';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { enqueueAlbumMatch } from './albumMatchRunner';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
-import { killProcessTree } from './processTree';
+import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -575,7 +574,8 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
 
       const env = buildSpawnEnv();
       addLog(`Starting ${wantClip ? 'clip' : 'audio'} download: ${ytdlPath} ${args.join(' ')}`);
-      const child = spawn(ytdlPath, args, { env });
+      // Own process group: killing it also kills the ffmpeg yt-dlp started.
+      const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
       activeMusicProcesses.set(trackId, child);
       activeMusicDownloadStartTimes.set(trackId, attemptStartedAt);
       // Progress is persisted at most once per second (see progressWriter.ts).
@@ -589,7 +589,7 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
         if (!settled) {
           endProgress();
           addLog(`yt-dlp [${trackId}] timed out after ${MUSIC_DOWNLOAD_TIMEOUT_MS / 60000} minutes. Cancelling.`);
-          try { child.kill('SIGKILL'); } catch (e) {}
+          killProcessTree(child);
           activeMusicProcesses.delete(trackId);
           activeMusicDownloadStartTimes.delete(trackId);
           cleanupPartialMusicFiles(trackId, artistId, { newerThan: attemptStartedAt });
@@ -849,12 +849,14 @@ export async function startMusicQueueWorker() {
           JOIN music_artists a ON t.artist_id = a.id
           WHERE t.download_status = 'pending' AND a.sync_status = 'downloading'
             AND t.id IS NOT NULL AND t.id != ''
+            AND t.id NOT IN (SELECT value FROM json_each(?))
           ORDER BY
             CASE WHEN t.download_progress > 0 THEN 0 ELSE 1 END,
             t.created_at ASC
           LIMIT 1
-        `).get() as { id: string; title: string; artist_id: string } | undefined;
+        `).get(JSON.stringify([...activeMusicProcesses.keys()])) as { id: string; title: string; artist_id: string } | undefined;
 
+        consecutiveSystemErrors = 0;
         if (!track) {
           await sleepOrWakeableMusic(3000);
           continue;
@@ -877,12 +879,10 @@ export async function startMusicQueueWorker() {
         runSingleMusicDownload(track.id, track.title, track.artist_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
-        addLog(`System error in the music worker loop (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
-        if (consecutiveSystemErrors >= 5) {
-          addLog('Too many consecutive system errors. Stopping the music worker.');
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Never stops for good: waits longer after each error in a row (at most 60 s).
+        const delay = workerErrorBackoffMs(consecutiveSystemErrors);
+        addLog(`System error in the music worker loop (${consecutiveSystemErrors} in a row, retrying in ${delay / 1000} s): ${loopErr.message || loopErr}`);
+        await sleepOrWakeableMusic(delay);
       }
     }
   } catch (err: any) {
@@ -904,6 +904,8 @@ export async function startMusicQueueWorker() {
  * after MAX_RETRY_COUNT attempts.
  */
 export function recordFailedMusicAttempt(trackId: string, trackTitle: string, errMsg: string): void {
+  // Killed by a server shutdown: left as is, reset to pending at the next start.
+  if (isShuttingDown()) return;
   const db = getDb();
   const MAX_RETRY_COUNT = 3;
   addLog(`Download FAILED for track "${trackTitle}" (${trackId}): ${errMsg}`);
@@ -1022,9 +1024,7 @@ export function cancelMusicDownload(trackId: string, targetStatus: 'failed' | 'p
   stopProgressWriter('music_tracks', trackId);
 
   if (child) {
-    try {
-      child.kill('SIGKILL');
-    } catch (e) {}
+    killProcessTree(child);
     activeMusicProcesses.delete(trackId);
     activeMusicDownloadStartTimes.delete(trackId);
   }
@@ -1106,6 +1106,18 @@ export async function syncAllMusicArtists(): Promise<void> {
     // refreshCompletedVideosMetadata() post-loop hook (Global Constraints: don't add one).
     startWorker: startMusicQueueWorker,
   });
+}
+
+/** Stops the music sync cron job (shutdown). */
+export function stopMusicScheduler(): void {
+  getActiveMusicCronJob()?.stop();
+  setActiveMusicCronJob(null);
+}
+
+/** Tells the music worker to stop and wakes it, so it exits now (shutdown). */
+export function stopMusicWorkerNow(): void {
+  setMusicWorkerShouldRun(false);
+  wakeMusicWorker();
 }
 
 /**

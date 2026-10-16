@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -6,6 +5,7 @@ import { getQuery, type H3Event } from 'h3';
 import { getDataDir } from './dataDir';
 import { buildSpawnEnv } from './downloader';
 import { streamForResponse } from './mediaResponse';
+import { killProcessTree, spawnInGroup, trackChild } from './processTree';
 
 /**
  * Resized thumbnails: `<image url>?w=<width>` serves a JPEG scaled down to
@@ -131,15 +131,15 @@ export const thumbnailDeps = {
   readWidth: (file: string): Promise<number | null> => readImageWidthAsync(file),
   runFfmpeg(args: string[], timeoutMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      let child: ReturnType<typeof spawn>;
+      let child: ReturnType<typeof spawnInGroup>;
       try {
-        child = spawn('ffmpeg', args, { env: buildSpawnEnv(), stdio: 'ignore' });
+        child = trackChild(spawnInGroup('ffmpeg', args, { env: buildSpawnEnv(), stdio: 'ignore' }));
       } catch (err) {
         reject(err);
         return;
       }
       const timer = setTimeout(() => {
-        try { child.kill('SIGKILL'); } catch {}
+        killProcessTree(child);
         reject(new Error(`ffmpeg timed out after ${timeoutMs} ms`));
       }, timeoutMs);
       child.on('error', (err) => { clearTimeout(timer); reject(err); });

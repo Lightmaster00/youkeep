@@ -190,8 +190,9 @@ describe('GET /downloads/...?w= (video thumbnails)', () => {
     const ids = Array.from({ length: THUMB_MAX_CONCURRENT + THUMB_MAX_WAITING + 3 }, (_, i) => `q${i}`);
     for (const id of ids) seedVideoThumb(id, jpeg(1280));
     const pending = ids.map((id) => videoRoute(videoEvent(`${id}.jpg`, '?w=160')));
-    // The overflow requests answer without waiting.
-    await new Promise((r) => setTimeout(r, 20));
+    // The overflow requests (the last ones) answer with the original while ffmpeg is still busy.
+    const overflow = await Promise.all(pending.slice(-3).map(async (p) => body(await p)));
+    expect(overflow.every((b) => b.includes('original-image-bytes'))).toBe(true);
     expect(ffmpegCalls.length).toBe(THUMB_MAX_CONCURRENT);
     release();
     const results = await Promise.all(pending.map(async (p) => body(await p)));

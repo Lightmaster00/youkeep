@@ -63,3 +63,16 @@ export function killAllTrackedChildren(): number {
   }
   return count;
 }
+
+// Set once the server is shutting down: a download killed by the shutdown is
+// not recorded as a failed attempt (it resumes, as 'pending', after a restart).
+const G_SHUTTING_DOWN = Symbol.for('YouKeep.shuttingDown');
+if (typeof _g[G_SHUTTING_DOWN] !== 'boolean') _g[G_SHUTTING_DOWN] = false;
+
+export function isShuttingDown(): boolean {
+  return _g[G_SHUTTING_DOWN];
+}
+
+export function markShuttingDown(value = true): void {
+  _g[G_SHUTTING_DOWN] = value;
+}

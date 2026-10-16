@@ -6,6 +6,7 @@ import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, re
 import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler } from '../utils/podcastDownloader';
 import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
 import { startThumbCacheSweep, sweepThumbCache } from '../utils/thumbnails';
+import { startAfterUpdate } from '../utils/startup';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
 function runDurationBackfill() {
@@ -54,27 +55,17 @@ export default defineNitroPlugin((nitroApp) => {
     resetStaleMusicDownloads();
     resetStalePodcastDownloads();
 
-    // Check and update yt-dlp asynchronously, then start all queue workers.
-    // Podcasts don't need yt-dlp at all, but starting their queue worker
-    // alongside the other two in both branches of this chain keeps startup
-    // ordering simple and matches where video/music already start.
-    updateYtdl()
-      .then(() => {
-        console.log('YouKeep Scheduler Plugin: yt-dlp check/update completed. Starting queue worker...');
-        startQueueWorker();
-        startMusicQueueWorker();
-        startPodcastQueueWorker();
-        runDurationBackfill();
-        resumeInterruptedImports();
-      })
-      .catch((err) => {
-        console.error('YouKeep Scheduler Plugin: yt-dlp auto-update check failed, starting queue anyway:', err);
-        startQueueWorker();
-        startMusicQueueWorker();
-        startPodcastQueueWorker();
-        runDurationBackfill();
-        resumeInterruptedImports();
-      });
+    // Check and update yt-dlp in the background; the queue workers start when
+    // it settles, or after a guard delay if it hangs (never blocked by it).
+    // Podcasts don't need yt-dlp, but starting all three together keeps
+    // startup ordering simple.
+    startAfterUpdate(updateYtdl, () => {
+      startQueueWorker();
+      startMusicQueueWorker();
+      startPodcastQueueWorker();
+      runDurationBackfill();
+      resumeInterruptedImports();
+    });
   } catch (err) {
     console.error('Failed to run startup tasks:', err);
   }

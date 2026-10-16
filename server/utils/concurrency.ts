@@ -21,6 +21,34 @@ export function isValidMaxConcurrentValue(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_CONCURRENT_DOWNLOADS_CEILING;
 }
 
+/**
+ * How long a queue worker waits after `consecutiveErrors` system errors in a
+ * row (database locked, disk gone...): 5 s, doubling, at most 60 s. A worker
+ * never stops for good on its own; one successful iteration resets the count.
+ */
+export function workerErrorBackoffMs(consecutiveErrors: number): number {
+  const n = Math.max(1, Math.floor(consecutiveErrors));
+  return Math.min(60_000, 5_000 * 2 ** Math.min(n - 1, 10));
+}
+
+/** The settings keys of the three 'sync all running' flags. */
+export const SYNC_ALL_FLAG_KEYS = ['sync_all_active', 'music_sync_all_active', 'podcast_sync_all_active'] as const;
+
+/**
+ * Clears the three 'sync all running' flags. Called at startup: a flag left
+ * at '1' by a crash or restart during a sync would otherwise block every
+ * later sync-all and cron run forever.
+ */
+export function resetSyncAllFlags(db: Database.Database, log: (msg: string) => void = console.log): void {
+  try {
+    const placeholders = SYNC_ALL_FLAG_KEYS.map(() => '?').join(', ');
+    const result = db.prepare(`UPDATE settings SET value = '0' WHERE key IN (${placeholders}) AND value != '0'`).run(...SYNC_ALL_FLAG_KEYS);
+    if (result.changes > 0) log(`Reset ${result.changes} 'sync all' flag(s) left on by an interrupted run.`);
+  } catch (err) {
+    console.error('Failed to reset the sync-all flags:', err);
+  }
+}
+
 export const MIN_FREE_DISK_SPACE_BYTES = 500 * 1024 * 1024; // 500 MB
 
 export async function hasEnoughDiskSpace(dirPath: string): Promise<boolean> {

@@ -9,7 +9,8 @@ import { getDb } from './db';
 import { parsePubTs } from './podcastPubDate';
 import { getDataDir } from './dataDir';
 import { addLog, isDirWritable } from './downloader';
-import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
+import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
+import { isShuttingDown } from './processTree';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
@@ -652,12 +653,14 @@ export async function startPodcastQueueWorker() {
           FROM podcast_episodes e
           JOIN podcast_shows s ON e.show_id = s.id
           WHERE e.download_status = 'pending' AND s.sync_status = 'downloading'
+            AND e.id NOT IN (SELECT value FROM json_each(?))
           ORDER BY
             CASE WHEN e.download_progress > 0 THEN 0 ELSE 1 END,
             e.created_at ASC
           LIMIT 1
-        `).get() as { id: string; title: string; show_id: string } | undefined;
+        `).get(JSON.stringify([...activePodcastAbortControllers.keys()])) as { id: string; title: string; show_id: string } | undefined;
 
+        consecutiveSystemErrors = 0;
         if (!episode) {
           await sleepOrWakeablePodcast(3000);
           continue;
@@ -680,12 +683,10 @@ export async function startPodcastQueueWorker() {
         runSinglePodcastDownload(episode.id, episode.title, episode.show_id);
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
-        addLog(`System error in the podcast worker loop (${consecutiveSystemErrors}/5) : ${loopErr.message || loopErr}`);
-        if (consecutiveSystemErrors >= 5) {
-          addLog('Too many consecutive system errors. Stopping the podcast worker.');
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        // Never stops for good: waits longer after each error in a row (at most 60 s).
+        const delay = workerErrorBackoffMs(consecutiveSystemErrors);
+        addLog(`System error in the podcast worker loop (${consecutiveSystemErrors} in a row, retrying in ${delay / 1000} s): ${loopErr.message || loopErr}`);
+        await sleepOrWakeablePodcast(delay);
       }
     }
   } catch (err: any) {
@@ -717,6 +718,8 @@ async function runSinglePodcastDownload(episodeId: string, episodeTitle: string,
     addLog(`Download SUCCEEDED: "${episodeTitle}"`);
   } catch (err: any) {
     const errMsg = err.message || String(err);
+    // Aborted by a server shutdown: left as is, reset to pending at the next start.
+    if (isShuttingDown()) return;
     addLog(`Download FAILED for episode "${episodeTitle}" (${episodeId}): ${errMsg}`);
 
     const currentEpisode = db.prepare('SELECT download_status, retry_count FROM podcast_episodes WHERE id = ?').get(episodeId) as { download_status: string; retry_count: number | null } | undefined;
@@ -851,6 +854,30 @@ export async function syncAllPodcastShows(): Promise<void> {
     // No afterLoop — podcasts have no metadata-refresh post-loop hook equivalent.
     startWorker: startPodcastQueueWorker,
   });
+}
+
+/** Stops the podcast sync cron job (shutdown). */
+export function stopPodcastScheduler(): void {
+  getActivePodcastCronJob()?.stop();
+  setActivePodcastCronJob(null);
+}
+
+/** Tells the podcast worker to stop and wakes it, so it exits now (shutdown). */
+export function stopPodcastWorkerNow(): void {
+  setPodcastWorkerShouldRun(false);
+  wakePodcastWorker();
+}
+
+/** Aborts every running episode download (shutdown); their partial files stay. */
+export function abortAllPodcastDownloads(): number {
+  let count = 0;
+  for (const [id, controller] of [...activePodcastAbortControllers]) {
+    try { controller.abort(); } catch {}
+    activePodcastAbortControllers.delete(id);
+    activePodcastDownloadStartTimes.delete(id);
+    count++;
+  }
+  return count;
 }
 
 /**

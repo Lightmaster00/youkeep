@@ -1,13 +1,14 @@
 import { defineEventHandler, readBody, createError } from 'h3';
-import { getYtdlPath, runProcessAsync, buildSpawnEnv } from '../../../utils/downloader';
+import { getYtdlPath, runProcessAsync, buildSpawnEnv, YTDL_METADATA_TIMEOUT_MS } from '../../../utils/downloader';
+import { isValidMediaId } from '../../../utils/videoPaths';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
   const body = await readBody(event);
   const { videoId } = body || {};
 
-  if (!videoId) {
-    throw createError({ statusCode: 400, statusMessage: 'A video ID is required for the test.' });
+  if (!isValidMediaId(videoId)) {
+    throw createError({ statusCode: 400, statusMessage: 'A valid video ID is required for the test.' });
   }
 
   const ytdlPath = await getYtdlPath();
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     // Run yt-dlp asynchronously to dump json for the single video (very fast check)
-    const child = await runProcessAsync(ytdlPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`], env);
+    const child = await runProcessAsync(ytdlPath, ['--dump-json', `https://www.youtube.com/watch?v=${videoId}`], env, undefined, YTDL_METADATA_TIMEOUT_MS);
     const stdout = child.stdout?.trim();
     const stderr = child.stderr?.trim();
     const status = child.status;

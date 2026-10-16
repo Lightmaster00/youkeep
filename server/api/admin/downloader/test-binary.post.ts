@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const env = buildSpawnEnv();
 
   try {
-    const child = await runProcessAsync(ytdlPath, ['--version'], env);
+    const child = await runProcessAsync(ytdlPath, ['--version'], env, undefined, 30_000);
     const stdout = child.stdout?.trim();
     const stderr = child.stderr?.trim();
     const status = child.status;
