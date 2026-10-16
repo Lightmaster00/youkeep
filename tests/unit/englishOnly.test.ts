@@ -49,7 +49,7 @@ const FRENCH_WORDS = [
   'Activé', 'Désactivé', 'Échec', 'Impossible de', 'Télécharg', 'Chaînes', 'Abonnements', 'Rétablir',
   'Populaires', 'Bloc vedette', 'Monter', 'Descendre', 'Sections de', 'Erreur lors', 'Valeurs de',
   'Chaine', 'Supprimer', 'Aucun', 'Enregistrer', 'Annuler', 'Ajouter', 'Paramètres', 'Bibliothèque',
-  'Chargement', 'requis', 'invalide', 'introuvable',
+  'Chargement', 'requis', 'invalide', 'introuvable', 'voit tout',
 ];
 
 // Text allowed to match despite the rules above. Keep this list short and give

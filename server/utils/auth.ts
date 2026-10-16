@@ -137,16 +137,27 @@ export async function verifyPassword(password: string, hash: string | null | und
   return ok && !!hash;
 }
 
+export const MAX_SESSIONS_PER_USER = 20;
+
 export async function createSession(userId: string, event: H3Event): Promise<string> {
   const db = getDb();
   const sessionId = crypto.randomUUID();
   const expiresAt = Date.now() + SESSION_DURATION;
 
-  // Insert session in DB
-  db.prepare(`
-    INSERT INTO sessions (id, user_id, expires_at)
-    VALUES (?, ?, ?)
-  `).run(sessionId, userId, expiresAt);
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO sessions (id, user_id, expires_at)
+      VALUES (?, ?, ?)
+    `).run(sessionId, userId, expiresAt);
+    // Every session lasts SESSION_DURATION, so the earliest expiry is the
+    // oldest login: keep only the newest MAX_SESSIONS_PER_USER.
+    db.prepare(`
+      DELETE FROM sessions
+      WHERE user_id = ? AND id NOT IN (
+        SELECT id FROM sessions WHERE user_id = ? ORDER BY expires_at DESC, id DESC LIMIT ?
+      )
+    `).run(userId, userId, MAX_SESSIONS_PER_USER);
+  })();
 
   // Set httpOnly cookie
   setCookie(event, SESSION_COOKIE_NAME, sessionId, {
@@ -312,7 +323,7 @@ export async function canAccessVideo(videoId: string, event: any, token?: string
   }
 
   if (user.role === 'admin') {
-    return true; // Admin voit tout
+    return true; // Admin sees everything
   }
 
   if (effectiveVisibilityLevel === 1) {
