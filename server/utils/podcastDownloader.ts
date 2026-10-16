@@ -411,11 +411,17 @@ function extensionFromContentType(contentType: string | null): string | null {
   return map[type] || null;
 }
 
-function extensionFromUrl(url: string): string | null {
+// Extensions the podcast file route serves (server/routes/downloads-podcasts):
+// a file saved under any other one (".php", ".aspx") could never be played.
+export const PODCAST_AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'm4b', 'ogg', 'oga', 'wav', 'opus', 'webm', 'weba', 'aac', 'flac', 'mp4']);
+
+/** The audio extension of an enclosure URL, only when it is one the file route serves. */
+export function extensionFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
     const match = parsed.pathname.match(/\.([a-zA-Z0-9]{2,5})$/);
-    return match ? match[1]!.toLowerCase() : null;
+    const ext = match ? match[1]!.toLowerCase() : null;
+    return ext && PODCAST_AUDIO_EXTENSIONS.has(ext) ? ext : null;
   } catch (e) {
     return null;
   }

@@ -138,7 +138,7 @@ describe('GET /downloads/...?w= (video thumbnails)', () => {
     for (const query of ['', '?w=300', '?w=abc']) {
       const event = videoEvent('v2.jpg', query);
       expect(await body(await videoRoute(event))).toContain('original-image-bytes');
-      expect(event.node.res.headers['cache-control']).toBe('private, must-revalidate');
+      expect(event.node.res.headers['cache-control']).toBe('private, max-age=86400, must-revalidate');
     }
     expect(ffmpegCalls).toHaveLength(0);
   });
@@ -159,7 +159,7 @@ describe('GET /downloads/...?w= (video thumbnails)', () => {
     ffmpegImpl = async (args) => { fs.writeFileSync(args[args.length - 1]!, 'half'); throw new Error('ffmpeg timed out after 10000 ms'); };
     const event = videoEvent('v4.jpg', '?w=480');
     expect(await body(await videoRoute(event))).toContain('original-image-bytes');
-    expect(event.node.res.headers['cache-control']).toBe('private, must-revalidate');
+    expect(event.node.res.headers['cache-control']).toBe('private, max-age=86400, must-revalidate');
     expect(cacheFiles()).toEqual([]);
 
     ffmpegImpl = async () => {}; // exits 0 without writing anything
@@ -274,7 +274,7 @@ describe('GET /downloads/...?w= (video thumbnails)', () => {
 });
 
 describe('music and podcast cover variants', () => {
-  it('music: resized after the same checks; a denied track is the same 403 with or without ?w=', async () => {
+  it('music: resized after the same checks; a denied track is the same 404 with or without ?w=', async () => {
     insertMusicArtist(db, { id: 'a1', name: 'Artist' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1', downloadStatus: 'completed' });
     fs.mkdirSync(path.join(getMusicDownloadsDir(), 'Artist'), { recursive: true });
@@ -287,12 +287,12 @@ describe('music and podcast cover variants', () => {
     expect(resized.node.res.headers['cache-control']).toBe(THUMB_CACHE_CONTROL);
 
     (globalThis as any).canAccessMusicTrack = async () => false;
-    await expect(musicRoute(ev(''))).rejects.toMatchObject({ statusCode: 403 });
-    await expect(musicRoute(ev('?w=160'))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(musicRoute(ev(''))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(musicRoute(ev('?w=160'))).rejects.toMatchObject({ statusCode: 404 });
     expect(ffmpegCalls).toHaveLength(1);
   });
 
-  it('podcast: resized after the same checks; a denied episode is the same 403 with or without ?w=', async () => {
+  it('podcast: resized after the same checks; a denied episode is the same 404 with or without ?w=', async () => {
     insertPodcastShow(db, { id: 's1', title: 'Show' });
     insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'completed' });
     fs.mkdirSync(path.join(getPodcastDownloadsDir(), 'Show'), { recursive: true });
@@ -302,8 +302,8 @@ describe('music and podcast cover variants', () => {
     expect(await body(await podcastRoute(ev('?w=480')))).toBe('resized-480');
 
     (globalThis as any).canAccessPodcastEpisode = async () => false;
-    await expect(podcastRoute(ev(''))).rejects.toMatchObject({ statusCode: 403 });
-    await expect(podcastRoute(ev('?w=480'))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(podcastRoute(ev(''))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(podcastRoute(ev('?w=480'))).rejects.toMatchObject({ statusCode: 404 });
     expect(ffmpegCalls).toHaveLength(1);
   });
 });

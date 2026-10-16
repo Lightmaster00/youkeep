@@ -1,8 +1,8 @@
-import fs from 'fs';
 import path from 'path';
 import { defineEventHandler, createError } from 'h3';
 import { entityFolderName } from '../../utils/videoPaths';
 import { serveResizedThumbnail } from '../../utils/thumbnails';
+import { sendMediaFile, statRegularFile } from '../../utils/mediaResponse';
 
 const IMAGE_CONTENT_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -60,7 +60,8 @@ export default defineEventHandler(async (event) => {
 
   const hasAccess = await canAccessMusicTrack(trackId, event);
   if (!hasAccess) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied. This content is restricted.' });
+    // Restricted and missing answer the same, so private ids cannot be probed.
+    throw createError({ statusCode: 404, statusMessage: 'File not found' });
   }
 
   const downloadsDir = getMusicDownloadsDir();
@@ -70,97 +71,27 @@ export default defineEventHandler(async (event) => {
   // Containment check: resolvedPath must stay inside artistDir.
   const relativeToArtistDir = path.relative(artistDir, resolvedPath);
   if (relativeToArtistDir.startsWith('..') || path.isAbsolute(relativeToArtistDir)) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied' });
+    throw createError({ statusCode: 404, statusMessage: 'File not found' });
   }
 
   // Belt-and-braces: resolvedPath must also stay inside the overall music downloads dir.
   const relativeToDownloadsDir = path.relative(downloadsDir, resolvedPath);
   if (relativeToDownloadsDir.startsWith('..') || path.isAbsolute(relativeToDownloadsDir)) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied' });
-  }
-
-  if (!fs.existsSync(resolvedPath)) {
     throw createError({ statusCode: 404, statusMessage: 'File not found' });
   }
 
-  const stat = fs.statSync(resolvedPath);
+  // Directories, devices and missing files: the same 404.
+  const stat = statRegularFile(resolvedPath);
+  if (!stat) {
+    throw createError({ statusCode: 404, statusMessage: 'File not found' });
+  }
 
   if (!isAudio) {
     // `?w=`: a resized copy, after exactly the checks above.
     const resized = await serveResizedThumbnail(event, resolvedPath, stat);
     if (resized) return resized;
-    event.node.res.setHeader('Content-Type', contentType);
-    event.node.res.setHeader('Cache-Control', 'private, must-revalidate');
-    event.node.res.setHeader('Last-Modified', stat.mtime.toUTCString());
-
-    const ifModifiedSince = event.node.req.headers['if-modified-since'];
-    if (ifModifiedSince) {
-      const ifModifiedSinceDate = new Date(ifModifiedSince as string);
-      if (!isNaN(ifModifiedSinceDate.getTime())) {
-        const fileSeconds = Math.floor(stat.mtime.getTime() / 1000);
-        const ifModifiedSinceSeconds = Math.floor(ifModifiedSinceDate.getTime() / 1000);
-        if (fileSeconds <= ifModifiedSinceSeconds) {
-          event.node.res.statusCode = 304;
-          event.node.res.removeHeader?.('Content-Type');
-          return null;
-        }
-      }
-    }
-
-    event.node.res.setHeader('Content-Length', stat.size);
-    event.node.res.statusCode = 200;
-    return fs.createReadStream(resolvedPath);
   }
-
-  // Audio: support HTTP Range requests so the <audio> element can seek
-  // without downloading the whole file — mirrors server/routes/downloads/[...path].ts's
-  // existing video-streaming Range logic verbatim.
-  const fileSize = stat.size;
-  const range = event.node.req.headers.range;
-
-  event.node.res.setHeader('Accept-Ranges', 'bytes');
-  event.node.res.setHeader('Content-Type', contentType);
-  event.node.res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-
-  if (range) {
-    const rangeParts = range.replace(/bytes=/, '').split('-');
-    let start: number;
-    let end: number;
-
-    if (rangeParts[0] === '') {
-      // Suffix range, e.g. "bytes=-500" — last N bytes of the file.
-      const suffixLength = parseInt(rangeParts[1] || '', 10);
-      start = Number.isFinite(suffixLength) && suffixLength >= 0
-        ? Math.max(0, fileSize - suffixLength)
-        : NaN;
-      end = fileSize - 1;
-    } else {
-      start = parseInt(rangeParts[0], 10);
-      end = rangeParts[1] ? parseInt(rangeParts[1], 10) : fileSize - 1;
-    }
-
-    const isValidRange =
-      Number.isFinite(start) && Number.isFinite(end) &&
-      Number.isInteger(start) && Number.isInteger(end) &&
-      start >= 0 && end >= start;
-
-    if (!isValidRange || start >= fileSize || end >= fileSize) {
-      event.node.res.statusCode = 416;
-      event.node.res.setHeader('Content-Range', `bytes */${fileSize}`);
-      return 'Requested range not satisfiable';
-    }
-
-    const chunksize = (end - start) + 1;
-    const fileStream = fs.createReadStream(resolvedPath, { start, end });
-
-    event.node.res.statusCode = 206;
-    event.node.res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-    event.node.res.setHeader('Content-Length', chunksize);
-
-    return fileStream;
-  }
-
-  event.node.res.statusCode = 200;
-  event.node.res.setHeader('Content-Length', fileSize);
-  return fs.createReadStream(resolvedPath);
+  // Audio and images can be replaced (a clip backfill, a re-download) or lose
+  // visibility: revalidated daily, never cached as immutable.
+  return sendMediaFile(event, resolvedPath, stat, { contentType: contentType!, immutable: false });
 });

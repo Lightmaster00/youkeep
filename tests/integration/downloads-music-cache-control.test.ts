@@ -53,15 +53,15 @@ function eventFor(trackId: string, ext: string, headers?: Record<string, string>
 }
 
 describe('GET /downloads-music/[...path] — Cache-Control', () => {
-  it('sets an immutable long-lived Cache-Control, with no Last-Modified, on audio and clip (.mp4) files', async () => {
+  it('audio and clip (.mp4) files revalidate daily (they can be replaced or lose visibility), with Last-Modified', async () => {
     insertMusicTrack(db, { id: 't1', artistId, downloadStatus: 'completed' });
     insertMusicTrack(db, { id: 't2', artistId, downloadStatus: 'completed', hasClip: true });
     writeFile('t1', 'opus');
     writeFile('t2', 'mp4');
     for (const event of [eventFor('t1', 'opus'), eventFor('t2', 'mp4')]) {
       closeIfStream(await handler(event));
-      expect(event.node.res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
-      expect(event.node.res.headers['last-modified']).toBeUndefined();
+      expect(event.node.res.headers['cache-control']).toBe('private, max-age=86400, must-revalidate');
+      expect(event.node.res.headers['last-modified']).toBeDefined();
     }
   });
 
@@ -72,7 +72,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
 
     closeIfStream(await handler(event));
 
-    expect(event.node.res.headers['cache-control']).toBe('private, must-revalidate');
+    expect(event.node.res.headers['cache-control']).toBe('private, max-age=86400, must-revalidate');
     expect(event.node.res.headers['last-modified']).toBeDefined();
   });
 
@@ -91,7 +91,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     expect(result).toBeTruthy();
   });
 
-  it('still returns 403 for a private artist without access (regression)', async () => {
+  it('returns the same 404 as a missing file for a private artist without access', async () => {
     const privateArtistId = 'cache-control-private-artist';
     insertMusicArtist(db, { id: privateArtistId, name: `Artist ${privateArtistId}`, visibility: 'private' });
     const privateDir = path.join(getMusicDownloadsDir(), sanitizeFolderName(`Artist ${privateArtistId}`));
@@ -100,7 +100,7 @@ describe('GET /downloads-music/[...path] — Cache-Control', () => {
     insertMusicTrack(db, { id: 't6', artistId: privateArtistId, downloadStatus: 'completed' });
 
     try {
-      await expect(handler(mockEvent(undefined, { path: `/downloads-music/${privateArtistId}/t6.opus`, params: { path: `${privateArtistId}/t6.opus` } }))).rejects.toMatchObject({ statusCode: 403 });
+      await expect(handler(mockEvent(undefined, { path: `/downloads-music/${privateArtistId}/t6.opus`, params: { path: `${privateArtistId}/t6.opus` } }))).rejects.toMatchObject({ statusCode: 404 });
     } finally {
       fs.rmSync(privateDir, { recursive: true, force: true });
     }

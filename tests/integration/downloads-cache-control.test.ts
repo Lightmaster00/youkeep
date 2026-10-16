@@ -71,7 +71,7 @@ describe('GET /downloads/[...path] — Cache-Control', () => {
 
     closeIfStream(await handler(event));
 
-    expect(event.node.res.headers['cache-control']).toBe('private, must-revalidate');
+    expect(event.node.res.headers['cache-control']).toBe('private, max-age=86400, must-revalidate');
     expect(event.node.res.headers['last-modified']).toBeDefined();
   });
 
