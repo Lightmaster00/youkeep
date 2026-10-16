@@ -4,7 +4,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getDataDir } from './dataDir';
 import { ensurePodcastPubTs } from './podcastPubDate';
-import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers } from './dbTuning';
+import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migrateFtsRenameTriggers } from './dbTuning';
 
 let dbInstance: Database.Database | null = null;
 
@@ -626,6 +626,11 @@ export function openDatabase(dbPath: string): Database.Database {
     migrateFtsTriggers(db);
   } catch (err) {
     console.error('[Database] Could not migrate the full-text update triggers:', err);
+  }
+  try {
+    migrateFtsRenameTriggers(db);
+  } catch (err) {
+    console.error('[Database] Could not set up the full-text rename triggers:', err);
   }
 
   // Seed settings if missing
