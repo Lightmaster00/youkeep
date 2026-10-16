@@ -21,14 +21,16 @@ export default defineEventHandler(async (event) => {
   `).get(id) as any;
 
   let videos = [];
+  let isPersonalOwner = false;
 
   if (playlist) {
     // Access control check for channel playlist
+    // A playlist of a channel the viewer may not see answers like a missing one.
     const hasAccess = await canAccessChannel(playlist.channel_id, event);
     if (!hasAccess) {
       throw createError({
-        statusCode: 403,
-        statusMessage: 'Access denied to this playlist.'
+        statusCode: 404,
+        statusMessage: 'Playlist not found.'
       });
     }
 
@@ -75,7 +77,8 @@ export default defineEventHandler(async (event) => {
     const query = getQuery(event);
     const token = query.token;
 
-    const isOwner = user && (playlist.user_id === user.id || user.role === 'admin');
+    const isOwner = !!user && (playlist.user_id === user.id || user.role === 'admin');
+    isPersonalOwner = isOwner;
     const hasValidToken = !!playlist.share_token && safeEqual(token, playlist.share_token);
     const isPublic = playlist.visibility === 'public';
 
@@ -105,13 +108,16 @@ export default defineEventHandler(async (event) => {
       ORDER BY pv.position ASC
     `).all(id) as { id: string }[];
 
-    // A public/shared playlist link must not leak videos the viewer wouldn't
-    // otherwise be allowed to see (e.g. a private/ultra_private video added by the owner).
-    videos = isOwner
+    // Only the videos this viewer may watch, the owner included (access can be
+    // revoked after a video was added). Admins see everything.
+    videos = user?.role === 'admin'
       ? personalVideos
       : (await Promise.all(personalVideos.map(async (v) => (await canAccessVideo(v.id, event)) ? v : null)))
           .filter((v): v is typeof personalVideos[number] => v !== null);
   }
+
+  // The share token belongs to the owner (and admins).
+  if (playlist.share_token !== undefined && !isPersonalOwner) delete playlist.share_token;
 
   return {
     playlist,

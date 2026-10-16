@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb();
   const playlist = db.prepare(`
-    SELECT p.*, u.username as owner_name
+    SELECT p.id, p.title, p.description, p.user_id, p.visibility, p.share_token, p.created_at, u.username as owner_name
     FROM personal_playlists p
     JOIN users u ON p.user_id = u.id
     WHERE p.id = ?
@@ -61,12 +61,16 @@ export default defineEventHandler(async (event) => {
     ORDER BY pv.position ASC
   `).all(id) as { id: string }[];
 
-  // A public/shared playlist link must not leak videos the viewer wouldn't
-  // otherwise be allowed to see (e.g. a private/ultra_private video added by the owner).
-  const accessibleVideos = isOwner
+  // Only the videos this viewer may watch, the owner included: a video that
+  // became hidden (or whose channel access was revoked) after it was added
+  // disappears from the list. Admins see everything.
+  const accessibleVideos = user?.role === 'admin'
     ? videos
     : (await Promise.all(videos.map(async (v) => (await canAccessVideo(v.id, event)) ? v : null)))
         .filter((v): v is typeof videos[number] => v !== null);
+
+  // The share token belongs to the owner (and admins).
+  if (!isOwner) delete playlist.share_token;
 
   return {
     playlist,

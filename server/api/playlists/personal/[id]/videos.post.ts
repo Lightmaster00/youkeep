@@ -1,4 +1,5 @@
-import { defineEventHandler, createError, readBody } from 'h3';
+import { defineEventHandler, createError } from 'h3';
+import { readJsonObject, optionalString, badRequest } from '../../../../utils/validation';
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event);
@@ -27,26 +28,24 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const body = await readBody(event);
-  const { action, videoId } = body;
-
-  if (!action || !['add', 'remove'].includes(action) || !videoId) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'action ("add" or "remove") and videoId are required.'
-    });
-  }
-
-  // Verify video exists
-  const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(videoId);
-  if (!video) {
-    throw createError({
-      statusCode: 404,
-      statusMessage: 'Video not found.'
-    });
+  const body = await readJsonObject(event);
+  const action = body.action;
+  const videoId = optionalString(body, 'videoId', { max: 200 });
+  if ((action !== 'add' && action !== 'remove') || !videoId) {
+    badRequest('action ("add" or "remove") and videoId are required.');
   }
 
   if (action === 'add') {
+    // Only a video the user may watch can be added; a hidden one answers
+    // exactly like a missing one.
+    const video = db.prepare('SELECT id FROM videos WHERE id = ?').get(videoId);
+    if (!video || !(await canAccessVideo(videoId, event))) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Video not found.'
+      });
+    }
+
     // Check if already in playlist
     const existing = db.prepare('SELECT position FROM personal_playlist_videos WHERE playlist_id = ? AND video_id = ?').get(id, videoId);
     if (existing) {
