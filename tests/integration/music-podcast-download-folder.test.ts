@@ -32,6 +32,7 @@ import { isContained } from '../../server/utils/videoPaths';
 import musicFileRoute from '../../server/routes/downloads-music/[...path]';
 import podcastFileRoute from '../../server/routes/downloads-podcasts/[...path]';
 import { assertInTmp, createTestDb, insertMusicArtist, insertMusicTrack, insertPodcastEpisode, insertPodcastShow, mockEvent } from '../helpers/testDb';
+import { safeUrlDeps } from '../../server/utils/safeUrl';
 
 let db: Database.Database;
 let musicBase: string;
@@ -94,7 +95,8 @@ describe('podcasts: a show with a degenerate title downloads into <base>/<show i
     it(`show titled ${JSON.stringify(title)}`, async () => {
       insertPodcastShow(db, { id: 's1', title });
       insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'downloading' });
-      vi.stubGlobal('fetch', async () => new Response('audio-bytes', { headers: { 'content-type': 'audio/mpeg' } }));
+      safeUrlDeps.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+    vi.stubGlobal('fetch', async () => new Response('audio-bytes', { headers: { 'content-type': 'audio/mpeg' } }));
 
       await downloadEpisodeFile('e1', 's1');
       const file = path.join(podcastBase, 's1', 'e1.mp3');

@@ -1,5 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
-import { ingestUrl, normalizeDateAfter, syncAllChannels } from '../../../utils/downloader';
+import { ingestUrl, normalizeCustomSavePath, normalizeDateAfter, syncAllChannels } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -26,6 +26,15 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  // A save folder is an absolute path without '..' (empty means none).
+  let savePath: string | null | undefined = undefined;
+  if (custom_save_path !== undefined && custom_save_path !== null && !(typeof custom_save_path === 'string' && custom_save_path.trim() === '')) {
+    savePath = normalizeCustomSavePath(custom_save_path);
+    if (!savePath) throw createError({ statusCode: 400, statusMessage: 'The save folder must be an absolute path without "..".' });
+  } else if (custom_save_path !== undefined) {
+    savePath = null;
+  }
+
   // "Only videos after": YYYY-MM-DD (the date input) or YYYYMMDD, stored as YYYYMMDD.
   if (date_after !== undefined && date_after !== null && date_after !== '' && !normalizeDateAfter(date_after)) {
     throw createError({ statusCode: 400, statusMessage: 'The date must be YYYY-MM-DD.' });
@@ -39,7 +48,7 @@ export default defineEventHandler(async (event) => {
       date_after: date_after !== undefined ? (normalizeDateAfter(date_after) ?? null) : undefined,
       sync_status: sync_status !== undefined ? sync_status : undefined,
       visibility: visibility !== undefined ? visibility : undefined,
-      custom_save_path: custom_save_path !== undefined ? custom_save_path : undefined,
+      custom_save_path: savePath,
       // A channel answers at once; its videos are listed in the background.
       background: true,
       // Optional hints from a search result: skip even the quick channel lookup.

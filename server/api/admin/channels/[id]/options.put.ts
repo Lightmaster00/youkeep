@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
+import { cancelDownload, normalizeCustomSavePath } from '../../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -11,10 +12,19 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event);
   const { downloadVideos, downloadShorts, downloadLives, dateAfter, customSavePath } = body;
 
+  // A save folder is an absolute path without '..' (empty clears it).
+  let savePath: string | null = null;
+  if (customSavePath !== undefined && customSavePath !== null && !(typeof customSavePath === 'string' && customSavePath.trim() === '')) {
+    savePath = normalizeCustomSavePath(customSavePath);
+    if (!savePath) {
+      throw createError({ statusCode: 400, statusMessage: 'The save folder must be an absolute path without "..".' });
+    }
+  }
+
   const db = getDb();
 
   // Retrieve existing channel settings to preserve fields if not sent
-  const channel = db.prepare('SELECT download_lives FROM channels WHERE id = ?').get(channelId) as { download_lives: number } | undefined;
+  const channel = db.prepare('SELECT download_lives, custom_save_path FROM channels WHERE id = ?').get(channelId) as { download_lives: number; custom_save_path: string | null } | undefined;
   if (!channel) {
     throw createError({ statusCode: 404, statusMessage: 'Channel not found.' });
   }
@@ -28,6 +38,19 @@ export default defineEventHandler(async (event) => {
   if (dateAfter && typeof dateAfter === 'string' && dateAfter.match(/^\d{4}-\d{2}-\d{2}$/)) {
     formattedDate = dateAfter.replace(/-/g, '');
   }
+
+  // Clean up non-completed videos that no longer match the new preferences,
+  // before the channel row changes (its save folder locates the partial files):
+  // a running download is stopped and every partial file removed first, so
+  // no yt-dlp process keeps writing for a row that no longer exists.
+  const removeUnfinished = (where: string, params: unknown[]) => {
+    const rows = db.prepare(`SELECT id FROM videos WHERE channel_id = ? AND download_status != 'completed' AND ${where}`).all(channelId, ...params) as { id: string }[];
+    for (const row of rows) cancelDownload(row.id, 'failed');
+    db.prepare(`DELETE FROM videos WHERE channel_id = ? AND download_status != 'completed' AND ${where}`).run(channelId, ...params);
+  };
+  if (videosVal === 0) removeUnfinished('is_short = 0', []);
+  if (shortsVal === 0) removeUnfinished('is_short = 1', []);
+  if (formattedDate) removeUnfinished('upload_date IS NOT NULL AND upload_date < ?', [formattedDate]);
 
   // Update channel options
   db.prepare(`
@@ -44,31 +67,10 @@ export default defineEventHandler(async (event) => {
     shortsVal,
     livesVal,
     formattedDate,
-    customSavePath && typeof customSavePath === 'string' && customSavePath.trim().length > 0 ? customSavePath.trim() : null,
+    // Not sent: the save folder stays as it is.
+    customSavePath === undefined ? channel.custom_save_path : savePath,
     channelId
   );
-
-  // Clean up non-completed videos that no longer match the active preferences
-  if (videosVal === 0) {
-    db.prepare(`
-      DELETE FROM videos 
-      WHERE channel_id = ? AND is_short = 0 AND download_status != 'completed'
-    `).run(channelId);
-  }
-
-  if (shortsVal === 0) {
-    db.prepare(`
-      DELETE FROM videos 
-      WHERE channel_id = ? AND is_short = 1 AND download_status != 'completed'
-    `).run(channelId);
-  }
-
-  if (formattedDate) {
-    db.prepare(`
-      DELETE FROM videos 
-      WHERE channel_id = ? AND download_status != 'completed' AND upload_date IS NOT NULL AND upload_date < ?
-    `).run(channelId, formattedDate);
-  }
 
   return { success: true };
 });

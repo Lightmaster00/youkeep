@@ -11,6 +11,8 @@ import { getDataDir } from './dataDir';
 import { addLog, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
 import { isShuttingDown } from './processTree';
+import { safeFetch, UnsafeUrlError } from './safeUrl';
+import { MIN_FREE_DISK_SPACE_BYTES } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
@@ -80,6 +82,12 @@ export function wakePodcastWorker() {
 // is a constant, not logic, so the duplication is cheap and avoids coupling
 // this file to an unrelated module's internals.
 const PODCAST_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+/** Hard cap of one episode file, whatever its Content-Length says. */
+export const PODCAST_EPISODE_MAX_BYTES = 4 * 1024 * 1024 * 1024;
+/** Free space in the show folder is checked again after every this many bytes. */
+export const PODCAST_SPACE_CHECK_BYTES = 64 * 1024 * 1024;
+/** The two limits above, as used; tests lower them (no 4 GiB fixtures). */
+export const podcastDownloadLimits = { maxBytes: PODCAST_EPISODE_MAX_BYTES, spaceCheckBytes: PODCAST_SPACE_CHECK_BYTES };
 
 export const activePodcastAbortControllers: Map<string, AbortController> = _g[G_PODCAST_ABORT_CONTROLLERS];
 export const activePodcastDownloadStartTimes: Map<string, number> = _g[G_PODCAST_DOWNLOAD_START_TIMES];
@@ -267,6 +275,59 @@ export function stripHtmlToPlainText(raw: string | null | undefined): string | n
  */
 /** A feed that has not answered after this long fails with a clear message. */
 export const PODCAST_FEED_TIMEOUT_MS = 15_000;
+/** A feed larger than this is refused (the whole body is held in memory to parse it). */
+export const PODCAST_FEED_MAX_BYTES = 10 * 1024 * 1024;
+
+class FeedTimeoutError extends Error {}
+
+/**
+ * Fetches a feed's text: one deadline for the whole exchange (connection,
+ * redirects and body), a byte cap, at most 5 redirects, http(s) only. The
+ * admin types the feed address, so LAN feeds are allowed; link-local and
+ * cloud metadata addresses never are.
+ */
+export async function fetchFeedText(feedUrl: string): Promise<string> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new FeedTimeoutError('timed out')), PODCAST_FEED_TIMEOUT_MS);
+  try {
+    const response = await safeFetch(feedUrl, {
+      allowPrivate: true,
+      signal: controller.signal,
+      headers: { Accept: 'application/rss+xml, application/atom+xml, application/xml;q=0.9, text/xml;q=0.9, */*;q=0.5', 'User-Agent': 'YouKeep' },
+    });
+    if (!response.ok || !response.body) {
+      try { await response.body?.cancel(); } catch {}
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const declared = Number(response.headers.get('content-length') || '0');
+    if (declared > PODCAST_FEED_MAX_BYTES) {
+      try { await response.body.cancel(); } catch {}
+      throw new Error(`The feed is larger than ${PODCAST_FEED_MAX_BYTES / (1024 * 1024)} MB.`);
+    }
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > PODCAST_FEED_MAX_BYTES) {
+        controller.abort();
+        try { await reader.cancel(); } catch {}
+        throw new Error(`The feed is larger than ${PODCAST_FEED_MAX_BYTES / (1024 * 1024)} MB.`);
+      }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength))).toString('utf8');
+  } catch (err: any) {
+    if (controller.signal.aborted && controller.signal.reason instanceof FeedTimeoutError) {
+      throw new FeedTimeoutError(`Request timed out after ${PODCAST_FEED_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function ingestPodcastFeed(
   feedUrl: string,
@@ -279,7 +340,6 @@ export async function ingestPodcastFeed(
   const trimmedFeedUrl = feedUrl.trim();
 
   const parser = new Parser({
-    timeout: PODCAST_FEED_TIMEOUT_MS,
     customFields: {
       feed: [['itunes:author', 'itunesAuthor'], ['itunes:image', 'itunesImage']],
       item: [
@@ -292,9 +352,12 @@ export async function ingestPodcastFeed(
 
   let feed: any;
   try {
-    feed = await parser.parseURL(trimmedFeedUrl);
+    feed = await parser.parseString(await fetchFeedText(trimmedFeedUrl));
   } catch (err: any) {
-    if (/timed out/i.test(String(err?.message || ''))) {
+    if (err instanceof UnsafeUrlError) {
+      return { success: false, message: `This feed address is not allowed: ${err.message}`, count: 0 };
+    }
+    if (err instanceof FeedTimeoutError) {
       return { success: false, message: `The feed did not answer within ${PODCAST_FEED_TIMEOUT_MS / 1000} s. Check the address or try again later.`, count: 0 };
     }
     return { success: false, message: `Failed to fetch/parse RSS feed: ${err.message || err}`, count: 0 };
@@ -530,8 +593,11 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       }
 
       addLog(`Starting download of episode ${episodeId}: ${episode.audio_url}`);
-      const response = await fetch(episode.audio_url, { signal: controller.signal });
+      // Enclosure addresses (and their redirects) come from a third-party feed:
+      // public addresses only.
+      const response = await safeFetch(episode.audio_url, { allowPrivate: false, signal: controller.signal });
       if (!response.ok || !response.body) {
+        try { await response.body?.cancel(); } catch {}
         throw new Error(`HTTP ${response.status}`);
       }
 
@@ -540,7 +606,10 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       const localFilePath = `/downloads-podcasts/${folderName}/${episodeId}.${ext}`;
 
       const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
+      // Never more than announced, and never more than the hard cap.
+      const byteLimit = totalBytes > 0 ? Math.min(totalBytes, podcastDownloadLimits.maxBytes) : podcastDownloadLimits.maxBytes;
       let receivedBytes = 0;
+      let nextSpaceCheck = podcastDownloadLimits.spaceCheckBytes;
       fileStream = fs.createWriteStream(outputPath);
 
       // Passes bytes through unchanged while reporting progress. Using
@@ -556,26 +625,47 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       // rejection (only callback(err) is), so nothing here may throw: the
       // progress writer throttles database writes to once per second and
       // swallows a failed write itself (progress is cosmetic).
+      const reportProgress = () => {
+        const elapsedSec = (Date.now() - attemptStartedAt) / 1000;
+        const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
+        const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
+        if (totalBytes > 0) {
+          const progress = Math.round((receivedBytes / totalBytes) * 100);
+          const remainingBytes = totalBytes - receivedBytes;
+          const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
+          progressWriter.update({ progress, speed, eta });
+        } else {
+          // Content-Length wasn't sent (e.g. chunked transfer encoding), so
+          // there's no total to compute a percentage or ETA against. Per this
+          // codebase's convention of not fabricating a fake percentage, only
+          // the speed is surfaced as a liveness signal; null keeps the stored
+          // download_progress/download_eta untouched.
+          progressWriter.update({ progress: null, speed, eta: null });
+        }
+      };
       const progressTransform = new Transform({
         transform(chunk, _encoding, callback) {
           receivedBytes += chunk.length;
-          const elapsedSec = (Date.now() - attemptStartedAt) / 1000;
-          const rate = elapsedSec > 0 ? receivedBytes / elapsedSec : 0;
-          const speed = rate > 0 ? formatBytesPerSec(rate) : '0KB/s';
-          if (totalBytes > 0) {
-            const progress = Math.round((receivedBytes / totalBytes) * 100);
-            const remainingBytes = totalBytes - receivedBytes;
-            const eta = rate > 0 ? formatEta(remainingBytes / rate) : '--:--';
-            progressWriter.update({ progress, speed, eta });
-          } else {
-            // Content-Length wasn't sent (e.g. chunked transfer encoding), so
-            // there's no total to compute a percentage or ETA against. Per this
-            // codebase's convention of not fabricating a fake percentage, only
-            // the speed is surfaced as a liveness signal; null keeps the stored
-            // download_progress/download_eta untouched.
-            progressWriter.update({ progress: null, speed, eta: null });
+          if (receivedBytes > byteLimit) {
+            callback(new Error(totalBytes > 0 && totalBytes <= podcastDownloadLimits.maxBytes
+              ? `The server sent more than the ${totalBytes} bytes it announced.`
+              : `The episode is larger than ${podcastDownloadLimits.maxBytes / (1024 * 1024 * 1024)} GiB.`));
+            return;
           }
-          callback(null, chunk);
+          if (receivedBytes < nextSpaceCheck) {
+            reportProgress();
+            callback(null, chunk);
+            return;
+          }
+          // Every podcastDownloadLimits.spaceCheckBytes: is there still room on the disk written to?
+          nextSpaceCheck += podcastDownloadLimits.spaceCheckBytes;
+          fs.promises.statfs(showDir).then(
+            (st) => st.bavail * st.bsize < MIN_FREE_DISK_SPACE_BYTES ? Promise.reject(new Error('Not enough free disk space to continue the download.')) : undefined,
+            () => undefined, // cannot check: carry on
+          ).then(
+            () => { reportProgress(); callback(null, chunk); },
+            (err) => callback(err),
+          );
         },
       });
 

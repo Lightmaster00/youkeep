@@ -30,6 +30,7 @@ import { downloadMusicTrackFile, cancelMusicDownload } from '../../server/utils/
 import { downloadEpisodeFile, cancelPodcastDownload } from '../../server/utils/podcastDownloader';
 import { getDataDir } from '../../server/utils/dataDir';
 import { assertInTmp, createTestDb, insertChannel, insertVideo, insertMusicArtist, insertMusicTrack, insertPodcastShow, insertPodcastEpisode } from '../helpers/testDb';
+import { safeUrlDeps } from '../../server/utils/safeUrl';
 
 let db: Database.Database;
 let dir: string;
@@ -142,6 +143,7 @@ describe('podcast progress is throttled to one write per second', () => {
     insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'downloading' });
     let push!: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({ start(controller) { push = controller; } });
+    safeUrlDeps.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
     vi.stubGlobal('fetch', async () => new Response(body, { headers: { 'content-type': 'audio/mpeg', 'content-length': '100' } }));
     const row = () => db.prepare("SELECT download_status, download_progress FROM podcast_episodes WHERE id = 'e1'").get() as { download_status: string; download_progress: number };
 

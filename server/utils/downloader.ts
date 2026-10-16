@@ -211,6 +211,22 @@ function getBinDir(): string {
   return path.join(getDataDir(), 'bin');
 }
 
+/**
+ * A custom save folder as typed by an admin: an absolute, normalised path
+ * without `..` segments (returned trimmed, without a trailing separator), or
+ * null when it is not one. Empty means "no custom folder" and is handled by
+ * the caller.
+ */
+export function normalizeCustomSavePath(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.includes('\u0000') || !path.isAbsolute(trimmed)) return null;
+  if (trimmed.split(/[\\/]+/).some((segment) => segment === '..' || segment === '.')) return null;
+  const normalized = path.normalize(trimmed);
+  const withoutTrailing = normalized.length > 1 ? normalized.replace(/[\\/]+$/, '') : normalized;
+  return withoutTrailing;
+}
+
 export function isDirWritable(dirPath: string): boolean {
   try {
     if (!fs.existsSync(dirPath)) {
@@ -450,6 +466,17 @@ export async function startQueueWorker() {
         }
 
         consecutiveSystemErrors = 0;
+
+        // The folder actually written: the channel's own save folder when it has one.
+        const target = db.prepare('SELECT custom_save_path FROM channels WHERE id = ?').get(video.channel_id) as { custom_save_path: string | null } | undefined;
+        const targetDir = resolveChannelBaseDir(target?.custom_save_path);
+        if (targetDir !== getDownloadsDir() && !(await hasEnoughDiskSpace(targetDir))) {
+          addLog(`Not enough free space in ${targetDir}: download of "${video.title}" waits.`);
+          await sleepOrWakeable(30_000);
+          continue;
+        }
+        if (!hasCapacityForMoreDownloads(getActiveDownloadCount(), maxConcurrent) || activeProcesses.has(video.id)) continue;
+
         addLog(`Starting download: "${video.title}" (ID: ${video.id})`);
 
         // Update status to downloading, keeping the existing progress if it exists

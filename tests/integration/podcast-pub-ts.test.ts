@@ -6,10 +6,11 @@ import Database from 'better-sqlite3';
 const state = vi.hoisted(() => ({ db: null as any, feed: null as any }));
 vi.mock('../../server/utils/db', () => ({ getDb: () => state.db }));
 vi.mock('rss-parser', () => ({
-  default: class { async parseURL() { return state.feed; } },
+  default: class { async parseString() { return state.feed; } },
 }));
 
 import { ingestPodcastFeed } from '../../server/utils/podcastDownloader';
+import { safeUrlDeps } from '../../server/utils/safeUrl';
 import { ensurePodcastPubTs, parsePubTs } from '../../server/utils/podcastPubDate';
 import { queryRecentEpisodes } from '../../server/utils/recentMedia';
 import { createTestDb, insertPodcastShow, insertPodcastEpisode } from '../helpers/testDb';
@@ -22,6 +23,9 @@ beforeEach(() => {
   db = createTestDb();
   state.db = db;
   (globalThis as any).getDb = () => db;
+  // No real DNS or HTTP: a public address, and a feed body the mocked parser ignores.
+  safeUrlDeps.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  vi.stubGlobal('fetch', async () => new Response('<rss/>'));
 });
 
 const ids = (page: { items: any[] }) => page.items.map((e: any) => e.id);

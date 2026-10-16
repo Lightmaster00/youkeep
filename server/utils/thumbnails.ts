@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { getQuery, type H3Event } from 'h3';
 import { getDataDir } from './dataDir';
+import { hasEnoughDiskSpace } from './concurrency';
 import { buildSpawnEnv } from './downloader';
 import { streamForResponse } from './mediaResponse';
 import { killProcessTree, spawnInGroup, trackChild } from './processTree';
@@ -129,6 +130,8 @@ export function imageWidthFromHeader(buf: Buffer): number | null {
 /** The process runner and header reader, injectable so tests never start a real ffmpeg. */
 export const thumbnailDeps = {
   readWidth: (file: string): Promise<number | null> => readImageWidthAsync(file),
+  /** Free space where the cache is written (its data folder, which always exists). */
+  hasSpace: (): Promise<boolean> => hasEnoughDiskSpace(getDataDir()),
   runFfmpeg(args: string[], timeoutMs: number): Promise<void> {
     return new Promise((resolve, reject) => {
       let child: ReturnType<typeof spawnInGroup>;
@@ -225,6 +228,8 @@ export async function getResizedThumbnail(sourcePath: string, stat: fs.Stats, wi
 
   const sourceWidth = await cachedSourceWidth(cacheKeyFor(sourcePath, stat), sourcePath);
   if (!sourceWidth || sourceWidth <= width) return null;
+  // A nearly full disk: no new variants, the original is served.
+  if (!(await thumbnailDeps.hasSpace())) return null;
 
   const existing = inFlight.get(out);
   if (existing) return existing;

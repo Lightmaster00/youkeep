@@ -12,6 +12,7 @@ import { buildVideoPaths } from '../../server/utils/videoPaths';
 import { parseByteRange, sendMediaFile, statRegularFile } from '../../server/utils/mediaResponse';
 import { downloadEpisodeFile, extensionFromUrl } from '../../server/utils/podcastDownloader';
 import { createTestDb, insertChannel, insertVideo, insertPodcastShow, insertPodcastEpisode, mockEvent } from '../helpers/testDb';
+import { safeUrlDeps } from '../../server/utils/safeUrl';
 
 let db: Database.Database;
 let dir: string;
@@ -187,6 +188,7 @@ describe('podcast episode files always get a playable extension', () => {
     expect(extensionFromUrl('https://h/ep.m4a')).toBe('m4a');
     insertPodcastShow(db, { id: 's1', title: 'Show' });
     insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'downloading', audioUrl: 'https://feeds.example/download.php?id=1' });
+    safeUrlDeps.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
     vi.stubGlobal('fetch', async () => new Response('abc', { headers: { 'content-type': 'text/html' } }));
     (globalThis as any).isWipeInProgress = () => false;
     await downloadEpisodeFile('e1', 's1');
