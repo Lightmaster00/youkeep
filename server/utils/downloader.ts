@@ -11,7 +11,7 @@ import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDisk
 import { extractInfoFields } from './videoInfo';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { channelBaseDirs, isContained, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
+import { channelBaseDirs, isContained, isValidMediaId, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 
 export function sanitizeFolderName(name: string): string {
@@ -35,6 +35,11 @@ export function buildSpawnEnv(): NodeJS.ProcessEnv {
 // Covers both layouts: legacy files directly in the channel folder, and the
 // video's own folder (one folder per video, named from its title).
 export function cleanupPartialFiles(videoId: string, channelId: string): void {
+  // An id that is not a plain YouTube id never names a file to remove.
+  if (!isValidMediaId(videoId)) {
+    addLog(`Partial-file cleanup skipped for an invalid video id: ${JSON.stringify(String(videoId)).slice(0, 80)}`);
+    return;
+  }
   const db = getDb();
   const channel = db.prepare('SELECT title, custom_save_path FROM channels WHERE id = ?').get(channelId) as { title: string; custom_save_path: string | null } | undefined;
   const basePath = resolveChannelBaseDir(channel?.custom_save_path);
@@ -57,6 +62,7 @@ export function cleanupPartialFiles(videoId: string, channelId: string): void {
     } catch (e) {}
 
     [mp4File, jpgFile, partFile, ytdlPartFile, ...legacyFragments].forEach(f => {
+      if (!isContained(channelDir, f)) return;
       if (fs.existsSync(f)) {
         try { fs.unlinkSync(f); } catch (e) {}
       }
@@ -394,6 +400,7 @@ export async function startQueueWorker() {
           FROM videos v
           JOIN channels c ON v.channel_id = c.id
           WHERE v.download_status = 'pending' AND (c.sync_status = 'downloading' OR v.is_manually_queued = 1)
+            AND v.id IS NOT NULL AND v.id != ''
           ORDER BY
             v.priority DESC,
             v.is_short DESC,
@@ -775,6 +782,7 @@ function extractCommentsParallel(videoId: string, targetVideoUrl: string, ytdlPa
 export function downloadVideoFile(videoId: string, channelId: string): Promise<void> {
   return new Promise<void>(async (resolve, reject) => {
     try {
+      if (!isValidMediaId(videoId)) throw new Error(`Invalid video id: ${JSON.stringify(String(videoId)).slice(0, 80)}`);
       const ytdlPath = await getYtdlPath();
     const db = getDb();
     const ffmpegAvailable = isFfmpegAvailable();
@@ -1139,6 +1147,11 @@ export function cancelDownload(videoId: string, targetStatus: 'failed' | 'pendin
   return true;
 }
 
+/** A YouTube channel id as reported by yt-dlp, or null when it is not a plain one. */
+function validChannelId(value: unknown): string | null {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value) ? value : null;
+}
+
 /**
  * Ensures a channel row exists for the given id, creating it as a passive,
  * paused reference (never actively followed) if it doesn't. Used both by
@@ -1501,10 +1514,14 @@ export async function ingestUrl(
     const checkVideoStatus = db.prepare('SELECT download_status FROM videos WHERE id = ?');
 
     let videosQueued = 0;
+    let skippedInvalid = 0;
     for (const entry of entries) {
-      if (!entry || !entry.id) continue;
+      if (!entry || !isValidMediaId(entry.id)) {
+        skippedInvalid++;
+        continue;
+      }
 
-      const entryChannelId = entry.channel_id || entry.uploader_id || 'unknown-channel';
+      const entryChannelId = validChannelId(entry.channel_id) ?? validChannelId(entry.uploader_id) ?? 'unknown-channel';
       const entryChannelTitle = entry.channel || entry.uploader || 'Unknown Channel';
       ensureChannelExists(db, entryChannelId, entryChannelTitle);
 
@@ -1538,6 +1555,8 @@ export async function ingestUrl(
       if (!priorStatus || priorStatus.download_status !== 'completed') videosQueued++;
     }
 
+    if (skippedInvalid > 0) addLog(`Playlist "${playlistTitle}": skipped ${skippedInvalid} entry(ies) without a valid video id.`);
+
     // Trigger queue processing unconditionally, same as single-video ingestion —
     // this is a deliberate, manual, one-time import, not a passive subscription.
     videoImportDeps.startWorker();
@@ -1555,7 +1574,7 @@ export async function ingestUrl(
 
   // Case A: It's a playlist or channel (contains _type: "playlist" or entries array)
   if (data._type === 'playlist' || Array.isArray(data.entries)) {
-    const channelId = data.channel_id || data.id || 'unknown-channel';
+    const channelId = validChannelId(data.channel_id) ?? validChannelId(data.id) ?? 'unknown-channel';
     const channelTitle = data.channel || data.title || 'Unknown Channel';
     const channelDesc = data.description || '';
     
@@ -1676,8 +1695,13 @@ export async function ingestUrl(
 
     const checkExists = db.prepare('SELECT 1 FROM videos WHERE id = ?');
 
+    let skippedInvalid = 0;
     for (const entry of videoEntries) {
-      if (!entry.id || entry.id === channelId) continue;
+      if (entry.id === channelId) continue;
+      if (!isValidMediaId(entry.id)) {
+        skippedInvalid++;
+        continue;
+      }
 
       // Filter by content type
       if (entry.contentType === 'live') continue;
@@ -1714,6 +1738,8 @@ export async function ingestUrl(
       }
     }
 
+    if (skippedInvalid > 0) addLog(`Channel "${channelTitle}": skipped ${skippedInvalid} listing entry(ies) without a valid video id.`);
+
     // Only trigger queue processing if the channel is already set to 'downloading'
     const channelState = db.prepare('SELECT sync_status FROM channels WHERE id = ?').get(channelId) as { sync_status: string } | undefined;
     if (channelState?.sync_status === 'downloading') {
@@ -1739,7 +1765,11 @@ export async function ingestUrl(
   
   // Case B: It's a single video
   const videoId = data.id;
-  const channelId = data.channel_id || 'unknown-channel';
+  if (!isValidMediaId(videoId)) {
+    addLog(`Ingest of ${url} skipped: yt-dlp returned no valid video id.`);
+    return { success: false, message: 'yt-dlp returned no valid video id for this address.', count: 0 };
+  }
+  const channelId = validChannelId(data.channel_id) ?? 'unknown-channel';
   const channelTitle = data.channel || 'Unknown Channel';
 
   ensureChannelExists(db, channelId, channelTitle);
@@ -2080,7 +2110,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
           // Collect completed videos to link
           const completedEntries = [];
           for (const entry of entries) {
-            if (!entry.id) continue;
+            if (!isValidMediaId(entry?.id)) continue;
             const exists = db.prepare("SELECT 1 FROM videos WHERE id = ? AND download_status = 'completed'").get(entry.id);
             if (exists) {
               completedEntries.push(entry);

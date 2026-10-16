@@ -1,7 +1,7 @@
 import { defineEventHandler, createError } from 'h3';
 import fs from 'fs';
 import path from 'path';
-import { channelBaseDirs, isContained, removeVideoFiles, removeVideoLeftovers, resolveStoredPath, videoChannelFolder } from '../../../utils/videoPaths';
+import { channelBaseDirs, isContained, isValidMediaId, removeVideoFiles, removeVideoLeftovers, resolveStoredPath, videoChannelFolder } from '../../../utils/videoPaths';
 import { isTidyRunning } from '../../../utils/videoTidy';
 
 export default defineEventHandler(async (event) => {
@@ -58,7 +58,10 @@ export default defineEventHandler(async (event) => {
   // is handled below.
   const otherBases = channelBaseDirs(channel?.custom_save_path, getDownloadsDir())
     .filter((base) => base !== path.resolve(basePath));
-  removeVideoLeftovers({ bases: otherBases, channelFolder: sanitizeFolderName(channel?.title || video.channel_id), id: videoId });
+  // An id that is not a plain YouTube id never names a file to remove by
+  // pattern (only its stored location, handled below, is trusted).
+  const validId = isValidMediaId(videoId);
+  if (validId) removeVideoLeftovers({ bases: otherBases, channelFolder: sanitizeFolderName(channel?.title || video.channel_id), id: videoId });
 
   if (location.layout === 'new') {
     let warning: string | undefined;
@@ -85,7 +88,7 @@ export default defineEventHandler(async (event) => {
   // 4. Remove local files from disk (any container extension, thumbnail,
   // subtitles, metadata, and partial-download leftovers), only from a folder
   // strictly inside the base (a title like '..' points at the folder above it).
-  if (!isContained(basePath, legacyDir)) return { success: true };
+  if (!validId || !isContained(basePath, legacyDir)) return { success: true };
   const videoExtensions = ['mp4', 'webm', 'mkv', '3gp', 'flv'];
   const filesToRemove = [
     ...videoExtensions.map(ext => path.join(legacyDir, `${videoId}.${ext}`)),
@@ -97,6 +100,7 @@ export default defineEventHandler(async (event) => {
   ];
 
   filesToRemove.forEach(f => {
+    if (!isContained(legacyDir, f)) return;
     if (fs.existsSync(f)) {
       try {
         fs.unlinkSync(f);

@@ -8,6 +8,18 @@ import { getDataDir } from './dataDir';
 // (spec docs/superpowers/specs/2026-10-06-video-storage-layout-design.md).
 
 export const VIDEO_BASENAME_MAX_BYTES = 120;
+
+/**
+ * A YouTube video / track id as yt-dlp reports it. Ids come from yt-dlp
+ * output (third-party data) and end up in file names and yt-dlp `-o`
+ * templates: anything else (`../`, `%`, slashes, empty) is rejected at
+ * ingest and again before every filesystem use.
+ */
+export const MEDIA_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+export function isValidMediaId(id: unknown): id is string {
+  return typeof id === 'string' && MEDIA_ID_RE.test(id);
+}
 export const VIDEO_EXTENSIONS = ['mp4', 'webm', 'mkv', '3gp', 'flv'];
 export const THUMB_EXTENSIONS = ['jpg', 'jpeg', 'webp', 'png'];
 
@@ -390,6 +402,7 @@ export function storedFileCandidates(bases: string[], channelFolder: string, sto
  * listed there stays. Never throws.
  */
 export function removeVideoLeftovers(opts: { bases: string[]; channelFolder: string; id: string; keepFiles?: string[] }): void {
+  if (!isValidMediaId(opts.id)) return;
   const keep = new Set((opts.keepFiles ?? []).map((file) => path.resolve(file)));
   for (const rawBase of opts.bases) {
     const base = path.resolve(rawBase);
@@ -418,7 +431,7 @@ export function removeVideoLeftovers(opts: { bases: string[]; channelFolder: str
       const fragment = entry.startsWith(`${opts.id}.f`) && (entry.endsWith('.part') || entry.endsWith('.ytdl'));
       if (!exact.has(entry) && !fragment) continue;
       const file = path.join(legacyDir, entry);
-      if (keep.has(file) || !isRegularFile(file)) continue;
+      if (keep.has(file) || !isContained(legacyDir, file) || !isRegularFile(file)) continue;
       try { fs.unlinkSync(file); } catch {}
     }
   }

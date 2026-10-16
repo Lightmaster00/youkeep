@@ -91,6 +91,8 @@ export function getPodcastDownloadsDir(): string {
 }
 
 export function cleanupPartialPodcastFiles(episodeId: string, showId: string, opts: { newerThan?: number } = {}): void {
+  // Episode ids are sha256 hex digests (hashPodcastEpisodeId): nothing else names a file.
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(episodeId)) return;
   const db = getDb();
   const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
   const basePath = getPodcastDownloadsDir();
@@ -110,6 +112,7 @@ export function cleanupPartialPodcastFiles(episodeId: string, showId: string, op
   for (const entry of entries) {
     if (!entry.startsWith(prefix)) continue;
     const fullPath = path.join(showDir, entry);
+    if (!isContained(showDir, fullPath)) continue;
     if (opts.newerThan !== undefined) {
       // A file that predates this download attempt is a previously-completed
       // file, not a partial artifact of the attempt being aborted — leave it alone.

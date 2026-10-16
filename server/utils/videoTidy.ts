@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import type Database from 'better-sqlite3';
-import { buildVideoPaths, candidateVideoDirs, channelBaseDirs, channelReadBaseDir, channelWriteBaseDir, folderIdOf, idFromVideoFolder, isContained, isNewLayoutUrl, isPartialDownloadName, storedUrlSegments } from './videoPaths';
+import { buildVideoPaths, candidateVideoDirs, channelBaseDirs, channelReadBaseDir, channelWriteBaseDir, folderIdOf, idFromVideoFolder, isContained, isValidMediaId, isNewLayoutUrl, isPartialDownloadName, storedUrlSegments } from './videoPaths';
 import { activeProcesses, addLog, sanitizeFolderName } from './downloader';
 import { isWipeInProgress } from './libraryWipe';
 
@@ -912,7 +912,24 @@ function isIdleUnfinished(db: Database.Database, id: string, isBusy: (id: string
   return !!row && row.status !== 'completed' && row.status !== 'downloading' && !row.url && !isBusy(id);
 }
 
+/**
+ * True when every path an item moves, creates or removes is what its plan
+ * says: a plain video id, each source directly in `fromDir`, each destination
+ * directly in `toDir` (no `..` or separator smuggled in through a name).
+ */
+export function isTidyItemContained(item: TidyPlanItem): boolean {
+  if (!isValidMediaId(item.id)) return false;
+  const fromDir = path.resolve(item.fromDir);
+  const toDir = path.resolve(item.toDir);
+  return item.moves.every((move) => path.dirname(path.resolve(move.from)) === fromDir && path.dirname(path.resolve(move.to)) === toDir
+    && isContained(fromDir, move.from) && isContained(toDir, move.to))
+    && item.cleanupDirs.every((dir) => dir === item.fromDir || isContained(dir, item.fromDir));
+}
+
 async function tidyOne(db: Database.Database, item: TidyPlanItem, fsp: RunnerFs, isBusy: (id: string) => boolean): Promise<ItemOutcome> {
+  if (!isTidyItemContained(item)) {
+    return { result: 'error', message: `Video ${JSON.stringify(item.id).slice(0, 80)}: its files were left in place (a file name or id would leave its folder).` };
+  }
   const partial = item.kind === 'partial';
   if (partial) {
     if (!isIdleUnfinished(db, item.id, isBusy)) return { result: 'skipped' };

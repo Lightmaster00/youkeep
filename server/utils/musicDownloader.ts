@@ -9,7 +9,7 @@ import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, isF
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
-import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
+import { entityFolderName, isContained, isValidMediaId, removeEntityFolder } from './videoPaths';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { enqueueAlbumMatch } from './albumMatchRunner';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
@@ -91,6 +91,8 @@ export function getMusicDownloadsDir(): string {
 }
 
 export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts: { newerThan?: number } = {}): void {
+  // An id that is not a plain YouTube id never names a file to remove.
+  if (!isValidMediaId(trackId)) return;
   const db = getDb();
   const artist = db.prepare('SELECT name FROM music_artists WHERE id = ?').get(artistId) as { name: string } | undefined;
   const basePath = getMusicDownloadsDir();
@@ -110,6 +112,7 @@ export function cleanupPartialMusicFiles(trackId: string, artistId: string, opts
   for (const entry of entries) {
     if (!entry.startsWith(prefix)) continue;
     const fullPath = path.join(artistDir, entry);
+    if (!isContained(artistDir, fullPath)) continue;
     if (opts.newerThan !== undefined) {
       // A file that predates this download attempt is a previously-completed
       // file (e.g. the audio a manual clip backfill is trying to supplement),
@@ -265,14 +268,20 @@ function upsertArtistTracks(db: ReturnType<typeof getDb>, artistId: string, chan
   `);
   const checkExists = db.prepare('SELECT 1 FROM music_tracks WHERE id = ?');
   let tracksAdded = 0;
+  let skippedInvalid = 0;
   db.transaction(() => {
     for (const entry of entries) {
-      if (!entry.id || entry.id === channelId) continue;
+      if (entry.id === channelId) continue;
+      if (!isValidMediaId(entry.id)) {
+        skippedInvalid++;
+        continue;
+      }
       const exists = checkExists.get(entry.id);
       upsertTrack.run(entry.id, artistId, entry.title || `Track ${entry.id}`, entry.duration || null, entry.view_count || null, entry.upload_date || null, Date.now());
       if (!exists) tracksAdded++;
     }
   })();
+  if (skippedInvalid > 0) addLog(`Artist listing: skipped ${skippedInvalid} entry(ies) without a valid track id.`);
   return tracksAdded;
 }
 
@@ -467,6 +476,10 @@ export async function ingestMusicUrl(
 
   // Case B: single track
   const trackId = data.id;
+  if (!isValidMediaId(trackId)) {
+    addLog(`Music ingest of ${trimmedUrl} skipped: yt-dlp returned no valid track id.`);
+    return { success: false, message: 'yt-dlp returned no valid track id for this address.', count: 0 };
+  }
   const channelId = data.channel_id || data.uploader_id || 'unknown-channel';
   const channelTitle = data.channel || data.uploader || 'Unknown Artist';
 
@@ -518,6 +531,7 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
   const attemptStartedAt = Date.now();
   return new Promise<{ hasClip: boolean }>(async (resolve, reject) => {
     try {
+      if (!isValidMediaId(trackId)) throw new Error(`Invalid track id: ${JSON.stringify(String(trackId)).slice(0, 80)}`);
       const ytdlPath = await getYtdlPath();
       const db = getDb();
 
@@ -535,7 +549,8 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
         fs.mkdirSync(artistDir, { recursive: true });
       }
 
-      const outputTemplate = path.join(artistDir, `${trackId}.%(ext)s`);
+      // Literal `%` (an artist name like "100% Hits") doubled so yt-dlp does not read it as a field.
+      const outputTemplate = `${path.join(artistDir, trackId).replace(/%/g, '%%')}.%(ext)s`;
       const targetUrl = `https://www.youtube.com/watch?v=${trackId}`;
 
       const args = wantClip
@@ -761,7 +776,7 @@ export async function downloadTrackClip(trackId: string): Promise<void> {
       const previousAudioExtensions = ['m4a', 'opus', 'webm', 'mp3', 'ogg', 'wav'];
       for (const ext of previousAudioExtensions) {
         const oldFile = path.join(artistDir, `${trackId}.${ext}`);
-        if (fs.existsSync(oldFile)) {
+        if (isContained(artistDir, oldFile) && fs.existsSync(oldFile)) {
           try { fs.unlinkSync(oldFile); } catch (e) {}
         }
       }
@@ -833,6 +848,7 @@ export async function startMusicQueueWorker() {
           FROM music_tracks t
           JOIN music_artists a ON t.artist_id = a.id
           WHERE t.download_status = 'pending' AND a.sync_status = 'downloading'
+            AND t.id IS NOT NULL AND t.id != ''
           ORDER BY
             CASE WHEN t.download_progress > 0 THEN 0 ELSE 1 END,
             t.created_at ASC
