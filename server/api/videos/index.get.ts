@@ -1,4 +1,20 @@
-import { defineEventHandler, getQuery } from 'h3';
+import { defineEventHandler, getQuery, createError } from 'h3';
+import { badRequest } from '../../utils/validation';
+import { videoColumnsSql, videoVisibilitySql } from '../../utils/videoAccess';
+
+const MAX_LIMIT = 100;
+const STATUSES = ['all', 'pending', 'downloading', 'completed', 'failed'];
+const SEED_RANGE = 4294967296;
+
+/** A non-negative integer query value, `fallback` when absent; anything else is a 400. */
+function queryInt(value: unknown, name: string, fallback: number, min: number, max: number): number {
+  if (value === undefined || value === '') return fallback;
+  const text = Array.isArray(value) ? '' : String(value);
+  if (!/^\d{1,15}$/.test(text)) badRequest(`${name} must be an integer.`);
+  const n = Number(text);
+  if (n < min || n > max) badRequest(`${name} must be between ${min} and ${max}.`);
+  return n;
+}
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
@@ -7,10 +23,18 @@ export default defineEventHandler(async (event) => {
   const search = query.q ? String(query.q).trim() : '';
   const channelId = query.channelId ? String(query.channelId) : '';
   const status = query.status ? String(query.status) : 'completed'; // Default to show completed videos
-  
-  const limit = parseInt(String(query.limit || '20'), 10);
-  const page = parseInt(String(query.page || '1'), 10);
-  const offset = (page - 1) * limit;
+  if (!STATUSES.includes(status)) badRequest('Unknown status.');
+  // Queue states (pending, failed, ...) are an admin view.
+  if (status !== 'completed' && session?.role !== 'admin') {
+    throw createError({ statusCode: 403, statusMessage: 'Only admins can filter by download status.' });
+  }
+
+  const limit = queryInt(query.limit, 'limit', 20, 1, MAX_LIMIT);
+  const page = queryInt(query.page, 'page', 1, 1, 1_000_000);
+  const offset = query.offset !== undefined ? queryInt(query.offset, 'offset', 0, 0, 100_000_000) : (page - 1) * limit;
+  // Seed of the feed's pseudo-random jitter: the client keeps one per session,
+  // otherwise the current hour, so the pages of one browsing session agree.
+  const seed = queryInt(query.seed, 'seed', Math.floor(Date.now() / 3_600_000) % SEED_RANGE, 0, SEED_RANGE - 1);
 
   const db = getDb();
   
@@ -48,20 +72,9 @@ export default defineEventHandler(async (event) => {
   }
 
   // Enforce access control based on visibility
-  if (!session) {
-    // Guest: only public videos from public channels
-    whereClauses.push("v.visibility = 'public' AND c.visibility = 'public'");
-  } else if (session.role !== 'admin') {
-    // Standard User: public/private OR explicit access
-    whereClauses.push(`
-      (
-        (v.visibility IN ('public', 'private') AND c.visibility IN ('public', 'private'))
-        OR
-        v.channel_id IN (SELECT channel_id FROM user_channel_access WHERE user_id = ?)
-      )
-    `);
-    params.push(session.id);
-  }
+  const visible = videoVisibilitySql(session);
+  whereClauses.push(visible.sql);
+  params.push(...visible.params);
 
   // Exclude hidden videos for the logged-in user
   if (session) {
@@ -109,7 +122,7 @@ export default defineEventHandler(async (event) => {
   const totalCount = (db.prepare(countQuery).get(...params) as { count: number }).count;
 
   // Sorting logic: use a basic recommendation algorithm for the homepage feed
-  let orderBySql = 'ORDER BY v.upload_date DESC, v.created_at DESC';
+  let orderBySql = 'ORDER BY v.upload_date DESC, v.created_at DESC, v.id ASC';
   if (!search && !channelId && !subscribed) {
     const sessionUserId = session ? session.id : null;
     const historyPenaltySql = sessionUserId ? `CASE WHEN v.id IN (SELECT video_id FROM user_history WHERE user_id = ?) THEN -200 ELSE 0 END` : '0';
@@ -136,33 +149,17 @@ export default defineEventHandler(async (event) => {
         -- Watched Video Penalty -> -200pts
         + ${historyPenaltySql}
         
-        -- Serendipity (Random factor 0-15)
-        + ((ABS(RANDOM()) % 150) / 10.0)
-      ) DESC
+        -- Serendipity (pseudo-random factor 0-15, fixed for a given seed so
+        -- that paging never repeats nor skips a video)
+        + ((((v.rowid * 2654435761) + ${seed}) % ${SEED_RANGE}) % 150) / 10.0
+      ) DESC, v.id ASC
     `;
   }
 
   // Get videos list
   const listQuery = `
-    SELECT 
-      v.id, 
-      v.title, 
-      v.description, 
-      v.channel_id, 
-      v.upload_date, 
-      v.duration, 
-      v.view_count, 
-      v.local_video_path, 
-      v.local_thumbnail_path, 
-      v.download_status, 
-      v.download_progress,
-      v.download_speed,
-      v.download_eta,
-      v.visibility,
-      v.share_token,
-      v.is_short,
-      v.was_live,
-      v.created_at,
+    SELECT
+      ${videoColumnsSql(session)},
       c.title as channel_title,
       c.avatar_url as channel_avatar
     FROM videos v

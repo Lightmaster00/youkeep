@@ -160,7 +160,7 @@ export default defineEventHandler(async (event) => {
     if (large) usedIds.add(large.id);
 
     if (session) {
-      const suggestions = getRecommendedVideos(db, session.id, { type: 'all', limit: 10 }) as unknown as FeedVideo[];
+      const suggestions = getRecommendedVideos(db, session, { type: 'all', limit: 10 }) as unknown as FeedVideo[];
       const suggestion = suggestions.find(v => !usedIds.has(v.id) && !subscribedChannelIds.has(v.channel_id));
       if (suggestion) {
         small.push(suggestion);
@@ -193,7 +193,7 @@ export default defineEventHandler(async (event) => {
     },
     suggested: () => {
       if (!session) return null;
-      const suggestions = getRecommendedVideos(db, session.id, { type: 'all', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
+      const suggestions = getRecommendedVideos(db, session, { type: 'all', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
       const videos = claim(suggestions.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'suggested', title: SECTION_TITLES.suggested, videos } : null;
     },

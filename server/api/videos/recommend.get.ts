@@ -8,6 +8,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb();
-  const videos = getRecommendedVideos(db, session.id, { type: 'short', limit: 15 });
+  const videos = getRecommendedVideos(db, session, { type: 'short', limit: 15 });
   return { videos };
 });

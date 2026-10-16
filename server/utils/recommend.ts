@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { videoVisibilitySql, type VideoViewer } from './videoAccess';
 
 export interface RecommendedVideo {
   id: string;
@@ -20,9 +21,12 @@ const CANDIDATE_POOL_SIZE = 500;
 
 export function getRecommendedVideos(
   db: Database.Database,
-  userId: string,
+  viewer: VideoViewer,
   opts: { type: 'short' | 'video' | 'all'; limit: number }
 ): RecommendedVideo[] {
+  const userId = viewer.id;
+  // Same visibility rule as every list: an admin is recommended everything.
+  const visible = videoVisibilitySql(viewer);
   // 1. Get user channel watch times
   const channelTimes = db.prepare(`
     SELECT v.channel_id, SUM(uh.watch_time_seconds) as total_time
@@ -58,14 +62,10 @@ export function getRecommendedVideos(
     JOIN channels c ON v.channel_id = c.id
     WHERE v.download_status = 'completed' ${isShortClause}
       AND v.id NOT IN (SELECT video_id FROM user_hidden_videos WHERE user_id = ?)
-      AND (
-        (v.visibility IN ('public', 'private') AND c.visibility IN ('public', 'private'))
-        OR
-        v.channel_id IN (SELECT channel_id FROM user_channel_access WHERE user_id = ?)
-      )
+      AND ${visible.sql}
     ORDER BY v.upload_date DESC
     LIMIT ?
-  `).all(userId, userId, CANDIDATE_POOL_SIZE) as RecommendedVideo[];
+  `).all(userId, ...visible.params, CANDIDATE_POOL_SIZE) as RecommendedVideo[];
 
   if (candidates.length === 0) {
     return [];

@@ -14,9 +14,9 @@ describe('getRecommendedVideos', () => {
     insertChannel(db, { id: 'c1' });
     insertVideo(db, { id: 'v1', channelId: 'c1', isShort: true, uploadDate: '20260101' });
     insertVideo(db, { id: 'v2', channelId: 'c1', isShort: false, uploadDate: '20260101' });
-    expect(getRecommendedVideos(db, 'u1', { type: 'short', limit: 15 }).map(v => v.id)).toEqual(['v1']);
-    expect(getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 }).map(v => v.id)).toEqual(['v2']);
-    expect(getRecommendedVideos(db, 'u1', { type: 'all', limit: 15 }).map(v => v.id).sort()).toEqual(['v1', 'v2']);
+    expect(getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'short', limit: 15 }).map(v => v.id)).toEqual(['v1']);
+    expect(getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'video', limit: 15 }).map(v => v.id)).toEqual(['v2']);
+    expect(getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'all', limit: 15 }).map(v => v.id).sort()).toEqual(['v1', 'v2']);
   });
 
   it('excludes hidden videos and videos not in completed status', () => {
@@ -25,8 +25,8 @@ describe('getRecommendedVideos', () => {
     insertVideo(db, { id: 'v2', channelId: 'c1', isShort: false, downloadStatus: 'downloading', uploadDate: '20260101' });
     insertVideo(db, { id: 'v3', channelId: 'c1', isShort: false, uploadDate: '20260101' });
     insertHiddenVideo(db, { userId: 'u1', videoId: 'v1' });
-    expect(getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 }).map(v => v.id)).toEqual(['v3']);
-    expect(getRecommendedVideos(db, 'u1', { type: 'short', limit: 15 })).toEqual([]);
+    expect(getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'video', limit: 15 }).map(v => v.id)).toEqual(['v3']);
+    expect(getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'short', limit: 15 })).toEqual([]);
   });
 
   it('respects the limit', () => {
@@ -34,7 +34,7 @@ describe('getRecommendedVideos', () => {
     for (let i = 0; i < 5; i++) {
       insertVideo(db, { id: `v${i}`, channelId: 'c1', isShort: false, uploadDate: '20260101' });
     }
-    const results = getRecommendedVideos(db, 'u1', { type: 'video', limit: 3 });
+    const results = getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'video', limit: 3 });
     expect(results).toHaveLength(3);
   });
 
@@ -45,7 +45,7 @@ describe('getRecommendedVideos', () => {
     insertVideo(db, { id: 'v2', channelId: 'c2', isShort: false, uploadDate: '20260101' });
     // Heavy watch history on c1 dwarfs the +/-20% random factor applied to scores.
     insertUserHistory(db, { userId: 'u1', videoId: 'v1', watchTimeSeconds: 100000 });
-    const results = getRecommendedVideos(db, 'u1', { type: 'video', limit: 15 });
+    const results = getRecommendedVideos(db, { id: 'u1', role: 'user' }, { type: 'video', limit: 15 });
     expect(results[0].id).toBe('v1');
   });
 });
