@@ -28,7 +28,8 @@ vi.mock('../../server/utils/downloader', async (importOriginal) => {
 
 import { cleanupPartialMusicFiles, deleteMusicArtist, downloadTrackClip, getMusicDownloadsDir } from '../../server/utils/musicDownloader';
 import { cleanupPartialPodcastFiles, deletePodcastShow, downloadEpisodeFile, getPodcastDownloadsDir } from '../../server/utils/podcastDownloader';
-import { isContained } from '../../server/utils/videoPaths';
+import { isContained, entityFolderName, videoChannelFolder, buildVideoPaths } from '../../server/utils/videoPaths';
+import { sanitizeFolderName } from '../../server/utils/downloader';
 import musicFileRoute from '../../server/routes/downloads-music/[...path]';
 import podcastFileRoute from '../../server/routes/downloads-podcasts/[...path]';
 import { assertInTmp, createTestDb, insertMusicArtist, insertMusicTrack, insertPodcastEpisode, insertPodcastShow, mockEvent } from '../helpers/testDb';
@@ -135,5 +136,64 @@ describe('the file routes serve a degenerate-name entity from <base>/<id>', () =
     fs.mkdirSync(path.join(podcastBase, 's1'));
     fs.writeFileSync(path.join(podcastBase, 's1', 'e1.mp3'), 'podcast');
     expect(await serve(podcastFileRoute, 's1/e1.mp3')).toBe('podcast');
+  });
+});
+
+// 315 UTF-8 bytes (multi-byte characters around the 240-byte cut).
+const LONG = 'The Very Long Show Title ' + 'é'.repeat(100) + ' — ' + 'x'.repeat(75) + ' 日本語';
+const bytes = (s: string) => Buffer.byteLength(s, 'utf8');
+
+describe('folder names longer than 240 bytes (M1)', () => {
+  it('the fixture is 315 bytes', () => {
+    expect(bytes(LONG)).toBe(315);
+  });
+
+  it('are cut on a character boundary with a stable hash suffix; shorter names are unchanged', () => {
+    const name = sanitizeFolderName(LONG);
+    expect(bytes(name)).toBeLessThanOrEqual(240);
+    expect(name).not.toContain('\uFFFD');
+    expect(Buffer.from(name, 'utf8').toString('utf8')).toBe(name);
+    expect(name).toMatch(/ ~[0-9a-f]{8}$/);
+    expect(sanitizeFolderName(LONG)).toBe(name);
+    expect(sanitizeFolderName(LONG + 'y')).not.toBe(name);
+    const exact = 'a'.repeat(240);
+    expect(sanitizeFolderName(exact)).toBe(exact);
+    expect(sanitizeFolderName('AC/DC: Live?')).toBe('AC_DC_ Live_');
+    expect(entityFolderName(LONG, 'id1')).toBe(name);
+    expect(videoChannelFolder(LONG, 'UC1')).toBe(name);
+  });
+
+  it('a podcast show with a 315-byte title downloads, serves and deletes its episode', async () => {
+    insertPodcastShow(db, { id: 's1', title: LONG });
+    insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'downloading' });
+    safeUrlDeps.lookup = async () => [{ address: '93.184.216.34', family: 4 }];
+    vi.stubGlobal('fetch', async () => new Response('audio-bytes', { headers: { 'content-type': 'audio/mpeg' } }));
+    await downloadEpisodeFile('e1', 's1');
+    const folder = sanitizeFolderName(LONG);
+    expect(fs.readFileSync(path.join(podcastBase, folder, 'e1.mp3'), 'utf8')).toBe('audio-bytes');
+    const stored = (db.prepare('SELECT local_file_path FROM podcast_episodes WHERE id = ?').get('e1') as any).local_file_path;
+    expect(stored).toBe(`/downloads-podcasts/${folder}/e1.mp3`);
+    db.prepare("UPDATE podcast_episodes SET download_status = 'completed' WHERE id = 'e1'").run();
+    const result: any = await podcastFileRoute(mockEvent(undefined, { params: { path: `${encodeURIComponent(folder)}/e1.mp3` } }));
+    const chunks: Buffer[] = [];
+    for await (const chunk of result) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks).toString('utf8')).toBe('audio-bytes');
+    deletePodcastShow('s1');
+    expect(fs.existsSync(path.join(podcastBase, folder))).toBe(false);
+  });
+
+  it('a music artist and a video channel with a 315-byte name get creatable folders', async () => {
+    insertMusicArtist(db, { id: 'a2', name: LONG });
+    insertMusicTrack(db, { id: 't2', artistId: 'a2', downloadStatus: 'completed' });
+    await expect(downloadTrackClip('t2')).rejects.toThrow();
+    const template = spawned[0]![spawned[0]!.indexOf('-o') + 1]!;
+    expect(path.dirname(template)).toBe(path.join(musicBase, sanitizeFolderName(LONG)));
+    fs.mkdirSync(path.dirname(template), { recursive: true });
+    deleteMusicArtist('a2');
+    expect(fs.existsSync(path.dirname(template))).toBe(false);
+
+    const p = buildVideoPaths({ baseDir: musicBase, channelFolder: videoChannelFolder(LONG, 'UC1'), title: LONG, id: 'v1' });
+    fs.mkdirSync(p.dir, { recursive: true });
+    expect(fs.existsSync(p.dir)).toBe(true);
   });
 });

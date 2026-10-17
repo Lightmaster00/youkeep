@@ -17,10 +17,33 @@ import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './pro
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
 
+/** Longest folder name (UTF-8 bytes) we create; most file systems stop at 255. */
+export const MAX_FOLDER_NAME_BYTES = 240;
+
+/**
+ * The folder name of a channel, artist or show. A name over
+ * MAX_FOLDER_NAME_BYTES is cut on a character boundary and given a short
+ * hash of the full name (` ~1a2b3c4d`), so it stays unique and stable; a
+ * shorter name is exactly what it always was, so existing libraries keep
+ * their folders. Download, serving, cleanup, delete, wipe and tidy all go
+ * through this function.
+ */
 export function sanitizeFolderName(name: string): string {
-  return name
+  const cleaned = name
     .replace(/[\\/:*?"<>|]/g, '_')
     .trim();
+  if (Buffer.byteLength(cleaned, 'utf8') <= MAX_FOLDER_NAME_BYTES) return cleaned;
+  const suffix = ` ~${crypto.createHash('sha256').update(cleaned, 'utf8').digest('hex').slice(0, 8)}`;
+  const budget = MAX_FOLDER_NAME_BYTES - Buffer.byteLength(suffix, 'utf8');
+  let out = '';
+  let used = 0;
+  for (const ch of cleaned) {
+    const size = Buffer.byteLength(ch, 'utf8');
+    if (used + size > budget) break;
+    out += ch;
+    used += size;
+  }
+  return `${out.trimEnd()}${suffix}`;
 }
 
 // Builds a process env with common Homebrew/local bin dirs prepended to PATH,
