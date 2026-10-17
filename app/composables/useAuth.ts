@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import { clearClientCaches } from '~/utils/clientCaches';
+import { clearUserClientState, readClientOwner, writeClientOwner } from '~/utils/userClientState';
 
 export interface UserSession {
   id: string;
@@ -9,6 +10,8 @@ export interface UserSession {
 }
 
 export const useAuth = () => {
+  // Captured now: logout/login run from event handlers, after awaits.
+  const nuxtApp = useNuxtApp();
   const user = useState<UserSession | null>('auth_user', () => null);
   const loading = useState<boolean>('auth_loading', () => true);
 
@@ -35,6 +38,11 @@ export const useAuth = () => {
       });
 
       if (response.success) {
+        // Another user's leftovers (their session ended without a logout
+        // here): drop them before this user's pages render.
+        const owner = import.meta.client ? readClientOwner() : null;
+        if (owner && owner !== response.user.id) nuxtApp.runWithContext(() => clearUserClientState());
+        if (import.meta.client) writeClientOwner(response.user.id);
         user.value = response.user;
         return { success: true };
       }
@@ -54,6 +62,8 @@ export const useAuth = () => {
       console.error('Logout error:', err);
     } finally {
       user.value = null;
+      // Nothing of this user stays in the browser for the next one.
+      nuxtApp.runWithContext(() => clearUserClientState());
       // The service worker cache must not outlive the session (shared browsers).
       await clearClientCaches();
       navigateTo('/login');
