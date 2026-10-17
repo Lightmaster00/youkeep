@@ -1,7 +1,9 @@
 import { defineEventHandler, createError } from 'h3';
+import { requireSessionAdmin } from '../../../utils/auth';
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event);
+  // A real admin session: an API token cannot wipe or move the library.
+  await requireSessionAdmin(event);
 
   const result = startLibraryWipe();
   if (!result.started) {

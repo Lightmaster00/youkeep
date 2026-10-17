@@ -2,9 +2,11 @@ import { defineEventHandler, createError } from 'h3';
 import { readJsonObject, optionalString } from '../../../utils/validation';
 import fs from 'fs';
 import path from 'path';
+import { requireSessionAdmin } from '../../../utils/auth';
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event);
+  // A real admin session: an API token cannot wipe or move the library.
+  await requireSessionAdmin(event);
   // An empty or missing path means "back to the built-in default".
   const trimmed = optionalString(await readJsonObject(event), 'path', { max: 1024 }) ?? '';
   if (trimmed.includes('\0')) {
