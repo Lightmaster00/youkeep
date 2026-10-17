@@ -1,4 +1,5 @@
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
+import { clearClientCaches } from '~/utils/clientCaches';
 
 export interface UserSession {
   id: string;
@@ -53,6 +54,8 @@ export const useAuth = () => {
       console.error('Logout error:', err);
     } finally {
       user.value = null;
+      // The service worker cache must not outlive the session (shared browsers).
+      await clearClientCaches();
       navigateTo('/login');
     }
   };
