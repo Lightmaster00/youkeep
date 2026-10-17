@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
+import { safeRedirectPath } from '~/utils/safeRedirect';
 
 // Disable default layout for the login page
 definePageMeta({
@@ -75,6 +76,9 @@ definePageMeta({
 });
 
 const { login } = useAuth();
+const route = useRoute();
+// The page the user wanted before being sent here (same-origin paths only).
+const afterLogin = () => safeRedirectPath(route.query.redirect) || '/';
 const username = ref('');
 const password = ref('');
 const confirmPassword = ref('');
@@ -122,7 +126,7 @@ const handleSetup = async () => {
     if (res.success) {
       const { fetchUser } = useAuth();
       await fetchUser();
-      navigateTo('/');
+      navigateTo(afterLogin());
     }
   } catch (err: any) {
     errorMessage.value = err.data?.statusMessage || 'Setup failed.';
@@ -139,7 +143,7 @@ const handleLogin = async () => {
   loadingSubmit.value = false;
 
   if (res.success) {
-    navigateTo('/');
+    navigateTo(afterLogin());
   } else {
     errorMessage.value = res.message || 'Incorrect credentials.';
   }

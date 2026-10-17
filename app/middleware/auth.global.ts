@@ -1,5 +1,6 @@
 import { moduleForPagePath } from '~/utils/moduleRouting';
 import { shouldApplyLanding } from '~/utils/displayPrefs';
+import { safeRedirectPath } from '~/utils/safeRedirect';
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const auth = useAuth();
@@ -10,15 +11,21 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   // If not logged in and trying to reach a protected page
-  const publicRoutes = ['/login', '/', '/channels', '/categories', '/shorts'];
-  const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/watch/');
+  const publicRoutes = ['/login', '/', '/channels', '/shorts'];
+  // A personal playlist opened from its share link (?token=...) is readable by
+  // guests; the API checks the token.
+  const isSharedPlaylist = to.path.startsWith('/playlists/')
+    && typeof to.query.token === 'string' && to.query.token !== '';
+  const isPublicRoute = publicRoutes.includes(to.path) || to.path.startsWith('/watch/') || isSharedPlaylist;
   if (!auth.isLoggedIn.value && !isPublicRoute) {
-    return navigateTo('/login');
+    // Come back here after signing in.
+    const back = safeRedirectPath(to.fullPath);
+    return navigateTo(back && back !== '/' ? { path: '/login', query: { redirect: back } } : '/login');
   }
 
   // If already logged in and trying to access the login page
   if (auth.isLoggedIn.value && to.path === '/login') {
-    return navigateTo('/');
+    return navigateTo(safeRedirectPath(to.query.redirect) || '/');
   }
 
   // Protect admin dashboard pages from standard users
