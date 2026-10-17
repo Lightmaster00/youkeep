@@ -24,6 +24,8 @@ export default defineNuxtConfig({
       title: 'YouKeep',
       meta: [
         { name: 'theme-color', content: '#8b5cf6' },
+        // A private, self-hosted app: keep every page out of search engines.
+        { name: 'robots', content: 'noindex, nofollow' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
       ],

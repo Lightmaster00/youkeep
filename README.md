@@ -78,6 +78,10 @@ Session cookies are marked `Secure` only when the request arrives over HTTPS (di
 
 ---
 
+### Exposure
+
+YouKeep is a personal archive meant to run on your LAN or behind your own authentication layer (VPN, reverse proxy with SSO / basic auth, Cloudflare Access...). It has its own accounts, but guests can open public channels, videos and share links, and the app is not hardened or rate-limited for direct exposure to the whole internet. If you publish it, put it behind HTTPS and an access-controlled proxy. Pages are marked `noindex` and `robots.txt` disallows all crawling.
+
 ## Development & Testing
 
 Run the full test suite with:

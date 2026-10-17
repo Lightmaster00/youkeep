@@ -1,2 +1,3 @@
-User-Agent: *
-Disallow:
+# YouKeep is a private, self-hosted app: nothing here is meant for search engines.
+User-agent: *
+Disallow: /
