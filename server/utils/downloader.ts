@@ -1706,7 +1706,8 @@ export async function ingestUrl(
   if (options.channelMetadataOnly) {
     args.push('--playlist-end', '1');
   }
-  args.push(url);
+  // '--' ends option parsing: the URL can never be read as a yt-dlp option.
+  args.push('--', url);
   
   let stdout = '';
   let stderr = '';
@@ -2321,7 +2322,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
 
   // Flat playlist scan of the playlists tab
   const playlistsUrl = `https://www.youtube.com/channel/${channelId}/playlists`;
-  const args = ['--dump-single-json', '--flat-playlist', playlistsUrl];
+  const args = ['--dump-single-json', '--flat-playlist', '--', playlistsUrl];
 
   let stdout = '';
   let status: number | null = null;
@@ -2373,7 +2374,7 @@ export async function syncChannelPlaylists(channelId: string): Promise<void> {
 
       // Fetch videos inside the playlist first
       const plUrl = `https://www.youtube.com/playlist?list=${pl.id}`;
-      const plArgs = ['--dump-single-json', '--flat-playlist', plUrl];
+      const plArgs = ['--dump-single-json', '--flat-playlist', '--', plUrl];
       
       try {
         const plChild = await runProcessAsync(ytdlPath, plArgs, env, undefined, YTDL_METADATA_TIMEOUT_MS);

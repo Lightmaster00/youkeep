@@ -68,7 +68,7 @@ describe('following a video channel from a search result (hints)', () => {
 
     await flush();
     expect(runYtdl).toHaveBeenCalledTimes(1);
-    expect(runYtdl.mock.calls[0][0]).toEqual(['--dump-single-json', '--flat-playlist', 'https://www.youtube.com/channel/UCv/videos']);
+    expect(runYtdl.mock.calls[0][0]).toEqual(['--dump-single-json', '--flat-playlist', '--', 'https://www.youtube.com/channel/UCv/videos']);
 
     videos.resolve(tab('UCv', 'videos', ['v1', 'v2']));
     await backgroundImportsIdle();
@@ -114,7 +114,7 @@ describe('following a pasted channel address (no hints)', () => {
 
     const res = await ingestUrl('https://www.youtube.com/@pasted', { background: true });
     expect(runYtdl.mock.calls[0]).toEqual([
-      ['--dump-single-json', '--flat-playlist', '--playlist-end', '1', 'https://www.youtube.com/@pasted'],
+      ['--dump-single-json', '--flat-playlist', '--playlist-end', '1', '--', 'https://www.youtube.com/@pasted'],
       CHANNEL_METADATA_TIMEOUT_MS,
     ]);
     expect(res).toMatchObject({ success: true, importing: true, channelId: 'UCp', count: 0 });

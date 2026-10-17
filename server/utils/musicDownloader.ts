@@ -345,7 +345,7 @@ function startWorkerIfDownloading(db: ReturnType<typeof getDb>, artistId: string
  * touch import_status and does not start the download worker.
  */
 export async function importArtistTracks(artistId: string, fetchUrl: string): Promise<{ count: number; name: string }> {
-  const data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', fetchUrl]);
+  const data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', '--', fetchUrl]);
   const db = getDb();
   const artist = db.prepare('SELECT channel_id, name FROM music_artists WHERE id = ?').get(artistId) as { channel_id: string | null; name: string } | undefined;
   // Unfollowed while the listing ran: nothing to import into.
@@ -444,7 +444,7 @@ export async function ingestMusicUrl(
     } else {
       let data: any;
       try {
-        data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', '--playlist-end', '1', fetchUrl], CHANNEL_METADATA_TIMEOUT_MS);
+        data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', '--playlist-end', '1', '--', fetchUrl], CHANNEL_METADATA_TIMEOUT_MS);
       } catch (err: any) {
         return { success: false, message: err?.message || String(err), count: 0 };
       }
@@ -468,7 +468,7 @@ export async function ingestMusicUrl(
 
   let data: any;
   try {
-    data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', fetchUrl]);
+    data = await musicImportDeps.runYtdlJson(['--dump-single-json', '--flat-playlist', '--', fetchUrl]);
   } catch (err: any) {
     return { success: false, message: err?.message || String(err), count: 0 };
   }

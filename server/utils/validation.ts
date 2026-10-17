@@ -106,10 +106,24 @@ export function optionalInteger(body: Record<string, unknown>, key: string, opts
   return value;
 }
 
-/** A URL field: required, a string of at most 2048 characters without control characters. */
+/**
+ * A URL field: required, at most 2048 characters, no control characters, and a
+ * real http(s) URL without embedded credentials. Anything else (for example a
+ * value starting with "--") could be read by yt-dlp as an option, so it is
+ * refused here instead of being passed on.
+ */
 export function requiredUrl(body: Record<string, unknown>, key: string): string {
   const value = requiredString(body, key, { max: 2048 });
   if (/[\u0000-\u001f\u007f]/.test(value)) badRequest(`${key} contains invalid characters.`);
+  let parsed: URL;
+  try {
+    parsed = new URL(value.trim());
+  } catch {
+    return badRequest(`${key} must be an http(s) URL.`);
+  }
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname || parsed.username || parsed.password) {
+    badRequest(`${key} must be an http(s) URL without credentials.`);
+  }
   return value;
 }
 

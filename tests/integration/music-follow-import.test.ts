@@ -69,7 +69,7 @@ describe('following an artist from a search result (hints)', () => {
 
     await flush();
     expect(runYtdl).toHaveBeenCalledTimes(1);
-    expect(runYtdl.mock.calls[0][0]).toEqual(['--dump-single-json', '--flat-playlist', 'https://www.youtube.com/channel/UCabc/videos']);
+    expect(runYtdl.mock.calls[0][0]).toEqual(['--dump-single-json', '--flat-playlist', '--', 'https://www.youtube.com/channel/UCabc/videos']);
     expect(artist('UCabc').import_status).toBe('importing');
     expect(startWorker).not.toHaveBeenCalled();
 
@@ -174,7 +174,7 @@ describe('following a pasted channel address (no hints)', () => {
 
     expect(runYtdl).toHaveBeenCalledTimes(1);
     expect(runYtdl.mock.calls[0]).toEqual([
-      ['--dump-single-json', '--flat-playlist', '--playlist-end', '1', 'https://www.youtube.com/@pasted/videos'],
+      ['--dump-single-json', '--flat-playlist', '--playlist-end', '1', '--', 'https://www.youtube.com/@pasted/videos'],
       CHANNEL_METADATA_TIMEOUT_MS,
     ]);
     expect(CHANNEL_METADATA_TIMEOUT_MS).toBe(20_000);
@@ -184,7 +184,7 @@ describe('following a pasted channel address (no hints)', () => {
     expect(trackCount(row.id)).toBe(0);
 
     await flush();
-    expect(runYtdl.mock.calls[1][0]).toEqual(['--dump-single-json', '--flat-playlist', 'https://www.youtube.com/channel/UCpasted/videos']);
+    expect(runYtdl.mock.calls[1][0]).toEqual(['--dump-single-json', '--flat-playlist', '--', 'https://www.youtube.com/channel/UCpasted/videos']);
     full.resolve(listing('UCpasted', ['first', 'second']));
     await backgroundImportsIdle();
     expect(artist('UCpasted').import_status).toBe('done');
