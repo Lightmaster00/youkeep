@@ -3,14 +3,34 @@ name: Publish Docker image
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
 
+# Third-party actions are referenced by tag here. For a stronger supply-chain
+# guarantee, pin each one to the full commit SHA of the release you reviewed
+# (e.g. actions/checkout@<40-char SHA> # v4) and let Dependabot update them.
+
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run
+
   publish:
+    # An image (and `latest`) is only published once the test suite passed.
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,13 +40,25 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/lightmaster00/youkeep
+          tags: |
+            # latest follows main
+            type=raw,value=latest,enable={{is_default_branch}}
+            # every build is also tagged with its full commit SHA
+            type=sha,format=long,prefix=
+            # a v1.2.3 tag publishes 1.2.3, 1.2 and 1
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           platforms: linux/amd64
-          tags: |
-            ghcr.io/lightmaster00/youkeep:latest
-            ghcr.io/lightmaster00/youkeep:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

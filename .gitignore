@@ -29,3 +29,6 @@ data/
 
 # Brainstorming visual companion sessions
 .superpowers/
+
+# Claude Code local settings
+.claude/

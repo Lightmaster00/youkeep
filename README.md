@@ -63,11 +63,12 @@ Then Docker tab -> **Add Container** -> pick **YouKeep** in the *Template* dropd
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `PUID` / `PGID` | `99` / `100` | Owner of `/app/data` and of every file the app writes |
+| `PUID` / `PGID` | `99` / `100` | Owner of `/app/data` and of every file the app writes. `0` (root) is refused unless `ALLOW_ROOT=true` |
+| `ALLOW_ROOT` | empty | Set to `true` to run as root anyway (not recommended: yt-dlp and ffmpeg parse untrusted media) |
 | `TZ` | `UTC` | Timezone, e.g. `Europe/Paris`; download schedules (cron) run in it |
-| `UMASK` | `022` | Permissions of created files (`000` = world-writable) |
+| `UMASK` | `022` | Permissions of created files (`000` = world-writable). An invalid value (not 3-4 octal digits) is ignored with a warning |
 | `COOKIE_SECURE` | auto | Force `Secure` cookies on (`true`) or off (`false`) |
-| `TRUST_PROXY` | empty | Number of reverse proxies in front of YouKeep (`true` = `1`). Empty: `X-Forwarded-*` headers are ignored |
+| `TRUST_PROXY` | empty | Number of reverse proxies in front of YouKeep (`true` = `1`). Empty: `X-Forwarded-*` headers are ignored. See below |
 | `PORT` | `3000` | Port inside the container (usually just change the host port instead) |
 
 ### HTTPS / reverse proxy
@@ -75,6 +76,16 @@ Then Docker tab -> **Add Container** -> pick **YouKeep** in the *Template* dropd
 Behind a reverse proxy (Nginx Proxy Manager, Traefik, Caddy, Cloudflare Tunnel...) set `TRUST_PROXY=1` (or the number of proxies chained in front of YouKeep). Without it, every visitor arrives from the proxy's address: the login rate limit then counts everyone as one client (a few wrong passwords lock everybody out for 15 minutes) and `X-Forwarded-Proto` is ignored. With `TRUST_PROXY=N` the client address is the Nth entry from the right of `X-Forwarded-For` (the entries to its left are sent by the client and can be forged). Never set it when YouKeep is reachable directly, without the proxy: anyone could then pick their own address.
 
 Session cookies are marked `Secure` only when the request arrives over HTTPS (directly, or through a trusted proxy (`TRUST_PROXY`) that sends `X-Forwarded-Proto: https`). Plain `http://<lan-ip>:3000` works too. Set `COOKIE_SECURE=true` or `false` to force the behaviour.
+
+When the proxy runs on the same host, publish the port on loopback only (`"127.0.0.1:3000:3000"` in `docker-compose.yml`): Docker's published ports bypass host firewalls such as ufw, so `"3000:3000"` also exposes the app directly, around the proxy.
+
+### Backups
+
+Everything that is not media lives in the app data folder (`/app/data`, e.g. `./data` or `/mnt/user/appdata/youkeep`): the SQLite database (`youkeep.db`, plus its `-wal`/`-shm` files while running), users, settings, history and the yt-dlp binary. Back it up regularly. For a consistent copy, stop the container first (it checkpoints and closes the database on shutdown), or copy with `sqlite3 youkeep.db ".backup backup.db"` while it runs. Media folders can be re-downloaded but are usually worth backing up too.
+
+### API tokens
+
+Tokens created in Account give scripts and other clients access with the rights of their owner (an admin's token can manage channels, downloads and settings). They have no scopes, no read-only mode and no expiry: create one per client and revoke it when unused. A token can never manage accounts or credentials (create tokens, change passwords, manage users, search-platform keys), nor wipe the library, tidy it or change the downloads folder: those need a browser session.
 
 ---
 

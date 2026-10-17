@@ -8,7 +8,15 @@ services:
     #   dockerfile: Dockerfile
     container_name: youkeep
     restart: unless-stopped
+    # An init process (tini) as PID 1 reaps orphaned yt-dlp/ffmpeg processes.
+    init: true
+    security_opt:
+      - no-new-privileges:true
     ports:
+      # Published on every interface (Docker bypasses host firewalls such as
+      # ufw). Behind a reverse proxy on the same host, publish on loopback
+      # only instead, so the app is reachable through the proxy alone:
+      #   - "127.0.0.1:3000:3000"
       - "3000:3000"
     volumes:
       # Database + settings (e.g. /mnt/user/appdata/youkeep on Unraid)

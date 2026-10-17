@@ -4,6 +4,14 @@ node_modules
 data
 .git
 .DS_Store
-README.md
 docker-compose.yml
 Dockerfile
+.env
+.env.*
+.claude
+.superpowers
+tests
+docs
+scratch*
+*.md
+!README.md
