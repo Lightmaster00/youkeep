@@ -83,10 +83,8 @@ export default defineEventHandler(async (event) => {
     const isPublic = playlist.visibility === 'public';
 
     if (!isOwner && !isPublic && !hasValidToken) {
-      throw createError({
-        statusCode: 403,
-        statusMessage: 'Access denied to this playlist.'
-      });
+      // Hidden answers exactly like missing: no existence oracle.
+      throw createError({ statusCode: 404, statusMessage: 'Playlist not found.' });
     }
 
     const personalVideos = db.prepare(`

@@ -19,7 +19,8 @@ export default defineEventHandler(async (event) => {
   // 2. Verify user has access to this channel (public, private, or explicit access)
   const hasAccess = await canAccessChannel(channelId, event);
   if (!hasAccess) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied.' });
+    // Hidden answers exactly like missing: no existence oracle.
+    throw createError({ statusCode: 404, statusMessage: 'Channel not found.' });
   }
 
   // 3. Insert subscription

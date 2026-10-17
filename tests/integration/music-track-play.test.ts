@@ -33,15 +33,15 @@ function eventFor(trackId: string, cookieHeader?: string) {
 }
 
 describe('POST /api/music/tracks/[id]/play', () => {
-  it('returns 404 for a nonexistent track, 403 for a private track to a guest and for an ultra_private one to a user', async () => {
+  it('returns 404 for a nonexistent track, and for a private track to a guest and an ultra_private one to a user', async () => {
     const cookie = loginAs('u1');
     await expect(handler(eventFor('missing', cookie))).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'a1', visibility: 'private' });
     insertMusicTrack(db, { id: 't1', artistId: 'a1' });
-    await expect(handler(eventFor('t1'))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(handler(eventFor('t1'))).rejects.toMatchObject({ statusCode: 404 });
     insertMusicArtist(db, { id: 'a2', visibility: 'ultra_private' });
     insertMusicTrack(db, { id: 't2', artistId: 'a2' });
-    await expect(handler(eventFor('t2', cookie))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(handler(eventFor('t2', cookie))).rejects.toMatchObject({ statusCode: 404 });
     expect(((await handler(eventFor('t2', loginAs('admin1', 'admin')))) as any).recorded).toBe(true);
   });
 

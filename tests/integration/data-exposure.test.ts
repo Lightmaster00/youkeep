@@ -22,6 +22,9 @@ import artistSongs from '../../server/api/music/artists/[id]/songs.get';
 import artistTracks from '../../server/api/music/artists/[id]/tracks.get';
 import showGet from '../../server/api/podcasts/shows/[id]/index.get';
 import showEpisodes from '../../server/api/podcasts/shows/[id]/episodes.get';
+import trackPlay from '../../server/api/music/tracks/[id]/play.post';
+import channelSubscribe from '../../server/api/channels/[id]/subscribe.post';
+import personalDelete from '../../server/api/playlists/personal/[id].delete';
 
 // What a viewer can learn from the API about content they may not see.
 const { openDatabase } = await vi.importActual<typeof import('../../server/utils/db')>('../../server/utils/db');
@@ -209,6 +212,46 @@ describe('inaccessible resources answer 404 like missing ones (L5)', () => {
       expect(await status(handler(ev(cookie, `/x${query}`, { id: missing })))).toBe(404);
     }
     expect(await status(handler(ev(ADMIN, `/x${query}`, { id: hidden })))).toBe(200);
+  });
+});
+
+describe('actions on hidden items answer 404 like missing ones (R5)', () => {
+  beforeEach(() => {
+    db.prepare("INSERT INTO music_artists (id, name, visibility, created_at) VALUES ('aU', 'Ultra artist', 'ultra_private', 0)").run();
+    db.prepare("INSERT INTO music_albums (id, artist_id, title, source, created_at) VALUES ('alU', 'aU', 'Ultra album', 'manual', 0)").run();
+    db.prepare("INSERT INTO music_tracks (id, artist_id, album_id, title, download_status, created_at) VALUES ('tU', 'aU', 'alU', 'Song', 'completed', 0)").run();
+    personalPlaylist('ppHidden', 'carol');
+  });
+
+  it('track play', async () => {
+    for (const cookie of [undefined, BOB]) {
+      expect(await status(trackPlay(mockEvent(cookie, { method: 'POST', params: { id: 'tU' } })))).toBe(404);
+      expect(await status(trackPlay(mockEvent(cookie, { method: 'POST', params: { id: 'nope' } })))).toBe(404);
+    }
+    expect(await status(trackPlay(mockEvent(ADMIN, { method: 'POST', params: { id: 'tU' } })))).toBe(200);
+  });
+
+  it('channel subscribe', async () => {
+    expect(await status(channelSubscribe(mockEvent(BOB, { method: 'POST', params: { id: 'chU' } })))).toBe(404);
+    expect(await status(channelSubscribe(mockEvent(BOB, { method: 'POST', params: { id: 'nope' } })))).toBe(404);
+    expect(await status(channelSubscribe(mockEvent(ADMIN, { method: 'POST', params: { id: 'chU' } })))).toBe(200);
+  });
+
+  it.each([
+    ['channel playlist route (personal id)', playlistGet],
+    ['personal playlist', personalGet],
+  ])('%s: a private playlist of someone else', async (_name, handler: any) => {
+    for (const cookie of [undefined, BOB]) {
+      expect(await status(handler(ev(cookie, '/x', { id: 'ppHidden' })))).toBe(404);
+      expect(await status(handler(ev(cookie, '/x', { id: 'nope' })))).toBe(404);
+    }
+    expect(await status(handler(ev(CAROL, '/x', { id: 'ppHidden' })))).toBe(200);
+    expect(await status(handler(ev(undefined, '/x?token=share-ppHidden', { id: 'ppHidden' })))).toBe(200);
+  });
+
+  it('editing a private playlist of someone else', async () => {
+    expect(await status(personalDelete(mockEvent(BOB, { method: 'DELETE', params: { id: 'ppHidden' } })))).toBe(404);
+    expect(await status(personalVideosPost(ev(BOB, '/x', { id: 'ppHidden' }, { videoId: 'vP' })))).toBe(404);
   });
 });
 

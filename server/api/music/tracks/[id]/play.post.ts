@@ -24,7 +24,8 @@ export default defineEventHandler(async (event) => {
 
   const hasAccess = await canAccessMusicTrack(trackId, event);
   if (!hasAccess) {
-    throw createError({ statusCode: 403, statusMessage: 'Access denied.' });
+    // Hidden answers exactly like missing: no existence oracle.
+    throw createError({ statusCode: 404, statusMessage: 'Track not found.' });
   }
 
   const session = await getUserFromSession(event);

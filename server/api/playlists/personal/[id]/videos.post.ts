@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const db = getDb();
-  const playlist = db.prepare('SELECT user_id FROM personal_playlists WHERE id = ?').get(id) as { user_id: string } | undefined;
+  const playlist = db.prepare('SELECT user_id, visibility FROM personal_playlists WHERE id = ?').get(id) as { user_id: string; visibility: string } | undefined;
 
   if (!playlist) {
     throw createError({
@@ -22,6 +22,10 @@ export default defineEventHandler(async (event) => {
   }
 
   if (playlist.user_id !== user.id && user.role !== 'admin') {
+    // A playlist the caller cannot even see answers like a missing one.
+    if (playlist.visibility !== 'public') {
+      throw createError({ statusCode: 404, statusMessage: 'Playlist not found.' });
+    }
     throw createError({
       statusCode: 403,
       statusMessage: 'You do not have permission to edit this playlist.'

@@ -129,7 +129,7 @@ describe('timing-safe token comparisons', () => {
     const spy = vi.spyOn(crypto, 'timingSafeEqual');
     await expect(personalPlaylistGet(mockEvent(undefined, { path: '/api/playlists/personal/p1?token=pp-secret', params: { id: 'p1' } }))).resolves.toMatchObject({ playlist: { id: 'p1' } });
     expect(spy).toHaveBeenCalled();
-    await expect(personalPlaylistGet(mockEvent(undefined, { path: '/api/playlists/personal/p1?token=pp-secreX', params: { id: 'p1' } }))).rejects.toMatchObject({ statusCode: 403 });
-    await expect(personalPlaylistGet(mockEvent(undefined, { path: '/api/playlists/personal/p1?token=pp-secret&token=x', params: { id: 'p1' } }))).rejects.toMatchObject({ statusCode: 403 });
+    await expect(personalPlaylistGet(mockEvent(undefined, { path: '/api/playlists/personal/p1?token=pp-secreX', params: { id: 'p1' } }))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(personalPlaylistGet(mockEvent(undefined, { path: '/api/playlists/personal/p1?token=pp-secret&token=x', params: { id: 'p1' } }))).rejects.toMatchObject({ statusCode: 404 });
   });
 });
