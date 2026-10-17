@@ -228,11 +228,19 @@ export function normalizeCustomSavePath(value: unknown): string | null {
   return withoutTrailing;
 }
 
+/**
+ * True when `dirPath` is a writable folder. A missing folder is created only
+ * when its parent exists: a vanished mount point (an unmounted NAS share)
+ * must not be silently recreated inside the container.
+ */
 export function isDirWritable(dirPath: string): boolean {
   try {
     if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+      const parent = path.dirname(dirPath);
+      if (parent === dirPath || !fs.statSync(parent).isDirectory()) return false;
+      fs.mkdirSync(dirPath);
     }
+    if (!fs.statSync(dirPath).isDirectory()) return false;
     fs.accessSync(dirPath, fs.constants.W_OK);
     return true;
   } catch (err) {
@@ -251,26 +259,61 @@ export function resolveChannelBaseDir(customSavePath: string | null | undefined)
     : getDownloadsDir();
 }
 
-export function getDownloadsDir(): string {
+export interface DownloadsDirState {
+  /** The folder videos are written to and read from. */
+  dir: string;
+  /** Set when the configured folder is unavailable: downloads wait for it. */
+  blockedReason: string | null;
+}
+
+/**
+ * The video downloads folder. A folder configured in the settings is always
+ * used, never silently replaced: when it is missing or not writable, the
+ * state says why and the queue worker waits instead of filling a
+ * container-local folder. Only when nothing is configured does it fall back
+ * from the built-in /downloads/videos to the local data folder.
+ */
+export function getDownloadsDirState(): DownloadsDirState {
+  let configured = '';
   try {
     const db = getDb();
     const setting = db.prepare("SELECT value FROM settings WHERE key = 'default_downloads_dir'").get() as { value: string } | undefined;
-    if (setting && setting.value.trim().length > 0) {
-      const customPath = path.resolve(setting.value.trim());
-      if (isDirWritable(customPath)) {
-        return customPath;
-      }
-    }
+    configured = setting?.value.trim() ?? '';
   } catch (e) {}
-  
+  if (configured) {
+    const customPath = path.resolve(configured);
+    return isDirWritable(customPath)
+      ? { dir: customPath, blockedReason: null }
+      : { dir: customPath, blockedReason: `The configured downloads folder ${customPath} is missing or not writable.` };
+  }
+
   const defaultPath = '/downloads/videos';
   if (isDirWritable(defaultPath)) {
-    return defaultPath;
+    return { dir: defaultPath, blockedReason: null };
   }
-  
+
   const localFallback = path.join(getDataDir(), 'downloads');
   try { fs.mkdirSync(localFallback, { recursive: true }); } catch (err) {}
-  return localFallback;
+  return { dir: localFallback, blockedReason: null };
+}
+
+export function getDownloadsDir(): string {
+  return getDownloadsDirState().dir;
+}
+
+// The last blocked reason reported, so the loud error is logged once per change.
+let reportedBlockedReason: string | null = null;
+
+/** Logs (loudly, once per change) that downloads are blocked, or that they resume. */
+function reportDownloadsBlocked(reason: string | null): void {
+  if (reason === reportedBlockedReason) return;
+  if (reason) {
+    console.error(`[Downloader] Downloads are blocked: ${reason}`);
+    addLog(`Downloads blocked: ${reason} Waiting until it is available again.`);
+  } else {
+    addLog('The downloads folder is available again: downloads resume.');
+  }
+  reportedBlockedReason = reason;
 }
 
 /**
@@ -422,6 +465,15 @@ export async function startQueueWorker() {
         // any new download while that's happening.
         if (isWipeInProgress()) {
           await sleepOrWakeable(5000);
+          continue;
+        }
+
+        // A configured downloads folder that is unavailable (unmounted share,
+        // permissions): wait for it rather than write somewhere else.
+        const blockedReason = getDownloadsDirState().blockedReason;
+        reportDownloadsBlocked(blockedReason);
+        if (blockedReason) {
+          await sleepOrWakeable(15_000);
           continue;
         }
 

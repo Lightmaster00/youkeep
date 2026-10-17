@@ -1,4 +1,5 @@
 import { defineEventHandler } from 'h3';
+import { getDownloadsDirState } from '../../../utils/downloader';
 
 type Counts = { downloading: number; pending: number };
 type Kind = 'video' | 'music' | 'podcasts';
@@ -47,5 +48,8 @@ export default defineEventHandler(async (event) => {
 
   const total = TABLES.reduce((sum, { kind }) => sum + counts[kind].downloading + counts[kind].pending, 0);
 
-  return { ...counts, total, current };
+  // Why video downloads are on hold, when the configured folder is unavailable.
+  const blockedReason = getDownloadsDirState().blockedReason;
+
+  return { ...counts, total, current, blockedReason };
 });

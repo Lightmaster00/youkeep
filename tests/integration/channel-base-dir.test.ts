@@ -74,15 +74,19 @@ async function status(url: string): Promise<number> {
 
 describe('channelWriteBaseDir', () => {
   it('matches the downloader\'s resolveChannelBaseDir, without creating anything', () => {
-    const missing = path.join(dir, 'new', 'deep');
+    const missing = path.join(dir, 'new');
+    // A vanished mount: two missing levels are never recreated.
+    const vanished = path.join(dir, 'gone', 'deep');
     const unwritable = unwritableCustom();
     // Both pick the save folder, or both fall back to the default folder.
-    for (const custom of [null, '', '  ', downloads, unwritable]) {
+    for (const custom of [null, '', '  ', downloads, unwritable, vanished]) {
       expect(channelWriteBaseDir(custom, downloads) === custom).toBe(resolveChannelBaseDir(custom) === custom);
     }
     expect(channelWriteBaseDir(unwritable, downloads)).toBe(downloads);
+    expect(channelWriteBaseDir(vanished, downloads)).toBe(downloads);
+    expect(fs.existsSync(path.join(dir, 'gone'))).toBe(false);
     expect(channelWriteBaseDir(missing, downloads)).toBe(missing);
-    expect(fs.existsSync(path.join(dir, 'new'))).toBe(false);
+    expect(fs.existsSync(missing)).toBe(false);
     expect(resolveChannelBaseDir(missing)).toBe(missing);
   });
 

@@ -43,6 +43,7 @@ describe('GET /api/admin/downloader/active-counts', () => {
       podcasts: { downloading: 0, pending: 0 },
       total: 0,
       current: { kind: null, progress: null, speed: null },
+      blockedReason: null,
     });
   });
 

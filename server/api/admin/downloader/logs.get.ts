@@ -1,4 +1,4 @@
-import { latestLogs, activeProcesses } from '../../../utils/downloader';
+import { latestLogs, activeProcesses, getDownloadsDirState } from '../../../utils/downloader';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     logs: latestLogs,
+    blockedReason: getDownloadsDirState().blockedReason,
     ytdlPath,
     isPaused,
     activeDownloadCount: activeProcesses.size,

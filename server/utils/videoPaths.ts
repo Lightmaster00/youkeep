@@ -191,24 +191,24 @@ export function channelReadBaseDir(customSavePath: string | null | undefined, do
 }
 
 /**
- * True when `dir` is a writable folder, or a missing one `mkdir -p` could
- * create (its deepest existing ancestor is a writable folder). Like
+ * True when `dir` is a writable folder, or a missing one whose parent is a
+ * writable folder (isDirWritable creates only that last level). Like
  * isDirWritable, but never creates anything.
  */
 function couldWriteInto(dir: string): boolean {
-  let probe = path.resolve(dir);
-  for (;;) {
+  const target = path.resolve(dir);
+  const writableDir = (p: string) => {
     try {
-      if (!fs.statSync(probe).isDirectory()) return false;
-      fs.accessSync(probe, fs.constants.W_OK);
+      if (!fs.statSync(p).isDirectory()) return false;
+      fs.accessSync(p, fs.constants.W_OK);
       return true;
-    } catch (err: any) {
-      if (err?.code !== 'ENOENT') return false;
-      const parent = path.dirname(probe);
-      if (parent === probe) return false;
-      probe = parent;
+    } catch {
+      return false;
     }
-  }
+  };
+  if (fs.existsSync(target)) return writableDir(target);
+  const parent = path.dirname(target);
+  return parent !== target && writableDir(parent);
 }
 
 /**
