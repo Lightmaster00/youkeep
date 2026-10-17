@@ -21,7 +21,10 @@ export default defineEventHandler(async (event) => {
       ${videoColumnsSql(session)},
       c.title as channel_title,
       c.avatar_url as channel_avatar,
-      c.description as channel_description
+      c.description as channel_description,
+      c.visibility as channel_visibility,
+      -- Whether a plain /watch link works for anyone (the Share button for non-admins).
+      CASE WHEN COALESCE(v.visibility, 'public') = 'public' AND COALESCE(c.visibility, 'public') = 'public' THEN 1 ELSE 0 END as publicly_shareable
     FROM videos v
     JOIN channels c ON v.channel_id = c.id
     WHERE v.id = ?

@@ -26,6 +26,7 @@ import trackPlay from '../../server/api/music/tracks/[id]/play.post';
 import channelSubscribe from '../../server/api/channels/[id]/subscribe.post';
 import personalDelete from '../../server/api/playlists/personal/[id].delete';
 import subscriptionGet from '../../server/api/channels/[id]/subscription.get';
+import shareLinkGet from '../../server/api/videos/[id]/share-link.get';
 
 // What a viewer can learn from the API about content they may not see.
 const { openDatabase } = await vi.importActual<typeof import('../../server/utils/db')>('../../server/utils/db');
@@ -309,5 +310,36 @@ describe('short recommendations (admin filter)', () => {
     db.prepare("INSERT INTO videos (id, title, channel_id, visibility, download_status, is_short, created_at) VALUES ('sP', 'Public short', 'chP', 'public', 'completed', 1, 0), ('sPH', 'Private short', 'chP', 'private', 'completed', 1, 0), ('sV', 'Short in private channel', 'chV', 'public', 'completed', 1, 0)").run();
     const res: any = await recommendGet(ev(undefined, '/api/videos/recommend'));
     expect(res.videos.map((v: any) => v.id)).toEqual(['sP']);
+  });
+});
+
+describe('share links (admin only, UI #15)', () => {
+  it('guest 401, member 403, unknown 404', async () => {
+    expect(await status(shareLinkGet(ev(undefined, '/x', { id: 'vPH' })))).toBe(401);
+    expect(await status(shareLinkGet(ev(BOB, '/x', { id: 'vPH' })))).toBe(403);
+    expect(await status(shareLinkGet(ev(ADMIN, '/x', { id: 'nope' })))).toBe(404);
+  });
+
+  it('an admin gets the token link of a private video (created once, then stable) and a plain link for a public one', async () => {
+    db.prepare("UPDATE videos SET share_token = NULL WHERE id = 'vPH'").run();
+    const first: any = await shareLinkGet(ev(ADMIN, '/x', { id: 'vPH' }));
+    expect(first.token).toMatch(/^[0-9a-f-]{36}$/);
+    expect(first.url).toBe(`/watch/vPH?token=${first.token}`);
+    expect(first.publiclyShareable).toBe(false);
+    expect(((await shareLinkGet(ev(ADMIN, '/x', { id: 'vPH' }))) as any).token).toBe(first.token);
+    const pub: any = await shareLinkGet(ev(ADMIN, '/x', { id: 'vP' }));
+    expect(pub).toMatchObject({ url: '/watch/vP', publiclyShareable: true });
+    // A public video in a private channel is not public.
+    expect(((await shareLinkGet(ev(ADMIN, '/x', { id: 'vV' }))) as any).publiclyShareable).toBe(false);
+  });
+
+  it('the video detail tells any viewer whether a plain link works, never the token', async () => {
+    const pub: any = ((await videoGet(ev(BOB, "/x", { id: "vP" }))) as any).video;
+    expect(pub.publicly_shareable).toBe(1);
+    expect(pub.share_token).toBeUndefined();
+    const priv: any = ((await videoGet(ev(BOB, "/x", { id: "vPH" }))) as any).video;
+    expect(priv.publicly_shareable).toBe(0);
+    expect(priv.share_token).toBeUndefined();
+    expect(priv.channel_visibility).toBe('public');
   });
 });
