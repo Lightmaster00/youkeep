@@ -482,3 +482,28 @@ describe('LibrarySourceSection — slow search', () => {
     expect(w.find('[data-testid="follow-search-submit"]').text()).toBe('Search');
   });
 });
+
+describe('LibrarySourceSection — broken avatars', () => {
+  it('switches a broken avatar to an inline fallback once and never loops', async () => {
+    listPayload = { artists: [{ id: 'a1', name: 'Artist One', avatar_url: '/broken.jpg', sync_status: 'paused', visibility: 'public', track_count: 1 }] };
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: musicSource } });
+    await flushPromises();
+    const img = w.find('[data-testid="following-a1"] img').element as HTMLImageElement;
+    const setAttr = vi.spyOn(img, 'setAttribute');
+    // The fallback failing too keeps firing error: it must not be set again.
+    for (let i = 0; i < 20; i++) img.dispatchEvent(new Event('error'));
+    expect(setAttr.mock.calls.filter(([name]) => name === 'src')).toHaveLength(1);
+    expect(img.getAttribute('src')!.startsWith('data:image/svg+xml')).toBe(true);
+  });
+
+  it('never points at a missing file for rows without an image', async () => {
+    listPayload = { artists: [{ id: 'a1', name: 'Artist One', avatar_url: '', sync_status: 'paused', visibility: 'public', track_count: 1 }] };
+    const w = await mountSuspended(LibrarySourceSection, { props: { config: musicSource } });
+    await flushPromises();
+    const img = w.find('[data-testid="following-a1"] img').element as HTMLImageElement;
+    expect(img.getAttribute('src')!.startsWith('data:image/svg+xml')).toBe(true);
+    const setAttr = vi.spyOn(img, 'setAttribute');
+    for (let i = 0; i < 5; i++) img.dispatchEvent(new Event('error'));
+    expect(setAttr).not.toHaveBeenCalled();
+  });
+});

@@ -7,6 +7,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { thumbUrl } from '~/utils/thumb';
 // One "Artists to explore" tile of the Music Discover page; opens the artist
 // in the Library.
@@ -15,8 +16,7 @@ defineProps<{ artist: any }>();
 const fallbackAvatar = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><path d=\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\'></path><circle cx=\'12\' cy=\'7\' r=\'4\'></circle></svg>';
 
 function onAvatarError(event: Event) {
-  const target = event.target as HTMLImageElement;
-  if (target && target.src !== fallbackAvatar) target.src = fallbackAvatar;
+  setImageFallback(event, fallbackAvatar);
 }
 </script>
 

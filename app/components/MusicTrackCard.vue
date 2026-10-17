@@ -24,6 +24,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
 
@@ -38,8 +39,7 @@ const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/20
 const cover = computed(() => thumbUrl(props.track.local_thumbnail_path, 320) || props.track.album_cover_url || fallbackCover);
 
 function onCoverError(event: Event) {
-  const target = event.target as HTMLImageElement;
-  if (target && target.src !== fallbackCover) target.src = fallbackCover;
+  setImageFallback(event, fallbackCover);
 }
 </script>
 

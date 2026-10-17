@@ -37,6 +37,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { thumbUrl } from '~/utils/thumb';
 // Numbered track list for Liked songs, playlists and the artist/album pages.
 // Clicking a row emits `play`; the `actions` slot adds per-row buttons after
@@ -52,8 +53,7 @@ function coverOf(track: any): string {
 }
 
 function onCoverError(event: Event) {
-  const target = event.target as HTMLImageElement;
-  if (target && target.src !== fallbackCover) target.src = fallbackCover;
+  setImageFallback(event, fallbackCover);
 }
 
 function formatDuration(seconds: number | null | undefined): string {

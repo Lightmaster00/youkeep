@@ -25,6 +25,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
 
@@ -49,7 +50,6 @@ const published = computed(() => {
 });
 
 function onCoverError(event: Event) {
-  const target = event.target as HTMLImageElement;
-  if (target && target.src !== fallbackCover) target.src = fallbackCover;
+  setImageFallback(event, fallbackCover);
 }
 </script>

@@ -8,6 +8,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
 
@@ -26,8 +27,7 @@ const trackCount = computed(() => props.album.trackCount ?? props.album.track_co
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><circle cx=\'12\' cy=\'12\' r=\'3\'></circle></svg>';
 
 function onCoverError(event: Event) {
-  const target = event.target as HTMLImageElement;
-  if (target && target.src !== fallbackCover) target.src = fallbackCover;
+  setImageFallback(event, fallbackCover);
 }
 </script>
 

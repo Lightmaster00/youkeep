@@ -34,7 +34,7 @@
       <div class="search-results-grid">
         <div v-for="(view, index) in resultViews" :key="index" class="search-channel-card">
           <img
-            :src="view.imageUrl || '/img/default-avatar.png'"
+            :src="view.imageUrl || FALLBACK_AVATAR"
             class="channel-avatar-thumb"
             referrerpolicy="no-referrer"
             alt=""
@@ -119,7 +119,7 @@
       <ul v-else class="following-list">
         <li v-for="row in rows" :key="row.id" class="following-row" :data-testid="`following-${row.id}`">
           <img
-            :src="row.imageUrl || '/img/default-avatar.png'"
+            :src="row.imageUrl || FALLBACK_AVATAR"
             class="channel-avatar-thumb"
             referrerpolicy="no-referrer"
             alt=""
@@ -195,6 +195,7 @@
 </template>
 
 <script setup lang="ts">
+import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useToast } from '~/composables/useToast';
 import ChannelOptionsModal from '~/components/settings/ChannelOptionsModal.vue';
@@ -281,9 +282,9 @@ const submitLabel = computed(() => {
   return props.config.directTarget(query.value) ? 'Follow' : 'Search';
 });
 
+// Sets the fallback at most once (the old fallback file did not exist and looped).
 function onImageError(event: Event) {
-  const target = event.target as HTMLImageElement | null;
-  if (target) target.src = '/img/default-avatar.png';
+  setImageFallback(event, FALLBACK_AVATAR);
 }
 
 // While a source is still being imported in the background, the list is

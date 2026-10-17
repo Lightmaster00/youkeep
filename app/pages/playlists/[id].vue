@@ -166,6 +166,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
@@ -243,13 +244,7 @@ const deletePlaylist = async () => {
 };
 
 const handleThumbnailError = (event: Event, videoId: string) => {
-  const target = event.target as HTMLImageElement;
-  if (target) {
-    const ytUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-    if (target.src !== ytUrl) {
-      target.src = ytUrl;
-    }
-  }
+  setImageFallback(event, `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`);
 };
 
 const playVideo = (videoId: string) => {

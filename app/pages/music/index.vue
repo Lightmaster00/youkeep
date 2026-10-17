@@ -102,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { setImageFallback } from '~/utils/imageFallback';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
@@ -271,10 +272,7 @@ onMounted(() => {
 const fallbackAvatar = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>';
 
 const handleAvatarError = (event: Event) => {
-  const target = event.target as HTMLImageElement;
-  if (target && target.src !== fallbackAvatar) {
-    target.src = fallbackAvatar;
-  }
+  setImageFallback(event, fallbackAvatar);
 };
 </script>
 
