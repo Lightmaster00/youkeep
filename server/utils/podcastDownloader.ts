@@ -18,6 +18,7 @@ import { entityFolderName, isContained, removeEntityFolder } from './videoPaths'
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
+import { usableStoredSchedule } from './validation';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -46,7 +47,7 @@ if (!(G_PODCAST_KEEP_FILES in _g)) _g[G_PODCAST_KEEP_FILES] = new Set<string>();
 // Episodes whose download a pause aborted: their partial file survives the abort.
 const podcastKeepFilesOnExit: Set<string> = _g[G_PODCAST_KEEP_FILES];
 
-function getActivePodcastCronJob(): Cron | null { return _g[G_PODCAST_CRON]; }
+export function getActivePodcastCronJob(): Cron | null { return _g[G_PODCAST_CRON]; }
 function setActivePodcastCronJob(val: Cron | null) { _g[G_PODCAST_CRON] = val; }
 
 function getIsPodcastProcessing(): boolean { return _g[G_PODCAST_PROCESSING]; }
@@ -1021,10 +1022,11 @@ export function initPodcastScheduler(): void {
     setActivePodcastCronJob(null);
   }
 
-  if (enabled) {
+  const usable = enabled ? usableStoredSchedule(db, 'podcast_sync_cron_enabled', cronExpression, 'podcast') : null;
+  if (usable) {
     console.log(`Scheduling podcast auto-sync cron job with expression: "${cronExpression}"`);
     try {
-      const job = new Cron(cronExpression, { catch: (err: unknown) => console.error('Automated podcast sync failed:', err) }, async () => {
+      const job = new Cron(usable, { protect: true, catch: (err: unknown) => console.error('Automated podcast sync failed:', err) }, async () => {
         if (!isModuleEnabled(db, 'podcasts')) {
           console.log('Automated podcast cron: Podcasts module is disabled. Skipping.');
           return;

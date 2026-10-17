@@ -16,6 +16,7 @@ import { startProgressWriter, finishProgressWriter, stopProgressWriter } from '.
 import { decodeChildOutput, isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
+import { usableStoredSchedule } from './validation';
 
 /** Longest folder name (UTF-8 bytes) we create; most file systems stop at 255. */
 export const MAX_FOLDER_NAME_BYTES = 240;
@@ -132,7 +133,7 @@ if (!(G_ACTIVE_DOWNLOAD_COUNT in _g)) _g[G_ACTIVE_DOWNLOAD_COUNT] = 0;
 if (!(G_KEEP_FILES_ON_EXIT in _g)) _g[G_KEEP_FILES_ON_EXIT] = new Set<string>();
 if (!(G_COMMENT_PROCESSES in _g)) _g[G_COMMENT_PROCESSES] = new Map<string, any>();
 
-function getActiveCronJob(): Cron | null { return _g[G_CRON]; }
+export function getActiveCronJob(): Cron | null { return _g[G_CRON]; }
 function setActiveCronJob(val: Cron | null) { _g[G_CRON] = val; }
 
 export const latestLogs: string[] = [];
@@ -2305,10 +2306,11 @@ export function initScheduler(): void {
     setActiveCronJob(null);
   }
 
-  if (enabled) {
+  const usable = enabled ? usableStoredSchedule(db, 'sync_cron_enabled', cronExpression, 'video') : null;
+  if (usable) {
     console.log(`Scheduling auto-sync cron job with expression: "${cronExpression}"`);
     try {
-      const job = new Cron(cronExpression, { catch: (err: unknown) => console.error('Automated video sync failed:', err) }, async () => {
+      const job = new Cron(usable, { protect: true, catch: (err: unknown) => console.error('Automated video sync failed:', err) }, async () => {
         if (!isModuleEnabled(db, 'video')) {
           console.log('Automated cron: Video module is disabled. Skipping.');
           return;

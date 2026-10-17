@@ -127,21 +127,66 @@ export function requiredUrl(body: Record<string, unknown>, key: string): string 
   return value;
 }
 
+/** Automatic syncs run at most this often (each one lists every source on YouTube or its feed). */
+export const MIN_CRON_INTERVAL_MS = 10 * 60 * 1000;
+
+/**
+ * Why `schedule` cannot be used for an automatic sync, or null when it can:
+ * it must be a valid 5-field cron expression (or a nickname such as @daily;
+ * no seconds field, which ran a sync every second) whose next runs are at
+ * least MIN_CRON_INTERVAL_MS apart.
+ */
+export function cronScheduleProblem(schedule: string): string | null {
+  const trimmed = String(schedule ?? '').trim();
+  let runs: Date[];
+  try {
+    const job = new Cron(trimmed, { paused: true });
+    runs = job.nextRuns(3);
+    job.stop();
+  } catch {
+    return 'Invalid cron expression.';
+  }
+  if (!trimmed.startsWith('@') && trimmed.split(/\s+/).length !== 5) {
+    return 'Use a cron expression with 5 fields (minute hour day month weekday); seconds are not supported.';
+  }
+  if (runs.length === 0) return 'Invalid cron expression.';
+  for (let i = 1; i < runs.length; i++) {
+    if (runs[i]!.getTime() - runs[i - 1]!.getTime() < MIN_CRON_INTERVAL_MS) {
+      return 'The schedule must not run more often than every 10 minutes.';
+    }
+  }
+  return null;
+}
+
+/**
+ * The cron expression to schedule at startup, or null: a stored schedule that
+ * the current rules refuse (saved by an older version) is disabled, with a
+ * log line, instead of running.
+ */
+export function usableStoredSchedule(db: { prepare: (sql: string) => any }, enabledKey: string, schedule: string, label: string): string | null {
+  const problem = cronScheduleProblem(schedule);
+  if (!problem) return schedule.trim();
+  console.warn(`[scheduler] The ${label} sync schedule "${schedule}" was disabled: ${problem}`);
+  try {
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, '0') ON CONFLICT(key) DO UPDATE SET value = '0'").run(enabledKey);
+  } catch (err) {
+    console.error(`[scheduler] Could not disable the ${label} sync schedule:`, err);
+  }
+  return null;
+}
+
 /**
  * The body of the three schedule routes: { enabled, schedule }. When enabled,
- * the schedule must be a valid cron expression (400 with a generic message
- * otherwise; the parser's own error text never reaches the client).
+ * the schedule must be a usable cron expression (cronScheduleProblem; 400
+ * otherwise, the parser's own error text never reaches the client).
  */
 export function readScheduleFields(body: Record<string, unknown>): { enabled: boolean; schedule: string | undefined } {
   const enabled = optionalBoolean(body, 'enabled') ?? false;
   const schedule = optionalString(body, 'schedule', { max: 100 }) || undefined;
   if (enabled && !schedule) badRequest('Cron schedule expression is required when enabled.');
   if (schedule) {
-    try {
-      new Cron(schedule).stop();
-    } catch {
-      badRequest('Invalid cron expression.');
-    }
+    const problem = cronScheduleProblem(schedule);
+    if (problem) badRequest(problem);
   }
   return { enabled, schedule };
 }
