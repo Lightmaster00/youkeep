@@ -31,7 +31,10 @@
           <h4>Personal Information</h4>
           <p class="section-desc">These details will be used to secure your account in the future.</p>
           
-          <form @submit.prevent="handleSavePersonalInfo" class="mt-4">
+          <p v-if="currentUser?.mustChangePassword" class="section-desc" data-testid="profile-locked">
+            You can edit these details once your new password is set.
+          </p>
+          <form v-else @submit.prevent="handleSavePersonalInfo" class="mt-4" data-testid="profile-form">
             <div class="form-row">
               <div class="form-group half-width">
                 <label class="form-label" for="first_name">First Name</label>
@@ -99,16 +102,28 @@
 
           <hr class="separator" />
 
-          <form @submit.prevent="handleChangeOwnPassword" class="password-change-form mt-4">
+          <form @submit.prevent="handleChangeOwnPassword" class="password-change-form mt-4" novalidate>
+            <div class="form-group">
+              <label class="form-label" for="current_password">{{ currentUser?.mustChangePassword ? 'Temporary password' : 'Current password' }}</label>
+              <input
+                type="password"
+                id="current_password"
+                v-model="currentPasswordInput"
+                class="form-input"
+                placeholder="••••••••"
+                autocomplete="current-password"
+              />
+            </div>
+
             <div class="form-group">
               <label class="form-label" for="own_password">New password</label>
               <input 
                 type="password" 
                 id="own_password" 
-                v-model="ownPasswordInput" 
-                class="form-input" 
-                placeholder="••••••••" 
-                required
+                v-model="ownPasswordInput"
+                class="form-input"
+                placeholder="••••••••"
+                autocomplete="new-password"
               />
             </div>
 
@@ -117,10 +132,10 @@
               <input 
                 type="password" 
                 id="own_password_confirm" 
-                v-model="ownPasswordConfirmInput" 
-                class="form-input" 
-                placeholder="••••••••" 
-                required
+                v-model="ownPasswordConfirmInput"
+                class="form-input"
+                placeholder="••••••••"
+                autocomplete="new-password"
               />
             </div>
 
@@ -136,7 +151,7 @@
           </form>
         </div>
 
-        <div class="profile-box glass-panel api-tokens-box">
+        <div v-if="!currentUser?.mustChangePassword" class="profile-box glass-panel api-tokens-box">
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
             <div>
@@ -205,8 +220,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
+import { passwordProblem } from '~/utils/passwordRules';
 
-const { user: currentUser } = useAuth();
+const { user: currentUser, fetchUser } = useAuth();
 
 // --- Profile Info Logic ---
 const profile = reactive({
@@ -257,47 +273,58 @@ const handleSavePersonalInfo = async () => {
 };
 
 // --- Password Change Logic ---
+const currentPasswordInput = ref('');
 const ownPasswordInput = ref('');
 const ownPasswordConfirmInput = ref('');
 const savingOwnPassword = ref(false);
 const ownPasswordMessage = ref('');
 const ownPasswordSuccess = ref(false);
 
+const failPassword = (message: string) => {
+  ownPasswordSuccess.value = false;
+  ownPasswordMessage.value = message;
+};
+
 const handleChangeOwnPassword = async () => {
+  if (!currentPasswordInput.value) {
+    return failPassword(currentUser.value?.mustChangePassword
+      ? 'Enter the temporary password you were given.'
+      : 'Enter your current password.');
+  }
+  const problem = passwordProblem(ownPasswordInput.value);
+  if (problem) return failPassword(problem);
   if (ownPasswordInput.value !== ownPasswordConfirmInput.value) {
-    ownPasswordSuccess.value = false;
-    ownPasswordMessage.value = 'Passwords do not match.';
-    return;
+    return failPassword('Passwords do not match.');
   }
-  
-  if (ownPasswordInput.value.length < 6) {
-    ownPasswordSuccess.value = false;
-    ownPasswordMessage.value = 'Password must be at least 6 characters.';
-    return;
-  }
-  
+
   savingOwnPassword.value = true;
   ownPasswordMessage.value = '';
-  
+
   try {
+    // The response also rotates the session and CSRF cookies.
     await $fetch('/api/account/password', {
       method: 'PUT',
       body: {
+        currentPassword: currentPasswordInput.value,
         password: ownPasswordInput.value
       }
     });
-    
+
     ownPasswordSuccess.value = true;
     ownPasswordMessage.value = 'Your password has been changed successfully.';
+    currentPasswordInput.value = '';
     ownPasswordInput.value = '';
     ownPasswordConfirmInput.value = '';
-    
+
     // Refresh user details to update mustChangePassword state on client
-    const auth = useAuth();
-    await auth.fetchUser();
+    const wasForced = !!currentUser.value?.mustChangePassword;
+    await fetchUser();
+    if (wasForced && !currentUser.value?.mustChangePassword) {
+      fetchProfile();
+      fetchApiTokens();
+    }
   } catch (err: any) {
-    ownPasswordSuccess.value = false;
-    ownPasswordMessage.value = err.data?.statusMessage || 'Modification failed.';
+    failPassword(err.data?.statusMessage || 'Changing the password failed.');
   } finally {
     savingOwnPassword.value = false;
   }
@@ -410,7 +437,8 @@ const formatTokenDate = (timestamp: number): string => {
 };
 
 onMounted(() => {
-  fetchApiTokens();
+  // Tokens are refused (403) until a temporary password is replaced.
+  if (!currentUser.value?.mustChangePassword) fetchApiTokens();
 });
 </script>
 
