@@ -28,7 +28,7 @@
               />
             </div>
 
-            <div class="form-group">
+            <div v-if="!editingSelf" class="form-group">
               <label class="form-label" for="u_password">
                 {{ editingUserId ? 'New password (leave empty to keep the current one)' : 'Password (leave empty to generate one)' }}
               </label>
@@ -157,10 +157,11 @@
 
               <div class="user-card-action-bar border-t mt-3 pt-2">
                 <button
+                  v-if="u.id !== currentUser?.id"
                   @click="handleResetPassword(u.id, u.username)"
                   class="btn-action-premium-icon"
                   title="Reset password"
-                  :disabled="u.id === currentUser?.id"
+                  data-testid="user-reset-password"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                   <span>Reset password</span>
@@ -172,8 +173,9 @@
                 <button
                   @click="handleDeleteUser(u.id, u.username)"
                   class="btn-action-premium-icon danger-icon"
-                  title="Delete Profile"
-                  :disabled="u.id === currentUser?.id || u.username === 'admin'"
+                  :title="deleteBlockedReason(u) || 'Delete user'"
+                  data-testid="user-delete"
+                  :disabled="!!deleteBlockedReason(u)"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                   <span>Delete</span>
@@ -192,6 +194,7 @@ import { ref, reactive, computed } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useAdminChannels } from '~/composables/useAdminChannels';
 import { useToast } from '~/composables/useToast';
+import { passwordProblem } from '~/utils/passwordRules';
 
 const toast = useToast();
 const { user: currentUser } = useAuth();
@@ -199,9 +202,20 @@ const { channels } = await useAdminChannels();
 
 const { data: usersData, pending: usersPending, refresh: refreshUsers } = await useFetch<{ users: any[] }>('/api/admin/users');
 const users = computed(() => usersData.value?.users || []);
+const adminCount = computed(() => users.value.filter((u: any) => u.role === 'admin').length);
+
+// Mirrors the server rules (409 otherwise): you cannot delete yourself, and
+// the last admin cannot be deleted.
+const deleteBlockedReason = (u: any): string => {
+  if (u.id === currentUser.value?.id) return 'You cannot delete your own account.';
+  if (u.role === 'admin' && adminCount.value <= 1) return 'The last admin cannot be deleted.';
+  return '';
+};
 
 const generatedPassword = ref('');
 const editingUserId = ref<string | null>(null);
+// Your own password is changed from the account page (it needs the current one).
+const editingSelf = computed(() => !!editingUserId.value && editingUserId.value === currentUser.value?.id);
 const fullChannelAccess = ref(true);
 
 const userForm = reactive({
@@ -251,22 +265,31 @@ const cancelEditUser = () => {
 
 const handleSaveUser = async () => {
   userFormMessage.value = '';
+  if (userForm.password && !editingSelf.value) {
+    const problem = passwordProblem(userForm.password);
+    if (problem) {
+      userFormSuccess.value = false;
+      userFormMessage.value = problem;
+      return;
+    }
+  }
   const submitChannelAccess = fullChannelAccess.value && userForm.role === 'user'
     ? channels.value.map((c: any) => c.id)
     : userForm.channelAccess;
+  let successMessage = '';
 
   try {
     if (editingUserId.value) {
       await $fetch(`/api/admin/users/${editingUserId.value}`, {
         method: 'PUT',
         body: {
-          password: userForm.password || undefined,
+          password: editingSelf.value ? undefined : (userForm.password || undefined),
           role: userForm.role,
           channelAccess: submitChannelAccess
         }
       });
       userFormSuccess.value = true;
-      userFormMessage.value = 'User updated successfully.';
+      successMessage = 'User updated successfully.';
     } else {
       const res = await $fetch<any>('/api/admin/users', {
         method: 'POST',
@@ -278,13 +301,14 @@ const handleSaveUser = async () => {
         }
       });
       userFormSuccess.value = true;
-      userFormMessage.value = 'User created successfully.';
+      successMessage = 'User created successfully.';
       if (res && res.password) {
         generatedPassword.value = res.password;
       }
     }
     oldUsername.value = userForm.username;
     cancelEditUser();
+    userFormMessage.value = successMessage;
     refreshUsers();
   } catch (err: any) {
     userFormSuccess.value = false;
