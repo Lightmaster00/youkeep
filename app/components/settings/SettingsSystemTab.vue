@@ -384,7 +384,12 @@ async function handleStartWipe() {
   }
 }
 
+// Set on unmount so a poll still awaiting its request does not re-arm.
+let unmounted = false;
+
 async function pollWipeStatus() {
+  wipePollTimeout = null;
+  if (unmounted) return;
   try {
     const status = await $fetch<{ inProgress: boolean; current: any; report: any }>('/api/admin/system/wipe-status');
     wipeInProgress.value = status.inProgress;
@@ -397,11 +402,14 @@ async function pollWipeStatus() {
     // Keep polling even on a transient fetch error: a single failed request
     // must not leave the wipe progress frozen.
   }
+  if (unmounted) return;
   wipePollTimeout = setTimeout(pollWipeStatus, 1000);
 }
 
 onUnmounted(() => {
+  unmounted = true;
   if (wipePollTimeout) clearTimeout(wipePollTimeout);
+  wipePollTimeout = null;
 });
 
 function resetDangerZone() {

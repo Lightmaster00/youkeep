@@ -70,6 +70,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { useChannelDetail } from '~/composables/useChannelDetail';
+import { createPoller } from '~/utils/poller';
 import ChannelDirectoryView from '~/components/channels/ChannelDirectoryView.vue';
 import ChannelDetailHeader from '~/components/channels/ChannelDetailHeader.vue';
 import ChannelStatsPanel from '~/components/channels/ChannelStatsPanel.vue';
@@ -94,31 +95,26 @@ const goBack = () => {
   router.push({ path: '/channels' });
 };
 
-// Dynamic polling for the selected channel's videos/details
-let syncStatusTimeout: any = null;
-
-const pollStatus = async () => {
-  if (channelId.value) {
-    await refreshVideos();
-    await refreshSingleChannel();
+// Dynamic polling for the selected channel's videos/details. Download states
+// are an admin view: poll fast for admins (1s while something on this channel
+// downloads, else 3s), slowly for everyone else.
+const { isAdmin } = useAuth();
+const poller = createPoller(
+  async () => {
+    if (channelId.value && !channelNotFound.value) {
+      await refreshVideos();
+      await refreshSingleChannel();
+    }
+  },
+  () => {
+    if (!isAdmin.value) return 30000;
+    return channelVideos.value.some((v: any) => v.download_status === 'downloading') ? 1000 : 3000;
   }
-};
+);
 
-const runPolling = async () => {
-  await pollStatus();
-  // Poll faster (every 1s) if there is an active downloading video on this channel page, else poll every 3s
-  const hasActiveDownloads = channelVideos.value.some((v: any) => v.download_status === 'downloading');
-  const nextPollDelay = hasActiveDownloads ? 1000 : 3000;
-  syncStatusTimeout = setTimeout(runPolling, nextPollDelay);
-};
-
-onMounted(() => {
-  runPolling();
-});
-
-onUnmounted(() => {
-  if (syncStatusTimeout) clearTimeout(syncStatusTimeout);
-});
+onMounted(() => poller.start());
+// Also stops a poll still awaiting its request from re-arming.
+onUnmounted(() => poller.stop());
 </script>
 
 <style>

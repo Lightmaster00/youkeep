@@ -146,6 +146,7 @@ watch(channelId, () => {
 });
 
 let syncPlaylistsRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let unmounted = false;
 
 async function handleSyncPlaylists() {
   if (!channelId.value) return;
@@ -155,6 +156,7 @@ async function handleSyncPlaylists() {
       method: 'POST'
     });
     toast.success(res.message || 'Playlist sync started.');
+    if (unmounted) return;
     // The sync runs in the background on the server; give it a moment before refreshing.
     syncPlaylistsRefreshTimer = setTimeout(() => {
       syncPlaylistsRefreshTimer = null;
@@ -168,6 +170,7 @@ async function handleSyncPlaylists() {
 }
 
 onUnmounted(() => {
+  unmounted = true;
   if (syncPlaylistsRefreshTimer) {
     clearTimeout(syncPlaylistsRefreshTimer);
     syncPlaylistsRefreshTimer = null;
