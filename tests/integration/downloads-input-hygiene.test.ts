@@ -91,6 +91,60 @@ describe('episode downloads (third-party addresses)', () => {
   });
 });
 
+describe('episode downloads of a LAN show', () => {
+  const ok = () => new Response(new ReadableStream({ start(c) { c.enqueue(new Uint8Array(10)); c.close(); } }), { headers: { 'content-type': 'audio/mpeg' } });
+  function seedLan(feedUrl: string, audioUrl: string) {
+    insertPodcastShow(db, { id: 's1', title: 'Show', feedUrl });
+    insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'downloading', audioUrl });
+  }
+
+  it('a show whose feed is on the LAN may download its enclosures from the LAN', async () => {
+    const fetchFn = vi.fn(async () => ok());
+    vi.stubGlobal('fetch', fetchFn);
+    seedLan('http://nas.lan/feed.xml', 'http://nas.lan/ep.mp3');
+    await downloadEpisodeFile('e1', 's1');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(showFiles()).toEqual(['e1.mp3']);
+  });
+
+  it('metadata and link-local addresses stay blocked for a LAN show', async () => {
+    const fetchFn = vi.fn(async () => ok());
+    vi.stubGlobal('fetch', fetchFn);
+    seedLan('http://192.168.1.5/feed.xml', 'http://169.254.169.254/latest/meta-data');
+    await expect(downloadEpisodeFile('e1', 's1')).rejects.toThrow(/not allowed/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it('a show whose feed is public still may not reach the LAN', async () => {
+    const fetchFn = vi.fn(async () => ok());
+    vi.stubGlobal('fetch', fetchFn);
+    seedLan('https://feeds.example/feed.xml', 'http://nas.lan/ep.mp3');
+    await expect(downloadEpisodeFile('e1', 's1')).rejects.toThrow(/not allowed/);
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+});
+
+describe('compressed enclosures', () => {
+  it('a Content-Encoding response is not cut at its (compressed) Content-Length', async () => {
+    seedEpisode('https://cdn.example/ep.mp3');
+    vi.stubGlobal('fetch', async () => new Response(new ReadableStream({
+      start(c) { c.enqueue(new Uint8Array(60)); c.enqueue(new Uint8Array(60)); c.close(); },
+    }), { headers: { 'content-type': 'audio/mpeg', 'content-length': '100', 'content-encoding': 'gzip' } }));
+    await downloadEpisodeFile('e1', 's1');
+    expect(fs.statSync(path.join(getPodcastDownloadsDir(), 'Show', 'e1.mp3')).size).toBe(120);
+  });
+
+  it('the hard cap still applies to decompressed bytes', async () => {
+    podcastDownloadLimits.maxBytes = 1000;
+    seedEpisode('https://cdn.example/ep.mp3');
+    vi.stubGlobal('fetch', async () => new Response(new ReadableStream({
+      start(c) { for (let i = 0; i < 5; i++) c.enqueue(new Uint8Array(400)); c.close(); },
+    }), { headers: { 'content-type': 'audio/mpeg', 'content-length': '50', 'content-encoding': 'br' } }));
+    await expect(downloadEpisodeFile('e1', 's1')).rejects.toThrow(/larger than/);
+    expect(showFiles()).toEqual([]);
+  });
+});
+
 describe('queue changes stop running downloads and remove their partial files', () => {
   function seedRunning(id: string, opts: { isShort?: boolean } = {}) {
     const p = buildVideoPaths({ baseDir: dir, channelFolder: 'Chan', title: 'T', id });

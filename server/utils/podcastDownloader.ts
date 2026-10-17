@@ -11,7 +11,7 @@ import { getDataDir } from './dataDir';
 import { addLog, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
 import { isShuttingDown } from './processTree';
-import { safeFetch, UnsafeUrlError } from './safeUrl';
+import { isPrivateNetworkUrl, safeFetch, UnsafeUrlError } from './safeUrl';
 import { MIN_FREE_DISK_SPACE_BYTES } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
@@ -586,7 +586,7 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
         throw new Error("The episode has no audio_url to download.");
       }
 
-      const show = db.prepare('SELECT title FROM podcast_shows WHERE id = ?').get(showId) as { title: string } | undefined;
+      const show = db.prepare('SELECT title, feed_url FROM podcast_shows WHERE id = ?').get(showId) as { title: string; feed_url: string | null } | undefined;
       const folderName = entityFolderName(show?.title, showId);
       const baseDir = getPodcastDownloadsDir();
       const showDir = path.join(baseDir, folderName);
@@ -596,8 +596,11 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
 
       addLog(`Starting download of episode ${episodeId}: ${episode.audio_url}`);
       // Enclosure addresses (and their redirects) come from a third-party feed:
-      // public addresses only.
-      const response = await safeFetch(episode.audio_url, { allowPrivate: false, signal: controller.signal });
+      // public addresses only, unless the show's own feed is on the LAN right
+      // now (a self-hosted podcast server): then its LAN addresses are fine
+      // too. Link-local and cloud metadata addresses are never allowed.
+      const allowPrivate = !!show?.feed_url && await isPrivateNetworkUrl(show.feed_url);
+      const response = await safeFetch(episode.audio_url, { allowPrivate, signal: controller.signal });
       if (!response.ok || !response.body) {
         try { await response.body?.cancel(); } catch {}
         throw new Error(`HTTP ${response.status}`);
@@ -607,7 +610,10 @@ export function downloadEpisodeFile(episodeId: string, showId: string): Promise<
       const outputPath = path.join(showDir, `${episodeId}.${ext}`);
       const localFilePath = `/downloads-podcasts/${folderName}/${episodeId}.${ext}`;
 
-      const totalBytes = parseInt(response.headers.get('content-length') || '0', 10);
+      // With a Content-Encoding, fetch() hands over decoded bytes while
+      // Content-Length is the encoded size: only the hard cap applies then.
+      const encoded = !!response.headers.get('content-encoding') && response.headers.get('content-encoding')!.trim().toLowerCase() !== 'identity';
+      const totalBytes = encoded ? 0 : parseInt(response.headers.get('content-length') || '0', 10);
       // Never more than announced, and never more than the hard cap.
       const byteLimit = totalBytes > 0 ? Math.min(totalBytes, podcastDownloadLimits.maxBytes) : podcastDownloadLimits.maxBytes;
       let receivedBytes = 0;

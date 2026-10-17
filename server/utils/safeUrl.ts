@@ -124,6 +124,19 @@ async function checkRemoteUrl(raw: string, opts: { allowPrivate: boolean; lookup
   return { url, isPrivate };
 }
 
+/**
+ * True when `raw` is an acceptable http(s) address whose host resolves to a
+ * private/LAN address (never for blocked or unresolvable ones). Used to let a
+ * show whose own feed lives on the LAN download its enclosures from the LAN.
+ */
+export async function isPrivateNetworkUrl(raw: string, opts: { lookup?: LookupFn } = {}): Promise<boolean> {
+  try {
+    return (await checkRemoteUrl(raw, { allowPrivate: true, lookup: opts.lookup })).isPrivate;
+  } catch {
+    return false;
+  }
+}
+
 export const MAX_REDIRECTS = 5;
 
 /**
