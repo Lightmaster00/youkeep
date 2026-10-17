@@ -278,6 +278,11 @@ export function stripHtmlToPlainText(raw: string | null | undefined): string | n
  */
 /** A feed that has not answered after this long fails with a clear message. */
 export const PODCAST_FEED_TIMEOUT_MS = 15_000;
+/** Items kept per feed (the newest by pubDate). */
+export const PODCAST_FEED_MAX_ITEMS = 5000;
+/** Episodes written per transaction while ingesting a feed. */
+export const PODCAST_INSERT_CHUNK = 500;
+
 /** A feed larger than this is refused (the whole body is held in memory to parse it). */
 export const PODCAST_FEED_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -392,7 +397,19 @@ export async function ingestPodcastFeed(
     `).run(showId, trimmedFeedUrl, showTitle, showDescription, showAuthor, showCoverUrl, showLanguage, initialSyncStatus, initialVisibility, Date.now(), Date.now());
   }
 
-  const items: any[] = Array.isArray(feed.items) ? feed.items : [];
+  const allItems: any[] = Array.isArray(feed.items) ? feed.items : [];
+  // A huge (or hostile) feed: only the newest PODCAST_FEED_MAX_ITEMS items
+  // (by pubDate; undated ones last, in feed order) are kept.
+  const items = allItems.length <= PODCAST_FEED_MAX_ITEMS
+    ? allItems
+    : allItems
+      .map((item, index) => ({ item, index, ts: parsePubTs(item?.pubDate) }))
+      .sort((a, b) => (b.ts ?? -Infinity) - (a.ts ?? -Infinity) || a.index - b.index)
+      .slice(0, PODCAST_FEED_MAX_ITEMS)
+      .map((entry) => entry.item);
+  if (items.length < allItems.length) {
+    addLog(`Ingesting feed "${showTitle}": kept the newest ${items.length} of ${allItems.length} items.`);
+  }
   const upsertEpisode = db.prepare(`
     INSERT INTO podcast_episodes (id, show_id, title, description, audio_url, duration, episode_number, season_number, pub_date, pub_ts, download_status, created_at)
     VALUES (@id, @showId, @title, @description, @audioUrl, @duration, @episodeNumber, @seasonNumber, @pubDate, @pubTs, 'pending', @createdAt)
@@ -419,9 +436,11 @@ export async function ingestPodcastFeed(
 
   let episodesAdded = 0;
   let skippedNoEnclosure = 0;
-  // One transaction for the whole feed: one commit, not one per episode.
-  db.transaction(() => {
-  for (const item of items) {
+  // One transaction per PODCAST_INSERT_CHUNK items (not one commit per
+  // episode), yielding to the event loop between chunks so a big feed never
+  // blocks the server for long.
+  const insertChunk = db.transaction((chunk: any[]) => {
+  for (const item of chunk) {
     // Episodes with no enclosure URL are a normal, common feed shape (show
     // notes, trailers) — skip silently, don't insert a broken row.
     const audioUrl: string | undefined = item.enclosure?.url;
@@ -457,7 +476,11 @@ export async function ingestPodcastFeed(
 
     if (!exists) episodesAdded++;
   }
-  })();
+  });
+  for (let start = 0; start < items.length; start += PODCAST_INSERT_CHUNK) {
+    if (start > 0) await new Promise((resolve) => setImmediate(resolve));
+    insertChunk(items.slice(start, start + PODCAST_INSERT_CHUNK));
+  }
 
   if (skippedNoEnclosure > 0) {
     addLog(`Ingesting feed "${showTitle}": skipped ${skippedNoEnclosure} item(s) without an audio enclosure.`);
