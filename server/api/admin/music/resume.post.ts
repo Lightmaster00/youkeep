@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3';
 import { startMusicQueueWorker } from '../../../utils/musicDownloader';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
     WHERE key = 'music_downloader_paused'
   `).run();
 
-  startMusicQueueWorker();
+  runInBackground('startMusicQueueWorker', () => startMusicQueueWorker());
 
   return { success: true };
 });

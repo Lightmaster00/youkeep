@@ -117,8 +117,9 @@ beforeAll(async () => {
     const mod = await import(path.join(ROOT, 'server/utils', file));
     for (const [k, v] of Object.entries(mod)) if (!(k in globalThis)) (globalThis as any)[k] = v;
   }
-  // Background queue workers are not part of a route's answer.
-  for (const name of ['startQueueWorker', 'startMusicQueueWorker', 'startPodcastQueueWorker']) {
+  // Background queue workers and syncs are not part of a route's answer (a
+  // sync left running would hit the database freshDb() closes for the next route).
+  for (const name of ['startQueueWorker', 'startMusicQueueWorker', 'startPodcastQueueWorker', 'syncAllChannels', 'syncAllMusicArtists', 'syncAllPodcastShows']) {
     (globalThis as any)[name] = async () => {};
   }
 });

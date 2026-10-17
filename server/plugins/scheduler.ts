@@ -8,6 +8,7 @@ import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
 import { startThumbCacheSweep, sweepThumbCache } from '../utils/thumbnails';
 import { startAfterUpdate } from '../utils/startup';
 import { resetSyncAllFlags } from '../utils/concurrency';
+import { runInBackground } from '../utils/background';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
 function runDurationBackfill() {
@@ -70,9 +71,9 @@ export default defineNitroPlugin((nitroApp) => {
     // Podcasts don't need yt-dlp, but starting all three together keeps
     // startup ordering simple.
     startAfterUpdate(updateYtdl, () => {
-      startQueueWorker();
-      startMusicQueueWorker();
-      startPodcastQueueWorker();
+      runInBackground('startQueueWorker', () => startQueueWorker());
+      runInBackground('startMusicQueueWorker', () => startMusicQueueWorker());
+      runInBackground('startPodcastQueueWorker', () => startPodcastQueueWorker());
       runDurationBackfill();
       runSizeBackfill();
       resumeInterruptedImports();

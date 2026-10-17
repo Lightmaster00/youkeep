@@ -17,6 +17,7 @@ import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { entityFolderName, isContained, removeEntityFolder } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 import { isWipeInProgress } from './libraryWipe';
+import { runInBackground } from './background';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -463,7 +464,7 @@ export async function ingestPodcastFeed(
 
   const showState = db.prepare('SELECT sync_status FROM podcast_shows WHERE id = ?').get(showId) as { sync_status: string } | undefined;
   if (showState?.sync_status === 'downloading') {
-    startPodcastQueueWorker();
+    runInBackground('startPodcastQueueWorker', () => startPodcastQueueWorker());
   }
 
   return {
@@ -792,7 +793,7 @@ export async function startPodcastQueueWorker() {
         `).run(episode.id);
 
         incrementActivePodcastDownloadCount();
-        runSinglePodcastDownload(episode.id, episode.title, episode.show_id);
+        runInBackground('runSinglePodcastDownload', () => runSinglePodcastDownload(episode.id, episode.title, episode.show_id));
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
         // Never stops for good: waits longer after each error in a row (at most 60 s).
@@ -1017,7 +1018,7 @@ export function initPodcastScheduler(): void {
   if (enabled) {
     console.log(`Scheduling podcast auto-sync cron job with expression: "${cronExpression}"`);
     try {
-      const job = new Cron(cronExpression, async () => {
+      const job = new Cron(cronExpression, { catch: (err: unknown) => console.error('Automated podcast sync failed:', err) }, async () => {
         if (!isModuleEnabled(db, 'podcasts')) {
           console.log('Automated podcast cron: Podcasts module is disabled. Skipping.');
           return;

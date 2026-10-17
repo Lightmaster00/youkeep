@@ -9,9 +9,17 @@ import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migra
 let dbInstance: Database.Database | null = null;
 
 export function getDb(): Database.Database {
-  // Graceful shutdown closes the connection: only an open one is reused.
   if (dbInstance?.open) return dbInstance;
+  // Only graceful shutdown closes the connection. Reopening it silently would
+  // leave a connection that is never checkpointed nor closed (and rerun the
+  // migrations) for whatever late caller asked: refuse instead.
+  if (dbInstance) throw new Error('The database connection is closed (the server is shutting down).');
+  return reopenDb();
+}
 
+/** Opens the app database, replacing a closed connection (tests, explicit recovery). */
+export function reopenDb(): Database.Database {
+  if (dbInstance?.open) return dbInstance;
   const dataDir = getDataDir();
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });

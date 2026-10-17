@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event) => {
   transaction(videoIds);
 
   // Trigger queue processing in the background
-  startQueueWorker();
+  runInBackground('startQueueWorker', () => startQueueWorker());
 
   return { success: true };
 });

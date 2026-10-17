@@ -14,6 +14,7 @@ import { enqueueAlbumMatch } from './albumMatchRunner';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 import { isWipeInProgress } from './libraryWipe';
+import { runInBackground } from './background';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -897,7 +898,7 @@ export async function startMusicQueueWorker() {
         `).run(track.id);
 
         incrementActiveMusicDownloadCount();
-        runSingleMusicDownload(track.id, track.title, track.artist_id);
+        runInBackground('runSingleMusicDownload', () => runSingleMusicDownload(track.id, track.title, track.artist_id));
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
         // Never stops for good: waits longer after each error in a row (at most 60 s).
@@ -1166,7 +1167,7 @@ export function initMusicScheduler(): void {
   if (enabled) {
     console.log(`Scheduling music auto-sync cron job with expression: "${cronExpression}"`);
     try {
-      const job = new Cron(cronExpression, async () => {
+      const job = new Cron(cronExpression, { catch: (err: unknown) => console.error('Automated music sync failed:', err) }, async () => {
         if (!isModuleEnabled(db, 'music')) {
           console.log('Automated music cron: Music module is disabled. Skipping.');
           return;

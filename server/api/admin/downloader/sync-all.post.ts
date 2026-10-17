@@ -1,4 +1,5 @@
 import { defineEventHandler } from 'h3';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Trigger asynchronously
-  syncAllChannels();
+  runInBackground('syncAllChannels', () => syncAllChannels());
 
   return { success: true, message: 'Sync of all channels started.' };
 });

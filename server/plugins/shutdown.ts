@@ -15,7 +15,9 @@ export default defineNitroPlugin((nitroApp) => {
     process.once(signal, () => {
       // Another listener (Nitro's graceful shutdown) exits the process after the close hook.
       if (process.listenerCount(signal) > 0) return;
-      gracefulShutdown().finally(() => process.exit(0));
+      gracefulShutdown()
+        .catch((err) => console.error('[shutdown] failed:', err))
+        .finally(() => process.exit(0));
     });
   }
 

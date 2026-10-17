@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { startChannelImport, startQueueWorker } from '../../../../utils/downloader';
+import { runInBackground } from '../../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
   startChannelImport(channelId);
 
   // Wakes up queue worker to process any pending downloads for this channel
-  startQueueWorker();
+  runInBackground('startQueueWorker', () => startQueueWorker());
 
   return { success: true };
 });

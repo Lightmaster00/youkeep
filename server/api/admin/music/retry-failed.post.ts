@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3';
 import { readOptionalJsonObject, optionalString } from '../../../utils/validation';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // Trigger queue processing
-  startMusicQueueWorker();
+  runInBackground('startMusicQueueWorker', () => startMusicQueueWorker());
 
   return { success: true };
 });

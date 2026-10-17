@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3';
 import { readOptionalJsonObject, optionalString } from '../../../utils/validation';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
     `).run();
   }
 
-  startPodcastQueueWorker();
+  runInBackground('startPodcastQueueWorker', () => startPodcastQueueWorker());
 
   return { success: true };
 });

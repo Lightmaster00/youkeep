@@ -147,6 +147,11 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
   } catch (err) {
     onFatalError(err);
   } finally {
-    db.prepare(`UPDATE settings SET value = '0' WHERE key = ?`).run(activeFlagSettingKey);
+    // Graceful shutdown may have closed the database under a running sync.
+    try {
+      if (db.open) db.prepare(`UPDATE settings SET value = '0' WHERE key = ?`).run(activeFlagSettingKey);
+    } catch (err) {
+      console.error(`Could not clear ${activeFlagSettingKey}:`, err);
+    }
   }
 }

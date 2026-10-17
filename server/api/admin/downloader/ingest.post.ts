@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { ingestUrl, normalizeCustomSavePath, normalizeDateAfter, syncAllChannels } from '../../../utils/downloader';
+import { runInBackground } from '../../../utils/background';
 import {
   readJsonObject, requiredUrl, optionalBoolean, optionalEnum, optionalString, badRequest,
   upstreamFailure, isHttpError, SYNC_STATUSES, VISIBILITIES,
@@ -59,7 +60,7 @@ export default defineEventHandler(async (event) => {
 
   if (start_sync) {
     // Trigger background sync worker asynchronously
-    syncAllChannels();
+    runInBackground('syncAllChannels', () => syncAllChannels());
   }
 
   return result;

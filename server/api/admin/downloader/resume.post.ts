@@ -1,4 +1,5 @@
 import { defineEventHandler } from 'h3';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -12,7 +13,7 @@ export default defineEventHandler(async (event) => {
   `).run();
 
   // 2. Trigger queue processing
-  startQueueWorker();
+  runInBackground('startQueueWorker', () => startQueueWorker());
 
   return { success: true };
 });

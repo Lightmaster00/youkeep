@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3';
 import { readJsonObject, requiredString } from '../../../utils/validation';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
   db.prepare('UPDATE videos SET priority = ?, is_manually_queued = 1 WHERE id = ?').run(nextPriority, videoId);
 
   // Trigger worker
-  startQueueWorker();
+  runInBackground('startQueueWorker', () => startQueueWorker());
 
   return { success: true, priority: nextPriority };
 });

@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { ingestPodcastFeed, startPodcastQueueWorker } from '../../../../../utils/podcastDownloader';
+import { runInBackground } from '../../../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event) => {
     }
   }, 100);
 
-  startPodcastQueueWorker();
+  runInBackground('startPodcastQueueWorker', () => startPodcastQueueWorker());
 
   return { success: true };
 });

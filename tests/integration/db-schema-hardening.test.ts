@@ -8,7 +8,7 @@ import { assertInTmp } from '../helpers/testDb';
 import { seedBigLibrary, REGRESSION_SIZES } from '../helpers/bigLibrary';
 
 // The server test setup mocks server/utils/db; these tests need the real init path.
-const { openDatabase, getDb } = await vi.importActual<typeof import('../../server/utils/db')>('../../server/utils/db');
+const { openDatabase, getDb, reopenDb } = await vi.importActual<typeof import('../../server/utils/db')>('../../server/utils/db');
 
 let dir: string;
 let dbFile: string;
@@ -144,14 +144,16 @@ describe('startup', () => {
     expect(log.mock.calls.some((c) => String(c[0]).includes('size_bytes'))).toBe(false);
   });
 
-  it('getDb() opens a new connection once the cached one was closed', () => {
+  it('getDb() refuses to reopen silently once the connection was closed (shutdown); reopenDb() is explicit', () => {
     const a = getDb();
     open.push(a);
     expect(getDb()).toBe(a);
     a.close();
-    const b = getDb();
+    expect(() => getDb()).toThrow(/closed/);
+    const b = reopenDb();
     open.push(b);
     expect(b).not.toBe(a);
     expect(b.open).toBe(true);
+    expect(getDb()).toBe(b);
   });
 });

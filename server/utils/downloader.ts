@@ -15,6 +15,7 @@ import { channelBaseDirs, isContained, isValidMediaId, resolveVideoPaths, locate
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
 import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 import { isWipeInProgress } from './libraryWipe';
+import { runInBackground } from './background';
 
 export function sanitizeFolderName(name: string): string {
   return name
@@ -547,7 +548,7 @@ export async function startQueueWorker() {
         // so no other loop iteration can interleave) then launch the download without
         // awaiting it, so the orchestrator can immediately go check for more capacity/work.
         incrementActiveDownloadCount();
-        runSingleDownload(video.id, video.title, video.channel_id);
+        runInBackground('runSingleDownload', () => runSingleDownload(video.id, video.title, video.channel_id));
       } catch (loopErr: any) {
         consecutiveSystemErrors++;
         // Never stops for good: waits longer after each error in a row (at most 60 s).
@@ -2283,7 +2284,7 @@ export function initScheduler(): void {
   if (enabled) {
     console.log(`Scheduling auto-sync cron job with expression: "${cronExpression}"`);
     try {
-      const job = new Cron(cronExpression, async () => {
+      const job = new Cron(cronExpression, { catch: (err: unknown) => console.error('Automated video sync failed:', err) }, async () => {
         if (!isModuleEnabled(db, 'video')) {
           console.log('Automated cron: Video module is disabled. Skipping.');
           return;

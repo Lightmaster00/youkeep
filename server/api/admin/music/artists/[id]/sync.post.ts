@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { startArtistImport, startMusicQueueWorker } from '../../../../../utils/musicDownloader';
+import { runInBackground } from '../../../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -31,7 +32,7 @@ export default defineEventHandler(async (event) => {
 
   // The channel listing runs in the background import queue (the artist shows "Importing…").
   startArtistImport(artistId);
-  startMusicQueueWorker();
+  runInBackground('startMusicQueueWorker', () => startMusicQueueWorker());
 
   return { success: true };
 });

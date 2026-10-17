@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3';
 import { startPodcastQueueWorker } from '../../../utils/podcastDownloader';
+import { runInBackground } from '../../../utils/background';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
     WHERE key = 'podcast_downloader_paused'
   `).run();
 
-  startPodcastQueueWorker();
+  runInBackground('startPodcastQueueWorker', () => startPodcastQueueWorker());
 
   return { success: true };
 });
