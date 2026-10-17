@@ -35,19 +35,6 @@ function loginEvent(username: string, password: string, ip = '10.0.0.1') {
   return event;
 }
 
-async function maxLoopGap(work: () => Promise<unknown>): Promise<number> {
-  let last = Date.now();
-  let maxGap = 0;
-  const timer = setInterval(() => {
-    const now = Date.now();
-    maxGap = Math.max(maxGap, now - last);
-    last = now;
-  }, 2);
-  await work();
-  clearInterval(timer);
-  return Math.max(maxGap, Date.now() - last);
-}
-
 const eightFailedLogins = () => Promise.all(
   Array.from({ length: 8 }, (_, i) =>
     expect(loginHandler(loginEvent(`ghost${i}`, 'nope-nope', `10.0.1.${i}`))).rejects.toMatchObject({ statusCode: 401 })
@@ -109,14 +96,39 @@ describe('password hashing', () => {
     expect(await verifyPassword('anything', null)).toBe(false);
   });
 
+  // Logical checks instead of event-loop timing (which flakes under a loaded
+  // full-suite run): with the worker, no hash runs on the main thread; with
+  // the fallback, at most one hash runs at a time.
   it('8 parallel failed logins do not stall the event loop (worker)', async () => {
     await hashPassword('warm-up');
-    expect(await maxLoopGap(eightFailedLogins)).toBeLessThan(100);
+    const compare = vi.spyOn(bcrypt, 'compare');
+    const compareSync = vi.spyOn(bcrypt, 'compareSync');
+    await eightFailedLogins();
+    expect(isPasswordWorkerActive()).toBe(true);
+    expect(compare).not.toHaveBeenCalled();
+    expect(compareSync).not.toHaveBeenCalled();
   });
 
   it('8 parallel failed logins stall at most one hash at a time (fallback)', async () => {
     setPasswordWorkerDisabledForTests(true);
-    // Unserialized, the 8 compares run back to back in one loop phase (~400 ms).
-    expect(await maxLoopGap(eightFailedLogins)).toBeLessThan(150);
+    const realCompare = bcrypt.compare.bind(bcrypt) as (p: string, h: string) => Promise<boolean>;
+    let running = 0;
+    let maxRunning = 0;
+    const order: string[] = [];
+    vi.spyOn(bcrypt, 'compare').mockImplementation((async (password: string, hash: string) => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      order.push(`start:${running}`);
+      try {
+        return await realCompare(password, hash);
+      } finally {
+        order.push('end');
+        running--;
+      }
+    }) as any);
+    await eightFailedLogins();
+    expect(maxRunning).toBe(1);
+    // Strictly alternating: each compare ends before the next starts.
+    expect(order).toEqual(Array.from({ length: 8 }, () => ['start:1', 'end']).flat());
   });
 });
