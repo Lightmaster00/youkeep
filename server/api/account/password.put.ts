@@ -34,6 +34,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Current password is incorrect.' });
   }
   clearLoginAttempts(rateLimitKey);
+  // The same password again (for a forced change: the temporary one, which
+  // the admin knows) is not a change.
+  if (password === currentPassword) {
+    throw createError({ statusCode: 400, statusMessage: 'Choose a different password.' });
+  }
 
   const passwordHash = await hashPassword(password);
   db.transaction(() => {

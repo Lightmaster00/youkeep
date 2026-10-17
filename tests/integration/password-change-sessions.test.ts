@@ -54,6 +54,19 @@ describe('PUT /api/account/password', () => {
     expect(bcrypt.compareSync('old-password-1', row.password_hash)).toBe(true);
   });
 
+  it('refuses a new password equal to the current one (400), changing nothing', async () => {
+    await expect(changeOwnPassword('sess-u1-here', { currentPassword: 'old-password-1', password: 'old-password-1' }))
+      .rejects.toMatchObject({ statusCode: 400, statusMessage: 'Choose a different password.' });
+    expect(sessionsOf('u1')).toHaveLength(3);
+  });
+
+  it('a forced change refuses the temporary password as the new one', async () => {
+    db.prepare("UPDATE users SET must_change_password = 1 WHERE id = 'u1'").run();
+    await expect(changeOwnPassword('sess-u1-here', { currentPassword: 'old-password-1', password: 'old-password-1' }))
+      .rejects.toMatchObject({ statusCode: 400, statusMessage: 'Choose a different password.' });
+    expect((db.prepare("SELECT must_change_password AS m FROM users WHERE id = 'u1'").get() as any).m).toBe(1);
+  });
+
   it('rate-limits wrong current passwords like login (429 after 5)', async () => {
     for (let i = 0; i < 5; i++) {
       await expect(changeOwnPassword('sess-u1-here', { currentPassword: `wrong-${i}-pw`, password: 'new-password-1' })).rejects.toMatchObject({ statusCode: 400 });
