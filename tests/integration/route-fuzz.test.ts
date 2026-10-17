@@ -39,6 +39,28 @@ vi.mock('child_process', async (importOriginal) => {
   return { ...mocked, default: mocked };
 });
 
+// No real HTTP either: Node's http/https clients fail at once.
+function failingRequest(...args: any[]) {
+  const req: any = new EventEmitter();
+  req.end = () => {};
+  req.write = () => {};
+  req.destroy = () => {};
+  req.setTimeout = () => req;
+  setImmediate(() => req.emit('error', new Error('network disabled in tests')));
+  void args;
+  return req;
+}
+vi.mock('https', async (importOriginal) => {
+  const real: any = await importOriginal();
+  const mocked = { ...real, get: failingRequest, request: failingRequest };
+  return { ...mocked, default: mocked };
+});
+vi.mock('http', async (importOriginal) => {
+  const real: any = await importOriginal();
+  const mocked = { ...real, get: failingRequest, request: failingRequest };
+  return { ...mocked, default: mocked };
+});
+
 const ROOT = path.resolve(__dirname, '../..');
 const API = path.join(ROOT, 'server/api');
 
@@ -79,6 +101,12 @@ beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yk-fuzz-'));
   assertInTmp(dir);
   process.env.YOUKEEP_DATA_DIR = dir;
+  // A yt-dlp binary is "installed", so nothing tries to download one.
+  const { getDataDir } = await import('../../server/utils/dataDir');
+  const bin = path.join(getDataDir(), 'bin');
+  assertInTmp(bin);
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'), 'fake');
   freshDb();
   (globalThis as any).getDb = () => db;
   vi.stubGlobal('fetch', async () => { throw new TypeError('fetch failed'); });
