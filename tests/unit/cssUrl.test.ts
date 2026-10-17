@@ -19,4 +19,20 @@ describe('cssUrl', () => {
     expect(cssUrl('/a%zz b.jpg')).toBe('url("/a%25zz%20b.jpg")');
     expect(cssUrl('')).toBe('none');
   });
+
+  it.each([
+    ['#', '%23'], ['&', '%26'], ['+', '%2B'], ['?', '%3F'], [',', '%2C'],
+    [' ', '%20'], ['[', '%5B'], [']', '%5D'], ['é', '%C3%A9'], ['%', '%25'],
+  ])('encodes %j exactly once, raw or already encoded', (char, enc) => {
+    const want = `url("/media/videos/Short%20clip%20${enc}1.jpg")`;
+    if (char !== '%') expect(cssUrl(`/media/videos/Short clip ${char}1.jpg`)).toBe(want);
+    // The server encodes each segment: that form is kept, never re-encoded.
+    expect(cssUrl(`/media/videos/Short%20clip%20${enc}1.jpg`)).toBe(want);
+    // Idempotent.
+    expect(cssUrl(want.slice(5, -2))).toBe(want);
+  });
+
+  it('keeps the query string of a remote address', () => {
+    expect(cssUrl('https://yt3.example.com/a b/x.jpg?s=88&c=k')).toBe('url("https://yt3.example.com/a%20b/x.jpg?s=88&c=k")');
+  });
 });
