@@ -341,99 +341,148 @@ function reportDownloadsBlocked(reason: string | null): void {
   reportedBlockedReason = reason;
 }
 
+const YTDL_RELEASE_BASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download';
+/** Checksums published next to every yt-dlp release asset. */
+export const YTDL_SUMS_URL = `${YTDL_RELEASE_BASE}/SHA2-256SUMS`;
+
+/** GET over https (at most 5 redirects) before `deadline` (ms epoch); calls `onBody` with a 200 response. */
+function httpsGetWithin(url: string, deadline: number, onBody: (response: import('http').IncomingMessage, done: (err?: Error) => void) => void, redirectsLeft = 5): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      reject(new Error(`Timed out downloading yt-dlp after ${YTDL_UPDATE_TIMEOUT_MS / 1000} s`));
+      return;
+    }
+    if (!url.startsWith('https://')) {
+      reject(new Error('yt-dlp is only downloaded over https.'));
+      return;
+    }
+    let settled = false;
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (err) reject(err); else resolve();
+    };
+    const req = https.get(url, { headers: { 'User-Agent': 'YouKeep-Archiver' } }, (response) => {
+      const status = response.statusCode ?? 0;
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        response.resume();
+        const location = response.headers.location;
+        if (!location || redirectsLeft <= 0) {
+          finish(new Error('Too many redirects while downloading yt-dlp'));
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        httpsGetWithin(new URL(location, url).toString(), deadline, onBody, redirectsLeft - 1).then(resolve, reject);
+      } else if (status === 200) {
+        onBody(response, finish);
+      } else {
+        response.resume();
+        finish(new Error(`Server responded with status code: ${status}`));
+      }
+    });
+    const timer = setTimeout(() => {
+      req.destroy(new Error(`Timed out downloading yt-dlp after ${YTDL_UPDATE_TIMEOUT_MS / 1000} s`));
+    }, remaining);
+    req.on('error', (err) => finish(err));
+  });
+}
+
+/** How the yt-dlp release is fetched; tests replace both (no network). */
+export const ytdlInstallDeps = {
+  /** Writes the body of `url` to `dest`. */
+  fetchFile(url: string, dest: string, deadline: number): Promise<void> {
+    return httpsGetWithin(url, deadline, (response, done) => {
+      const file = fs.createWriteStream(dest);
+      file.on('error', (err) => { response.destroy(); done(err); });
+      response.on('error', (err) => { file.destroy(); done(err); });
+      file.on('finish', () => file.close(() => done()));
+      response.pipe(file);
+    });
+  },
+  /** The body of `url` as text (at most 1 MiB). */
+  async fetchText(url: string, deadline: number): Promise<string> {
+    let text = '';
+    await httpsGetWithin(url, deadline, (response, done) => {
+      response.setEncoding('utf8');
+      response.on('data', (chunk: string) => {
+        text += chunk;
+        if (text.length > 1024 * 1024) response.destroy(new Error('The checksum file is too large.'));
+      });
+      response.on('error', (err) => done(err));
+      response.on('end', () => done());
+    });
+    return text;
+  },
+};
+
+/** The SHA-256 the sums file lists for `fileName`, or null. */
+function expectedSha256(sums: string, fileName: string): string | null {
+  for (const line of sums.split(/\r?\n/)) {
+    const m = /^([0-9a-fA-F]{64})\s+\*?(\S+)\s*$/.exec(line.trim());
+    if (m && m[2] === fileName) return m[1]!.toLowerCase();
+  }
+  return null;
+}
+
+function sha256OfFile(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    fs.createReadStream(file).on('data', (d) => hash.update(d)).on('error', reject).on('end', () => resolve(hash.digest('hex')));
+  });
+}
+
+// One install at a time: concurrent first callers share it.
+let ytdlInstall: Promise<string> | null = null;
+
 /**
- * Gets the path of the locally managed yt-dlp executable,
- * downloading it if it doesn't exist.
+ * Gets the path of the locally managed yt-dlp executable, downloading it if
+ * it doesn't exist: the release asset is written to a temporary file, its
+ * SHA-256 is checked against the release's SHA2-256SUMS, and only then is it
+ * renamed into place (refused, and nothing installed, on a mismatch).
  */
 export async function getYtdlPath(): Promise<string> {
   const isWin = process.platform === 'win32';
   const filename = isWin ? 'yt-dlp.exe' : 'yt-dlp';
-  const binDir = getBinDir();
-  const ytdlPath = path.join(binDir, filename);
-
+  const ytdlPath = path.join(getBinDir(), filename);
   if (fs.existsSync(ytdlPath) && fs.statSync(ytdlPath).size > 0) {
     return ytdlPath;
   }
-  fs.mkdirSync(binDir, { recursive: true });
-
-  // Remove incomplete/0-byte files if they exist
-  if (fs.existsSync(ytdlPath)) {
-    fs.unlinkSync(ytdlPath);
+  if (!ytdlInstall) {
+    ytdlInstall = installYtdl(ytdlPath, filename).finally(() => { ytdlInstall = null; });
   }
+  return ytdlInstall;
+}
+
+async function installYtdl(ytdlPath: string, filename: string): Promise<string> {
+  const binDir = path.dirname(ytdlPath);
+  fs.mkdirSync(binDir, { recursive: true });
+  // Remove an incomplete/0-byte file if there is one.
+  if (fs.existsSync(ytdlPath)) fs.unlinkSync(ytdlPath);
 
   console.log(`yt-dlp not found or corrupted. Downloading to ${ytdlPath}...`);
-  const url = isWin
-    ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
-    : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
-
-  const tmpPath = ytdlPath + '.tmp';
-  // The whole download (redirects included) must finish within YTDL_UPDATE_TIMEOUT_MS.
   const deadline = Date.now() + YTDL_UPDATE_TIMEOUT_MS;
-  const downloadFile = (currentUrl: string, redirectsLeft = 5): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) {
-        reject(new Error(`Timed out downloading yt-dlp after ${YTDL_UPDATE_TIMEOUT_MS / 1000} s`));
-        return;
-      }
-      let file: fs.WriteStream | null = null;
-      const req = https.get(currentUrl, { headers: { 'User-Agent': 'YouKeep-Archiver' } }, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
-          response.resume();
-          clearTimeout(timer);
-          const location = response.headers.location;
-          if (!location || redirectsLeft <= 0) {
-            reject(new Error('Too many redirects while downloading yt-dlp'));
-            return;
-          }
-          downloadFile(new URL(location, currentUrl).toString(), redirectsLeft - 1).then(resolve).catch(reject);
-        } else if (response.statusCode === 200) {
-          file = fs.createWriteStream(tmpPath);
-          response.pipe(file);
-          file.on('finish', () => {
-            clearTimeout(timer);
-            file!.close();
-            resolve();
-          });
-          file.on('error', (err) => {
-            clearTimeout(timer);
-            file!.close();
-            reject(err);
-          });
-        } else {
-          response.resume();
-          clearTimeout(timer);
-          reject(new Error(`Server responded with status code: ${response.statusCode}`));
-        }
-      });
-      const timer = setTimeout(() => {
-        req.destroy(new Error(`Timed out downloading yt-dlp after ${YTDL_UPDATE_TIMEOUT_MS / 1000} s`));
-        file?.destroy();
-      }, remaining);
-      req.on('error', (err) => {
-        clearTimeout(timer);
-        file?.destroy();
-        reject(err);
-      });
-    });
-  };
-
+  const tmpPath = path.join(binDir, `.${filename}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`);
   try {
-    await downloadFile(url);
-    if (fs.existsSync(tmpPath)) {
-      fs.renameSync(tmpPath, ytdlPath);
-    }
+    const [, sums] = await Promise.all([
+      ytdlInstallDeps.fetchFile(`${YTDL_RELEASE_BASE}/${filename}`, tmpPath, deadline),
+      ytdlInstallDeps.fetchText(YTDL_SUMS_URL, deadline),
+    ]);
+    const expected = expectedSha256(sums, filename);
+    if (!expected) throw new Error(`The yt-dlp release checksums list no ${filename}: checksum cannot be verified, not installing it.`);
+    const actual = await sha256OfFile(tmpPath);
+    if (actual !== expected) throw new Error(`The downloaded yt-dlp does not match the release checksum (expected ${expected}, got ${actual}): not installing it.`);
+    if (process.platform !== 'win32') fs.chmodSync(tmpPath, 0o755);
+    fs.renameSync(tmpPath, ytdlPath); // atomic on the same file system
   } catch (err) {
-    if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-    if (fs.existsSync(ytdlPath)) fs.unlinkSync(ytdlPath);
+    try { fs.rmSync(tmpPath, { force: true }); } catch {}
+    console.error('yt-dlp download failed:', (err as Error)?.message ?? err);
     throw err;
   }
 
-  if (!isWin) {
-    fs.chmodSync(ytdlPath, 0o755);
-  }
-
-  console.log('yt-dlp downloaded successfully.');
+  console.log('yt-dlp downloaded and verified.');
   return ytdlPath;
 }
 
