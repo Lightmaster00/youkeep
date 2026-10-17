@@ -1,13 +1,15 @@
 import { defineEventHandler, getQuery } from 'h3';
 import { getUserFromSession } from '../../../utils/auth';
 import { podcastVisibilityClause } from '../../../utils/podcastVisibility';
+import { buildFtsQuery } from '../../../utils/ftsQuery';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
   const db = getDb();
 
   const query = getQuery(event);
-  const search = query.q ? String(query.q).trim() : '';
+  // Capped once here: the MATCH expression and the LIKE fallback share it.
+  const { text: search, match: ftsMatch } = buildFtsQuery(query.q);
   const rawLimit = parseInt(String(query.limit ?? '200'), 10);
   const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 200) : 200;
 
@@ -24,8 +26,10 @@ export default defineEventHandler(async (event) => {
 
   if (search) {
     try {
-      const ftsQuery = search.split(/\s+/).filter(Boolean).map(word => `"${word.replace(/"/g, '""')}"*`).join(' AND ');
-      if (ftsQuery) {
+      const ftsQuery = ftsMatch;
+      // Nothing searchable (punctuation only): the LIKE fallback below.
+      if (!ftsQuery) throw new Error('No searchable word.');
+      {
         db.prepare('SELECT 1 FROM podcast_episodes_fts WHERE podcast_episodes_fts MATCH ? LIMIT 1').get(ftsQuery);
         // See the equivalent comment in music/tracks/search.get.ts: a direct
         // JOIN (not a subquery filter) exposes FTS5's `rank` column so real

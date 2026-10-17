@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { badRequest } from '../../utils/validation';
 import { videoColumnsSql, videoVisibilitySql } from '../../utils/videoAccess';
+import { buildFtsQuery } from '../../utils/ftsQuery';
 
 const MAX_LIMIT = 100;
 const STATUSES = ['all', 'pending', 'downloading', 'completed', 'failed'];
@@ -20,7 +21,8 @@ export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
   const query = getQuery(event);
 
-  const search = query.q ? String(query.q).trim() : '';
+  // Capped once here: the MATCH expression and the LIKE fallback share it.
+  const { text: search, match: ftsMatch } = buildFtsQuery(query.q);
   const channelId = query.channelId ? String(query.channelId) : '';
   const status = query.status ? String(query.status) : 'completed'; // Default to show completed videos
   if (!STATUSES.includes(status)) badRequest('Unknown status.');
@@ -96,8 +98,10 @@ export default defineEventHandler(async (event) => {
   if (search) {
     try {
       // Properly quote words to avoid FTS syntax errors with hyphens or special chars
-      const ftsQuery = search.split(/\s+/).filter(Boolean).map(word => `"${word.replace(/"/g, '""')}"*`).join(' AND ');
-      if (ftsQuery) {
+      const ftsQuery = ftsMatch;
+      // Nothing searchable (punctuation only): the LIKE fallback below.
+      if (!ftsQuery) throw new Error('No searchable word.');
+      {
         // Test query to trigger catch block if FTS is missing or query is invalid
         db.prepare('SELECT 1 FROM videos_fts WHERE videos_fts MATCH ? LIMIT 1').get(ftsQuery);
         whereClauses.push('v.id IN (SELECT id FROM videos_fts WHERE videos_fts MATCH ?)');
