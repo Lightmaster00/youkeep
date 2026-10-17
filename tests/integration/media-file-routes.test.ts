@@ -57,6 +57,48 @@ describe('parseByteRange', () => {
   });
 });
 
+describe('If-Range, ETag and reversed ranges (R6)', () => {
+  function serve(headers: Record<string, string>) {
+    const file = path.join(dir, 'a.mp3');
+    if (!fs.existsSync(file)) fs.writeFileSync(file, '0123456789');
+    const stat = fs.statSync(file);
+    const event = mockEvent(undefined, { headers });
+    close(sendMediaFile(event, file, stat, { contentType: 'audio/mpeg', immutable: false }));
+    return { code: event.node.res.statusCode as number, headers: event.node.res.headers as Record<string, any>, stat };
+  }
+
+  it('a reversed range (end < start) is ignored: the whole file (200)', () => {
+    expect(parseByteRange('bytes=5-2', 10)).toEqual({ kind: 'none' });
+    expect(serve({ range: 'bytes=5-2' }).code).toBe(200);
+  });
+
+  it('every response carries an ETag', () => {
+    const r = serve({});
+    expect(r.headers.etag).toMatch(/^"[0-9a-f]+-[0-9a-f]+"$/);
+  });
+
+  it('If-Range with the current ETag or Last-Modified honours the range (206)', () => {
+    const { headers } = serve({});
+    expect(serve({ range: 'bytes=0-3', 'if-range': headers.etag }).code).toBe(206);
+    expect(serve({ range: 'bytes=0-3', 'if-range': headers['last-modified'] }).code).toBe(206);
+  });
+
+  it('If-Range with another ETag, a weak one or another date sends the full file (200)', () => {
+    const { headers, stat } = serve({});
+    for (const ifRange of ['"bogus"', `W/${headers.etag}`, new Date(stat.mtime.getTime() - 5000).toUTCString(), 'not a date']) {
+      const r = serve({ range: 'bytes=0-3', 'if-range': ifRange });
+      expect(r.code).toBe(200);
+      expect(r.headers['content-length']).toBe(10);
+    }
+  });
+
+  it('If-None-Match with the current ETag is a 304', () => {
+    const { headers } = serve({});
+    expect(serve({ 'if-none-match': headers.etag }).code).toBe(304);
+    expect(serve({ 'if-none-match': '"other"' }).code).toBe(200);
+  });
+});
+
 describe('/downloads: Range, directories and legacy paths', () => {
   function seedNew() {
     insertChannel(db, { id: 'c1', title: 'Chan' });

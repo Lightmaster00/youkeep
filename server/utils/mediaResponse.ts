@@ -30,7 +30,7 @@ export type ByteRange =
  * - an end at or after the file size is clamped to the last byte;
  * - a start at or after the size (or an empty suffix) is unsatisfiable (416);
  * - several ranges: only the first one is served;
- * - a malformed header is ignored (the whole file is served).
+ * - a malformed header, or an end before the start, is ignored (the whole file is served).
  */
 export function parseByteRange(header: string | undefined | null, size: number): ByteRange {
   if (!header) return { kind: 'none' };
@@ -76,8 +76,46 @@ export function streamForResponse(event: H3Event, file: string, opts?: { start: 
   return stream;
 }
 
+/**
+ * The file's entity tag: size and modification time (ms), so a replaced file
+ * (a re-download, a clip backfill) gets a new one. Used as a strong validator.
+ */
+export function fileEtag(stat: fs.Stats): string {
+  return `"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`;
+}
+
+/**
+ * Whether a `Range` may be honoured given `If-Range` (RFC 9110 13.1.5): no
+ * header, the current (strong) ETag, or exactly the current Last-Modified
+ * date. Anything else (another or a weak ETag, another date, garbage) means
+ * the client's partial copy is stale: the whole file is sent.
+ */
+function ifRangeAllows(header: string | undefined, stat: fs.Stats): boolean {
+  if (header === undefined) return true;
+  const value = header.trim();
+  if (value.startsWith('"') || value.startsWith('W/')) return value === fileEtag(stat);
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return false;
+  return Math.floor(date.getTime() / 1000) === Math.floor(stat.mtime.getTime() / 1000);
+}
+
+/** True when `If-None-Match` lists the current ETag (or is `*`). */
+function etagMatches(header: string | undefined, etag: string): boolean {
+  if (!header) return false;
+  return header.split(',').some((t) => {
+    const tag = t.trim();
+    return tag === '*' || tag === etag || tag === `W/${etag}`;
+  });
+}
+
 /** True (and a 304 set up) when `If-Modified-Since` is at or after the file's mtime. */
 function notModified(event: H3Event, stat: fs.Stats): boolean {
+  if (event.node.req.headers['if-none-match'] !== undefined) {
+    if (!etagMatches(event.node.req.headers['if-none-match'] as string, fileEtag(stat))) return false;
+    event.node.res.statusCode = 304;
+    event.node.res.removeHeader?.('Content-Type');
+    return true;
+  }
   const header = event.node.req.headers['if-modified-since'];
   if (!header) return false;
   const since = new Date(header as string);
@@ -97,6 +135,7 @@ export function sendMediaFile(event: H3Event, file: string, stat: fs.Stats, opts
   const res = event.node.res;
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', opts.contentType);
+  res.setHeader('ETag', fileEtag(stat));
   if (opts.immutable) {
     res.setHeader('Cache-Control', CACHE_IMMUTABLE);
   } else {
@@ -105,7 +144,9 @@ export function sendMediaFile(event: H3Event, file: string, stat: fs.Stats, opts
     if (notModified(event, stat)) return null;
   }
   const size = stat.size;
-  const range = parseByteRange(event.node.req.headers.range as string | undefined, size);
+  const range = ifRangeAllows(event.node.req.headers['if-range'] as string | undefined, stat)
+    ? parseByteRange(event.node.req.headers.range as string | undefined, size)
+    : { kind: 'none' as const };
   if (range.kind === 'unsatisfiable') {
     res.statusCode = 416;
     res.setHeader('Content-Range', `bytes */${size}`);
