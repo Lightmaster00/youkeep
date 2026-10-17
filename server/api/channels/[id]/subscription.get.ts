@@ -1,12 +1,15 @@
 import { defineEventHandler, createError } from 'h3';
 
 export default defineEventHandler(async (event) => {
-  const session = await requireUser(event);
+  // A guest (public channel page) simply has no subscription: no 401.
+  const session = await getUserFromSession(event);
   const channelId = event.context.params?.id;
 
   if (!channelId) {
     throw createError({ statusCode: 400, statusMessage: 'Channel ID is required.' });
   }
+
+  if (!session) return { subscribed: false };
 
   const db = getDb();
   

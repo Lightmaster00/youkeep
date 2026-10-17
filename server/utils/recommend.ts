@@ -21,10 +21,11 @@ const CANDIDATE_POOL_SIZE = 500;
 
 export function getRecommendedVideos(
   db: Database.Database,
-  viewer: VideoViewer,
+  viewer: VideoViewer | null,
   opts: { type: 'short' | 'video' | 'all'; limit: number }
 ): RecommendedVideo[] {
-  const userId = viewer.id;
+  // A guest has no history: every user_id filter below matches nothing.
+  const userId = viewer?.id ?? null;
   // Same visibility rule as every list: an admin is recommended everything.
   const visible = videoVisibilitySql(viewer);
   // 1. Get user channel watch times

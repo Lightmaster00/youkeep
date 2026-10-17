@@ -25,6 +25,7 @@ import showEpisodes from '../../server/api/podcasts/shows/[id]/episodes.get';
 import trackPlay from '../../server/api/music/tracks/[id]/play.post';
 import channelSubscribe from '../../server/api/channels/[id]/subscribe.post';
 import personalDelete from '../../server/api/playlists/personal/[id].delete';
+import subscriptionGet from '../../server/api/channels/[id]/subscription.get';
 
 // What a viewer can learn from the API about content they may not see.
 const { openDatabase } = await vi.importActual<typeof import('../../server/utils/db')>('../../server/utils/db');
@@ -296,5 +297,17 @@ describe('short recommendations (admin filter)', () => {
     const ids = async (cookie: string) => ((await recommendGet(ev(cookie, '/api/videos/recommend'))) as any).videos.map((v: any) => v.id);
     expect(await ids(ADMIN)).toContain('sU');
     expect(await ids(BOB)).not.toContain('sU');
+  });
+
+  it('a guest on a public channel page reads "not subscribed" instead of a 401', async () => {
+    expect(await subscriptionGet(ev(undefined, '/x', { id: 'chP' }))).toEqual({ subscribed: false });
+    await channelSubscribe(mockEvent(BOB, { method: 'POST', params: { id: 'chP' } }));
+    expect(await subscriptionGet(ev(BOB, '/x', { id: 'chP' }))).toEqual({ subscribed: true });
+  });
+
+  it('a guest (public /shorts) is recommended public shorts of public channels only', async () => {
+    db.prepare("INSERT INTO videos (id, title, channel_id, visibility, download_status, is_short, created_at) VALUES ('sP', 'Public short', 'chP', 'public', 'completed', 1, 0), ('sPH', 'Private short', 'chP', 'private', 'completed', 1, 0), ('sV', 'Short in private channel', 'chV', 'public', 'completed', 1, 0)").run();
+    const res: any = await recommendGet(ev(undefined, '/api/videos/recommend'));
+    expect(res.videos.map((v: any) => v.id)).toEqual(['sP']);
   });
 });
