@@ -18,6 +18,50 @@ export function applyPerformancePragmas(db: Database.Database): void {
   for (const pragma of PERFORMANCE_PRAGMAS) db.pragma(pragma);
 }
 
+/** How often PRAGMA optimize runs while the server is up. */
+export const PLANNER_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Keeps the query planner's statistics usable: a full ANALYZE once when the
+ * database has none (a fresh install or an older database; without them
+ * SQLite picked the visibility index for the channel list and scanned every
+ * public video once per channel), then PRAGMA optimize, which only re-analyzes
+ * what changed enough. Never throws.
+ */
+export function runPlannerMaintenance(db: Database.Database): { analyzed: boolean } {
+  let analyzed = false;
+  try {
+    let hasStats = false;
+    try {
+      hasStats = ((db.prepare('SELECT COUNT(*) AS n FROM sqlite_stat1').get() as { n: number }).n) > 0;
+    } catch {
+      hasStats = false; // no sqlite_stat1 table yet
+    }
+    if (!hasStats) {
+      db.exec('ANALYZE');
+      analyzed = true;
+    }
+    db.pragma('optimize');
+  } catch (err) {
+    console.warn('[Database] Planner statistics maintenance failed:', (err as Error)?.message ?? err);
+  }
+  return { analyzed };
+}
+
+/** Runs PRAGMA optimize every PLANNER_MAINTENANCE_INTERVAL_MS; returns a stop function. */
+export function startPlannerMaintenance(getDatabase: () => Database.Database): () => void {
+  const timer = setInterval(() => {
+    try {
+      const db = getDatabase();
+      if (db.open) db.pragma('optimize');
+    } catch (err) {
+      console.warn('[Database] PRAGMA optimize failed:', (err as Error)?.message ?? err);
+    }
+  }, PLANNER_MAINTENANCE_INTERVAL_MS);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+
 /**
  * Full-text index update triggers, scoped to the columns that feed each index.
  * A download progress tick (download_progress/speed/eta) no longer rewrites the

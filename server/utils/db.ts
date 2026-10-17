@@ -4,7 +4,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getDataDir } from './dataDir';
 import { ensurePodcastPubTs } from './podcastPubDate';
-import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migrateFtsRenameTriggers } from './dbTuning';
+import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migrateFtsRenameTriggers, runPlannerMaintenance } from './dbTuning';
 
 let dbInstance: Database.Database | null = null;
 
@@ -440,6 +440,7 @@ export function openDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_videos_channel_id ON videos(channel_id);
     CREATE INDEX IF NOT EXISTS idx_videos_download_status ON videos(download_status);
     CREATE INDEX IF NOT EXISTS idx_videos_visibility ON videos(visibility);
+    CREATE INDEX IF NOT EXISTS idx_videos_channel_visibility_status ON videos(channel_id, visibility, download_status);
     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_history_user_id ON user_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_history_video_id ON user_history(video_id);
@@ -823,6 +824,9 @@ export function openDatabase(dbPath: string): Database.Database {
     db.prepare("INSERT INTO settings (key, value) VALUES ('album_matching_enabled', '1')").run();
     console.log('Seeded setting album_matching_enabled: 1');
   }
+
+  // After the migrations: planner statistics (ANALYZE when there are none).
+  runPlannerMaintenance(db);
 
   return db;
 }
