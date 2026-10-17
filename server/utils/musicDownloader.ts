@@ -12,7 +12,7 @@ import { entityFolderName, isContained, isValidMediaId, removeEntityFolder } fro
 import { enqueueBackgroundImport } from './backgroundImports';
 import { enqueueAlbumMatch } from './albumMatchRunner';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
-import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
+import { decodeChildOutput, isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
 
@@ -594,7 +594,7 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
       const env = buildSpawnEnv();
       addLog(`Starting ${wantClip ? 'clip' : 'audio'} download: ${ytdlPath} ${args.join(' ')}`);
       // Own process group: killing it also kills the ffmpeg yt-dlp started.
-      const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
+      const child = decodeChildOutput(trackChild(spawnInGroup(ytdlPath, args, { env })));
       activeMusicProcesses.set(trackId, child);
       musicKeepFilesOnExit.delete(trackId); // a fresh attempt: no pause pending for it
       activeMusicDownloadStartTimes.set(trackId, attemptStartedAt);

@@ -13,7 +13,7 @@ import { enqueueBackgroundImport } from './backgroundImports';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { channelBaseDirs, isContained, isValidMediaId, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
 import { startProgressWriter, finishProgressWriter, stopProgressWriter } from './progressWriter';
-import { isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
+import { decodeChildOutput, isShuttingDown, killProcessTree, spawnInGroup, trackChild } from './processTree';
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
 
@@ -772,7 +772,7 @@ export function runProcessAsync(
       fn();
     };
     try {
-      const child = trackChild(spawnInGroup(commandPath, args, { env }));
+      const child = decodeChildOutput(trackChild(spawnInGroup(commandPath, args, { env })));
       let stdout = '';
       let stderr = '';
 
@@ -897,7 +897,7 @@ export function extractCommentsParallel(videoId: string, targetVideoUrl: string,
 
     // Tracked with the download: a cancel, pause, timeout or shutdown kills it.
     stopCommentExtraction(videoId);
-    const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
+    const child = decodeChildOutput(trackChild(spawnInGroup(ytdlPath, args, { env })));
     activeCommentProcesses.set(videoId, child);
     let stdoutData = '';
     let stdoutBytes = 0;
@@ -917,7 +917,7 @@ export function extractCommentsParallel(videoId: string, targetVideoUrl: string,
 
     child.stdout?.on('data', (data) => {
       if (done) return;
-      stdoutBytes += data.length;
+      stdoutBytes += Buffer.byteLength(data);
       if (stdoutBytes > COMMENTS_MAX_STDOUT_BYTES) {
         killProcessTree(child);
         stdoutData = '';
@@ -1083,7 +1083,7 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
 
     addLog(`Starting download command (ffmpeg available: ${ffmpegAvailable}): ${ytdlPath} ${args.join(' ')}`);
     // Own process group: killing it also kills the ffmpeg yt-dlp started.
-    const child = trackChild(spawnInGroup(ytdlPath, args, { env }));
+    const child = decodeChildOutput(trackChild(spawnInGroup(ytdlPath, args, { env })));
     activeProcesses.set(videoId, child);
     keepFilesOnExit.delete(videoId); // a fresh attempt: no pause pending for it
     // Progress is persisted at most once per second (see progressWriter.ts).

@@ -5,6 +5,7 @@ import { buildSpawnEnv, getDownloadsDir } from './downloader';
 import { isContained, resolveStoredPath } from './videoPaths';
 import { isWipeInProgress } from './libraryWipe';
 import { isModuleEnabled } from './modules';
+import { decodeChildOutput } from './processTree';
 
 export type DurationProbe = (filePath: string) => Promise<number | null>;
 
@@ -31,6 +32,7 @@ export function runFfprobe(
         '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', filePath,
       ], { env: buildSpawnEnv() });
+      decodeChildOutput(child);
       let out = '';
       timer = setTimeout(() => {
         try { child.kill('SIGKILL'); } catch {}

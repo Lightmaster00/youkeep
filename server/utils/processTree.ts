@@ -115,3 +115,16 @@ export function isShuttingDown(): boolean {
 export function markShuttingDown(value = true): void {
   _g[G_SHUTTING_DOWN] = value;
 }
+
+/**
+ * Makes `child`'s stdout and stderr emit UTF-8 strings decoded across chunk
+ * boundaries (a StringDecoder): `data.toString()` per chunk turned a
+ * multi-byte character split between two 64 KB chunks into U+FFFD, corrupting
+ * titles in yt-dlp's JSON. Ignores streams without setEncoding (test fakes).
+ */
+export function decodeChildOutput<T extends { stdout?: any; stderr?: any }>(child: T): T {
+  for (const stream of [child.stdout, child.stderr]) {
+    if (stream && typeof stream.setEncoding === 'function') stream.setEncoding('utf8');
+  }
+  return child;
+}
