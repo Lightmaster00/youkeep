@@ -48,3 +48,23 @@ describe('VideoCard image errors', () => {
     }
   });
 });
+
+describe('replayFailedImageErrors', () => {
+  it('re-fires error only on images that already failed before hydration', async () => {
+    const { replayFailedImageErrors } = await import('../../app/plugins/replayImageErrors.client');
+    const root = document.createElement('div');
+    const failed = brokenImage('/missing.png');
+    Object.defineProperty(failed, 'complete', { value: true });
+    Object.defineProperty(failed, 'naturalWidth', { value: 0 });
+    const ok = brokenImage('/fine.png');
+    Object.defineProperty(ok, 'complete', { value: true });
+    Object.defineProperty(ok, 'naturalWidth', { value: 64 });
+    const loading = brokenImage('/later.png');
+    Object.defineProperty(loading, 'complete', { value: false });
+    root.append(failed, ok, loading);
+    replayFailedImageErrors(root);
+    expect(failed.getAttribute('src')).toBe(FALLBACK_AVATAR);
+    expect(ok.getAttribute('src')).toBe('/fine.png');
+    expect(loading.getAttribute('src')).toBe('/later.png');
+  });
+});
