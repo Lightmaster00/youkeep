@@ -34,7 +34,12 @@
         v-for="playlist in playlists" 
         :key="playlist.id" 
         class="playlist-card premium-card"
+        role="link"
+        tabindex="0"
+        :aria-label="`Open ${playlist.title}`"
         @click="navigateToPlaylist(playlist)"
+        @keydown.enter.self.prevent="navigateToPlaylist(playlist)"
+        @keydown.space.self.prevent="navigateToPlaylist(playlist)"
       >
         <!-- Thumbnail Wrapper -->
         <div class="thumbnail-wrapper">

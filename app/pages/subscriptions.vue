@@ -10,7 +10,12 @@
           :key="channel.id" 
           class="sub-channel-pill"
           :class="{ 'inactive-channel': inactiveChannelIds.includes(channel.id) }"
+          role="button"
+          tabindex="0"
+          :aria-pressed="!inactiveChannelIds.includes(channel.id)"
           @click="toggleChannelFilter(channel.id)"
+          @keydown.enter.self.prevent="toggleChannelFilter(channel.id)"
+          @keydown.space.self.prevent="toggleChannelFilter(channel.id)"
         >
           <img 
             :src="channel.avatar_url || FALLBACK_AVATAR"

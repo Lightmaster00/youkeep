@@ -6,7 +6,8 @@
     tabindex="0"
     :aria-label="`Play ${episode.title}`"
     @click="emit('play', episode)"
-    @keydown.enter.prevent="emit('play', episode)"
+    @keydown.enter.self.prevent="emit('play', episode)"
+    @keydown.space.self.prevent="emit('play', episode)"
   >
     <img :src="cover" @error="onCoverError" class="media-card-cover" alt="" width="320" height="320" loading="lazy" decoding="async" />
     <div class="media-card-body">

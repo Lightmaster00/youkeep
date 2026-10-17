@@ -30,7 +30,12 @@
         v-for="ch in channels"
         :key="ch.id"
         class="channel-card glass-panel"
+        role="link"
+        tabindex="0"
+        :aria-label="`Open ${ch.title}`"
         @click="selectChannel(ch.id)"
+        @keydown.enter.self.prevent="selectChannel(ch.id)"
+        @keydown.space.self.prevent="selectChannel(ch.id)"
       >
         <!-- Banner Section -->
         <div

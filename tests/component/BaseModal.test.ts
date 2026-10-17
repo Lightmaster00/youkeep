@@ -1,18 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import { defineComponent, h, ref } from 'vue';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { nextTick } from 'vue';
 import BaseModal from '../../app/components/BaseModal.vue';
 
-// BaseModal's focus/keydown-listener behavior is driven by a
-// `watch(() => props.show, ...)` with no `{ immediate: true }`. That means
-// the watcher callback only runs on a show TRANSITION (false -> true or
-// true -> false) -- it does NOT run just because the component happened to
-// mount with `show: true` already set. Verified directly: mounting with
-// `show: true` from the start leaves `document.activeElement` untouched and
-// does not attach the Escape listener. Tests that need the "shown" behavior
-// must mount with `show: false` and then `setProps({ show: true })` to
-// trigger the watcher, exactly like the real app does when a modal is
-// toggled open by user action.
+// BaseModal's focus/keydown-listener behavior follows `show` (also when the
+// modal mounts already shown). Most tests mount hidden and then open it, like
+// the app does when a modal is toggled open by user action.
+const mounted: any[] = [];
+afterEach(() => {
+  while (mounted.length) mounted.pop().unmount();
+  document.body.innerHTML = '';
+});
 
 describe('BaseModal', () => {
   it('clicking the backdrop emits close', async () => {
@@ -88,7 +87,7 @@ describe('BaseModal', () => {
     expect(document.activeElement).toBe(card);
   });
 
-  it('does NOT move focus when mounted directly with show: true (watch has no immediate:true)', async () => {
+  it('also takes focus when mounted directly with show: true (modals rendered under v-if)', async () => {
     const wrapper = await mountSuspended(BaseModal, {
       props: { show: true, title: 'Confirm' },
       attachTo: document.body
@@ -96,7 +95,8 @@ describe('BaseModal', () => {
     await nextTick();
     await nextTick();
     const card = wrapper.find('.modal-card').element as HTMLElement;
-    expect(document.activeElement).not.toBe(card);
+    expect(document.activeElement).toBe(card);
+    wrapper.unmount();
   });
 
   it('returns focus to the previously-focused element when show transitions from true to false', async () => {
@@ -145,5 +145,73 @@ describe('BaseModal', () => {
     // must not attempt to call .focus() on the detached element; body (or
     // nothing) ends up focused instead of throwing.
     expect(document.activeElement).not.toBe(trigger);
+  });
+
+  it('labels the dialog with its title and the close button "Close"', async () => {
+    const wrapper = await mountSuspended(BaseModal, { props: { show: true, title: 'Rename' } });
+    mounted.push(wrapper);
+    const card = wrapper.find('[role="dialog"]');
+    expect(card.attributes('aria-modal')).toBe('true');
+    const titleId = card.attributes('aria-labelledby')!;
+    expect(wrapper.find(`#${titleId}`).text()).toBe('Rename');
+    expect(wrapper.find('.close-modal-btn').attributes('aria-label')).toBe('Close');
+  });
+
+  it('traps Tab inside the dialog in both directions', async () => {
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    const wrapper = await mountSuspended(BaseModal, {
+      props: { show: false, title: 'Trap' },
+      slots: { default: '<input id="first-field" /><button id="last-btn">Save</button>' },
+      attachTo: document.body,
+    });
+    mounted.push(wrapper);
+    await wrapper.setProps({ show: true });
+    await nextTick();
+    await nextTick();
+    const closeBtn = wrapper.find('.close-modal-btn').element as HTMLElement;
+    const lastBtn = wrapper.find('#last-btn').element as HTMLElement;
+    lastBtn.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+    document.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(closeBtn);
+    const back = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
+    document.dispatchEvent(back);
+    expect(document.activeElement).toBe(lastBtn);
+    // Focus that escaped (e.g. by a click) is pulled back in.
+    outside.focus();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+    expect(document.activeElement).toBe(closeBtn);
+  });
+
+  it('Escape closes only the topmost of two stacked modals', async () => {
+    const Stack = defineComponent({
+      setup() {
+        const outer = ref(false);
+        const inner = ref(false);
+        const closed: string[] = [];
+        return { outer, inner, closed };
+      },
+      render() {
+        return h('div', [
+          h(BaseModal, { show: this.outer, title: 'Outer', onClose: () => { this.closed.push('outer'); this.outer = false; } }, () => 'outer body'),
+          h(BaseModal, { show: this.inner, title: 'Inner', onClose: () => { this.closed.push('inner'); this.inner = false; } }, () => 'inner body'),
+        ]);
+      },
+    });
+    const wrapper = await mountSuspended(Stack, { attachTo: document.body });
+    mounted.push(wrapper);
+    const vm = wrapper.vm as any;
+    vm.outer = true;
+    await nextTick();
+    vm.inner = true;
+    await nextTick();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    expect(vm.closed).toEqual(['inner']);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+    expect(vm.closed).toEqual(['inner', 'outer']);
   });
 });

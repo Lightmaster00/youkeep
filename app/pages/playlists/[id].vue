@@ -83,7 +83,12 @@
             v-for="(video, index) in videos" 
             :key="video.id" 
             class="video-row glass-panel"
+            role="link"
+            tabindex="0"
+            :aria-label="`Play ${video.title}`"
             @click="playVideo(video.id)"
+            @keydown.enter.self.prevent="playVideo(video.id)"
+            @keydown.space.self.prevent="playVideo(video.id)"
           >
             <div class="video-index">{{ index + 1 }}</div>
             

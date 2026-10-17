@@ -920,3 +920,12 @@ textarea.form-input {
   .media-card { padding: 12px; }
   .media-card-cover { width: 100%; height: auto; aspect-ratio: 1; }
 }
+
+/* Keyboard focus ring for clickable cards and rows that are not native
+   buttons or links (role="button" / role="link" with tabindex="0"). */
+[role="button"][tabindex="0"]:focus-visible,
+[role="link"][tabindex="0"]:focus-visible,
+.mtl-row:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}

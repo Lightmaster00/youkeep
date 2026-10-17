@@ -5,10 +5,12 @@
       :key="track.id"
       class="mtl-row"
       :class="{ 'now-playing': activeId === track.id, 'is-unplayable': !track.local_file_path }"
+      role="button"
       tabindex="0"
       :aria-label="`Play ${track.title}`"
       @click="emit('play', track)"
       @keydown.enter.self.prevent="emit('play', track)"
+      @keydown.space.self.prevent="emit('play', track)"
     >
       <span class="mtl-index">{{ trackNumbers ? (track.track_number ?? '–') : index + 1 }}</span>
       <img :src="coverOf(track)" class="mtl-cover" alt="" width="40" height="40" loading="lazy" decoding="async" @error="onCoverError" />

@@ -40,8 +40,18 @@
 
     <!-- Video Details -->
     <div class="video-info">
-      <h4 v-if="props.searchQuery" class="video-title" :title="video.title" v-html="highlightMatch(video.title, props.searchQuery)"></h4>
-      <h4 v-else class="video-title" :title="video.title">{{ video.title }}</h4>
+      <h4 class="video-title" :title="video.title">
+        <!-- The title is the card's keyboard/screen-reader entry point; a click
+             anywhere else on the card goes to the same place. -->
+        <NuxtLink v-if="clickable" :to="watchTarget" class="video-title-link" @click.stop>
+          <span v-if="props.searchQuery" v-html="highlightMatch(video.title, props.searchQuery)"></span>
+          <template v-else>{{ video.title }}</template>
+        </NuxtLink>
+        <template v-else>
+          <span v-if="props.searchQuery" v-html="highlightMatch(video.title, props.searchQuery)"></span>
+          <template v-else>{{ video.title }}</template>
+        </template>
+      </h4>
       <div v-if="showChannelInfo" class="channel-row">
         <img
           :src="video.channel_avatar || fallbackAvatar"
@@ -108,6 +118,7 @@ const PREVIEW_START_RATIO = 0.10;
 const PREVIEW_END_RATIO = 0.40;
 
 const instanceId = nextInstanceId('video-card');
+const watchTarget = computed(() => props.to || `/watch/${props.video.id}`);
 const { activePreviewId } = useVideoPreview();
 const isPreviewActive = computed(() => activePreviewId.value === instanceId);
 const previewVideoEl = ref<HTMLVideoElement | null>(null);
@@ -176,7 +187,7 @@ const handleAvatarError = (event: Event) => {
 
 const playVideo = () => {
   if (!props.clickable) return;
-  navigateTo(props.to || `/watch/${props.video.id}`);
+  navigateTo(watchTarget.value);
 };
 
 const handleThumbnailError = (event: Event) => {
@@ -229,6 +240,16 @@ const formattedUploadDate = computed(() => {
 </script>
 
 <style scoped>
+.video-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.video-title-link:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .video-card {
   display: flex;
   flex-direction: column;

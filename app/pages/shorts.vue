@@ -80,7 +80,13 @@
             <!-- Bottom Info Overlay -->
             <div class="reel-bottom-info">
               <div class="channel-info-row">
-                <h4 class="channel-title" @click="navigateToChannel(video.channel_id)">
+                <h4
+                  class="channel-title"
+                  role="link"
+                  tabindex="0"
+                  @click="navigateToChannel(video.channel_id)"
+                  @keydown.enter.prevent="navigateToChannel(video.channel_id)"
+                >
                   @{{ video.channel_title }}
                 </h4>
                 <span class="video-date-badge">• {{ formatVideoDate(video.upload_date) }}</span>
