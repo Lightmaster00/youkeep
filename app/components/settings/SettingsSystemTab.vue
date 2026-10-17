@@ -61,25 +61,47 @@
       </div>
     <div v-for="platform in searchPlatforms" :key="platform.id" class="mt-3 pt-3 border-t">
       <h4 class="results-header">{{ platformLabels[platform.id] }}</h4>
-      <form @submit.prevent="handleSaveSearchPlatform(platform.id)" class="ingest-form mt-2">
+      <form @submit.prevent="handleSaveSearchPlatform(platform.id)" class="ingest-form mt-2" :data-testid="`platform-${platform.id}`">
         <div class="search-input-wrapper">
           <input
-            type="text"
-            v-model="platform.apiKey"
-            placeholder="API Key"
+            type="password"
+            v-model="platformDrafts[platform.id]!.apiKey"
+            :placeholder="secretPlaceholder('API key', platform.apiKeyConfigured, platform.apiKeyHint)"
+            :aria-label="`${platformLabels[platform.id]} API key`"
+            autocomplete="off"
             class="form-input settings-search-input"
+            data-testid="platform-api-key"
             :disabled="savingPlatformId === platform.id"
           />
         </div>
+        <button
+          v-if="platform.apiKeyConfigured"
+          type="button"
+          class="btn btn-secondary"
+          data-testid="platform-clear-key"
+          :disabled="savingPlatformId === platform.id"
+          @click="clearPlatformSecret(platform.id, 'clearApiKey')"
+        >Clear key</button>
         <div class="search-input-wrapper" v-if="platform.id === 'podcastindex'">
           <input
             type="password"
-            v-model="platform.apiSecret"
-            placeholder="API Secret"
+            v-model="platformDrafts[platform.id]!.apiSecret"
+            :placeholder="secretPlaceholder('API secret', platform.apiSecretConfigured, platform.apiSecretHint)"
+            :aria-label="`${platformLabels[platform.id]} API secret`"
+            autocomplete="off"
             class="form-input settings-search-input"
+            data-testid="platform-api-secret"
             :disabled="savingPlatformId === platform.id"
           />
         </div>
+        <button
+          v-if="platform.id === 'podcastindex' && platform.apiSecretConfigured"
+          type="button"
+          class="btn btn-secondary"
+          data-testid="platform-clear-secret"
+          :disabled="savingPlatformId === platform.id"
+          @click="clearPlatformSecret(platform.id, 'clearApiSecret')"
+        >Clear secret</button>
         <button type="submit" class="btn btn-secondary-dark" :disabled="savingPlatformId === platform.id">
           {{ savingPlatformId === platform.id ? 'Saving...' : 'Save' }}
         </button>
@@ -252,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted, onMounted } from 'vue';
+import { ref, reactive, computed, watch, onUnmounted, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import TidyLibraryPanel from '~/components/settings/TidyLibraryPanel.vue';
@@ -397,7 +419,17 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
-const searchPlatforms = ref<{ id: string; apiKey: string; apiSecret: string }[]>([]);
+// Stored secrets never come back from the server: only whether one is set and
+// a short hint. The inputs start empty and only what the admin types is sent.
+interface SearchPlatformStatus {
+  id: string;
+  apiKeyConfigured: boolean;
+  apiKeyHint: string;
+  apiSecretConfigured: boolean;
+  apiSecretHint: string;
+}
+const searchPlatforms = ref<SearchPlatformStatus[]>([]);
+const platformDrafts = reactive<Record<string, { apiKey: string; apiSecret: string }>>({});
 const savingPlatformId = ref<string | null>(null);
 const platformLabels: Record<string, string> = {
   podcastindex: 'PodcastIndex',
@@ -405,31 +437,56 @@ const platformLabels: Record<string, string> = {
   youtube_data_api: 'YouTube Data API'
 };
 
+const secretPlaceholder = (label: string, configured: boolean, hint: string) => {
+  if (!configured) return label;
+  return hint ? `Configured (…${hint})` : 'Configured';
+};
+
 const fetchSearchPlatforms = async () => {
   try {
     const data = await $fetch<any>('/api/admin/system/search-platforms');
-    searchPlatforms.value = data.platforms || [];
+    searchPlatforms.value = (data.platforms || []).map((p: any) => ({
+      id: p.id,
+      apiKeyConfigured: !!p.apiKeyConfigured,
+      apiKeyHint: typeof p.apiKeyHint === 'string' ? p.apiKeyHint : '',
+      apiSecretConfigured: !!p.apiSecretConfigured,
+      apiSecretHint: typeof p.apiSecretHint === 'string' ? p.apiSecretHint : ''
+    }));
+    for (const p of searchPlatforms.value) platformDrafts[p.id] = { apiKey: '', apiSecret: '' };
   } catch (err) {
     console.error('Failed to fetch search platforms:', err);
   }
 };
 
-const handleSaveSearchPlatform = async (id: string) => {
-  const platform = searchPlatforms.value.find((p) => p.id === id);
-  if (!platform) return;
-
+const postSearchPlatform = async (id: string, body: Record<string, unknown>, success: string) => {
   savingPlatformId.value = id;
   try {
-    await $fetch('/api/admin/system/search-platforms', {
-      method: 'POST',
-      body: { id: platform.id, apiKey: platform.apiKey, apiSecret: platform.apiSecret }
-    });
-    toast.success(`${platformLabels[id]} credentials saved.`);
+    await $fetch('/api/admin/system/search-platforms', { method: 'POST', body: { id, ...body } });
+    toast.success(success);
+    await fetchSearchPlatforms();
   } catch (err: any) {
     toast.error(err.data?.statusMessage || `Failed to save ${platformLabels[id]} credentials.`);
   } finally {
     savingPlatformId.value = null;
   }
+};
+
+const handleSaveSearchPlatform = async (id: string) => {
+  const draft = platformDrafts[id];
+  if (!draft) return;
+  const body: Record<string, string> = {};
+  if (draft.apiKey.trim()) body.apiKey = draft.apiKey.trim();
+  if (draft.apiSecret.trim()) body.apiSecret = draft.apiSecret.trim();
+  if (Object.keys(body).length === 0) {
+    toast.error('Type a new value to save, or use Clear to remove the stored one.');
+    return;
+  }
+  await postSearchPlatform(id, body, `${platformLabels[id]} credentials saved.`);
+};
+
+const clearPlatformSecret = async (id: string, flag: 'clearApiKey' | 'clearApiSecret') => {
+  const what = flag === 'clearApiKey' ? 'API key' : 'API secret';
+  await postSearchPlatform(id, { [flag]: true }, `${platformLabels[id]} ${what} removed.`);
 };
 
 const contentSearchMode = ref('per_space');
