@@ -190,25 +190,16 @@ export function channelReadBaseDir(customSavePath: string | null | undefined, do
   return customSavePath && customSavePath.trim().length > 0 ? customSavePath : downloadsDir;
 }
 
-/**
- * True when `dir` is a writable folder, or a missing one whose parent is a
- * writable folder (isDirWritable creates only that last level). Like
- * isDirWritable, but never creates anything.
- */
+/** True when `dir` is an existing writable folder (the same rule as isDirWritable, which creates nothing). */
 function couldWriteInto(dir: string): boolean {
-  const target = path.resolve(dir);
-  const writableDir = (p: string) => {
-    try {
-      if (!fs.statSync(p).isDirectory()) return false;
-      fs.accessSync(p, fs.constants.W_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  if (fs.existsSync(target)) return writableDir(target);
-  const parent = path.dirname(target);
-  return parent !== target && writableDir(parent);
+  try {
+    const target = path.resolve(dir);
+    if (!fs.statSync(target).isDirectory()) return false;
+    fs.accessSync(target, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -85,14 +85,20 @@ describe('channelWriteBaseDir', () => {
     expect(channelWriteBaseDir(unwritable, downloads)).toBe(downloads);
     expect(channelWriteBaseDir(vanished, downloads)).toBe(downloads);
     expect(fs.existsSync(path.join(dir, 'gone'))).toBe(false);
-    expect(channelWriteBaseDir(missing, downloads)).toBe(missing);
+    // A missing save folder (its parent exists) is never created: both fall back.
+    expect(channelWriteBaseDir(missing, downloads)).toBe(downloads);
+    expect(resolveChannelBaseDir(missing)).not.toBe(missing);
     expect(fs.existsSync(missing)).toBe(false);
+    fs.mkdirSync(missing);
+    expect(channelWriteBaseDir(missing, downloads)).toBe(missing);
     expect(resolveChannelBaseDir(missing)).toBe(missing);
   });
 
   it('lists the write base first, then the other place the downloader may have used', () => {
     const custom = path.join(dir, 'custom');
     expect(channelBaseDirs(null, downloads)).toEqual([downloads]);
+    expect(channelBaseDirs(custom, downloads)).toEqual([downloads, custom]);
+    fs.mkdirSync(custom);
     expect(channelBaseDirs(custom, downloads)).toEqual([custom, downloads]);
     const unwritable = unwritableCustom();
     expect(channelBaseDirs(unwritable, downloads)).toEqual([downloads, unwritable]);

@@ -22,16 +22,21 @@ export default defineEventHandler(async (event) => {
       });
     }
 
-    // Try to ensure directory exists or can be created
+    // The folder must already exist and be writable: it is never created
+    // (a missing folder is usually an unmounted share; creating it would
+    // fill the local disk instead).
+    let ok = false;
     try {
-      if (!fs.existsSync(trimmed)) {
-        fs.mkdirSync(trimmed, { recursive: true });
-      }
+      ok = fs.statSync(trimmed).isDirectory();
+      if (ok) fs.accessSync(trimmed, fs.constants.W_OK);
     } catch (err: any) {
-      console.error('[admin/downloader/default-dir]', err);
+      if (err?.code !== 'ENOENT') console.error('[admin/downloader/default-dir]', err);
+      ok = false;
+    }
+    if (!ok) {
       throw createError({
         statusCode: 400,
-        statusMessage: 'Unable to create or access the folder. Check the server logs for details.'
+        statusMessage: 'The folder does not exist or is not writable. Create it (or mount the share) first.'
       });
     }
   }

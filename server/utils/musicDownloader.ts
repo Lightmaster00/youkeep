@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { Cron } from 'croner';
 import { getDb } from './db';
 import { getDataDir } from './dataDir';
-import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, isFfmpegAvailable, usableChannelHints, CHANNEL_METADATA_TIMEOUT_MS, type ChannelFollowHints } from './downloader';
+import { getYtdlPath, buildSpawnEnv, runProcessAsync, addLog, isDirWritable, builtinDownloadsDirs, isFfmpegAvailable, usableChannelHints, CHANNEL_METADATA_TIMEOUT_MS, type ChannelFollowHints } from './downloader';
 import { parseMusicMetadataFromInfoData } from './musicMetadata';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
@@ -86,7 +86,7 @@ export const activeMusicDownloadStartTimes: Map<string, number> = _g[G_MUSIC_DOW
 export const musicClipBackfillsInFlight: Set<string> = _g[G_MUSIC_CLIP_BACKFILLS_IN_FLIGHT];
 
 export function getMusicDownloadsDir(): string {
-  const defaultPath = '/downloads/music';
+  const defaultPath = builtinDownloadsDirs.music;
   if (isDirWritable(defaultPath)) {
     return defaultPath;
   }

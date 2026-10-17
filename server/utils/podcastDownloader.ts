@@ -8,7 +8,7 @@ import { Cron } from 'croner';
 import { getDb } from './db';
 import { parsePubTs } from './podcastPubDate';
 import { getDataDir } from './dataDir';
-import { addLog, isDirWritable } from './downloader';
+import { addLog, builtinDownloadsDirs, isDirWritable } from './downloader';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
 import { isShuttingDown } from './processTree';
 import { isPrivateNetworkUrl, safeFetch, UnsafeUrlError } from './safeUrl';
@@ -96,7 +96,7 @@ export const activePodcastAbortControllers: Map<string, AbortController> = _g[G_
 export const activePodcastDownloadStartTimes: Map<string, number> = _g[G_PODCAST_DOWNLOAD_START_TIMES];
 
 export function getPodcastDownloadsDir(): string {
-  const defaultPath = '/downloads/podcasts';
+  const defaultPath = builtinDownloadsDirs.podcasts;
   if (isDirWritable(defaultPath)) {
     return defaultPath;
   }

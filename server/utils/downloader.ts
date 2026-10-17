@@ -254,17 +254,14 @@ export function normalizeCustomSavePath(value: unknown): string | null {
 }
 
 /**
- * True when `dirPath` is a writable folder. A missing folder is created only
- * when its parent exists: a vanished mount point (an unmounted NAS share)
- * must not be silently recreated inside the container.
+ * True when `dirPath` is an existing, writable folder. Nothing is ever
+ * created: a configured downloads or save folder that is missing is an
+ * unmounted share (even when its mount point exists, empty), and creating it
+ * would fill the container's or the host's local disk instead. Only the
+ * per-channel/artist/show folders below it are created, when downloading.
  */
 export function isDirWritable(dirPath: string): boolean {
   try {
-    if (!fs.existsSync(dirPath)) {
-      const parent = path.dirname(dirPath);
-      if (parent === dirPath || !fs.statSync(parent).isDirectory()) return false;
-      fs.mkdirSync(dirPath);
-    }
     if (!fs.statSync(dirPath).isDirectory()) return false;
     fs.accessSync(dirPath, fs.constants.W_OK);
     return true;
@@ -283,6 +280,17 @@ export function resolveChannelBaseDir(customSavePath: string | null | undefined)
     ? customSavePath
     : getDownloadsDir();
 }
+
+/**
+ * The Docker volume mount points used when no folder is configured (only
+ * when they exist: a mount that was not set up is not created). Tests point
+ * them at temporary folders.
+ */
+export const builtinDownloadsDirs = {
+  videos: '/downloads/videos',
+  music: '/downloads/music',
+  podcasts: '/downloads/podcasts',
+};
 
 export interface DownloadsDirState {
   /** The folder videos are written to and read from. */
@@ -312,7 +320,7 @@ export function getDownloadsDirState(): DownloadsDirState {
       : { dir: customPath, blockedReason: `The configured downloads folder ${customPath} is missing or not writable.` };
   }
 
-  const defaultPath = '/downloads/videos';
+  const defaultPath = builtinDownloadsDirs.videos;
   if (isDirWritable(defaultPath)) {
     return { dir: defaultPath, blockedReason: null };
   }
