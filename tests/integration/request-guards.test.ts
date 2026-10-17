@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import { readBody } from 'h3';
 import guards, { MAX_API_BODY_BYTES } from '../../server/middleware/requestGuards';
 import { mockEvent } from '../helpers/testDb';
+import { normalizeRequestPath } from '../../server/utils/requestPath';
 
 const originalTrust = process.env.TRUST_PROXY;
 afterEach(() => {
@@ -114,5 +115,36 @@ describe('cross-site login and setup', () => {
 
   it('does not apply the cross-site rule to other routes (they have CSRF tokens)', async () => {
     await expect(guards(ev('/api/videos/track', 'POST', { ...json, 'sec-fetch-site': 'cross-site' }))).resolves.toBeUndefined();
+  });
+});
+
+describe('path normalisation (R14)', () => {
+  const crossSite = { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example', 'content-type': 'application/json', 'content-length': '2' };
+  it.each([
+    '/api/auth/login', '/api/auth/login/', '/api/auth/login//', '/api/auth/login?x=1', '/api/auth/login/?x=1',
+    '/API/auth/login', '/api/Auth/Login', '//api//auth//login', '/api/auth/setup/', '/API/AUTH/SETUP?y',
+  ])('%s gets the cross-site check', async (p) => {
+    await expect(guards(ev(p, 'POST', crossSite))).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('other routes are not cross-site checked', async () => {
+    await expect(guards(ev('/api/auth/logout', 'POST', crossSite))).resolves.toBeUndefined();
+  });
+
+  it('the JSON rule also applies to an /API path', async () => {
+    await expect(guards(ev('/API/videos/track', 'POST', { 'content-type': 'text/plain', 'content-length': '2' }))).rejects.toMatchObject({ statusCode: 415 });
+  });
+});
+
+describe('normalizeRequestPath', () => {
+  it.each([
+    ['/api/auth/login/', '/api/auth/login'],
+    ['/api/auth/login?x=1', '/api/auth/login'],
+    ['/API//Auth///login//?a=b', '/api/auth/login'],
+    ['/', '/'],
+    ['', '/'],
+    ['/downloads-music/A/b.opus', '/downloads-music/a/b.opus'],
+  ])('%s -> %s', (raw, expected) => {
+    expect(normalizeRequestPath(raw)).toBe(expected);
   });
 });

@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { getUserFromSession } from '../utils/auth';
+import { normalizeRequestPath } from '../utils/requestPath';
 
 // A user flagged must_change_password (temporary password set by an admin)
 // may only reach what the change-password screen itself needs. Enforced here
@@ -10,7 +11,7 @@ const ALLOWED_PREFIXES = ['/api/auth/', '/api/account/password', '/api/settings/
 const ALLOWED_READ_ONLY = ['/api/account/profile'];
 
 export default defineEventHandler(async (event) => {
-  const path = (event.path || '').split('?')[0] || '';
+  const path = normalizeRequestPath(event.path);
   // /downloads* (video), /downloads-music* and /downloads-podcasts* serve the
   // media files themselves and sit outside /api.
   const guarded = path.startsWith('/api/') || path.startsWith('/downloads');

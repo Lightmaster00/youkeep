@@ -97,3 +97,10 @@ describe('moduleGate middleware', () => {
     }
   });
 });
+
+describe('moduleGate path normalisation (R14)', () => {
+  it.each(['/API/music/artists', '//api/music//artists', '/api/music/', '/Downloads-Music/a/t.opus'])('blocks %s when music is disabled', async (path) => {
+    insertSetting(db, { key: 'music_module_enabled', value: '0' });
+    await blocked(path);
+  });
+});

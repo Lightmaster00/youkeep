@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getHeader, setHeader, type H3Event } from 'h3';
 import { getForwardedHost } from '../utils/trustProxy';
+import { normalizeRequestPath } from '../utils/requestPath';
 
 // Request hardening applied to every /api call before any route runs:
 // - bodies over 1 MiB are refused (413), declared or chunked;
@@ -86,7 +87,7 @@ function assertSameSite(event: H3Event): void {
 }
 
 export default defineEventHandler(async (event) => {
-  const path = (event.path || '').split('?')[0] || '';
+  const path = normalizeRequestPath(event.path);
   if (!path.startsWith('/api/')) return;
   if (!MUTATING_METHODS.has(event.method)) return;
 

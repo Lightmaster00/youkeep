@@ -68,3 +68,15 @@ describe('forcePasswordChange middleware', () => {
     await expect(middleware(mockEvent(cookie, { path: '/api/account/preferences', method: 'PUT' }))).rejects.toMatchObject({ statusCode: 403 });
   });
 });
+
+describe('forcePasswordChange path normalisation (R14)', () => {
+  it.each(['/API/videos', '//api/videos', '/api/videos/', '/Api/Channels?x=1', '/DOWNLOADS/chan/v.mp4'])('blocks %s', async (path) => {
+    const cookie = mustChange('u9');
+    await expect(middleware(mockEvent(cookie, { path }))).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it.each(['/api/account/password/', '/API/account/password', '/api//auth/me'])('still allows %s', async (path) => {
+    const cookie = mustChange('u8');
+    await expect(middleware(mockEvent(cookie, { path }))).resolves.toBeUndefined();
+  });
+});
