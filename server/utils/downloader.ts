@@ -2166,6 +2166,7 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
   let commentsUpdated = 0;
 
   for (const video of videosToRefresh) {
+    if (isShuttingDown()) break;
     // Check if global download is paused, or the Video module is disabled
     if (isEffectivelyPaused(db, 'downloader_paused', 'video')) {
       addLog('Metadata refresh aborted: downloader is paused or the Video module is disabled.');

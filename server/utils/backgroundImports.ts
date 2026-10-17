@@ -6,6 +6,8 @@
  * process (each task records its own failure in the database).
  */
 
+import { isShuttingDown } from './processTree';
+
 export const MAX_CONCURRENT_IMPORTS = 2;
 
 interface QueuedImport {
@@ -39,6 +41,12 @@ function notifyIdle() {
 }
 
 function pump() {
+  // Shutdown: queued imports are not started (they resume after a restart).
+  if (isShuttingDown()) {
+    state.pending.length = 0;
+    notifyIdle();
+    return;
+  }
   while (state.running.size < MAX_CONCURRENT_IMPORTS && state.pending.length > 0) {
     const next = state.pending.shift()!;
     state.running.add(next.key);

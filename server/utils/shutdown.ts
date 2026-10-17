@@ -46,6 +46,13 @@ export async function gracefulShutdown(deps: { getDb?: () => Database.Database; 
   // Let the killed processes' exit handlers run while the database is still open.
   await new Promise((resolve) => setTimeout(resolve, 50));
 
+  // A child that a loop started in the window above (it raced the flag) is
+  // killed too, before the database closes under its handlers.
+  step('killing late processes', () => {
+    const late = killAllTrackedChildren();
+    if (late > 0) log(`Stopped ${late} process(es) started during shutdown.`);
+  });
+
   step('closing the database', () => {
     const db = (deps.getDb ?? getDb)();
     if (!db.open) return;

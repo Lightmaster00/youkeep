@@ -1,4 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'child_process';
+import { EventEmitter } from 'events';
+import { PassThrough } from 'stream';
 
 /**
  * Child processes (yt-dlp, ffmpeg, ffprobe) run in their own process group
@@ -8,8 +10,40 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'child_process';
  */
 const USE_GROUPS = process.platform !== 'win32';
 
-/** spawn() with the child as the leader of a new process group (POSIX). */
+/**
+ * A child that never started: it reports an 'error' (code ESHUTDOWN) then a
+ * 'close', like a spawn() that failed, so every caller's usual failure path runs.
+ */
+function refusedChild(command: string): ChildProcess {
+  const child: any = new EventEmitter();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.stdin = null;
+  child.pid = undefined;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.killed = false;
+  child.kill = () => false;
+  setImmediate(() => {
+    const err: NodeJS.ErrnoException = new Error(`Not starting ${command}: the server is shutting down.`);
+    err.code = 'ESHUTDOWN';
+    child.emit('error', err);
+    child.stdout.end();
+    child.stderr.end();
+    child.exitCode = 1;
+    child.emit('exit', 1, null);
+    child.emit('close', 1, null);
+  });
+  return child as ChildProcess;
+}
+
+/**
+ * spawn() with the child as the leader of a new process group (POSIX). Once
+ * the server is shutting down nothing is started: such a child would outlive
+ * the server (its own process group does not die with it).
+ */
 export function spawnInGroup(command: string, args: string[], options: SpawnOptions = {}): ChildProcess {
+  if (isShuttingDown()) return refusedChild(command);
   return spawn(command, args, { ...options, detached: USE_GROUPS });
 }
 
@@ -21,6 +55,11 @@ const trackedChildren: Set<ChildProcess> = _g[G_CHILDREN];
 
 /** Remembers `child` until it exits, so killAllTrackedChildren can reach it. */
 export function trackChild<T extends ChildProcess>(child: T): T {
+  // Shutdown already killed the tracked children: a late one is killed at once.
+  if (isShuttingDown()) {
+    killProcessTree(child);
+    return child;
+  }
   trackedChildren.add(child);
   const forget = () => trackedChildren.delete(child);
   child.once('exit', forget);

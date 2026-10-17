@@ -1,6 +1,7 @@
 import fs from 'fs';
 import Database from 'better-sqlite3';
 import { isModuleEnabled, isEffectivelyPaused } from './modules';
+import { isShuttingDown } from './processTree';
 import type { ModuleId } from './modules';
 
 export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 2;
@@ -130,6 +131,8 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
     onStart(entities.length);
 
     for (const entity of entities) {
+      // Shutdown: start nothing more (a new yt-dlp would outlive the server).
+      if (isShuttingDown()) return;
       const paused = moduleId
         ? isEffectivelyPaused(db, pausedSettingKey, moduleId)
         : (db.prepare('SELECT value FROM settings WHERE key = ?').get(pausedSettingKey) as { value: string } | undefined)?.value === '1';
@@ -140,7 +143,9 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
       await processEntity(entity);
     }
 
+    if (isShuttingDown()) return;
     if (afterLoop) await afterLoop();
+    if (isShuttingDown()) return;
 
     startWorker();
     onComplete();
