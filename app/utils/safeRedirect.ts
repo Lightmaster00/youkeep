@@ -18,6 +18,18 @@ export function safeRedirectPath(raw: unknown): string | null {
     return null;
   }
   if (url.origin !== BASE) return null;
+  // The checks above ran on the raw value; normalisation ("/.//x", "/a/..//x",
+  // "/%2e%2e//x") can still produce a protocol-relative "//x", which the
+  // router would treat as an external address. Check the normalised path,
+  // percent-decoded, once more.
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(url.pathname);
+  } catch {
+    return null;
+  }
+  if (url.pathname.startsWith('//') || decoded.startsWith('//')) return null;
+  if (decoded.includes('\\') || /[\u0000-\u001f\u007f]/.test(decoded)) return null;
   if (url.pathname === '/login') return null;
   return `${url.pathname}${url.search}${url.hash}`;
 }
