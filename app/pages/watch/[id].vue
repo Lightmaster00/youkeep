@@ -889,6 +889,7 @@ function toggleMiniPlayerPlayback() {
   font-size: 20px;
   font-weight: 700;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .replay-pill {

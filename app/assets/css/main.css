@@ -929,3 +929,14 @@ textarea.form-input {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
+
+/* Data-driven titles can be one long word (a URL, a hash, a 300-character
+   title without spaces): let them wrap instead of running off-screen. */
+.video-title, .hero-title, .rec-title, .media-card-title, .mtl-title,
+.track-row-title, .search-result-title, .episode-search-title, .episode-title,
+.show-card-title, .show-detail-title, .playlist-title, .channel-title,
+.sub-channel-title, .mao-title, .mao-latest-title, .mix-tile-title,
+.album-tile-title, .artist-tile-name, .mini-player-title, .podcast-mini-player-title,
+.description-text {
+  overflow-wrap: anywhere;
+}

@@ -40,7 +40,7 @@
         <!-- Banner Section -->
         <div
           class="channel-card-banner"
-          :style="ch.banner_url ? { backgroundImage: `url(${ch.banner_url}), linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)` } : {}"
+          :style="ch.banner_url ? { backgroundImage: `${cssUrl(ch.banner_url)}, linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)` } : {}"
         >
           <div class="channel-card-banner-overlay"></div>
           <span v-if="isAdmin" class="channel-card-sync-badge" :class="ch.sync_status">
@@ -80,6 +80,7 @@
 </template>
 
 <script setup lang="ts">
+import { cssUrl } from '~/utils/cssUrl';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { useAuth } from '~/composables/useAuth';
 import { useChannelsList } from '~/composables/useChannelsList';

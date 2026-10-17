@@ -3,7 +3,7 @@
     <!-- Channel Banner -->
     <div
       class="channel-banner-container glass-panel"
-      :style="channel.banner_url ? { backgroundImage: `url(${channel.banner_url}), linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}"
+      :style="channel.banner_url ? { backgroundImage: `${cssUrl(channel.banner_url)}, linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%)`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}"
     >
       <div class="banner-overlay"></div>
     </div>
@@ -78,6 +78,7 @@
 </template>
 
 <script setup lang="ts">
+import { cssUrl } from '~/utils/cssUrl';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';

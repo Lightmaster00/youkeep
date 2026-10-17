@@ -32,7 +32,7 @@
             <!-- Blurred Background (for landscape videos) -->
             <div 
               class="reel-blur-bg" 
-              :style="{ backgroundImage: `url(${video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`})` }"
+              :style="{ backgroundImage: cssUrl(video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`) }"
             ></div>
 
             <!-- Video Player -->
@@ -170,6 +170,7 @@
 </template>
 
 <script setup lang="ts">
+import { cssUrl } from '~/utils/cssUrl';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useToast } from '~/composables/useToast';

@@ -14,7 +14,7 @@
       ref="videoPlayer"
       class="video-player"
       :poster="video.local_thumbnail_path || (video.id ? `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` : '')"
-      :src="video.local_video_path ? `${video.local_video_path}${token ? `?token=${token}` : ''}` : ''"
+      :src="video.local_video_path ? `${video.local_video_path}${tokenQuery}` : ''"
       preload="metadata"
       :loop="video?.is_short === 1"
       @click="togglePlay"
@@ -32,7 +32,7 @@
         v-for="sub in subtitles"
         :key="sub.code"
         kind="subtitles"
-        :src="sub.url + (token ? `?token=${token}` : '')"
+        :src="sub.url + tokenQuery"
         :srclang="sub.code"
         :label="sub.label"
       />
@@ -221,6 +221,8 @@ const props = defineProps<{
   hasPrevVideo?: boolean;
   hasNextVideo?: boolean;
 }>();
+// The share token travels as a query parameter: encode it.
+const tokenQuery = computed(() => (props.token ? `?token=${encodeURIComponent(props.token)}` : ''));
 
 const emit = defineEmits<{
   ended: [];
@@ -412,11 +414,15 @@ const updateMediaSession = () => {
 
 const onPlayTrigger = () => {
   isPaused.value = false;
+  userPausedWhileHidden = false;
   updateMediaSession();
 };
 
 const onPauseTrigger = () => {
   isPaused.value = true;
+  if (typeof document !== 'undefined' && document.hidden && Date.now() - hiddenAt > BROWSER_AUTO_PAUSE_WINDOW_MS) {
+    userPausedWhileHidden = true;
+  }
 };
 
 const onMetadataLoaded = () => {
@@ -590,12 +596,20 @@ const onDocumentClick = (e: MouseEvent) => {
 };
 
 const wasPlayingBeforeVisibilityChange = ref(false);
+// A pause that happens a while after the tab was hidden comes from the user
+// (OS media keys, headset button, lock-screen controls), not from the browser
+// suspending background media: coming back must not override it.
+let hiddenAt = 0;
+let userPausedWhileHidden = false;
+const BROWSER_AUTO_PAUSE_WINDOW_MS = 1000;
 
 const handleVisibilityChange = () => {
   const v = videoPlayer.value;
   if (!v) return;
 
   if (document.hidden) {
+    hiddenAt = Date.now();
+    userPausedWhileHidden = false;
     wasPlayingBeforeVisibilityChange.value = !v.paused;
     if (wasPlayingBeforeVisibilityChange.value) {
       // In background: wait a moment and try to resume if browser auto-paused it.
@@ -609,9 +623,10 @@ const handleVisibilityChange = () => {
     }
   } else {
     // Returned to foreground
-    if (wasPlayingBeforeVisibilityChange.value && v.paused) {
+    if (wasPlayingBeforeVisibilityChange.value && v.paused && !userPausedWhileHidden) {
       v.play().catch(() => {});
     }
+    userPausedWhileHidden = false;
   }
 };
 
