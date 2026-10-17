@@ -96,6 +96,6 @@ describe('/music/album/[id]', () => {
 
   it('reports a missing or forbidden album', async () => {
     const w = await mountAlbum('nope');
-    expect(w.text()).toContain('Album not found or access denied.');
+    expect(w.text()).toContain('Album not found.');
   });
 });

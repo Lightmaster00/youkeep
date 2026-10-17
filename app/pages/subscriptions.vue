@@ -80,6 +80,7 @@ const loadingMore = ref(false);
 const hasMore = ref(true);
 const loadMoreTrigger = ref<HTMLElement | null>(null);
 
+const feedSeed = useFeedSeed();
 let observer: IntersectionObserver | null = null;
 let fetchRequestId = 0;
 
@@ -113,7 +114,8 @@ const fetchVideos = async (isLoadMore = false) => {
         limit: 16,
         subscribed: 'true',
         excludeChannels: inactiveChannelIds.value.length > 0 ? inactiveChannelIds.value.join(',') : undefined,
-        status: 'completed'
+        status: 'completed',
+        seed: feedSeed
       }
     });
 

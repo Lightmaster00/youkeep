@@ -1,4 +1,5 @@
 import { ref } from 'vue';
+import { getFeedSeed } from '~/composables/useFeedSeed';
 
 export interface Suggestion {
   type: 'video' | 'track' | 'episode';
@@ -22,7 +23,7 @@ function normalizeEpisode(e: any): Suggestion {
 }
 
 async function fetchVideos(term: string, limit: number): Promise<Suggestion[]> {
-  const data = await $fetch<{ videos: any[] }>('/api/videos', { params: { q: term, limit } });
+  const data = await $fetch<{ videos: any[] }>('/api/videos', { params: { q: term, limit, seed: getFeedSeed() } });
   return (data.videos || []).map(normalizeVideo);
 }
 async function fetchTracks(term: string, limit: number): Promise<Suggestion[]> {

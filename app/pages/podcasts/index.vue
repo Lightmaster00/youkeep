@@ -61,7 +61,7 @@
       </button>
 
       <div v-if="detailPending" class="podcast-loading">Loading...</div>
-      <div v-else-if="detailError" class="podcast-error">Podcast not found or access denied.</div>
+      <div v-else-if="detailError" class="podcast-error">Podcast not found.</div>
 
       <template v-else-if="show">
         <div class="show-detail-header">

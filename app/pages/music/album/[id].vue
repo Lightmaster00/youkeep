@@ -6,7 +6,7 @@
     </NuxtLink>
 
     <div v-if="pending" class="ap-status">Loading...</div>
-    <div v-else-if="failed || !album" class="ap-status">Album not found or access denied.</div>
+    <div v-else-if="failed || !album" class="ap-status">Album not found.</div>
 
     <template v-else>
       <MusicCollectionHeader

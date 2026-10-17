@@ -6,7 +6,7 @@
     </NuxtLink>
 
     <div v-if="pending" class="map-status">Loading...</div>
-    <div v-else-if="failed || !overview" class="map-status">Artist not found or access denied.</div>
+    <div v-else-if="failed || !overview" class="map-status">Artist not found.</div>
 
     <template v-else>
       <MusicArtistHeader

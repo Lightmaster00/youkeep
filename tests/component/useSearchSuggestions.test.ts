@@ -17,7 +17,7 @@ describe('useSearchSuggestions', () => {
       fetchSuggestions('foo', 'per_space', space);
       await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock).toHaveBeenCalledWith(url, { params: { q: 'foo', limit: 5 } });
+      expect(fetchMock).toHaveBeenCalledWith(url, { params: expect.objectContaining({ q: 'foo', limit: 5 }) });
     }
   });
 
@@ -36,9 +36,12 @@ describe('useSearchSuggestions', () => {
       { type: 'episode', title: 'My Episode', subtitle: 'My Show' },
     ]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock).toHaveBeenCalledWith('/api/videos', { params: { q: 'foo', limit: 3 } });
-    expect(fetchMock).toHaveBeenCalledWith('/api/music/tracks/search', { params: { q: 'foo', limit: 3 } });
-    expect(fetchMock).toHaveBeenCalledWith('/api/podcasts/episodes/search', { params: { q: 'foo', limit: 3 } });
+    expect(fetchMock).toHaveBeenCalledWith('/api/videos', { params: expect.objectContaining({ q: 'foo', limit: 3 }) });
+    // Video requests carry the browser session's integer feed seed.
+    const videoCall = fetchMock.mock.calls.find(([u]: any) => u === '/api/videos')!;
+    expect(Number.isInteger(videoCall[1].params.seed)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith('/api/music/tracks/search', { params: expect.objectContaining({ q: 'foo', limit: 3 }) });
+    expect(fetchMock).toHaveBeenCalledWith('/api/podcasts/episodes/search', { params: expect.objectContaining({ q: 'foo', limit: 3 }) });
   });
 
   it('clears suggestions and does not fetch when the term is under 2 characters', async () => {
@@ -62,8 +65,8 @@ describe('useSearchSuggestions', () => {
     const { fetchSuggestions } = useSearchSuggestions();
     fetchSuggestions('foo', 'global', 'video', ['video', 'podcasts']);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(fetchMock).toHaveBeenCalledWith('/api/videos', { params: { q: 'foo', limit: 3 } });
-    expect(fetchMock).toHaveBeenCalledWith('/api/podcasts/episodes/search', { params: { q: 'foo', limit: 3 } });
+    expect(fetchMock).toHaveBeenCalledWith('/api/videos', { params: expect.objectContaining({ q: 'foo', limit: 3 }) });
+    expect(fetchMock).toHaveBeenCalledWith('/api/podcasts/episodes/search', { params: expect.objectContaining({ q: 'foo', limit: 3 }) });
     expect(fetchMock).not.toHaveBeenCalledWith('/api/music/tracks/search', expect.anything());
   });
 

@@ -120,7 +120,7 @@ async function fetchVideos() {
   videosPending.value = true;
   videosError.value = false;
   try {
-    const data = await $fetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 10 } });
+    const data = await $fetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 10, seed: getFeedSeed() } });
     videos.value = data.videos || [];
   } catch (e) {
     videos.value = [];

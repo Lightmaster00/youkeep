@@ -1,3 +1,31 @@
+import { useAuth } from '~/composables/useAuth';
+import { useFeedSeed } from '~/composables/useFeedSeed';
+
+export const CHANNEL_VIDEOS_PAGE_SIZE = 100;
+// 50 pages of 100: past that a channel page would be unusable anyway.
+export const CHANNEL_VIDEOS_MAX_PAGES = 50;
+
+export async function fetchAllChannelVideos(channelId: string, admin: boolean, seed: number) {
+  const videos: any[] = [];
+  let total = 0;
+  for (let page = 1; page <= CHANNEL_VIDEOS_MAX_PAGES; page++) {
+    const res = await $fetch<any>('/api/videos', {
+      params: {
+        channelId,
+        status: admin ? 'all' : undefined,
+        limit: CHANNEL_VIDEOS_PAGE_SIZE,
+        page,
+        seed
+      }
+    });
+    const batch = res?.videos || [];
+    videos.push(...batch);
+    total = res?.pagination?.total ?? videos.length;
+    if (batch.length < CHANNEL_VIDEOS_PAGE_SIZE || videos.length >= total) break;
+  }
+  return { videos, pagination: { total } };
+}
+
 export async function useChannelDetail() {
   // Capture the Nuxt app instance before the first `await`. Vue's <script setup>
   // compiler only auto-restores the component instance context around `await`
@@ -18,18 +46,29 @@ export async function useChannelDetail() {
     }
   });
 
-  const { data: singleChannelData, refresh: refreshSingleChannel } = await useFetch<any>(computed(() => {
-    return channelId.value ? `/api/channels/${channelId.value}` : '/api/channels';
+  const { isAdmin } = useAuth();
+  const seed = useFeedSeed();
+
+  const { data: singleChannelData, error: channelError, refresh: refreshSingleChannel } = await useFetch<any>(computed(() => {
+    return channelId.value ? `/api/channels/${encodeURIComponent(channelId.value)}` : '/api/channels';
   }));
   const channel = computed(() => {
     if (!channelId.value) return null;
     return singleChannelData.value?.channel || null;
   });
+  // Unknown and inaccessible channels both answer 404: one "not found" state.
+  const channelNotFound = computed(() => !!channelId.value && !!channelError.value);
 
+  // Every video of the channel, fetched page by page (the API caps a page at
+  // 100). Admins also see queued/failed videos (status=all); everyone else
+  // gets the default (completed) view, the only one the API allows them.
   const { data: videosData, pending: videosPending, refresh: refreshVideos } = await nuxtApp.runWithContext(() =>
-    useFetch<any>(computed(() => {
-      return channelId.value ? `/api/videos?channelId=${channelId.value}&status=all&limit=200` : '/api/videos?limit=1';
-    }))
+    useAsyncData<any>(
+      computed(() => `channel-videos:${channelId.value}:${isAdmin.value ? 'all' : 'completed'}`),
+      () => (channelId.value
+        ? fetchAllChannelVideos(channelId.value, isAdmin.value, seed)
+        : Promise.resolve({ videos: [], pagination: { total: 0 } }))
+    )
   );
   const channelVideos = computed(() => {
     if (!channelId.value) return [];
@@ -37,7 +76,7 @@ export async function useChannelDetail() {
   });
 
   return {
-    channelId, channel, singleChannelData, refreshSingleChannel,
+    channelId, channel, channelNotFound, singleChannelData, refreshSingleChannel,
     videosData, videosPending, refreshVideos, channelVideos,
   };
 }

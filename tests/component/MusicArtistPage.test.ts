@@ -176,6 +176,6 @@ describe('artist page', () => {
       return {};
     });
     const w = await mountArtist();
-    expect(w.text()).toContain('Artist not found or access denied.');
+    expect(w.text()).toContain('Artist not found.');
   });
 });

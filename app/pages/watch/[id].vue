@@ -7,8 +7,9 @@
 
     <EmptyState
       v-else-if="error || !video"
-      title="Loading Error"
-      :description="errorMsg || 'This video was not found or you do not have permission to view it.'"
+      :title="errorStatus === 404 || !error ? 'Video not found' : 'Loading error'"
+      :description="errorStatus === 404 || !error ? 'This video does not exist or is not available to you.' : (errorMsg || 'The video could not be loaded.')"
+      data-testid="video-not-found"
       icon="video"
       action-text="Back to Home"
       action-route="/"
@@ -426,6 +427,8 @@ const comments = computed(() => videoResponse.value?.comments || []);
 const subtitles = computed(() => videoResponse.value?.subtitles || []);
 const chapters = computed(() => videoResponse.value?.chapters || []);
 
+const errorStatus = computed(() => (error.value as any)?.statusCode ?? (error.value as any)?.status ?? null);
+
 // Custom error message extractor
 const errorMsg = computed(() => {
   if (error.value) {
@@ -435,8 +438,9 @@ const errorMsg = computed(() => {
 });
 
 // Fetch other recommended videos (completed only)
+const feedSeed = useFeedSeed();
 const { data: relatedData, pending: relatedPending } = await useFetch<{ videos: any[] }>(() => {
-  return `/api/videos?limit=10&status=completed`;
+  return `/api/videos?limit=10&status=completed&seed=${feedSeed}`;
 });
 
 // Filter out the currently playing video from the sidebar recommendations list

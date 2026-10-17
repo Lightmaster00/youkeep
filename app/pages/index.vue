@@ -168,12 +168,14 @@ const allVideos = ref<any[]>([]);
 const searchPagination = ref<any>(null);
 
 // Fetch for search mode
+const feedSeed = useFeedSeed();
 const { data: searchData, pending: searchPending } = await useFetch<{ videos: any[], pagination: any }>(() => '/api/videos', {
   query: computed(() => ({
     page: page.value,
     limit: 24,
     q: searchQuery.value || undefined,
-    status: 'completed'
+    status: 'completed',
+    seed: feedSeed
   })),
   watch: [searchQuery, page],
   immediate: !!searchQuery.value

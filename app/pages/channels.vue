@@ -49,6 +49,17 @@
       </div>
     </div>
 
+    <!-- Unknown or inaccessible channel (the API answers 404 for both) -->
+    <EmptyState
+      v-else-if="channelNotFound"
+      data-testid="channel-not-found"
+      title="Channel not found"
+      description="This channel does not exist or is not available to you."
+      icon="channels"
+      action-text="All channels"
+      action-route="/channels"
+    />
+
     <!-- DIRECTORY VIEW: List of Channels -->
     <ChannelDirectoryView v-else />
 
@@ -68,7 +79,7 @@ import ChannelSettingsDrawer from '~/components/channels/ChannelSettingsDrawer.v
 
 const router = useRouter();
 
-const { channelId, channel, singleChannelData, channelVideos, refreshSingleChannel, refreshVideos } = await useChannelDetail();
+const { channelId, channel, channelNotFound, singleChannelData, channelVideos, refreshSingleChannel, refreshVideos } = await useChannelDetail();
 
 const activeTab = ref('archived');
 const showDrawer = ref(false);
