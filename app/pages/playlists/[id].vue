@@ -171,6 +171,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
@@ -222,7 +223,7 @@ const updateVisibility = async () => {
 };
 
 const removeVideo = async (videoId: string) => {
-  if (!window.confirm("Are you sure you want to remove this video from the playlist?")) {
+  if (!(await confirmAction({ title: 'Remove video?', message: 'Remove this video from the playlist?', confirmLabel: 'Remove' }))) {
     return;
   }
   

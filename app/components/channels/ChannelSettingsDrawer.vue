@@ -91,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { reactive, ref, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
@@ -170,7 +171,11 @@ const handleSavePreferences = async () => {
 };
 
 const handleDeleteChannel = async () => {
-  if (!confirm(`WARNING: Are you sure you want to permanently delete the channel "${channel.value.title}" from the archive?\nThis will delete all downloaded videos from your disk and the database.`)) {
+  if (!(await confirmAction({
+    title: 'Delete channel?',
+    message: `Permanently delete the channel "${channel.value.title}" from the archive? This deletes all its downloaded videos from the disk and the database.`,
+    confirmLabel: 'Delete channel',
+  }))) {
     return;
   }
 

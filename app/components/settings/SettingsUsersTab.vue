@@ -190,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { ref, reactive, computed } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useAdminChannels } from '~/composables/useAdminChannels';
@@ -317,7 +318,7 @@ const handleSaveUser = async () => {
 };
 
 const handleDeleteUser = async (id: string, name: string) => {
-  if (!confirm(`Permanently delete the user "${name}"?`)) return;
+  if (!(await confirmAction({ title: 'Delete user?', message: `Permanently delete the user "${name}"?`, confirmLabel: 'Delete user' }))) return;
   try {
     await $fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
     refreshUsers();
@@ -328,7 +329,7 @@ const handleDeleteUser = async (id: string, name: string) => {
 };
 
 const handleResetPassword = async (userId: string, username: string) => {
-  if (!confirm(`Do you want to reset the password for "${username}"? A new temporary password will be generated.`)) return;
+  if (!(await confirmAction({ title: 'Reset password?', message: `Reset the password for "${username}"? A new temporary password will be generated.`, confirmLabel: 'Reset password' }))) return;
   try {
     const res = await $fetch<any>(`/api/admin/users/${userId}/reset-password`, {
       method: 'POST'

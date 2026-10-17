@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import TidyLibraryPanel from '../../app/components/settings/TidyLibraryPanel.vue';
+import { autoAnswerConfirms } from '../helpers/autoConfirm';
+
+let confirmReply = true;
+let stopConfirms: () => void = () => {};
 
 const PREVIEW = {
   total: 3, toMove: 2, alreadyTidy: 1, conflicts: 0, missingFiles: 0, notWritable: 0, duplicateFolders: 0,
@@ -28,9 +32,11 @@ beforeEach(() => {
     return {};
   });
   vi.stubGlobal('$fetch', fetchMock);
-  vi.stubGlobal('confirm', vi.fn(() => true));
+  confirmReply = true;
+  stopConfirms = autoAnswerConfirms(() => confirmReply);
 });
 afterEach(() => {
+  stopConfirms();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -148,11 +154,12 @@ describe('TidyLibraryPanel', () => {
     const w = await mountPanel();
     await w.find('[data-testid="tidy-preview-btn"]').trigger('click');
     await flushPromises();
-    (globalThis as any).confirm.mockReturnValueOnce(false);
+    confirmReply = false;
     await w.find('[data-testid="tidy-start"]').trigger('click');
     await flushPromises();
     expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/library/tidy/start', expect.anything());
 
+    confirmReply = true;
     startReply = () => { throw { data: { statusMessage: 'A tidy run is already in progress.' } }; };
     statusReplies = [{ ...STATUS, state: 'running', processed: 2, total: 5 }];
     await w.find('[data-testid="tidy-start"]').trigger('click');

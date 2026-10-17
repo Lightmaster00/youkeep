@@ -2,6 +2,7 @@
   <NuxtLayout>
     <NuxtPage :transition="{ name: 'page', mode: 'out-in' }" />
   </NuxtLayout>
+  <ConfirmHost />
 </template>
 
 <script setup lang="ts">

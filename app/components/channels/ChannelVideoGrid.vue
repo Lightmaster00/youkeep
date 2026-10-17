@@ -91,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { ref, computed, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
@@ -220,7 +221,7 @@ const handleUpdateVideoVisibility = async (videoId: string, event: Event) => {
 };
 
 const handleDeleteVideo = async (videoId: string, title: string) => {
-  if (!confirm(`Permanently delete the video "${title}"?\nThe local file will be deleted.`)) {
+  if (!(await confirmAction({ title: 'Delete video?', message: `Permanently delete the video "${title}"? The local file will be deleted.`, confirmLabel: 'Delete video' }))) {
     return;
   }
 

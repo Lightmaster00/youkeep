@@ -4,6 +4,10 @@ import { flushPromises } from '@vue/test-utils';
 import DownloadTypeCard from '../../app/components/settings/DownloadTypeCard.vue';
 import { emptyTypeState, type TypeQueueState, type QueueItem } from '../../app/utils/allDownloads';
 import { useToast } from '../../app/composables/useToast';
+import { autoAnswerConfirms } from '../helpers/autoConfirm';
+
+let confirmReply = true;
+let stopConfirms: () => void = () => {};
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let serverConcurrency: number;
@@ -27,9 +31,13 @@ beforeEach(() => {
     return { success: true };
   });
   vi.stubGlobal('$fetch', fetchMock);
-  vi.stubGlobal('confirm', vi.fn(() => true));
+  confirmReply = true;
+  stopConfirms = autoAnswerConfirms(() => confirmReply);
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  stopConfirms();
+  vi.unstubAllGlobals();
+});
 
 const mountCard = async (kind: 'video' | 'music' | 'podcast', state: TypeQueueState) => {
   const w = await mountSuspended(DownloadTypeCard, { props: { kind, state } });
@@ -107,7 +115,7 @@ describe('DownloadTypeCard', () => {
     await flushPromises();
     expect(posts('/api/admin/downloader/clear-queue')).toHaveLength(1);
 
-    vi.stubGlobal('confirm', vi.fn(() => false));
+    confirmReply = false;
     await v.find('[data-testid="clear-queue"]').trigger('click');
     await flushPromises();
     expect(posts('/api/admin/downloader/clear-queue')).toHaveLength(1);

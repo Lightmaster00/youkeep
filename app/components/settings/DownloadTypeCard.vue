@@ -40,6 +40,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { ref, computed, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { KIND_LABELS, KIND_PILL, KIND_API_BASE, typeSummary, type DownloadKind, type TypeQueueState } from '~/utils/allDownloads';
@@ -122,7 +123,7 @@ async function retryFailed() {
 
 async function clearQueue() {
   if (clearing.value) return;
-  if (!confirm('Remove every queued, downloading and failed video from the queue? Videos already downloaded are kept.')) return;
+  if (!(await confirmAction({ title: 'Clear the video queue?', message: 'Remove every queued, downloading and failed video from the queue? Videos already downloaded are kept.', confirmLabel: 'Clear queue' }))) return;
   clearing.value = true;
   try {
     await $fetch('/api/admin/downloader/clear-queue', { method: 'POST' });

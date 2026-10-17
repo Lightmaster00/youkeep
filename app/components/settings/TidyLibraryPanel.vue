@@ -75,6 +75,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 
 interface TidyPreview {
@@ -181,7 +182,7 @@ async function pollStatus() {
 
 async function startRun() {
   if (!canStart.value) return;
-  if (!confirm('Move the video files now? Each video goes into its own folder. You can cancel at any time.')) return;
+  if (!(await confirmAction({ title: 'Tidy the library?', message: 'Move the video files now? Each video goes into its own folder. You can cancel at any time.', confirmLabel: 'Move files' }))) return;
   starting.value = true;
   errorMessage.value = '';
   try {

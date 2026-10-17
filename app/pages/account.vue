@@ -218,6 +218,7 @@
 </template>
 
 <script setup lang="ts">
+import { confirmAction } from '~/composables/useConfirm';
 import { ref, reactive, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { passwordProblem } from '~/utils/passwordRules';
@@ -418,7 +419,7 @@ const dismissNewToken = () => {
 };
 
 const handleRevokeToken = async (tokenId: string) => {
-  if (!confirm('Revoke this token? Any app using it will immediately lose access.')) {
+  if (!(await confirmAction({ title: 'Revoke token?', message: 'Revoke this token? Any app using it will immediately lose access.', confirmLabel: 'Revoke' }))) {
     return;
   }
   revokingTokenId.value = tokenId;
