@@ -26,4 +26,25 @@ describe('highlightMatch', () => {
     expect(highlightMatch('Rock & Roll', 'rock roll')).toBe('<mark>Rock</mark> &amp; <mark>Roll</mark>');
     expect(highlightMatch('Rock & Roll', 'rock zzz')).toBe('<mark>Rock</mark> &amp; Roll');
   });
+
+  it('matches the raw text, never inside an escaped entity', () => {
+    expect(highlightMatch('Guitar & Amp', 'amp')).toBe('Guitar &amp; <mark>Amp</mark>');
+    expect(highlightMatch('a < b > c', 'lt')).toBe('a &lt; b &gt; c');
+    expect(highlightMatch('say "hi"', 'quot')).toBe('say &quot;hi&quot;');
+    expect(highlightMatch('Tom & Jerry', '&')).toBe('Tom <mark>&amp;</mark> Jerry');
+    expect(highlightMatch('x<y', '<')).toBe('x<mark>&lt;</mark>y');
+  });
+
+  it('escapes quotes and apostrophes so the output is safe anywhere', () => {
+    expect(highlightMatch(`It's "quoted"`, 'quoted')).toBe('It&#39;s &quot;<mark>quoted</mark>&quot;');
+    expect(highlightMatch(`<img src=x onerror="alert(1)">`, 'img')).toBe('&lt;<mark>img</mark> src=x onerror=&quot;alert(1)&quot;&gt;');
+    expect(highlightMatch(`'"><svg onload=alert(2)>`, 'svg')).not.toMatch(/<svg/);
+  });
+
+  it('handles unicode and regex metacharacters', () => {
+    expect(highlightMatch('Café Ünïcode 😀 fun', 'ünï')).toBe('Café <mark>Ünï</mark>code 😀 fun');
+    expect(highlightMatch('Smile 😀 now', '😀')).toBe('Smile <mark>😀</mark> now');
+    expect(highlightMatch('a+b (c) [d] {e} ^f$ g|h \\ i?', '(c) [d]')).toBe('a+b <mark>(c) [d]</mark> {e} ^f$ g|h \\ i?');
+    expect(highlightMatch('back\\slash', '\\')).toBe('back<mark>\\</mark>slash');
+  });
 });
