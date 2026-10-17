@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import bcrypt from 'bcryptjs';
 import loginHandler from '../../server/api/auth/login.post';
 import { hashPassword, verifyPassword, DUMMY_PASSWORD_HASH, requireAdmin, createSession } from '../../server/utils/auth';
-import { setPasswordWorkerDisabledForTests, isPasswordWorkerActive } from '../../server/utils/passwordWorker';
+import { setPasswordWorkerDisabledForTests, isPasswordWorkerActive, crashPasswordWorkerForTests } from '../../server/utils/passwordWorker';
 import { resetAllLoginAttempts } from '../../server/utils/rateLimit';
 import { createTestDb, insertUser, mockEvent } from '../helpers/testDb';
 
@@ -58,6 +58,25 @@ describe('password hashing', () => {
     await verifyPassword('x-password', h);
     expect(hashSync).not.toHaveBeenCalled();
     expect(compareSync).not.toHaveBeenCalled();
+  });
+
+  it('a worker crash during a compare or a hash retries once in the main thread (R7)', async () => {
+    const h = bcrypt.hashSync('correct horse battery', 4);
+    await hashPassword('warm-up'); // the worker is running
+    expect(isPasswordWorkerActive()).toBe(true);
+    const verifying = verifyPassword('correct horse battery', h);
+    const hashing = hashPassword('another password');
+    crashPasswordWorkerForTests();
+    expect(await verifying).toBe(true);
+    expect(bcrypt.compareSync('another password', await hashing)).toBe(true);
+  });
+
+  it('a wrong password stays wrong after a crash, and a bcrypt error is not retried', async () => {
+    const h = bcrypt.hashSync('correct horse battery', 4);
+    await hashPassword('warm-up');
+    const verifying = verifyPassword('wrong', h);
+    crashPasswordWorkerForTests();
+    expect(await verifying).toBe(false);
   });
 
   it('the in-thread fallback awaits the async bcryptjs API', async () => {

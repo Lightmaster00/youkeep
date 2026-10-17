@@ -51,7 +51,11 @@ function findBcryptEntry(): string | null {
   return null;
 }
 
-function failAll(err: Error) {
+/** The worker died (crash, exit) before answering: not an answer about the password. */
+class WorkerFailure extends Error {}
+
+function failAll(cause: Error) {
+  const err = new WorkerFailure(cause.message);
   for (const p of pending.values()) p.reject(err);
   pending.clear();
 }
@@ -114,6 +118,12 @@ function runInWorker<T>(message: Record<string, unknown>, inline: () => Promise<
     w.postMessage({ id, ...message });
   }).finally(() => {
     if (pending.size === 0) worker?.unref();
+  }).catch((err) => {
+    // A crash is not an answer: retry once in this thread, so a correct
+    // password is never reported wrong (nor a hash a 500) because of it.
+    // An error bcrypt itself reported (a malformed hash) is not retried.
+    if (err instanceof WorkerFailure) return runInline(inline);
+    throw err;
   });
 }
 
@@ -132,6 +142,11 @@ export function setPasswordWorkerDisabledForTests(disabled: boolean): void {
     void worker.terminate();
     worker = null;
   }
+}
+
+/** Tests: simulate a worker crash (it exits with requests pending). */
+export function crashPasswordWorkerForTests(): void {
+  if (worker) void worker.terminate();
 }
 
 /** True when hashing currently runs in the worker thread. */
