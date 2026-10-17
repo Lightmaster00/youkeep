@@ -98,7 +98,7 @@ const {
   currentTrack, isPlaying, currentTime, duration,
   audioEl, shuffleOn, repeatMode, clipMode,
   togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode, replaceQueueKeepingCurrent,
-  recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
+  recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage, restoring,
 } = useMusicPlayer();
 
 const toast = useToast();
@@ -148,6 +148,8 @@ function onEnded() {
 }
 
 function onAudioError() {
+  // The track restored on page load is stale: the player clears it silently.
+  if (restoring.value || !currentTrack.value) return;
   toast.error('Error playing audio.');
   isPlaying.value = false;
   setClipMode(false);

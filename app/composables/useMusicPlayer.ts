@@ -29,8 +29,14 @@ export function useMusicPlayer() {
   const shuffledOrder = useState<number[] | null>('music_player_shuffled_order', () => null);
   const hasCountedThisPlay = useState<boolean>('music_player_has_counted', () => false);
   const lastPlayedAt = useState<number>('music_player_last_played_at', () => 0);
+  // True while the track restored from localStorage on page load is loading
+  // and the user has not touched the player yet. A load error in that window
+  // means the saved track is stale (deleted, no longer accessible): the saved
+  // state is cleared silently instead of toasting on every page load.
+  const restoring = useState<boolean>('music_player_restoring', () => false);
 
   function loadTrack(track: PlayableTrack, index: number) {
+    restoring.value = false;
     currentTrack.value = track;
     currentIndex.value = index;
     hasCountedThisPlay.value = false;
@@ -106,6 +112,7 @@ export function useMusicPlayer() {
 
   function togglePlay() {
     if (!audioEl.value || !currentTrack.value) return;
+    restoring.value = false;
     if (isPlaying.value) {
       audioEl.value.pause();
       isPlaying.value = false;
@@ -225,6 +232,22 @@ export function useMusicPlayer() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
+  function clearRestoredState() {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Storage blocked: nothing persisted to clear.
+    }
+    restoring.value = false;
+    currentTrack.value = null;
+    queue.value = [];
+    currentIndex.value = -1;
+    shuffledOrder.value = null;
+    currentTime.value = 0;
+    duration.value = 0;
+    isPlaying.value = false;
+  }
+
   async function restoreFromLocalStorage() {
     if (typeof window === 'undefined') return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -269,20 +292,28 @@ export function useMusicPlayer() {
       if (audioEl.value && currentTrack.value) {
         const el = audioEl.value;
         const track = currentTrack.value;
+        restoring.value = true;
         el.src = track.local_file_path;
         const restoreTime = typeof saved.currentTime === 'number' ? saved.currentTime : 0;
         const setTime = () => {
           cleanup();
           if (currentTrack.value?.id !== track.id) return;
+          restoring.value = false;
           el.currentTime = restoreTime;
           currentTime.value = restoreTime;
         };
+        const onRestoreError = () => {
+          cleanup();
+          // A later real play() may already have replaced the restored track.
+          if (!restoring.value || currentTrack.value?.id !== track.id) return;
+          clearRestoredState();
+        };
         const cleanup = () => {
           el.removeEventListener('loadedmetadata', setTime);
-          el.removeEventListener('error', cleanup);
+          el.removeEventListener('error', onRestoreError);
         };
         el.addEventListener('loadedmetadata', setTime);
-        el.addEventListener('error', cleanup);
+        el.addEventListener('error', onRestoreError);
       }
     } catch (e) {
       // Restore is best-effort — a failed fetch just leaves nothing playing.
@@ -290,7 +321,7 @@ export function useMusicPlayer() {
   }
 
   return {
-    currentTrack, queue, currentIndex, isPlaying, currentTime, duration, audioEl, lastPlayedAt,
+    currentTrack, queue, currentIndex, isPlaying, currentTime, duration, audioEl, lastPlayedAt, restoring,
     shuffleOn, repeatMode, clipMode,
     play, replaceQueueKeepingCurrent, togglePlay, seek, next, prev, toggleShuffle, cycleRepeat, setClipMode,
     recordPlayIfThresholdReached, saveToLocalStorage, restoreFromLocalStorage,
