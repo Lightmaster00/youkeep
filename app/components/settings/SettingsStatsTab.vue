@@ -1,5 +1,6 @@
 <template>
   <div class="tab-pane">
+    <DownloadsBlockedBanner />
     <OverviewActivityCard />
     <!-- Premium Welcome & Summary Banner -->
     <div class="dashboard-banner glass-panel">
@@ -169,6 +170,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import OverviewActivityCard from '~/components/settings/OverviewActivityCard.vue';
+import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
 import { useAdminChannels } from '~/composables/useAdminChannels';
 
 const { stats, channels } = await useAdminChannels();

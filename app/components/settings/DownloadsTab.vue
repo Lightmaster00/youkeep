@@ -1,5 +1,6 @@
 <template>
   <div class="tab-pane downloads-hub">
+    <DownloadsBlockedBanner />
     <div class="downloads-header-panel glass-panel">
       <div class="header-text">
         <h2>Downloads</h2>
@@ -39,6 +40,7 @@ import { onMounted, onUnmounted } from 'vue';
 import DownloadTypeCard from '~/components/settings/DownloadTypeCard.vue';
 import DownloadQueueList from '~/components/settings/DownloadQueueList.vue';
 import DownloadsAdvanced from '~/components/settings/DownloadsAdvanced.vue';
+import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
 import { useAllDownloads } from '~/composables/useAllDownloads';
 import { useToast } from '~/composables/useToast';
 import { DOWNLOAD_KINDS, FILTERS, queueActionRequest, type QueueAction, type QueueItem } from '~/utils/allDownloads';

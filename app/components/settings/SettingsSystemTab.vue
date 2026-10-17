@@ -196,6 +196,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
       </button>
     </div>
+    <DownloadsBlockedBanner />
     <div class="logs-terminal" ref="terminalBody">
       <div v-if="diagnosticLogs.length === 0" class="log-line text-muted">
         The log is empty.
@@ -280,6 +281,7 @@ import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import TidyLibraryPanel from '~/components/settings/TidyLibraryPanel.vue';
 import AlbumMatchPanel from '~/components/settings/AlbumMatchPanel.vue';
 import ServerResponsivenessPanel from '~/components/settings/ServerResponsivenessPanel.vue';
+import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
 
 const toast = useToast();
 const WIPE_CONFIRM_WORD = 'DELETE';

@@ -1,3 +1,4 @@
+import { useDownloadsBlockedReason } from '~/composables/useActiveCounts';
 let lastFrameTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
 let animationFrameId: any = null;
 
@@ -10,6 +11,7 @@ export function useDownloadsQueue() {
   const smoothProgress = useState<Record<string, number>>('settings_downloads_smooth_progress', () => ({}));
   const progressRates = useState<Record<string, number>>('settings_downloads_progress_rates', () => ({}));
   const diagnosticLogs = useState<string[]>('settings_downloads_diagnostic_logs', () => []);
+  const blockedReason = useDownloadsBlockedReason();
   const diagnosticYtdlPath = useState<string>('settings_downloads_diagnostic_ytdl_path', () => '');
 
   const activeDownloadCount = computed(() => {
@@ -112,6 +114,7 @@ export function useDownloadsQueue() {
       const data = await $fetch<any>('/api/admin/downloader/logs');
       diagnosticLogs.value = data.logs || [];
       diagnosticYtdlPath.value = data.ytdlPath || '';
+      if (data && 'blockedReason' in data) blockedReason.value = data.blockedReason || null;
     } catch (err) {
       console.error('Failed to fetch logs:', err);
     }

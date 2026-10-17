@@ -154,7 +154,8 @@ const handleSavePreferences = async () => {
       body: {
         downloadVideos: formPref.downloadVideos,
         downloadShorts: formPref.downloadShorts,
-        dateAfter: null,
+        // The PUT is partial: the date filter (set from Settings > Library) is
+        // not part of this form and is left untouched.
         customSavePath: formPref.customSavePath || null
       }
     });
