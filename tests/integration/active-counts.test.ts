@@ -23,10 +23,13 @@ function loginAs(userId: string, role: 'admin' | 'user') {
 
 const call = (cookie?: string) => handler(mockEvent(cookie, { path: '/api/admin/downloader/active-counts' }));
 
+// Sources that are being downloaded (their pending items are picked up).
 function seed() {
   insertChannel(db, { id: 'c1' });
   insertMusicArtist(db, { id: 'a1' });
-  insertPodcastShow(db, { id: 's1' });
+  insertPodcastShow(db, { id: 's1', syncStatus: 'downloading' });
+  db.prepare("UPDATE channels SET sync_status = 'downloading'").run();
+  db.prepare("UPDATE music_artists SET sync_status = 'downloading'").run();
 }
 
 describe('GET /api/admin/downloader/active-counts', () => {
@@ -38,9 +41,9 @@ describe('GET /api/admin/downloader/active-counts', () => {
   it('returns zeros and nulls on an empty database', async () => {
     const res: any = await call(loginAs('admin', 'admin'));
     expect(res).toEqual({
-      video: { downloading: 0, pending: 0 },
-      music: { downloading: 0, pending: 0 },
-      podcasts: { downloading: 0, pending: 0 },
+      video: { downloading: 0, pending: 0, pausedPending: 0 },
+      music: { downloading: 0, pending: 0, pausedPending: 0 },
+      podcasts: { downloading: 0, pending: 0, pausedPending: 0 },
       total: 0,
       current: { kind: null, progress: null, speed: null },
       blockedReason: null,
@@ -62,9 +65,9 @@ describe('GET /api/admin/downloader/active-counts', () => {
     insertPodcastEpisode(db, { id: 'e2', showId: 's1', downloadStatus: 'pending' });
     insertPodcastEpisode(db, { id: 'e3', showId: 's1', downloadStatus: 'failed' });
     const res: any = await call(cookie);
-    expect(res.video).toEqual({ downloading: 1, pending: 2 });
-    expect(res.music).toEqual({ downloading: 1, pending: 1 });
-    expect(res.podcasts).toEqual({ downloading: 0, pending: 2 });
+    expect(res.video).toEqual({ downloading: 1, pending: 2, pausedPending: 0 });
+    expect(res.music).toEqual({ downloading: 1, pending: 1, pausedPending: 0 });
+    expect(res.podcasts).toEqual({ downloading: 0, pending: 2, pausedPending: 0 });
     expect(res.total).toBe(7);
   });
 
@@ -92,7 +95,28 @@ describe('GET /api/admin/downloader/active-counts', () => {
     insertPodcastEpisode(db, { id: 'e1', showId: 's1', downloadStatus: 'pending' });
     db.exec('DROP TABLE music_tracks');
     const res: any = await call(cookie);
-    expect(res.music).toEqual({ downloading: 0, pending: 0 });
+    expect(res.music).toEqual({ downloading: 0, pending: 0, pausedPending: 0 });
+    expect(res.total).toBe(2);
+  });
+
+  it('pending items of paused channels, artists and shows are not queued work (UI #13)', async () => {
+    const cookie = loginAs('admin', 'admin');
+    seed();
+    insertChannel(db, { id: 'cP' });
+    insertMusicArtist(db, { id: 'aP' });
+    insertPodcastShow(db, { id: 'sP', syncStatus: 'paused' });
+    for (let i = 0; i < 3; i++) insertVideo(db, { id: `vp${i}`, channelId: 'cP', downloadStatus: 'pending' });
+    // A manually queued video of a paused channel is picked up.
+    insertVideo(db, { id: 'vq', channelId: 'cP', downloadStatus: 'pending' });
+    db.prepare("UPDATE videos SET is_manually_queued = 1 WHERE id = 'vq'").run();
+    insertVideo(db, { id: 'va', channelId: 'c1', downloadStatus: 'pending' });
+    insertMusicTrack(db, { id: 'mp', artistId: 'aP', downloadStatus: 'pending' });
+    insertPodcastEpisode(db, { id: 'ep1', showId: 'sP', downloadStatus: 'pending' });
+    insertPodcastEpisode(db, { id: 'ep2', showId: 'sP', downloadStatus: 'pending' });
+    const res: any = await call(cookie);
+    expect(res.video).toEqual({ downloading: 0, pending: 2, pausedPending: 3 });
+    expect(res.music).toEqual({ downloading: 0, pending: 0, pausedPending: 1 });
+    expect(res.podcasts).toEqual({ downloading: 0, pending: 0, pausedPending: 2 });
     expect(res.total).toBe(2);
   });
 });
