@@ -5,15 +5,20 @@
       <p>Loading video...</p>
     </div>
 
-    <EmptyState
-      v-else-if="error || !video"
-      :title="errorStatus === 404 || !error ? 'Video not found' : 'Loading error'"
-      :description="errorStatus === 404 || !error ? 'This video does not exist or is not available to you.' : (errorMsg || 'The video could not be loaded.')"
-      data-testid="video-not-found"
-      icon="video"
-      action-text="Back to Home"
-      action-route="/"
-    />
+    <template v-else-if="error || !video">
+      <EmptyState
+        :title="errorStatus === 404 || !error ? 'Video not found' : 'Loading error'"
+        :description="errorStatus === 404 || !error ? 'This video does not exist or is not available to you.' : (errorMsg || 'The video could not be loaded.')"
+        data-testid="video-not-found"
+        icon="video"
+        action-text="Back to Home"
+        action-route="/"
+      />
+      <div v-if="!isLoggedIn" class="watch-login-hint" data-testid="watch-login-hint">
+        <p>This video may be private. Log in to see it if you have access.</p>
+        <NuxtLink class="btn btn-primary" :to="loginLink">Log in</NuxtLink>
+      </div>
+    </template>
 
     <div v-else class="watch-content" :class="{ 'theater-mode': theaterMode }">
       <!-- Left Column (Player + Description) -->
@@ -80,31 +85,43 @@
             </div>
           </div>
           
-          <div class="action-buttons" style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn btn-secondary" @click="shareVideo">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+          <div class="action-buttons">
+            <button v-if="canShare" type="button" class="btn btn-secondary" data-testid="watch-share" @click="shareVideo">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
               Share
             </button>
-            <div class="dropdown-wrapper" ref="dropdownWrapperRef" style="position: relative;">
-              <button class="btn btn-secondary" style="width: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" @click.stop="toggleWatchOptionsMenu" title="More options">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle><circle cx="5" cy="12" r="1.5"></circle></svg>
+            <div v-if="hasWatchOptions" class="dropdown-wrapper" ref="dropdownWrapperRef" @keydown.esc="closeWatchOptionsMenu(true)">
+              <button
+                ref="watchOptionsBtn"
+                type="button"
+                class="btn btn-secondary watch-more-btn"
+                data-testid="watch-more"
+                aria-label="More options"
+                title="More options"
+                aria-haspopup="menu"
+                :aria-expanded="isWatchOptionsMenuOpen ? 'true' : 'false'"
+                @click.stop="toggleWatchOptionsMenu"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle><circle cx="5" cy="12" r="1.5"></circle></svg>
               </button>
-              
+
               <transition name="dropdown-fade">
-                <div v-if="isWatchOptionsMenuOpen" class="watch-options-menu glass-panel" style="position: absolute; right: 0; top: 100%; margin-top: 8px; width: 220px; padding: 8px; border-radius: 12px; z-index: 50; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.08);">
-                  <button v-if="user" class="dropdown-item" @click="openPlaylistsModalWrapper">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="15" y1="10" x2="9" y2="10"/></svg>
+                <div v-if="isWatchOptionsMenuOpen" class="watch-options-menu" role="menu" data-testid="watch-options-menu" :style="watchMenuStyle">
+                  <button v-if="isLoggedIn" type="button" role="menuitem" class="dropdown-item" @click="openPlaylistsModalWrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="15" y1="10" x2="9" y2="10"/></svg>
                     Save
                   </button>
-                  <button v-if="video?.local_video_path" class="dropdown-item" @click="downloadLocalCopyWrapper">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <button v-if="video?.local_video_path" type="button" role="menuitem" class="dropdown-item" @click="downloadLocalCopyWrapper">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     Download
                   </button>
-                  <div class="dropdown-divider" style="height: 1px; background: rgba(255, 255, 255, 0.06); margin: 4px 0;"></div>
-                  <button class="dropdown-item text-danger" @click="reportWatchVideo">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-                    Report
-                  </button>
+                  <template v-if="isLoggedIn">
+                    <div class="dropdown-divider" role="separator"></div>
+                    <button type="button" role="menuitem" class="dropdown-item text-danger" data-testid="watch-report" @click="openReport">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                      Report
+                    </button>
+                  </template>
                 </div>
               </transition>
             </div>
@@ -236,7 +253,7 @@
               :key="rel.id" 
               class="recommendation-card playlist-card-item"
               :class="{ 'active-playlist-item': rel.id === videoId, 'disabled-playlist-item': rel.download_status !== 'completed' }"
-              @click="rel.download_status === 'completed' ? navigateTo(`/watch/${rel.id}?playlistId=${playlistId}`) : null"
+              @click="rel.download_status === 'completed' ? navigateTo(playlistQuery(rel.id)) : null"
               style="position: relative; display: flex; gap: 12px; padding: 6px; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
             >
               <span style="display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--text-muted); width: 16px; text-align: center; flex-shrink: 0;">
@@ -300,61 +317,19 @@
       </aside>
     </div>
 
-    <!-- Modal: Manage Playlists (Save to Playlist) -->
-    <div v-if="user && showPlaylistsModal" class="modal-overlay" @click="closePlaylistsModal">
-      <div class="modal-card glass-panel" @click.stop>
-        <div class="modal-header">
-          <h3>Save to Playlist</h3>
-          <button class="close-modal-btn" @click="closePlaylistsModal">&times;</button>
-        </div>
-        
-        <div class="modal-body">
-          <p class="modal-desc">Select playlists to add or remove "{{ video?.title }}":</p>
-          
-          <div v-if="loadingPlaylists" class="modal-empty-state">
-            Loading playlists...
-          </div>
-          <div v-else-if="userPlaylists.length === 0" class="modal-empty-state">
-            No playlists created yet. Go to <NuxtLink to="/playlists" class="text-accent" @click="closePlaylistsModal">Playlists</NuxtLink> to create one.
-          </div>
-          
-          <div v-else class="modal-categories-list">
-            <label v-for="pl in userPlaylists" :key="pl.id" class="modal-check-item">
-              <input type="checkbox" :checked="isVideoInPlaylist(pl.id)" @change="togglePlaylistMembership(pl.id, $event)" />
-              <div class="check-item-text">
-                <span class="check-item-name">{{ pl.title }}</span>
-                <span v-if="pl.description" class="check-item-desc">{{ pl.description }}</span>
-              </div>
-            </label>
-          </div>
-
-          <div class="create-playlist-inline mt-4 pt-4" style="border-top: 1px solid rgba(255,255,255,0.08);">
-            <button v-if="!showInlineForm" @click="showInlineForm = true" class="btn btn-secondary" style="width: 100%; justify-content: center;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              Create new playlist
-            </button>
-            <div v-else class="inline-form" style="display: flex; flex-direction: column; gap: 8px;">
-              <input v-model="newPlaylistTitle" class="form-input" placeholder="Playlist title" style="padding: 8px 12px; font-size: 13px;" />
-              <select v-model="newPlaylistVisibility" class="form-input" style="padding: 8px 12px; font-size: 13px;">
-                <option value="private">Private</option>
-                <option value="unlisted">Unlisted</option>
-                <option value="public">Public</option>
-              </select>
-              <div style="display: flex; gap: 8px; margin-top: 4px;">
-                <button @click="createPlaylist" :disabled="!newPlaylistTitle || creatingPlaylist" class="btn btn-primary" style="flex: 1; justify-content: center;">
-                  {{ creatingPlaylist ? 'Creating...' : 'Create' }}
-                </button>
-                <button @click="showInlineForm = false" class="btn btn-secondary" style="justify-content: center;">Cancel</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-footer">
-          <button class="btn btn-primary" @click="closePlaylistsModal">Done</button>
-        </div>
-      </div>
-    </div>
+    <SaveToPlaylistModal
+      v-if="isLoggedIn && video"
+      :show="showPlaylistsModal"
+      :video-id="video.id"
+      :video-title="video.title"
+      @close="showPlaylistsModal = false"
+    />
+    <ReportVideoModal
+      v-if="isLoggedIn && video"
+      :show="showReportModal"
+      :video-id="video.id"
+      @close="showReportModal = false"
+    />
   </div>
 </template>
 
@@ -365,11 +340,14 @@ import { useRoute, useRouter } from 'vue-router';
 import { useToast } from '~/composables/useToast';
 import { useAuth } from '~/composables/useAuth';
 import VideoPlayer from '~/components/VideoPlayer.vue';
+import SaveToPlaylistModal from '~/components/SaveToPlaylistModal.vue';
+import ReportVideoModal from '~/components/ReportVideoModal.vue';
+import { canShareVideo, shareVideoLink } from '~/utils/shareVideo';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
-const { user, isAdmin } = useAuth();
+const { isLoggedIn, isAdmin } = useAuth();
 
 const videoId = computed(() => String(route.params.id));
 const token = computed(() => route.query.token ? String(route.query.token) : '');
@@ -384,28 +362,39 @@ function onTheaterModeChange(value: boolean) {
 }
 
 const showPlaylistsModal = ref(false);
-const loadingPlaylists = ref(false);
-const userPlaylists = ref<any[]>([]);
-
-const showInlineForm = ref(false);
-const newPlaylistTitle = ref('');
-const newPlaylistVisibility = ref('private');
-const creatingPlaylist = ref(false);
+const showReportModal = ref(false);
 
 const isWatchOptionsMenuOpen = ref(false);
 const dropdownWrapperRef = ref<HTMLElement | null>(null);
+const watchOptionsBtn = ref<HTMLButtonElement | null>(null);
+const watchMenuStyle = ref<Record<string, string>>({});
+const WATCH_MENU_WIDTH = 220;
+
+// Fixed to the viewport and clamped inside it: as an absolute child of the
+// action row it was clipped under the sidebar rail on phones.
+function placeWatchOptionsMenu() {
+  const btn = watchOptionsBtn.value;
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const left = Math.max(8, Math.min(r.right - WATCH_MENU_WIDTH, vw - WATCH_MENU_WIDTH - 8));
+  watchMenuStyle.value = { top: `${Math.round(r.bottom + 8)}px`, left: `${Math.round(left)}px`, width: `${WATCH_MENU_WIDTH}px` };
+}
 
 const toggleWatchOptionsMenu = () => {
+  if (!isWatchOptionsMenuOpen.value) placeWatchOptionsMenu();
   isWatchOptionsMenuOpen.value = !isWatchOptionsMenuOpen.value;
 };
 
-const closeWatchOptionsMenu = () => {
+const closeWatchOptionsMenu = (refocus = false) => {
+  const wasOpen = isWatchOptionsMenuOpen.value;
   isWatchOptionsMenuOpen.value = false;
+  if (refocus && wasOpen) watchOptionsBtn.value?.focus();
 };
 
 const openPlaylistsModalWrapper = () => {
   closeWatchOptionsMenu();
-  openPlaylistsModal();
+  showPlaylistsModal.value = true;
 };
 
 const downloadLocalCopyWrapper = () => {
@@ -413,18 +402,13 @@ const downloadLocalCopyWrapper = () => {
   downloadLocalCopy();
 };
 
-const reportWatchVideo = async () => {
+// Guests cannot report (the server answers 401): the entry is hidden.
+const openReport = () => {
   closeWatchOptionsMenu();
-  try {
-    await $fetch(`/api/videos/${videoId.value}/report`, { 
-      method: 'POST',
-      body: { reason: 'User reported this video from player options' }
-    });
-    toast.success('Video reported successfully');
-  } catch (e) {
-    toast.error('Failed to report video');
-  }
+  showReportModal.value = true;
 };
+
+const loginLink = computed(() => `/login?redirect=${encodeURIComponent(route.fullPath)}`);
 
 // Fetch video metadata, comments and categories
 const { data: videoResponse, pending, error, refresh: refreshVideo } = await useFetch<{ video: any; comments?: any[]; categories?: any[]; subtitles?: any[]; chapters?: any[] }>(() => {
@@ -459,12 +443,21 @@ const filteredRelatedVideos = computed(() => {
 
 const playlistId = computed(() => route.query.playlistId ? String(route.query.playlistId) : '');
 
-// Fetch playlist details and videos
+// Fetch playlist details and videos. useRequestFetch forwards the viewer's
+// cookies during SSR (a bare $fetch would load the playlist as a guest and
+// hydrate that 404), and the share token of a shared playlist link is passed
+// on so a guest gets the queue and "next" too.
+const requestFetch = useRequestFetch();
 const { data: playlistData, pending: playlistPending } = await useAsyncData<any>(
-  'watch-playlist-data',
-  () => playlistId.value ? $fetch<any>(`/api/playlists/${playlistId.value}` as any) : Promise.resolve(null),
-  { immediate: !!playlistId.value, watch: [playlistId] }
+  () => `watch-playlist:${playlistId.value}:${token.value}`,
+  () => playlistId.value
+    ? requestFetch<any>(`/api/playlists/${encodeURIComponent(playlistId.value)}`, { params: token.value ? { token: token.value } : {} })
+      .catch(() => null)
+    : Promise.resolve(null),
+  { watch: [playlistId, token] }
 );
+// Next/previous keep the share token so the queue survives navigation.
+const playlistQuery = (id: string) => `/watch/${id}?playlistId=${encodeURIComponent(playlistId.value)}${token.value ? `&token=${encodeURIComponent(token.value)}` : ''}`;
 
 const playlist = computed(() => playlistData.value?.playlist || null);
 const playlistVideos = computed(() => playlistData.value?.videos || []);
@@ -486,7 +479,7 @@ const playPrevVideo = () => {
   const idx = playlistVideos.value.findIndex((v: any) => v.id === videoId.value);
   if (idx > 0) {
     const prevVideo = playlistVideos.value[idx - 1];
-    navigateTo(`/watch/${prevVideo.id}?playlistId=${playlistId.value}`);
+    navigateTo(playlistQuery(prevVideo.id));
   }
 };
 
@@ -495,7 +488,7 @@ const playNextVideo = () => {
   const idx = playlistVideos.value.findIndex((v: any) => v.id === videoId.value);
   if (idx >= 0 && idx < playlistVideos.value.length - 1) {
     const nextVideo = playlistVideos.value[idx + 1];
-    navigateTo(`/watch/${nextVideo.id}?playlistId=${playlistId.value}`);
+    navigateTo(playlistQuery(nextVideo.id));
   }
 };
 
@@ -510,7 +503,7 @@ const handleVideoEnded = () => {
         toast.info(`Playing next video: ${nextVideo.title}`);
         autoNextTimer = setTimeout(() => {
           autoNextTimer = null;
-          navigateTo(`/watch/${nextVideo.id}?playlistId=${playlistId.value}`);
+          navigateTo(playlistQuery(nextVideo.id));
         }, 1500);
       }
     }
@@ -553,23 +546,24 @@ const playRecommendedVideo = (id: string) => {
   navigateTo(`/watch/${id}`);
 };
 
-const shareVideo = () => {
+// Admins share the server's share link (with a token when needed); anyone
+// else only a video whose plain link works for everybody.
+const canShare = computed(() => canShareVideo(video.value, isAdmin.value));
+const hasWatchOptions = computed(() => isLoggedIn.value || !!video.value?.local_video_path);
+
+const shareVideo = async () => {
   if (!video.value) return;
-  
-  let shareUrl = window.location.origin + '/watch/' + video.value.id;
-  if (video.value.visibility !== 'public' && video.value.share_token) {
-    shareUrl += '?token=' + video.value.share_token;
-  }
-  
-  navigator.clipboard.writeText(shareUrl);
-  toast.success('Share link copied to clipboard!');
+  const res = await shareVideoLink(video.value, isAdmin.value);
+  if (!res.ok) toast.error(res.message || 'Could not share this video.');
+  else if (res.message) toast.success(res.message);
 };
 
 const downloadLocalCopy = () => {
   if (video.value?.local_video_path) {
     const link = document.createElement('a');
     link.href = video.value.local_video_path + (token.value ? '?token=' + token.value : '');
-    link.download = `${video.value.title}.mp4`;
+    const ext = /\.([a-z0-9]{2,4})(?:$|\?)/i.exec(video.value.local_video_path)?.[1] || 'mp4';
+    link.download = `${video.value.title}.${ext}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -619,86 +613,6 @@ const formatUploadDate = (dateStr: string | null): string => {
   return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
-const openPlaylistsModal = async () => {
-  showPlaylistsModal.value = true;
-  loadingPlaylists.value = true;
-  try {
-    const data = await $fetch<any>(`/api/playlists/personal?videoId=${videoId.value}`);
-    userPlaylists.value = data.playlists || [];
-  } catch (err: any) {
-    toast.error('Failed to load playlists.');
-  } finally {
-    loadingPlaylists.value = false;
-  }
-};
-
-const closePlaylistsModal = () => {
-  showPlaylistsModal.value = false;
-};
-
-const isVideoInPlaylist = (playlistId: string) => {
-  const pl = userPlaylists.value.find(p => p.id === playlistId);
-  return pl ? pl.contains_video === 1 : false;
-};
-
-const togglePlaylistMembership = async (playlistId: string, event: Event) => {
-  const checkbox = event.target as HTMLInputElement;
-  const isChecked = checkbox.checked;
-  const action = isChecked ? 'add' : 'remove';
-  
-  try {
-    await $fetch(`/api/playlists/personal/${playlistId}/videos`, {
-      method: 'POST',
-      body: { action, videoId: videoId.value }
-    });
-    
-    // Update local state
-    const pl = userPlaylists.value.find(p => p.id === playlistId);
-    if (pl) {
-      pl.contains_video = isChecked ? 1 : 0;
-    }
-    toast.success(isChecked ? 'Added to playlist.' : 'Removed from playlist.');
-  } catch (err: any) {
-    toast.error(err.data?.statusMessage || 'Failed to update playlist membership.');
-    checkbox.checked = !isChecked; // Revert checkbox state on error
-  }
-};
-
-const createPlaylist = async () => {
-  if (!newPlaylistTitle.value.trim()) return;
-  creatingPlaylist.value = true;
-  try {
-    const { playlist: newPl } = await $fetch<any>('/api/playlists/personal', {
-      method: 'POST',
-      body: {
-        title: newPlaylistTitle.value.trim(),
-        visibility: newPlaylistVisibility.value,
-        description: ''
-      }
-    });
-
-    // Add to local list
-    userPlaylists.value.push({ ...newPl, contains_video: 1 });
-
-    // Automatically add this video to the new playlist
-    await $fetch(`/api/playlists/personal/${newPl.id}/videos`, {
-      method: 'POST',
-      body: { action: 'add', videoId: videoId.value }
-    });
-    
-    toast.success(`Playlist created and video added!`);
-    
-    // Reset form
-    newPlaylistTitle.value = '';
-    newPlaylistVisibility.value = 'private';
-    showInlineForm.value = false;
-  } catch (e: any) {
-    toast.error(e.data?.statusMessage || 'Failed to create playlist');
-  } finally {
-    creatingPlaylist.value = false;
-  }
-};
-
 const formatTimestamp = (ts: number | null): string => {
   if (!ts) return 'Unknown';
   const date = new Date(ts);
@@ -706,7 +620,7 @@ const formatTimestamp = (ts: number | null): string => {
 };
 
 const formatBytes = (bytes: number | null): string => {
-  if (bytes === null || bytes === undefined) return 'Inconnu';
+  if (bytes === null || bytes === undefined) return 'Unknown';
   if (bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -726,6 +640,8 @@ const showMiniPlayer = ref(false);
 const playerContainerEl = ref<HTMLElement | null>(null);
 
 function handleScroll() {
+  // The options menu is fixed to the viewport: it would drift off its button.
+  if (isWatchOptionsMenuOpen.value) closeWatchOptionsMenu();
   if (!playerContainerEl.value) return;
   const rect = playerContainerEl.value.getBoundingClientRect();
   const videoEl = videoPlayerRef.value?.videoEl;
@@ -953,6 +869,59 @@ function toggleMiniPlayerPlayback() {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.dropdown-wrapper {
+  position: relative;
+}
+
+/* The generic .btn padding (10px 20px) left no room for the icon in a 36px
+   circle: the svg was squeezed to 0 px wide. */
+.watch-more-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.watch-more-btn svg {
+  flex-shrink: 0;
+}
+
+/* Fixed and clamped to the viewport by placeWatchOptionsMenu(); opaque and
+   above the sidebar rail. */
+.watch-options-menu {
+  position: fixed;
+  z-index: 1100;
+  padding: 8px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: calc(100vw - 16px);
+  background: rgb(22, 22, 32);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.watch-options-menu .dropdown-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
+}
+
+.watch-login-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: -8px;
+  text-align: center;
+  color: var(--text-secondary);
 }
 
 /* Description Box */
