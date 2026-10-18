@@ -10,6 +10,12 @@ import { assertInTmp, mockEvent, sessionCookie } from '../helpers/testDb';
 // are not objects, fields of the wrong type, odd query values and ids) must
 // never produce a 500. Child processes and outbound requests are replaced by
 // fakes that fail, so an upstream failure must be reported as a 502.
+// Every route is also called as a guest and as a member: an admin route must
+// refuse both (401/403), and no answer to either may carry a stack trace, a
+// server path, a password hash, a share token or a stored API key.
+// Handlers are called directly here; the middleware chain in front of them
+// (request guards, CSRF, forced password change) is exercised over real HTTP
+// in request-pipeline.test.ts.
 
 function fakeChild() {
   const child: any = new EventEmitter();
@@ -64,7 +70,11 @@ vi.mock('http', async (importOriginal) => {
 const ROOT = path.resolve(__dirname, '../..');
 const API = path.join(ROOT, 'server/api');
 
-// Routes that wipe or rewrite the whole library on disk: covered by their own tests.
+// Routes that wipe or rewrite the whole library on disk. Fuzzing them as an
+// admin would start a background job that outlives the per-route database
+// (freshDb closes it) and touches the downloads folders; their auth and input
+// handling are covered by destructive-routes-auth.test.ts,
+// library-wipe-run.test.ts and tidy-routes.test.ts instead.
 const SKIP = new Set([
   'admin/system/wipe-all.post.ts',
   'admin/library/tidy/start.post.ts',
@@ -92,6 +102,33 @@ function freshDb() {
   db.prepare("INSERT INTO podcast_episodes (id, show_id, title, audio_url, download_status, created_at) VALUES ('ep1', 'show1', 'E', 'https://example.invalid/a.mp3', 'completed', ?)").run(now);
   db.prepare("INSERT INTO personal_playlists (id, title, user_id, visibility, created_at) VALUES ('pl1', 'P', 'admin', 'private', ?)").run(now);
   db.prepare("INSERT INTO music_user_playlists (id, user_id, title, created_at, updated_at) VALUES ('mpl1', 'admin', 'M', ?, ?)").run(now, now);
+  // Secrets no guest or member answer may ever contain.
+  db.prepare('UPDATE videos SET share_token = ? WHERE id = ?').run(SECRETS.videoShare, 'aaaaaaaaaaa');
+  db.prepare('UPDATE podcast_episodes SET share_token = ? WHERE id = ?').run(SECRETS.episodeShare, 'ep1');
+  db.prepare('UPDATE personal_playlists SET share_token = ? WHERE id = ?').run(SECRETS.playlistShare, 'pl1');
+  db.prepare("INSERT OR REPLACE INTO search_platforms (id, api_key, api_secret, updated_at) VALUES ('youtube', ?, ?, ?), ('podcastindex', ?, ?, ?)")
+    .run(SECRETS.apiKey, '', now, SECRETS.apiKey, SECRETS.apiSecret, now);
+}
+
+const SECRETS = {
+  videoShare: 'SHARE-SECRET-VIDEO-0001',
+  episodeShare: 'SHARE-SECRET-EPISODE-0001',
+  playlistShare: 'SHARE-SECRET-PLAYLIST-0001',
+  apiKey: 'APIKEY-SECRET-VALUE-0001',
+  apiSecret: 'APISECRET-SECRET-VALUE-0001',
+};
+
+/** What a guest or member answer must never contain; returns the offending marker, if any. */
+function leakIn(body: unknown, message: string): string | null {
+  let text: string;
+  try { text = `${JSON.stringify(body) ?? ''}\n${message}`; } catch { text = message; }
+  if (/\bat .*\.(ts|js|mjs):\d+/.test(text)) return 'stack trace';
+  if (text.includes(dir) || text.includes(fs.realpathSync(dir))) return 'server path';
+  if (text.includes(os.tmpdir())) return 'server temp path';
+  for (const marker of ['password_hash', '$2b$', 'share_token', 'api_key', 'api_secret', 'apiSecret', ...Object.values(SECRETS)]) {
+    if (text.includes(marker)) return marker;
+  }
+  return null;
 }
 
 beforeAll(async () => {
@@ -177,12 +214,18 @@ function idFor(name: string, rel: string): string {
   return 'x';
 }
 
-async function call(handler: any, event: any): Promise<{ status: number; message: string }> {
+async function call(handler: any, event: any): Promise<{ status: number; message: string; body: unknown }> {
   try {
-    await handler(event);
-    return { status: event.node.res.statusCode ?? 200, message: '' };
+    const body = await handler(event);
+    // A file stream is not part of the answer we inspect.
+    if (body && typeof (body as any).pipe === 'function') {
+      (body as any).on?.('error', () => {});
+      (body as any).destroy?.();
+      return { status: event.node.res.statusCode ?? 200, message: '', body: null };
+    }
+    return { status: event.node.res.statusCode ?? 200, message: '', body };
   } catch (e: any) {
-    return { status: e?.statusCode ?? 500, message: String(e?.statusMessage ?? e?.message ?? '') };
+    return { status: e?.statusCode ?? 500, message: String(e?.statusMessage ?? e?.message ?? ''), body: e?.data ?? null };
   }
 }
 
@@ -205,11 +248,17 @@ describe('every API route survives malformed input', () => {
       const failures: string[] = [];
       const check = async (label: string, cookie: string | undefined, opts: any) => {
         const event = mockEvent(cookie, { method, path: opts.path ?? url, params: opts.params ?? goodParams, ...('body' in opts ? { body: opts.body } : { body: undefined }) });
-        const { status, message } = await call(handler, event);
+        const result = await call(handler, event);
+        const { status, message } = result;
         if ((status >= 500 && status !== 502 && status !== 503) || /TypeError|RangeError|SqliteError|CronPattern|at \//.test(message)) {
           failures.push(`${label} -> ${status} ${message.slice(0, 160)}`);
         }
+        return result;
       };
+
+      // First, before the admin calls below change the data (deleting the member, say).
+      const guest = await check('guest', undefined, {});
+      const member = await check('member', sessionCookie('sess-bob'), {});
 
       const admin = sessionCookie('sess-admin');
       const fields = bodyFields(source);
@@ -230,8 +279,14 @@ describe('every API route survives malformed input', () => {
       for (const name of paramNames) {
         for (const bad of BAD_IDS) await check(`:${name}=${bad.slice(0, 20)}`, admin, { params: { ...goodParams, [name]: bad } });
       }
-      await check('guest', undefined, {});
-      await check('member', sessionCookie('sess-bob'), {});
+      if (rel.startsWith('admin/')) {
+        if (![401, 403].includes(guest.status)) failures.push(`guest on an admin route -> ${guest.status}`);
+        if (member.status !== 403) failures.push(`member on an admin route -> ${member.status}`);
+      }
+      for (const [who, r] of [['guest', guest], ['member', member]] as const) {
+        const leak = leakIn(r.body, r.message);
+        if (leak) failures.push(`${who} answer (${r.status}) leaks: ${leak}`);
+      }
 
       expect(failures).toEqual([]);
     }, 60_000);
