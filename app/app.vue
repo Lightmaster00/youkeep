@@ -3,6 +3,7 @@
     <NuxtPage :transition="{ name: 'page', mode: 'out-in' }" />
   </NuxtLayout>
   <ConfirmHost />
+  <ClipboardFallbackHost />
 </template>
 
 <script setup lang="ts">

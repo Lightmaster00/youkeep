@@ -218,6 +218,7 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { ref, reactive, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
@@ -379,38 +380,13 @@ const handleCreateToken = async () => {
 const tokenCodeEl = ref<HTMLElement | null>(null);
 const copyMessage = ref('');
 
-// navigator.clipboard only exists on HTTPS / localhost; a self-hosted instance
-// reached over plain http://<lan-ip> has none, so fall back to selecting the
-// text and execCommand('copy'), and finally to a manual-copy hint.
+// Plain http://<lan-ip> has no navigator.clipboard: copyToClipboard falls
+// back to execCommand('copy'), then to a dialog with the token selected.
 const copyNewToken = async () => {
   if (!newToken.value) return;
   copyMessage.value = '';
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(newToken.value);
-      copyMessage.value = 'Token copied.';
-      return;
-    }
-  } catch (e) {
-    // fall through to the selection fallback
-  }
-  const el = tokenCodeEl.value;
-  if (el) {
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    try {
-      if (document.execCommand('copy')) {
-        copyMessage.value = 'Token copied.';
-        return;
-      }
-    } catch (e) {
-      // leave the text selected for a manual copy
-    }
-  }
-  copyMessage.value = 'Automatic copy failed: the token is selected, copy it with Ctrl+C (or Cmd+C).';
+  const result = await copyToClipboard(newToken.value, 'Copy your API token');
+  copyMessage.value = result === 'copied' ? 'Token copied.' : '';
 };
 
 const dismissNewToken = () => {

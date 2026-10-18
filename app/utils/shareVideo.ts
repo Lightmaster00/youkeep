@@ -1,0 +1,32 @@
+import { copyToClipboard } from '~/utils/clipboard';
+
+// Who may share a video, and with which link (R10): an admin gets the share
+// link from the server (with its token when the video is private), anyone
+// else only a public video of a public channel, whose plain /watch link works
+// for every visitor. Otherwise there is no Share button.
+
+export function canShareVideo(video: { publicly_shareable?: number | boolean | null } | null | undefined, isAdmin: boolean): boolean {
+  if (!video) return false;
+  return isAdmin || video.publicly_shareable === 1 || video.publicly_shareable === true;
+}
+
+export async function videoShareUrl(video: { id: string }, isAdmin: boolean): Promise<string> {
+  const origin = window.location.origin;
+  if (isAdmin) {
+    const res = await $fetch<{ url: string }>(`/api/videos/${encodeURIComponent(video.id)}/share-link`);
+    return new URL(res.url, origin).toString();
+  }
+  return `${origin}/watch/${encodeURIComponent(video.id)}`;
+}
+
+/** Copies the share link; resolves the toast to show (null when the user copies by hand). */
+export async function shareVideoLink(video: { id: string }, isAdmin: boolean): Promise<{ ok: boolean; message: string | null }> {
+  let url: string;
+  try {
+    url = await videoShareUrl(video, isAdmin);
+  } catch (err: any) {
+    return { ok: false, message: err?.data?.statusMessage || 'Could not create the share link.' };
+  }
+  const result = await copyToClipboard(url);
+  return { ok: true, message: result === 'copied' ? 'Share link copied.' : null };
+}

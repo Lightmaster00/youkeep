@@ -171,6 +171,7 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted } from 'vue';
@@ -270,10 +271,8 @@ const copyShareLink = () => {
     shareUrl += `?token=${playlist.value.share_token}`;
   }
   
-  navigator.clipboard.writeText(shareUrl).then(() => {
-    toast.success('Share link copied to clipboard!');
-  }).catch(() => {
-    toast.error('Failed to copy link.');
+  copyToClipboard(shareUrl).then((result) => {
+    if (result === 'copied') toast.success('Share link copied.');
   });
 };
 

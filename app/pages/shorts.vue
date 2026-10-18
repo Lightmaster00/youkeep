@@ -70,7 +70,7 @@
 
             <!-- Top-Right Actions -->
             <div class="top-right-actions">
-              <button class="share-btn-top" @click.stop="shareShort(video)" title="Share">
+              <button v-if="canShareVideo(video, isAdminViewer)" type="button" class="share-btn-top" @click.stop="shareShort(video)" title="Share" aria-label="Share">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
                 <span>Share</span>
               </button>
@@ -170,6 +170,7 @@
 </template>
 
 <script setup lang="ts">
+import { canShareVideo, shareVideoLink } from '~/utils/shareVideo';
 import { cssUrl } from '~/utils/cssUrl';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
@@ -521,10 +522,11 @@ const watchNormal = (id: string) => {
   navigateTo(`/watch/${id}`);
 };
 
-const shareShort = (video: Video) => {
-  const shareUrl = `${window.location.origin}/watch/${video.id}`;
-  navigator.clipboard.writeText(shareUrl);
-  toast.success('Short link copied to clipboard!');
+const { isAdmin: isAdminViewer } = useAuth();
+const shareShort = async (video: Video) => {
+  const res = await shareVideoLink(video, isAdminViewer.value);
+  if (!res.ok) toast.error(res.message || 'Could not share this Short.');
+  else if (res.message) toast.success(res.message);
 };
 
 const formatVideoDate = (dateStr: string | null | undefined): string => {

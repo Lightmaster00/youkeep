@@ -15,6 +15,7 @@ export interface RecommendedVideo {
   upload_date: string | null;
   channel_title: string;
   channel_avatar: string | null;
+  publicly_shareable: number;
 }
 
 const CANDIDATE_POOL_SIZE = 500;
@@ -58,7 +59,9 @@ export function getRecommendedVideos(
   const isShortClause = opts.type === 'short' ? 'AND v.is_short = 1' : opts.type === 'video' ? 'AND v.is_short = 0' : '';
   const candidates = db.prepare(`
     SELECT v.id, v.title, v.description, v.duration, v.view_count, v.local_video_path, v.local_thumbnail_path, v.is_short, v.was_live, v.channel_id, v.upload_date,
-           c.title as channel_title, c.avatar_url as channel_avatar
+           c.title as channel_title, c.avatar_url as channel_avatar,
+           -- Whether the plain /watch link works for anyone (the Share button).
+           CASE WHEN COALESCE(v.visibility, 'public') = 'public' AND COALESCE(c.visibility, 'public') = 'public' THEN 1 ELSE 0 END AS publicly_shareable
     FROM videos v
     JOIN channels c ON v.channel_id = c.id
     WHERE v.download_status = 'completed' ${isShortClause}

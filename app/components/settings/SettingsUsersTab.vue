@@ -190,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { ref, reactive, computed } from 'vue';
 import { useAuth } from '~/composables/useAuth';
@@ -231,10 +232,8 @@ const oldUsername = ref('');
 
 const copyCredentials = () => {
   const text = `YouKeep Credentials:\nUsername: ${oldUsername.value || userForm.username}\nTemporary password: ${generatedPassword.value}`;
-  navigator.clipboard.writeText(text).then(() => {
-    toast.success('Sign-in details copied.');
-  }).catch(() => {
-    toast.error('Copy failed.');
+  copyToClipboard(text, 'Copy the sign-in details').then((result) => {
+    if (result === 'copied') toast.success('Sign-in details copied.');
   });
 };
 

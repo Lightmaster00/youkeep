@@ -91,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { shareVideoLink } from '~/utils/shareVideo';
 import { confirmAction } from '~/composables/useConfirm';
 import { ref, computed, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
@@ -195,14 +196,10 @@ const onVideoHidden = (id: string) => {
   }
 };
 
-const copyShareLink = (video: any) => {
-  let shareUrl = window.location.origin + '/watch/' + video.id;
-  if (video.visibility !== 'public' && video.share_token) {
-    shareUrl += '?token=' + video.share_token;
-  }
-
-  navigator.clipboard.writeText(shareUrl);
-  toast.success('Share link copied.');
+const copyShareLink = async (video: any) => {
+  const res = await shareVideoLink(video, isAdmin.value);
+  if (!res.ok) toast.error(res.message || 'Could not share this video.');
+  else if (res.message) toast.success(res.message);
 };
 
 const handleUpdateVideoVisibility = async (videoId: string, event: Event) => {
