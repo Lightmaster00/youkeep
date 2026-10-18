@@ -135,4 +135,20 @@ describe('createDbProgressWriter', () => {
     stopProgressWriter('videos', 'v1'); // still reaches the newer writer
     expect(row().download_progress).toBe(55);
   });
+
+  it('starting a new attempt stops the old writer: its late updates never overwrite the new progress', () => {
+    const first = startProgressWriter(db, 'videos', 'v1');
+    first.update(snap(80));
+    first.update(snap(85)); // throttled, pending: flushed when the new attempt starts
+    const second = startProgressWriter(db, 'videos', 'v1');
+    expect(row().download_progress).toBe(85);
+    second.update(snap(5));
+    expect(row().download_progress).toBe(5);
+    // The previous attempt's process is still printing progress lines.
+    vi.advanceTimersByTime(2000);
+    first.update(snap(90));
+    vi.advanceTimersByTime(2000);
+    expect(row().download_progress).toBe(5);
+    stopProgressWriter('videos', 'v1');
+  });
 });
