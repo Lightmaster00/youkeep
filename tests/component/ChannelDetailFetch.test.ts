@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
-import { fetchAllChannelVideos, CHANNEL_VIDEOS_MAX_PAGES } from '../../app/composables/useChannelDetail';
 import { getFeedSeed, useFeedSeed, resetFeedSeedForTests } from '../../app/composables/useFeedSeed';
 import ChannelsPage from '../../app/pages/channels.vue';
 
@@ -10,44 +9,6 @@ let fetchMock: ReturnType<typeof vi.fn>;
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-});
-
-const pagedVideos = (total: number) => vi.fn(async (_url: string, opts?: any) => {
-  const { page, limit } = opts.params;
-  const start = (page - 1) * limit;
-  const count = Math.max(0, Math.min(limit, total - start));
-  return { videos: Array.from({ length: count }, (_, i) => ({ id: `v${start + i}` })), pagination: { total } };
-});
-
-describe('fetchAllChannelVideos', () => {
-  it('pages with limit 100 until the total is reached', async () => {
-    fetchMock = pagedVideos(250);
-    vi.stubGlobal('$fetch', fetchMock);
-    const res = await fetchAllChannelVideos('ch1', false, 7);
-    expect(res.videos).toHaveLength(250);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    for (const [url, opts] of fetchMock.mock.calls) {
-      expect(url).toBe('/api/videos');
-      expect(opts.params.limit).toBeLessThanOrEqual(100);
-      expect(opts.params.seed).toBe(7);
-    }
-  });
-
-  it('asks for status=all only as an admin', async () => {
-    fetchMock = pagedVideos(1);
-    vi.stubGlobal('$fetch', fetchMock);
-    await fetchAllChannelVideos('ch1', false, 1);
-    expect(fetchMock.mock.calls[0]![1].params.status).toBeUndefined();
-    await fetchAllChannelVideos('ch1', true, 1);
-    expect(fetchMock.mock.calls[1]![1].params.status).toBe('all');
-  });
-
-  it('stops at the page cap even if the server keeps reporting more', async () => {
-    fetchMock = vi.fn(async () => ({ videos: Array.from({ length: 100 }, (_, i) => ({ id: `x${i}` })), pagination: { total: 1e9 } }));
-    vi.stubGlobal('$fetch', fetchMock);
-    await fetchAllChannelVideos('ch1', true, 1);
-    expect(fetchMock).toHaveBeenCalledTimes(CHANNEL_VIDEOS_MAX_PAGES);
-  });
 });
 
 describe('feed seed', () => {

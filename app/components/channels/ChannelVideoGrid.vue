@@ -27,7 +27,7 @@
       </div>
     </div>
 
-    <div v-if="videosPending && isInitialLoad" class="videos-loading">
+    <div v-if="pending && videos.length === 0" class="videos-loading">
       <div class="spinner"></div>
     </div>
 
@@ -40,7 +40,7 @@
       @action="handleToggleSync(true)"
     />
 
-    <div v-else :class="variant === 'videos' ? 'video-grid stagger-in' : 'shorts-grid'">
+    <div v-else :class="variant === 'videos' ? 'video-grid stagger-in' : 'shorts-grid'" :data-testid="`channel-${variant}-grid`">
       <VideoCard
         v-for="video in displayedVideos"
         :key="video.id"
@@ -87,38 +87,43 @@
         </template>
       </VideoCard>
     </div>
+
+    <div v-if="displayedVideos.length > 0 && (hasMore || total > CHANNEL_PAGE_SIZE)" class="channel-show-more" :data-testid="`channel-${variant}-more`">
+      <p class="channel-show-more-count" aria-live="polite">Showing {{ displayedVideos.length }} of {{ total }}</p>
+      <button v-if="hasMore" type="button" class="btn btn-secondary" :disabled="loadingMore" @click="loadMore">
+        {{ loadingMore ? 'Loading...' : 'Show more' }}
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { shareVideoLink } from '~/utils/shareVideo';
 import { confirmAction } from '~/composables/useConfirm';
-import { ref, computed, watch } from 'vue';
+import { shareVideoLink } from '~/utils/shareVideo';
+import { computed, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { useChannelDetail } from '~/composables/useChannelDetail';
 import { useChannelVideoFilters } from '~/composables/useChannelVideoFilters';
 import { useChannelsList } from '~/composables/useChannelsList';
+import { useChannelVideoPages, CHANNEL_PAGE_SIZE } from '~/composables/useChannelVideoPages';
 
 const props = defineProps<{ variant: 'videos' | 'shorts' }>();
 
 const { isAdmin } = useAuth();
 const toast = useToast();
 
-const { channelId, channelVideos, videosData, videosPending, refreshVideos, refreshSingleChannel, singleChannelData } = await useChannelDetail();
+const { channelId, refreshSingleChannel, singleChannelData } = await useChannelDetail();
 const { refreshChannels } = await useChannelsList();
 const { videoSearchQuery, sortBy } = useChannelVideoFilters();
+// Videos hidden from another tab of this page (the playlists tab).
+const hiddenIds = useState<string[]>('channel_hidden_video_ids', () => []);
 
-const isInitialLoad = ref(true);
-
-watch(channelId, () => {
-  isInitialLoad.value = true;
-});
-
-watch(videosPending, (newVal) => {
-  if (!newVal) {
-    isInitialLoad.value = false;
-  }
+const { videos, total, hasMore, pending, loadingMore, searchTerm, loadMore, reload, removeVideo } = await useChannelVideoPages({
+  channelId,
+  variant: props.variant,
+  sort: sortBy,
+  search: videoSearchQuery,
 });
 
 const completedCount = computed(() => {
@@ -127,73 +132,48 @@ const completedCount = computed(() => {
   }
   return singleChannelData.value?.stats?.completedShortsCount || 0;
 });
+const indexedCount = computed(() => singleChannelData.value?.stats?.totalCount || 0);
+
+// A download finishing (or a delete elsewhere) changes the count: reload the
+// pages already on screen, never the whole channel.
+watch(completedCount, (now, before) => {
+  if (import.meta.client && now !== before) reload().catch(() => {});
+});
 
 const searchPlaceholder = computed(() => props.variant === 'videos' ? 'Search archived video...' : 'Search Short...');
 
-const filteredVideos = computed(() => {
-  let vids = [...channelVideos.value];
-
-  // 1. Filter by search query
-  if (videoSearchQuery.value.trim()) {
-    const query = videoSearchQuery.value.toLowerCase().trim();
-    vids = vids.filter(v => v.title && v.title.toLowerCase().includes(query));
-  }
-
-  // 2. Sort
-  vids.sort((a, b) => {
-    if (sortBy.value === 'date_desc') {
-      return (b.upload_date || '').localeCompare(a.upload_date || '');
-    } else if (sortBy.value === 'date_asc') {
-      return (a.upload_date || '').localeCompare(b.upload_date || '');
-    } else if (sortBy.value === 'views_desc') {
-      return (b.view_count || 0) - (a.view_count || 0);
-    } else if (sortBy.value === 'views_asc') {
-      return (a.view_count || 0) - (b.view_count || 0);
-    } else if (sortBy.value === 'duration_desc') {
-      return (b.duration || 0) - (a.duration || 0);
-    } else if (sortBy.value === 'duration_asc') {
-      return (a.duration || 0) - (b.duration || 0);
-    }
-    return 0;
-  });
-
-  return vids;
-});
-
 const displayedVideos = computed(() => {
-  if (props.variant === 'videos') {
-    return filteredVideos.value.filter((v: any) => v.download_status === 'completed' && v.is_short !== 1);
-  }
-  return filteredVideos.value.filter((v: any) => v.download_status === 'completed' && v.is_short === 1);
+  const hidden = new Set(hiddenIds.value);
+  return videos.value.filter((v: any) => !hidden.has(v.id));
 });
 
 const emptyTitle = computed(() => {
+  if (searchTerm.value) return 'No matching videos';
   if (props.variant === 'videos') {
-    return channelVideos.value.length === 0 ? 'Channel not synchronized' : 'No videos archived locally';
+    return indexedCount.value === 0 ? 'Channel not synchronized' : 'No videos archived locally';
   }
   return 'No Shorts archived';
 });
 
 const emptyDescription = computed(() => {
+  if (searchTerm.value) return `Nothing in this channel matches "${searchTerm.value}".`;
   if (props.variant === 'videos') {
-    return channelVideos.value.length === 0
+    return indexedCount.value === 0
       ? 'No videos have been indexed for this channel yet. You need to start a sync to fetch available videos from YouTube.'
-      : `There are currently ${channelVideos.value.length} videos indexed in our database, but none have been successfully downloaded yet.`;
+      : `There are currently ${indexedCount.value} videos indexed in our database, but none have been successfully downloaded yet.`;
   }
   return 'No Shorts have been downloaded for this channel yet. Make sure the Shorts archiving option is enabled in the channel settings.';
 });
 
 const emptyActionText = computed(() => {
-  if (props.variant === 'videos' && channelVideos.value.length === 0 && isAdmin.value) {
+  if (props.variant === 'videos' && !searchTerm.value && indexedCount.value === 0 && isAdmin.value) {
     return 'Start initial sync';
   }
   return undefined;
 });
 
 const onVideoHidden = (id: string) => {
-  if (videosData.value && videosData.value.videos) {
-    videosData.value.videos = videosData.value.videos.filter((v: any) => v.id !== id);
-  }
+  removeVideo(id);
 };
 
 const copyShareLink = async (video: any) => {
@@ -211,7 +191,7 @@ const handleUpdateVideoVisibility = async (videoId: string, event: Event) => {
       body: { visibility }
     });
     toast.success('Video visibility updated.');
-    refreshVideos();
+    reload().catch(() => {});
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Update failed.');
   }
@@ -225,7 +205,8 @@ const handleDeleteVideo = async (videoId: string, title: string) => {
   try {
     await $fetch(`/api/admin/videos/${videoId}`, { method: 'DELETE' });
     toast.success('Video deleted.');
-    refreshVideos();
+    removeVideo(videoId);
+    refreshSingleChannel();
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Deletion failed.');
   }
@@ -243,3 +224,18 @@ const handleToggleSync = async (start: boolean) => {
   }
 };
 </script>
+
+<style scoped>
+.channel-show-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 24px 0 8px;
+}
+.channel-show-more-count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+</style>

@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useChannelDetail } from '~/composables/useChannelDetail';
 import { createPoller } from '~/utils/poller';
 import ChannelDirectoryView from '~/components/channels/ChannelDirectoryView.vue';
@@ -80,14 +80,24 @@ import ChannelSettingsDrawer from '~/components/channels/ChannelSettingsDrawer.v
 
 const router = useRouter();
 
-const { channelId, channel, channelNotFound, singleChannelData, channelVideos, refreshSingleChannel, refreshVideos } = await useChannelDetail();
+const { channelId, channel, channelNotFound, singleChannelData, refreshSingleChannel } = await useChannelDetail();
 
-const activeTab = ref('archived');
+// The tab lives in the URL (?tab=), so reload and Back keep it.
+const route = useRoute();
+const CHANNEL_TABS = ['archived', 'shorts', 'playlists'];
+const activeTab = computed<string>({
+  get: () => {
+    const t = String(route.query.tab || '');
+    return CHANNEL_TABS.includes(t) ? t : 'archived';
+  },
+  set: (value) => {
+    router.replace({ query: { ...route.query, tab: value === 'archived' ? undefined : value } });
+  },
+});
 const showDrawer = ref(false);
 const channelPlaylistsTabRef = ref<InstanceType<typeof ChannelPlaylistsTab> | null>(null);
 
 watch(channelId, () => {
-  activeTab.value = 'archived';
   showDrawer.value = false;
 });
 
@@ -101,14 +111,16 @@ const goBack = () => {
 const { isAdmin } = useAuth();
 const poller = createPoller(
   async () => {
+    // The stats carry the counts; each video grid reloads its loaded pages
+    // itself when its count changes.
     if (channelId.value && !channelNotFound.value) {
-      await refreshVideos();
       await refreshSingleChannel();
     }
   },
   () => {
     if (!isAdmin.value) return 30000;
-    return channelVideos.value.some((v: any) => v.download_status === 'downloading') ? 1000 : 3000;
+    const stats = singleChannelData.value?.stats;
+    return (stats?.downloadingVideosCount || 0) + (stats?.downloadingShortsCount || 0) > 0 ? 1000 : 3000;
   }
 );
 

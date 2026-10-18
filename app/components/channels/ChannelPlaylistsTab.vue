@@ -109,7 +109,9 @@ import { useChannelDetail } from '~/composables/useChannelDetail';
 
 const toast = useToast();
 
-const { channelId, videosData } = await useChannelDetail();
+const { channelId } = await useChannelDetail();
+// Shared with the video grids of this page, which drop these ids too.
+const hiddenIds = useState<string[]>('channel_hidden_video_ids', () => []);
 
 const { data: playlistsData, pending: playlistsPending, refresh: refreshPlaylists } = await useFetch<any>(computed(() => {
   return channelId.value ? `/api/channels/${channelId.value}/playlists` : '/api/channels';
@@ -181,9 +183,7 @@ const onVideoHidden = (id: string) => {
   if (selectedPlaylistData.value && selectedPlaylistData.value.videos) {
     selectedPlaylistData.value.videos = selectedPlaylistData.value.videos.filter((v: any) => v.id !== id);
   }
-  if (videosData.value && videosData.value.videos) {
-    videosData.value.videos = videosData.value.videos.filter((v: any) => v.id !== id);
-  }
+  if (!hiddenIds.value.includes(id)) hiddenIds.value = [...hiddenIds.value, id];
 };
 
 const formatStatus = (status: string): string => {

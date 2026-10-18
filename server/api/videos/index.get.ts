@@ -6,6 +6,16 @@ import { buildFtsQuery } from '../../utils/ftsQuery';
 const MAX_LIMIT = 100;
 const STATUSES = ['all', 'pending', 'downloading', 'completed', 'failed'];
 const SEED_RANGE = 4294967296;
+// Explicit orders (the channel page pages through a channel lazily, so its
+// sort has to happen here). Without `sort` the default order applies.
+const SORTS: Record<string, string> = {
+  date_desc: 'ORDER BY v.upload_date DESC, v.created_at DESC, v.id ASC',
+  date_asc: 'ORDER BY v.upload_date ASC, v.created_at ASC, v.id ASC',
+  views_desc: 'ORDER BY COALESCE(v.view_count, 0) DESC, v.id ASC',
+  views_asc: 'ORDER BY COALESCE(v.view_count, 0) ASC, v.id ASC',
+  duration_desc: 'ORDER BY COALESCE(v.duration, 0) DESC, v.id ASC',
+  duration_asc: 'ORDER BY COALESCE(v.duration, 0) ASC, v.id ASC',
+};
 
 /** A non-negative integer query value, `fallback` when absent; anything else is a 400. */
 function queryInt(value: unknown, name: string, fallback: number, min: number, max: number): number {
@@ -26,6 +36,8 @@ export default defineEventHandler(async (event) => {
   const channelId = query.channelId ? String(query.channelId) : '';
   const status = query.status ? String(query.status) : 'completed'; // Default to show completed videos
   if (!STATUSES.includes(status)) badRequest('Unknown status.');
+  const sort = query.sort === undefined || query.sort === '' ? '' : String(query.sort);
+  if (sort && !Object.hasOwn(SORTS, sort)) badRequest('Unknown sort.');
   // Queue states (pending, failed, ...) are an admin view.
   if (status !== 'completed' && session?.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Only admins can filter by download status.' });
@@ -126,8 +138,8 @@ export default defineEventHandler(async (event) => {
   const totalCount = (db.prepare(countQuery).get(...params) as { count: number }).count;
 
   // Sorting logic: use a basic recommendation algorithm for the homepage feed
-  let orderBySql = 'ORDER BY v.upload_date DESC, v.created_at DESC, v.id ASC';
-  if (!search && !channelId && !subscribed) {
+  let orderBySql = sort ? SORTS[sort]! : SORTS.date_desc!;
+  if (!sort && !search && !channelId && !subscribed) {
     const sessionUserId = session ? session.id : null;
     const historyPenaltySql = sessionUserId ? `CASE WHEN v.id IN (SELECT video_id FROM user_history WHERE user_id = ?) THEN -200 ELSE 0 END` : '0';
     const subBoostSql = sessionUserId ? `CASE WHEN v.channel_id IN (SELECT channel_id FROM user_subscriptions WHERE user_id = ?) THEN 30 ELSE 0 END` : '0';
