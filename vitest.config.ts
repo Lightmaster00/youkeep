@@ -16,6 +16,9 @@ export default defineConfig({
           include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
           // Keeps every server test away from the real database and media folders.
           setupFiles: ['tests/setup/server.ts'],
+          // Some files seed tens of thousands of rows in beforeAll (big-library
+          // perf guards): seconds when several suites share the CPU.
+          hookTimeout: 60_000,
         }
       },
       await defineVitestProject({
