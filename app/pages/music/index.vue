@@ -26,7 +26,7 @@
       </div>
 
       <template v-if="search">
-        <div v-if="trackSearchPending" class="music-loading">Loading...</div>
+        <div v-if="trackSearchPending || trackSearchFor !== search" class="music-loading">Loading...</div>
         <div v-else-if="trackSearchError" class="music-error">Search failed.</div>
         <EmptyState
           v-else-if="trackSearchResults.length === 0"
@@ -205,18 +205,25 @@ async function fetchArtists() {
 const trackSearchResults = ref<any[]>([]);
 const trackSearchPending = ref(false);
 const trackSearchError = ref(false);
+// The term the shown results belong to: until the (debounced) request for
+// the current term answers, the page shows "Loading...", never a premature
+// "No results".
+const trackSearchFor = ref<string | null>(null);
 let trackSearchRequestId = 0;
 
 async function fetchTrackSearch() {
   const requestId = ++trackSearchRequestId;
+  const term = search.value;
   trackSearchPending.value = true;
   trackSearchError.value = false;
   try {
-    const data = await $fetch<any>('/api/music/tracks/search', { params: { q: search.value } });
+    const data = await $fetch<any>('/api/music/tracks/search', { params: { q: term } });
     if (requestId !== trackSearchRequestId) return;
+    trackSearchFor.value = term;
     trackSearchResults.value = data.tracks || [];
   } catch (e) {
     if (requestId !== trackSearchRequestId) return;
+    trackSearchFor.value = term;
     trackSearchResults.value = [];
     trackSearchError.value = true;
   } finally {

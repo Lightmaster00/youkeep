@@ -12,7 +12,7 @@
       </div>
 
       <template v-if="search">
-        <div v-if="episodeSearchPending" class="podcast-loading">Loading...</div>
+        <div v-if="episodeSearchPending || episodeSearchFor !== search" class="podcast-loading">Loading...</div>
         <div v-else-if="episodeSearchError" class="podcast-error">Search failed.</div>
         <EmptyState
           v-else-if="episodeSearchResults.length === 0"
@@ -166,18 +166,25 @@ async function fetchShows() {
 const episodeSearchResults = ref<any[]>([]);
 const episodeSearchPending = ref(false);
 const episodeSearchError = ref(false);
+// The term the shown results belong to: until the (debounced) request for
+// the current term answers, the page shows "Loading...", never a premature
+// "No results".
+const episodeSearchFor = ref<string | null>(null);
 let episodeSearchRequestId = 0;
 
 async function fetchEpisodeSearch() {
   const requestId = ++episodeSearchRequestId;
+  const term = search.value;
   episodeSearchPending.value = true;
   episodeSearchError.value = false;
   try {
-    const data = await $fetch<any>('/api/podcasts/episodes/search', { params: { q: search.value } });
+    const data = await $fetch<any>('/api/podcasts/episodes/search', { params: { q: term } });
     if (requestId !== episodeSearchRequestId) return;
+    episodeSearchFor.value = term;
     episodeSearchResults.value = data.episodes || [];
   } catch (e) {
     if (requestId !== episodeSearchRequestId) return;
+    episodeSearchFor.value = term;
     episodeSearchResults.value = [];
     episodeSearchError.value = true;
   } finally {
