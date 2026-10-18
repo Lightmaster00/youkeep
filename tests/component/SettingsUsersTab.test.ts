@@ -55,6 +55,15 @@ describe('SettingsUsersTab', () => {
     expect(card(w, 'bob').find('[data-testid="user-delete"]').attributes('disabled')).toBeUndefined();
   });
 
+  it('disables Delete for yourself even when another admin remains', async () => {
+    users = [me, bob, admin2];
+    const w = await mountTab();
+    const del = card(w, 'boss').find('[data-testid="user-delete"]');
+    expect(del.attributes('disabled')).toBeDefined();
+    expect(del.attributes('title')).toBe('You cannot delete your own account.');
+    expect(card(w, 'admin').find('[data-testid="user-delete"]').attributes('disabled')).toBeUndefined();
+  });
+
   it('does not protect an account just because it is named "admin"', async () => {
     users = [me, bob, admin2];
     const w = await mountTab();
