@@ -28,7 +28,11 @@ const description = computed(() => (statusCode.value === 404
   ? 'This page does not exist or has moved.'
   : 'YouKeep could not show this page. Try again in a moment.'));
 
-useHead({ title: computed(() => (statusCode.value === 404 ? 'Page not found' : 'Error')) });
+// The error page replaces app.vue (and its title template): full title here.
+useHead({
+  titleTemplate: null,
+  title: computed(() => `${statusCode.value === 404 ? 'Page not found' : 'Error'} — YouKeep`),
+});
 
 function goHome() {
   clearError({ redirect: '/' });
