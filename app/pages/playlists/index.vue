@@ -182,7 +182,7 @@ const formatDate = (timestamp: any) => {
   if (!timestamp) return 'Unknown date';
   const date = new Date(Number(timestamp));
   if (isNaN(date.getTime())) return String(timestamp);
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const navigateToPlaylist = (playlist: any) => {

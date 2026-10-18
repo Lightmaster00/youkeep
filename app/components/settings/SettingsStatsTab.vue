@@ -20,7 +20,7 @@
         </div>
         <div class="quick-stat-divider"></div>
         <div class="quick-stat-item">
-          <span class="stat-number">{{ stats?.totalComments?.toLocaleString() || 0 }}</span>
+          <span class="stat-number">{{ stats?.totalComments?.toLocaleString('en-US') || 0 }}</span>
           <span class="stat-label">Comments saved</span>
         </div>
         <div class="quick-stat-divider"></div>
@@ -41,7 +41,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
           </div>
         </div>
-        <span class="metric-value">{{ stats?.totalVideos?.toLocaleString() || 0 }}</span>
+        <span class="metric-value">{{ stats?.totalVideos?.toLocaleString('en-US') || 0 }}</span>
         <div class="metric-sub">Downloaded and ready to watch</div>
       </div>
 
@@ -137,7 +137,7 @@
 
           <div class="diag-item">
             <div class="diag-label">Comments saved</div>
-            <div class="diag-value">{{ stats?.totalComments?.toLocaleString() || 0 }} comments</div>
+            <div class="diag-value">{{ stats?.totalComments?.toLocaleString('en-US') || 0 }} comments</div>
           </div>
 
           <div class="diag-item">
@@ -191,14 +191,14 @@ const getPercentage = (count: number, total: number) => {
 const formatSecondsToHours = (secs: number) => {
   if (!secs) return '0h';
   const hours = Math.round(secs / 3600);
-  return `${hours.toLocaleString()} h`;
+  return `${hours.toLocaleString('en-US')} h`;
 };
 
 const formatViews = (views: number) => {
   if (!views) return '0';
   if (views >= 1000000) return (views / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
   if (views >= 1000) return (views / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  return views.toLocaleString();
+  return views.toLocaleString('en-US');
 };
 
 const formatBytes = (bytes: number) => {
