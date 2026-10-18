@@ -33,6 +33,16 @@ const setVisibility = (isHidden: boolean) => {
 };
 
 describe('VideoPlayer', () => {
+  it('fits the subtitles menu inside a phone-sized player, "Off" first (#17)', async () => {
+    const { w } = await mountPlayer({ subtitles: Array.from({ length: 8 }, (_, i) => ({ code: `l${i}`, label: `Lang ${i}`, url: `/d/${i}.vtt` })) });
+    const container = w.find('.video-player-container').element as HTMLElement;
+    Object.defineProperty(container, 'clientHeight', { configurable: true, value: 190 });
+    await w.find('.cc-btn').trigger('click');
+    const menu = w.find('[data-testid="subtitles-menu"]');
+    expect(menu.attributes('style')).toContain('max-height: 134px');
+    expect(menu.findAll('button')[0]!.text()).toBe('Off');
+  });
+
   it('encodes the share token in the video and subtitle URLs', async () => {
     const { w } = await mountPlayer({ token: 'a&b=c d' });
     expect(w.find('video').attributes('src')).toBe('/downloads/v1.mp4?token=a%26b%3Dc%20d');

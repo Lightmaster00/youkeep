@@ -151,7 +151,7 @@
             <button class="ctrl-btn speed-btn" @click="toggleSpeedMenu" title="Playback Speed">
               <span class="speed-label">{{ currentSpeed === 1 ? '1x' : currentSpeed + 'x' }}</span>
             </button>
-            <div v-if="showSpeedMenu" class="speed-menu">
+            <div v-if="showSpeedMenu" class="speed-menu" :style="{ maxHeight: menuMaxHeight }">
               <button
                 v-for="speed in playbackSpeeds"
                 :key="speed"
@@ -174,7 +174,7 @@
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect><line x1="7" y1="10" x2="11" y2="10"></line><line x1="7" y1="14" x2="17" y2="14"></line><line x1="15" y1="10" x2="17" y2="10"></line></svg>
             </button>
-            <div v-if="showSubtitlesMenu" class="subtitles-menu">
+            <div v-if="showSubtitlesMenu" class="subtitles-menu" data-testid="subtitles-menu" :style="{ maxHeight: menuMaxHeight }">
               <button
                 class="subtitles-option"
                 :class="{ active: activeSubtitleCode === 'off' }"
@@ -284,7 +284,18 @@ const playbackSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const activeSubtitleCode = ref('off');
 const showSubtitlesMenu = ref(false);
 
+// The player clips its content (overflow: hidden for the rounded corners):
+// on a phone the 16:9 player is ~190 px tall, so a menu taller than the
+// space above the control bar lost its top entries ("Off" included). Each
+// menu is capped to what fits and scrolls inside.
+const menuMaxHeight = ref('200px');
+function fitMenus() {
+  const h = playerContainer.value?.clientHeight || 0;
+  menuMaxHeight.value = h > 0 ? `${Math.max(80, Math.min(260, h - 56))}px` : '200px';
+}
+
 const toggleSubtitlesMenu = () => {
+  fitMenus();
   showSubtitlesMenu.value = !showSubtitlesMenu.value;
   showSpeedMenu.value = false;
 };
@@ -455,6 +466,7 @@ const setSpeed = (speed: number) => {
 };
 
 const toggleSpeedMenu = () => {
+  fitMenus();
   showSpeedMenu.value = !showSpeedMenu.value;
 };
 
@@ -963,6 +975,7 @@ defineExpose({ videoEl: videoPlayer });
 }
 
 .speed-menu {
+  overflow-y: auto;
   position: absolute;
   bottom: 44px;
   right: 0;
