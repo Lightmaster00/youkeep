@@ -58,7 +58,7 @@ describe('/podcasts/discover', () => {
     expect(w.findAll('.show-card-detail').map((d) => d.text()).slice(0, 3)).toEqual(['5 followers', '1 follower', 'Latest one · Jan 15, 2026']);
     expect(w.findAll('.episode-context').map((c) => c.text())).toEqual(['Show s1 · 3 listeners', 'Show s1 · 1 listener']);
     expect(w.findAll('.show-follow-btn').length).toBe(4);
-    expect(w.findAll('.language-chip').map((c) => c.text())).toEqual(['All', 'en 4', 'fr 1']);
+    expect(w.findAll('.language-chip').map((c) => c.text())).toEqual(['All', 'English 4', 'French 1']);
 
     await w.find('.episode-play-btn').trigger('click');
     expect(usePodcastPlayer().currentEpisode.value?.id).toBe('e1');

@@ -16,7 +16,7 @@
           </select>
           <select v-model="language" class="form-input">
             <option value="">All languages</option>
-            <option v-for="l in facets.languages" :key="l" :value="l">{{ l }}</option>
+            <option v-for="l in facets.languages" :key="l" :value="l">{{ languageName(l) }}</option>
           </select>
           <select v-model="year" class="form-input">
             <option value="">All years</option>
@@ -102,6 +102,7 @@
 </template>
 
 <script setup lang="ts">
+import { languageName } from '~/utils/languageName';
 import { setImageFallback } from '~/utils/imageFallback';
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';

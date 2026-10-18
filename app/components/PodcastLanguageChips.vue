@@ -14,12 +14,14 @@
       class="language-chip"
       :class="{ active: modelValue === l.language }"
       :aria-pressed="modelValue === l.language"
+      :title="l.language"
       @click="emit('update:modelValue', l.language)"
-    >{{ l.language }} <span class="language-chip-count">{{ l.showCount }}</span></button>
+    >{{ languageName(l.language) }} <span class="language-chip-count">{{ l.showCount }}</span></button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { languageName } from '~/utils/languageName';
 // Language filter chips of the Podcasts Discover page. "All" (empty value)
 // clears the filter.
 defineProps<{ languages: Array<{ language: string; showCount: number }>; modelValue: string }>();
