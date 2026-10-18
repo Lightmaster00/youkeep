@@ -125,14 +125,11 @@
 
 <script setup lang="ts">
 import { useChannelDetail } from '~/composables/useChannelDetail';
+import { formatArchiveDuration } from '~/utils/archiveDuration';
 
 const { channel, singleChannelData } = await useChannelDetail();
 
-const formatDurationHours = (seconds: number | null): string => {
-  if (!seconds) return '0h';
-  const hrs = Math.ceil(seconds / 3600);
-  return `${hrs}h`;
-};
+const formatDurationHours = (seconds: number | null): string => formatArchiveDuration(seconds);
 
 const formatViewsShort = (views: number | null): string => {
   if (!views) return '0';
