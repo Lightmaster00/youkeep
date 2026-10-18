@@ -9,79 +9,114 @@
       </div>
 
       <div class="header-center">
-        <form @submit.prevent="handleSearch" class="search-form">
+        <form role="search" class="search-form" @submit.prevent="handleSearch">
           <input
             type="text"
             v-model="searchQuery"
             :placeholder="searchPlaceholder(activeSpace.id)"
             class="search-input"
+            aria-label="Search"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="header-search-listbox"
+            :aria-expanded="showDropdown ? 'true' : 'false'"
+            :aria-activedescendant="showDropdown && selectedIndex >= 0 ? `header-search-option-${selectedIndex}` : undefined"
+            autocomplete="off"
+            data-testid="header-search-input"
             @input="onSearchInput"
             @focus="onSearchFocus"
             @blur="onSearchBlur"
             @keydown="onSearchKeydown"
           />
-          <button type="submit" class="search-btn">
-            <!-- Search SVG -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <button type="submit" class="search-btn" aria-label="Search" title="Search">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </button>
 
-          <div v-if="showDropdown" class="search-dropdown">
-            <div
-              v-for="(item, index) in dropdownItems"
-              :key="`${item.label}-${index}`"
-              class="search-dropdown-item"
-              :class="{ 'is-selected': index === selectedIndex }"
-              @mousedown.prevent="selectDropdownItem(item.label)"
-            >
-              <span class="search-dropdown-label">{{ item.label }}</span>
-              <span v-if="item.sublabel" class="search-dropdown-sublabel">{{ item.sublabel }}</span>
+          <div v-show="showDropdown" class="search-dropdown">
+            <div id="header-search-listbox" role="listbox" :aria-label="searchQuery.trim() ? 'Suggestions' : 'Recent searches'" data-testid="header-search-listbox">
+              <div
+                v-for="(item, index) in dropdownItems"
+                :id="`header-search-option-${index}`"
+                :key="`${item.label}-${index}`"
+                role="option"
+                :aria-selected="index === selectedIndex ? 'true' : 'false'"
+                class="search-dropdown-item"
+                :class="{ 'is-selected': index === selectedIndex }"
+                @mousedown.prevent="selectDropdownItem(item.label)"
+              >
+                <span class="search-dropdown-label">{{ item.label }}</span>
+                <span v-if="item.sublabel" class="search-dropdown-sublabel">{{ item.sublabel }}</span>
+              </div>
             </div>
-            <div
+            <button
               v-if="searchQuery.trim().length === 0 && historyEntries.length > 0"
+              type="button"
+              tabindex="-1"
               class="search-dropdown-clear"
               @mousedown.prevent="onClearHistory"
             >
-              Clear
-            </div>
+              Clear recent searches
+            </button>
           </div>
         </form>
       </div>
 
       <div class="header-right">
-        <div v-if="user" class="user-menu" :class="{ 'is-active': dropdownOpen }" @click.stop="toggleDropdown">
-          <div class="avatar-circle">
-            {{ user.username.charAt(0).toUpperCase() }}
-          </div>
-          <span class="username">{{ user.username }}</span>
-          <!-- Dropdown Arrow -->
-          <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          
+        <div v-if="user" ref="userMenuEl" class="user-menu-wrapper" @keydown="onUserMenuKeydown">
+          <button
+            ref="userMenuBtn"
+            type="button"
+            class="user-menu"
+            :class="{ 'is-active': dropdownOpen }"
+            aria-haspopup="menu"
+            :aria-expanded="dropdownOpen ? 'true' : 'false'"
+            aria-controls="header-user-menu"
+            :aria-label="`Account menu for ${user.username}`"
+            data-testid="user-menu-button"
+            @click.stop="toggleDropdown"
+          >
+            <span class="avatar-circle" aria-hidden="true">
+              {{ user.username.charAt(0).toUpperCase() }}
+            </span>
+            <span class="username">{{ user.username }}</span>
+            <svg class="dropdown-arrow" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+
           <!-- Profile Dropdown Menu -->
-          <div v-if="dropdownOpen" class="dropdown-menu" @click.stop>
-            <div class="dropdown-header">
+          <div v-if="dropdownOpen" id="header-user-menu" ref="userMenuList" class="dropdown-menu" role="menu" aria-label="Account" data-testid="user-menu" @click.stop>
+            <div class="dropdown-header" role="presentation">
               <p class="dp-username">{{ user.username }}</p>
               <span class="dp-role badge" :class="user.role === 'admin' ? 'badge-completed' : 'badge-pending'">
                 {{ user.role }}
               </span>
             </div>
-            <hr class="dropdown-divider" />
-            <NuxtLink to="/account" class="dropdown-item" @click="dropdownOpen = false">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <hr class="dropdown-divider" role="separator" />
+            <NuxtLink to="/account" class="dropdown-item" role="menuitem" tabindex="-1" @click="closeDropdown()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
               Account
             </NuxtLink>
-            <NuxtLink to="/settings" class="dropdown-item" @click="dropdownOpen = false">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.5 1z"></path></svg>
+            <NuxtLink to="/settings" class="dropdown-item" role="menuitem" tabindex="-1" @click="closeDropdown()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.5 1z"></path></svg>
               Settings
-              <span v-if="activeDownloadCount > 0" class="sidebar-badge" style="margin-left: auto;">
+              <span
+                v-if="isAdmin && activeDownloadCount > 0"
+                class="sidebar-badge"
+                style="margin-left: auto;"
+                :title="pausedTotal > 0 ? `${pausedTotal} more waiting on paused sources` : undefined"
+              >
                 {{ activeDownloadCount }}
               </span>
             </NuxtLink>
-            <button @click="handleLogout" class="dropdown-item logout-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <p v-if="isAdmin && pausedTotal > 0" class="dropdown-note" role="presentation">+{{ pausedTotal }} waiting on paused sources</p>
+            <button type="button" class="dropdown-item logout-btn" role="menuitem" tabindex="-1" @click="handleLogout">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
               Log out
             </button>
           </div>
         </div>
+        <NuxtLink v-else-if="!authLoading && route.path !== '/login'" :to="loginTarget" class="btn btn-primary header-login" data-testid="header-login">
+          Log in
+        </NuxtLink>
       </div>
     </header>
 
@@ -123,19 +158,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
+import { useActiveCounts, startActiveCountsPolling } from '~/composables/useActiveCounts';
 import { spaces } from '~/spaces';
 import { searchPlaceholder } from '~/utils/searchPlaceholder';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
 import { shouldApplyLanding } from '~/utils/displayPrefs';
 import { buildSidebarGroups } from '~/utils/sidebarGroups';
 
-const { user, isAdmin, logout } = useAuth();
+const { user, isAdmin, logout, loading: authLoading } = useAuth();
 const displayPrefs = useDisplayPrefs();
 useHead({ htmlAttrs: { 'data-density': computed(() => displayPrefs.effective.value.density) } });
 const { toasts, removeToast } = useToast();
@@ -270,19 +306,82 @@ watch(() => route.query.q, (newVal) => {
   searchQuery.value = newVal ? String(newVal) : '';
 });
 
-const toggleDropdown = () => {
-  dropdownOpen.value = !dropdownOpen.value;
+// Header account menu: a real button + role="menu", operable with the
+// keyboard (Enter/Space/ArrowDown open it on the first item, ArrowUp on the
+// last, arrows/Home/End move, Escape closes and returns to the button, Tab
+// leaves it).
+const userMenuEl = ref<HTMLElement | null>(null);
+const userMenuBtn = ref<HTMLButtonElement | null>(null);
+const userMenuList = ref<HTMLElement | null>(null);
+
+const menuItems = () => Array.from(userMenuList.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []);
+
+async function openDropdown(focus: 'first' | 'last' | null) {
+  dropdownOpen.value = true;
+  if (!focus) return;
+  await nextTick();
+  const items = menuItems();
+  (focus === 'first' ? items[0] : items[items.length - 1])?.focus();
+}
+
+const toggleDropdown = (e?: MouseEvent) => {
+  if (dropdownOpen.value) {
+    closeDropdown();
+    return;
+  }
+  // A keyboard "click" (Enter/Space: detail 0) lands on the first item.
+  openDropdown(e && e.detail === 0 ? 'first' : null);
 };
 
 // Close dropdown if clicked outside
-const closeDropdown = () => {
+const closeDropdown = (refocus = false) => {
+  const wasOpen = dropdownOpen.value;
   dropdownOpen.value = false;
+  if (refocus && wasOpen) userMenuBtn.value?.focus();
 };
+
+function onUserMenuKeydown(e: KeyboardEvent) {
+  const onButton = e.target === userMenuBtn.value;
+  if (e.key === 'Escape') {
+    if (dropdownOpen.value) {
+      e.preventDefault();
+      closeDropdown(true);
+    }
+    return;
+  }
+  if (e.key === 'Tab') {
+    closeDropdown();
+    return;
+  }
+  if (!dropdownOpen.value) {
+    if (onButton && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      openDropdown(e.key === 'ArrowDown' ? 'first' : 'last');
+    }
+    return;
+  }
+  const items = menuItems();
+  if (items.length === 0) return;
+  const current = items.indexOf(document.activeElement as HTMLElement);
+  let next = -1;
+  if (e.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length;
+  else if (e.key === 'ArrowUp') next = current <= 0 ? items.length - 1 : current - 1;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = items.length - 1;
+  if (next >= 0) {
+    e.preventDefault();
+    items[next]!.focus();
+  }
+}
+
+// Guests: a visible way in, back to this page afterwards.
+const loginTarget = computed(() => ({ path: '/login', query: route.path === '/' ? {} : { redirect: route.fullPath } }));
+const closeDropdownOnOutsideClick = () => closeDropdown();
 onMounted(() => {
-  window.addEventListener('click', closeDropdown);
+  window.addEventListener('click', closeDropdownOnOutsideClick);
 });
 onUnmounted(() => {
-  window.removeEventListener('click', closeDropdown);
+  window.removeEventListener('click', closeDropdownOnOutsideClick);
 });
 
 const contentSearchMode = ref('per_space');
@@ -308,30 +407,27 @@ const handleSearch = () => {
   router.push({ path: activeSpace.value.homeRoute, query: { ...route.query, q: term || undefined, page: undefined, artistId: undefined, showId: undefined } });
 };
 
-const activeDownloadCount = ref(0);
-const activeDownloadProgress = ref<number | null>(null);
-const activeDownloadSpeed = ref<string | null>(null);
-let downloadCountInterval: any = null;
+// Downloading + queued (pickable) items, from the one shared poll of the
+// active counts (also read by Settings); items of paused sources apart.
+const { counts: activeCounts, pausedTotal } = useActiveCounts();
+const activeDownloadCount = computed(() => activeCounts.value?.total || 0);
+let releaseActiveCounts: (() => void) | null = null;
 
-const fetchActiveDownloads = async () => {
-  if (!isAdmin.value) return;
-  try {
-    const data = await $fetch<any>('/api/admin/downloader/active-counts');
-    activeDownloadCount.value = data.total || 0;
-    activeDownloadProgress.value = data.current?.kind ? (data.current.progress ?? 0) : null;
-    activeDownloadSpeed.value = data.current?.speed || null;
-  } catch (e) {
-    // Silently fail — not critical
+watch(isAdmin, (admin) => {
+  if (!import.meta.client) return;
+  if (admin && !releaseActiveCounts) releaseActiveCounts = startActiveCountsPolling();
+  if (!admin && releaseActiveCounts) {
+    releaseActiveCounts();
+    releaseActiveCounts = null;
   }
-};
+});
 
 const handleLogout = async () => {
   await logout();
 };
 
 onMounted(() => {
-  fetchActiveDownloads();
-  downloadCountInterval = setInterval(fetchActiveDownloads, 5000);
+  if (isAdmin.value) releaseActiveCounts = startActiveCountsPolling();
   refreshModules();
   if (shouldApplyLanding(route.path, route.query)) {
     useLanding().consumeLandingTarget().then((target) => {
@@ -341,7 +437,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (downloadCountInterval) clearInterval(downloadCountInterval);
+  releaseActiveCounts?.();
+  releaseActiveCounts = null;
 });
 </script>
 
@@ -454,6 +551,11 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
+.search-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .search-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
@@ -510,6 +612,11 @@ onUnmounted(() => {
 }
 
 .search-dropdown-clear {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
   padding: 8px 16px;
   text-align: center;
   font-size: 13px;
@@ -522,8 +629,32 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.user-menu-wrapper {
+  position: relative;
+  min-width: 0;
+}
+
+.header-login {
+  padding: 8px 18px;
+  font-size: 14px;
+}
+
+.dropdown-note {
+  margin: 0;
+  padding: 0 20px 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.user-menu:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .user-menu {
   position: relative;
+  color: inherit;
+  font: inherit;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -634,6 +765,10 @@ onUnmounted(() => {
 
 .dropdown-item {
   width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: inherit;
   padding: 12px 20px;
   display: flex;
   align-items: center;
@@ -643,6 +778,12 @@ onUnmounted(() => {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
+}
+
+.dropdown-item:focus-visible {
+  outline: none;
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--text-primary);
 }
 
 .dropdown-item:hover {
@@ -726,6 +867,13 @@ onUnmounted(() => {
   }
   .search-form {
     width: 200px;
+  }
+  /* The input is narrow here: the suggestions use the width of the screen. */
+  .search-dropdown {
+    position: fixed;
+    top: calc(var(--header-height) - 4px);
+    left: 8px;
+    right: 8px;
   }
 }
 
