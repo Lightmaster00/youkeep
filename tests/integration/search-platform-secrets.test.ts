@@ -90,7 +90,10 @@ describe('API keys are never logged', () => {
       const full = `${url}?part=snippet&q=x&key=${opts?.params?.key ?? ''}`;
       throw new Error(`[GET] "${full}": <no response> fetch failed`);
     });
-    await expect(searchChannels(mockEvent(sessionCookie('s-a1'), { path: '/?q=x' }))).rejects.toBeTruthy();
+    const err: any = await searchChannels(mockEvent(sessionCookie('s-a1'), { path: '/?q=x' })).then(() => null, (e) => e);
+    expect(err).toBeTruthy();
+    expect(err.statusCode).toBe(502);
+    expect(String(err.statusMessage ?? err.message)).not.toContain(KEY);
     expect(logged.length).toBeGreaterThan(0);
     expect(logged.join('\n')).not.toContain(KEY);
   });
