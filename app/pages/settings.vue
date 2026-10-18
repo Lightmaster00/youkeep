@@ -4,30 +4,39 @@
 
     <div class="settings-layout">
       <!-- Tabs Sidebar -->
-      <div v-if="isAdmin" class="settings-tabs glass-panel">
+      <div
+        v-if="isAdmin"
+        ref="tabsEl"
+        class="settings-tabs glass-panel"
+        :class="{ 'fade-start': tabsFadeStart, 'fade-end': tabsFadeEnd }"
+        role="tablist"
+        aria-label="Settings sections"
+        data-testid="settings-tabs"
+        @scroll.passive="updateTabsFade"
+      >
         <template v-if="showTabs">
-          <button class="tab-btn" :class="{ active: activeTab === 'overview' }" data-testid="settings-tab-overview" @click="selectTab('overview')">
+          <button type="button" role="tab" class="tab-btn" :class="{ active: activeTab === 'overview' }" :aria-selected="activeTab === 'overview' ? 'true' : 'false'" data-testid="settings-tab-overview" @click="selectTab('overview')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
             <span>Overview</span>
           </button>
 
-          <button class="tab-btn" :class="{ active: activeTab === 'library' }" data-testid="settings-tab-library" @click="selectTab('library')">
+          <button type="button" role="tab" class="tab-btn" :class="{ active: activeTab === 'library' }" :aria-selected="activeTab === 'library' ? 'true' : 'false'" data-testid="settings-tab-library" @click="selectTab('library')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
             <span>Library</span>
           </button>
 
-          <button class="tab-btn" :class="{ active: activeTab === 'downloads' }" data-testid="settings-tab-downloads" @click="selectTab('downloads')">
+          <button type="button" role="tab" class="tab-btn" :class="{ active: activeTab === 'downloads' }" :aria-selected="activeTab === 'downloads' ? 'true' : 'false'" data-testid="settings-tab-downloads" @click="selectTab('downloads')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <span>Downloads</span>
             <span v-if="downloadingTotal > 0" class="tab-badge" data-testid="downloads-tab-badge">{{ downloadingTotal }}</span>
           </button>
 
-          <button class="tab-btn" :class="{ active: activeTab === 'users' }" data-testid="settings-tab-users" @click="selectTab('users')">
+          <button type="button" role="tab" class="tab-btn" :class="{ active: activeTab === 'users' }" :aria-selected="activeTab === 'users' ? 'true' : 'false'" data-testid="settings-tab-users" @click="selectTab('users')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             <span>Users</span>
           </button>
 
-          <button class="tab-btn" :class="{ active: activeTab === 'system' }" data-testid="settings-tab-system" @click="selectTab('system')">
+          <button type="button" role="tab" class="tab-btn" :class="{ active: activeTab === 'system' }" :aria-selected="activeTab === 'system' ? 'true' : 'false'" data-testid="settings-tab-system" @click="selectTab('system')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
             <span>System</span>
           </button>
@@ -47,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useActiveCounts, startActiveCountsPolling } from '~/composables/useActiveCounts';
 import { normalizeSettingsTab, type SettingsTab, type LibrarySection } from '~/utils/settingsTabs';
@@ -75,6 +84,39 @@ watch(() => [route.query.tab, route.query.section], () => {
   activeTab.value = next.tab;
   librarySection.value = next.section;
 });
+
+// On narrow screens the tabs scroll sideways: fades show there is more on
+// either side, and the active tab is scrolled into view.
+const tabsEl = ref<HTMLElement | null>(null);
+const tabsFadeStart = ref(false);
+const tabsFadeEnd = ref(false);
+
+function updateTabsFade() {
+  const el = tabsEl.value;
+  if (!el) return;
+  const max = el.scrollWidth - el.clientWidth;
+  tabsFadeStart.value = max > 1 && el.scrollLeft > 1;
+  tabsFadeEnd.value = max > 1 && el.scrollLeft < max - 1;
+}
+
+async function revealActiveTab() {
+  await nextTick();
+  const el = tabsEl.value;
+  const active = el?.querySelector<HTMLElement>('.tab-btn.active');
+  if (el && active && el.scrollWidth > el.clientWidth) {
+    const left = active.offsetLeft - el.offsetLeft;
+    const target = left - (el.clientWidth - active.offsetWidth) / 2;
+    el.scrollTo?.({ left: Math.max(0, target), behavior: 'smooth' });
+  }
+  updateTabsFade();
+}
+
+watch(activeTab, revealActiveTab);
+onMounted(() => {
+  revealActiveTab();
+  window.addEventListener('resize', updateTabsFade, { passive: true });
+});
+onUnmounted(() => window.removeEventListener('resize', updateTabsFade));
 
 function selectTab(tab: SettingsTab) {
   activeTab.value = tab;
@@ -137,6 +179,26 @@ onUnmounted(() => {
     overflow-x: auto;
     white-space: nowrap;
     padding: 8px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+  .settings-container .settings-tabs .tab-btn {
+    width: auto;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+  }
+  /* Fades on the sides that have more tabs to scroll to. */
+  .settings-container .settings-tabs.fade-end {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  }
+  .settings-container .settings-tabs.fade-start {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+  }
+  .settings-container .settings-tabs.fade-start.fade-end {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
   }
 }
 

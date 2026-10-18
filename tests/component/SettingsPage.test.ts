@@ -106,4 +106,22 @@ describe('settings page shell', () => {
     await vi.advanceTimersByTimeAsync(20000);
     expect(countsCalls()).toBe(0);
   });
+
+  it('marks the tab strip as scrollable with a fade and exposes tabs (#39)', async () => {
+    const w = await mountPage({ tab: 'system' });
+    const strip = w.find('[data-testid="settings-tabs"]');
+    expect(strip.attributes('role')).toBe('tablist');
+    expect(w.find('[data-testid="settings-tab-system"]').attributes('aria-selected')).toBe('true');
+    const el = strip.element as HTMLElement;
+    Object.defineProperty(el, 'scrollWidth', { configurable: true, value: 600 });
+    Object.defineProperty(el, 'clientWidth', { configurable: true, value: 300 });
+    el.scrollLeft = 0;
+    await strip.trigger('scroll');
+    expect(strip.classes()).toContain('fade-end');
+    expect(strip.classes()).not.toContain('fade-start');
+    el.scrollLeft = 300;
+    await strip.trigger('scroll');
+    expect(strip.classes()).toContain('fade-start');
+    expect(strip.classes()).not.toContain('fade-end');
+  });
 });
