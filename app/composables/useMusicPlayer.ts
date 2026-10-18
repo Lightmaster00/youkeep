@@ -209,6 +209,10 @@ export function useMusicPlayer() {
 
   function recordPlayIfThresholdReached() {
     if (hasCountedThisPlay.value || !currentTrack.value) return;
+    // Only while the user is actually listening: a track restored (paused) on
+    // page load sets its saved position, whose timeupdate must never count as
+    // a play.
+    if (!isPlaying.value || !audioEl.value || audioEl.value.paused) return;
     const dur = duration.value || currentTrack.value.duration || 0;
     if (dur <= 0) return;
     const threshold = Math.min(30, dur * 0.5);

@@ -58,4 +58,29 @@ describe('music mini-player restore', () => {
     expect(useToast().toasts.value.map((t) => t.message)).toContain('Error playing audio.');
     expect(window.localStorage.getItem('music_player_state')).not.toBeNull();
   });
+
+  it('never records a play for a restored, paused track (#10)', async () => {
+    window.localStorage.setItem('music_player_state', JSON.stringify({ ...saved, currentTime: 95 }));
+    const w = await mountPlayer();
+    const audio = w.find('video').element as HTMLVideoElement;
+    Object.defineProperty(audio, 'duration', { value: 200, configurable: true });
+    Object.defineProperty(audio, 'paused', { value: true, configurable: true });
+    audio.dispatchEvent(new Event('loadedmetadata'));
+    audio.currentTime = 95;
+    audio.dispatchEvent(new Event('timeupdate'));
+    await flushPromises();
+    const plays = () => (globalThis as any).$fetch.mock.calls.filter(([u]: [string]) => u.endsWith('/play'));
+    expect(plays()).toHaveLength(0);
+
+    // Once the user presses play, the usual threshold applies.
+    Object.defineProperty(audio, 'paused', { value: false, configurable: true });
+    audio.play = vi.fn(async () => undefined) as any;
+    useMusicPlayer().togglePlay();
+    await flushPromises();
+    audio.dispatchEvent(new Event('play'));
+    audio.dispatchEvent(new Event('timeupdate'));
+    await flushPromises();
+    expect(plays()).toHaveLength(1);
+    expect(plays()[0][0]).toBe('/api/music/tracks/t1/play');
+  });
 });
