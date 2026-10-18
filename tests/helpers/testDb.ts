@@ -23,7 +23,9 @@ export function assertInTmp(p: string): void {
 }
 
 // Minimal schema mirroring server/utils/db.ts — only the tables/columns the
-// access-control logic under test actually touches.
+// logic under test touches. Every table and column here must match the real
+// schema (NOT NULL, default, type): tests/integration/schema-parity.test.ts
+// checks it, so a default that differs cannot hide a bug.
 export function createTestDb(): Database.Database {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = ON');
@@ -86,10 +88,10 @@ export function createTestDb(): Database.Database {
       channel_id TEXT NOT NULL,
       visibility TEXT DEFAULT 'public',
       share_token TEXT,
-      download_status TEXT DEFAULT 'completed',
+      download_status TEXT NOT NULL,
       upload_date TEXT,
       duration INTEGER,
-      view_count INTEGER DEFAULT 0,
+      view_count INTEGER,
       is_short INTEGER DEFAULT 0,
       was_live INTEGER DEFAULT 0,
       download_progress INTEGER DEFAULT 0,
@@ -153,7 +155,7 @@ export function createTestDb(): Database.Database {
       title TEXT NOT NULL,
       release_year INTEGER,
       cover_url TEXT,
-      source TEXT NOT NULL DEFAULT 'youtube',
+      source TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       external_id TEXT,
       album_type TEXT,
@@ -173,7 +175,7 @@ export function createTestDb(): Database.Database {
       duration INTEGER,
       view_count INTEGER,
       upload_date TEXT,
-      download_status TEXT DEFAULT 'completed',
+      download_status TEXT DEFAULT 'pending',
       download_progress INTEGER DEFAULT 0,
       download_speed TEXT,
       download_eta TEXT,
@@ -193,7 +195,7 @@ export function createTestDb(): Database.Database {
     CREATE TABLE music_track_artists (
       track_id TEXT NOT NULL,
       artist_id TEXT NOT NULL,
-      role TEXT,
+      role TEXT NOT NULL,
       PRIMARY KEY (track_id, artist_id),
       FOREIGN KEY (track_id) REFERENCES music_tracks(id) ON DELETE CASCADE
     );
