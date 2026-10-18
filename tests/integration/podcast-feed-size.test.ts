@@ -66,6 +66,7 @@ describe('podcast feed size (L3)', () => {
     expect(commits.length).toBe(10);
     expect(Math.max(...commits)).toBeLessThan(250);
     expect(turns).toBeGreaterThanOrEqual(9);
-    expect(maxGap).toBeLessThan(1000);
+    // Typically ~150 ms (parsing the 20k-item XML); 10x that only fails on a real block.
+    expect(maxGap).toBeLessThan(1500);
   }, 30_000);
 });

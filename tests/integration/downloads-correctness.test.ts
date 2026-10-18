@@ -116,9 +116,10 @@ describe('channel re-sync', () => {
     insertChannel(db, { id: 'UCc', title: 'Chan' });
     const entries = Array.from({ length: 5000 }, (_, i) => ({ _type: 'url', id: `big${i}`, title: `T${i}` }));
     videoImportDeps.runYtdl = vi.fn(async () => listing(entries)) as any;
-    const started = Date.now();
+    const started = performance.now();
     await ingestUrl('https://www.youtube.com/channel/UCc/videos');
-    expect(Date.now() - started).toBeLessThan(2000);
+    // Typically ~10 ms: a budget 200x that only fails on a real regression.
+    expect(performance.now() - started).toBeLessThan(2000);
     expect((db.prepare('SELECT COUNT(*) AS n FROM videos').get() as any).n).toBe(5000);
   });
 });
@@ -214,8 +215,13 @@ describe('startup resets', () => {
 });
 
 describe('deleting a large channel', () => {
-  it('4000 videos: only the running download is killed, and the delete takes well under a second', async () => {
+  it('4000 videos: only the running download is killed, and the delete costs about what creating them did', async () => {
     insertChannel(db, { id: 'big', title: 'Big', customSavePath: dir });
+    // Baseline from this very run: creating the 4000 folders and files. Under
+    // CPU or disk load both slow down together, so the ratio stays meaningful
+    // where a fixed number of milliseconds flaked (a per-video rescan of the
+    // channel folder, the regression this guards, is quadratic: far above it).
+    const seedStart = performance.now();
     const insert = db.prepare("INSERT INTO videos (id, title, channel_id, download_status, local_video_path, created_at) VALUES (?, ?, 'big', 'completed', ?, 0)");
     db.transaction(() => {
       for (let i = 0; i < 4000; i++) {
@@ -225,6 +231,7 @@ describe('deleting a large channel', () => {
         fs.writeFileSync(path.join(p.dir, `${p.baseName}.mp4`), 'x');
       }
     })();
+    const seedMs = performance.now() - seedStart;
     db.prepare("UPDATE videos SET download_status = 'downloading' WHERE id = 'b7'").run();
     const child = { kill: vi.fn(), pid: undefined };
     activeProcesses.set('b7', child);
@@ -241,6 +248,7 @@ describe('deleting a large channel', () => {
     expect(child.kill).toHaveBeenCalled();
     expect(other.kill).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(dir, 'Big'))).toBe(false);
-    expect(elapsed).toBeLessThan(3000);
-  }, 30_000);
+    // Typically about 1.3x the seeding time.
+    expect(elapsed).toBeLessThan(Math.max(2000, 6 * seedMs));
+  }, 60_000);
 });

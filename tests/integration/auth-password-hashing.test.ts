@@ -7,6 +7,10 @@ import { setPasswordWorkerDisabledForTests, isPasswordWorkerActive, crashPasswor
 import { resetAllLoginAttempts } from '../../server/utils/rateLimit';
 import { createTestDb, insertUser, mockEvent } from '../helpers/testDb';
 
+// Real bcrypt (cost 10) compares, dozens per test: seconds when 3 suites share
+// the CPU, so the 5 s default timeout is too tight for a loaded machine.
+vi.setConfig({ testTimeout: 30_000 });
+
 let db: Database.Database;
 
 beforeEach(() => {
