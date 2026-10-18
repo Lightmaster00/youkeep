@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
@@ -88,17 +88,34 @@ const { isEnabled } = useModules();
 const { play: playMusicTrack } = useMusicPlayer();
 const { play: playPodcastEpisode } = usePodcastPlayer();
 
-const videos = ref<any[]>([]);
-const videosPending = ref(false);
-const videosError = ref(false);
+// One useAsyncData per section, through useRequestFetch: the SSR render
+// carries the viewer's cookies (private results included) and hydrates as is.
+const requestFetch = useRequestFetch();
+const seed = useFeedSeed();
+const section = (key: string, enabled: () => boolean, load: () => Promise<any[]>) => useAsyncData<any[]>(
+  () => `search-${key}:${query.value}`,
+  () => (query.value && enabled() ? load() : Promise.resolve([])),
+  { default: () => [] },
+);
 
-const tracks = ref<any[]>([]);
-const tracksPending = ref(false);
-const tracksError = ref(false);
+const [videosState, tracksState, episodesState] = await Promise.all([
+  section('videos', () => isEnabled('video'), async () =>
+    ((await requestFetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 10, seed } }))?.videos || [])),
+  section('tracks', () => isEnabled('music'), async () =>
+    ((await requestFetch<any>('/api/music/tracks/search', { params: { q: query.value } }))?.tracks || []).slice(0, 10)),
+  section('episodes', () => isEnabled('podcasts'), async () =>
+    ((await requestFetch<any>('/api/podcasts/episodes/search', { params: { q: query.value } }))?.episodes || []).slice(0, 10)),
+]);
 
-const episodes = ref<any[]>([]);
-const episodesPending = ref(false);
-const episodesError = ref(false);
+const videos = computed(() => videosState.data.value || []);
+const videosPending = computed(() => videosState.pending.value);
+const videosError = computed(() => !!videosState.error.value);
+const tracks = computed(() => tracksState.data.value || []);
+const tracksPending = computed(() => tracksState.pending.value);
+const tracksError = computed(() => !!tracksState.error.value);
+const episodes = computed(() => episodesState.data.value || []);
+const episodesPending = computed(() => episodesState.pending.value);
+const episodesError = computed(() => !!episodesState.error.value);
 
 function playTrack(track: any) {
   playMusicTrack(track, tracks.value);
@@ -116,62 +133,6 @@ function playEpisode(ep: any) {
   });
 }
 
-async function fetchVideos() {
-  videosPending.value = true;
-  videosError.value = false;
-  try {
-    const data = await $fetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 10, seed: getFeedSeed() } });
-    videos.value = data.videos || [];
-  } catch (e) {
-    videos.value = [];
-    videosError.value = true;
-  } finally {
-    videosPending.value = false;
-  }
-}
-
-async function fetchTracks() {
-  tracksPending.value = true;
-  tracksError.value = false;
-  try {
-    const data = await $fetch<any>('/api/music/tracks/search', { params: { q: query.value } });
-    tracks.value = (data.tracks || []).slice(0, 10);
-  } catch (e) {
-    tracks.value = [];
-    tracksError.value = true;
-  } finally {
-    tracksPending.value = false;
-  }
-}
-
-async function fetchEpisodes() {
-  episodesPending.value = true;
-  episodesError.value = false;
-  try {
-    const data = await $fetch<any>('/api/podcasts/episodes/search', { params: { q: query.value } });
-    episodes.value = (data.episodes || []).slice(0, 10);
-  } catch (e) {
-    episodes.value = [];
-    episodesError.value = true;
-  } finally {
-    episodesPending.value = false;
-  }
-}
-
-function fetchAll() {
-  if (!query.value) {
-    videos.value = [];
-    tracks.value = [];
-    episodes.value = [];
-    return;
-  }
-  // Independent fetches: one section's failure must not block the others.
-  if (isEnabled('video')) fetchVideos();
-  if (isEnabled('music')) fetchTracks();
-  if (isEnabled('podcasts')) fetchEpisodes();
-}
-
-watch(query, fetchAll, { immediate: true });
 </script>
 
 <style scoped>
