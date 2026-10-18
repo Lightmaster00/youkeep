@@ -86,8 +86,8 @@ describe('settings page shell', () => {
     expect(w.find('[data-testid="downloads-tab-badge"]').text()).toBe('3');
   });
 
-  it('polls the badge for admins and stops on unmount', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  it('polls the badge for admins (one shared loop) and stops on unmount', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     await mountPage();
     const before = countsCalls();
     expect(before).toBeGreaterThan(0);
@@ -100,7 +100,7 @@ describe('settings page shell', () => {
   });
 
   it('starts no polling for non-admins', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
     setRole('user');
     await mountPage();
     await vi.advanceTimersByTimeAsync(20000);

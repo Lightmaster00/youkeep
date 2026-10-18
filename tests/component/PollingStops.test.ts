@@ -84,4 +84,28 @@ describe('createPoller', () => {
     expect(vi.getTimerCount()).toBe(0);
     poller.stop();
   });
+
+  it('pauses while the browser tab is hidden and resumes when it is shown (#29)', async () => {
+    vi.useFakeTimers();
+    let hidden = false;
+    const spy = vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => (hidden ? 'hidden' : 'visible'));
+    const task = vi.fn(async () => {});
+    const p = createPoller(task, () => 1000);
+    p.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(1);
+    hidden = true;
+    await vi.advanceTimersByTimeAsync(10_000);
+    // The run due while hidden is skipped and nothing re-arms.
+    expect(task).toHaveBeenCalledTimes(1);
+    hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(task).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(task).toHaveBeenCalledTimes(3);
+    p.stop();
+    spy.mockRestore();
+    vi.useRealTimers();
+  });
 });

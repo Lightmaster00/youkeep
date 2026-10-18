@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
-import { useActiveCounts } from '~/composables/useActiveCounts';
+import { useActiveCounts, startActiveCountsPolling } from '~/composables/useActiveCounts';
 import { normalizeSettingsTab, type SettingsTab, type LibrarySection } from '~/utils/settingsTabs';
 import LibraryTab from '~/components/settings/LibraryTab.vue';
 import DownloadsTab from '~/components/settings/DownloadsTab.vue';
@@ -84,18 +84,18 @@ function selectTab(tab: SettingsTab) {
 
 // Badge on the Downloads tab and the Overview Activity card. The queue itself
 // is polled only by the Downloads tab (one loop, see useAllDownloads).
-const { downloadingTotal, fetchActiveCounts } = useActiveCounts();
-let activeCountsTimer: ReturnType<typeof setInterval> | null = null;
+// One shared loop with the layout's badge (startActiveCountsPolling), not a
+// second interval of its own.
+const { downloadingTotal } = useActiveCounts();
+let releaseActiveCounts: (() => void) | null = null;
 
 onMounted(() => {
-  if (isAdmin.value) {
-    fetchActiveCounts();
-    activeCountsTimer = setInterval(fetchActiveCounts, 5000);
-  }
+  if (isAdmin.value) releaseActiveCounts = startActiveCountsPolling();
 });
 
 onUnmounted(() => {
-  if (activeCountsTimer) clearInterval(activeCountsTimer);
+  releaseActiveCounts?.();
+  releaseActiveCounts = null;
 });
 </script>
 
