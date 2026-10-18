@@ -25,6 +25,8 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   useState('auth_loading').value = false;
   useState('auth_user').value = null;
+  useState('modules').value = { video: true, music: true, podcasts: true };
+  useState('modules_loaded').value = true;
   fetchMock = vi.fn(async (url: string) => {
     if (url === '/api/modules') return { modules: { video: true, music: true, podcasts: true } };
     if (url === '/api/auth/login') return { success: true, user: { id: 'u1', username: 'bob', role: 'user' } };
@@ -58,6 +60,53 @@ describe('auth middleware', () => {
     for (const bad of ['//evil.com', '/\\evil', 'https://x']) {
       expect(await runMiddleware(`/login?redirect=${encodeURIComponent(bad)}`)).toBe('/');
     }
+  });
+});
+
+describe('auth middleware: public pages, admin pages and disabled modules', () => {
+  const asUser = (role: 'admin' | 'user') => { useState('auth_user').value = { id: 'u1', username: 'bob', role }; };
+
+  it.each(['/', '/channels', '/shorts', '/watch/abc123', '/watch/abc123?t=10', '/login'])('a guest may open %s', async (p) => {
+    expect(await runMiddleware(p)).toBeUndefined();
+  });
+
+  it.each(['/watch', '/history', '/subscriptions', '/account', '/admin', '/music', '/podcasts'])('a guest is sent to /login from %s', async (p) => {
+    const r: any = await runMiddleware(p);
+    expect(r === '/login' || r?.path === '/login').toBe(true);
+  });
+
+  it.each(['/admin', '/admin/users', '/administrator'])('a member is sent home from %s', async (p) => {
+    asUser('user');
+    expect(await runMiddleware(p)).toBe('/');
+  });
+
+  it('an admin may open /admin pages', async () => {
+    asUser('admin');
+    expect(await runMiddleware('/admin')).toBeUndefined();
+    expect(await runMiddleware('/admin/users')).toBeUndefined();
+  });
+
+  it("a member is sent to the first enabled module's home from a disabled module's page", async () => {
+    useState('modules').value = { video: false, music: true, podcasts: true };
+    asUser('user');
+    expect(await runMiddleware('/channels/c1')).toBe('/music');
+    expect(await runMiddleware('/watch/abc')).toBe('/music');
+    expect(await runMiddleware('/music/artists')).toBeUndefined();
+    // Cross-module pages belong to no module.
+    expect(await runMiddleware('/account')).toBeUndefined();
+  });
+
+  it('an admin still reaches a disabled module', async () => {
+    useState('modules').value = { video: false, music: true, podcasts: true };
+    asUser('admin');
+    expect(await runMiddleware('/channels/c1')).toBeUndefined();
+  });
+
+  it('a guest on a disabled module page is redirected too', async () => {
+    useState('modules').value = { video: true, music: false, podcasts: true };
+    expect(await runMiddleware('/shorts')).toBeUndefined();
+    useState('modules').value = { video: false, music: true, podcasts: true };
+    expect(await runMiddleware('/shorts')).toBe('/music');
   });
 });
 
