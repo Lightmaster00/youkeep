@@ -45,6 +45,7 @@ definePageMeta({ key: (route) => route.fullPath });
 
 const route = useRoute();
 const name = computed(() => String(route.params.name ?? ''));
+useHead({ title: computed(() => name.value || 'Genre') });
 const { items, total, loading, error, loaded, hasMore, loadMore } = useRecentList(
   `/api/music/genres/${encodeURIComponent(name.value)}/tracks`,
   'tracks'

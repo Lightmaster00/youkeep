@@ -178,6 +178,8 @@ import { useToast } from '~/composables/useToast';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 
+useHead({ title: 'Shorts' });
+
 interface Video {
   id: string;
   title: string;

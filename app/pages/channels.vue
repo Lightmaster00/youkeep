@@ -81,6 +81,7 @@ import ChannelSettingsDrawer from '~/components/channels/ChannelSettingsDrawer.v
 const router = useRouter();
 
 const { channelId, channel, channelNotFound, singleChannelData, refreshSingleChannel } = await useChannelDetail();
+useHead({ title: computed(() => channel.value?.title || (channelNotFound.value ? 'Channel not found' : 'Channels')) });
 
 // The tab lives in the URL (?tab=), so reload and Back keep it.
 const route = useRoute();

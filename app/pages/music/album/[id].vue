@@ -80,6 +80,7 @@ const { isAdmin } = useAuth();
 const { playAll, shuffleAll, playFrom, currentTrack } = usePlayTrackList();
 
 const album = ref<any>(null);
+useHead({ title: computed(() => album.value?.title || 'Album') });
 const tracks = ref<any[]>([]);
 const pending = ref(true);
 const failed = ref(false);

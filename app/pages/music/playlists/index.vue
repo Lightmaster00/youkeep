@@ -64,6 +64,8 @@ import { ref, nextTick, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { PLAYLIST_TITLE_MAX, PLAYLIST_DESCRIPTION_MAX } from '#shared/musicPlaylists';
 
+useHead({ title: 'Music playlists' });
+
 interface PlaylistEntry { id: string; title: string; trackCount: number; coverUrls: string[] }
 
 const toast = useToast();

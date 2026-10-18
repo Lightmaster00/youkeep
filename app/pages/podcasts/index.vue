@@ -239,6 +239,7 @@ watch(
 
 // --- Detail view state ---
 const show = ref<any>(null);
+useHead({ title: computed(() => show.value?.title || 'Podcasts') });
 const episodes = ref<any[]>([]);
 const episodesTotal = ref(0);
 const episodesLoading = ref(false);

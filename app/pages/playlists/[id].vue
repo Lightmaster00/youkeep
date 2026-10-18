@@ -184,6 +184,7 @@ const { user, isAdmin } = useAuth();
 const toast = useToast();
 
 const playlist = ref<any>(null);
+useHead({ title: computed(() => playlist.value?.title || 'Playlist') });
 const videos = ref<any[]>([]);
 const pending = ref(true);
 const error = ref<string | null>(null);

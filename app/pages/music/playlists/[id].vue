@@ -137,6 +137,7 @@ const { playAll, shuffleAll, playFrom, currentTrack } = usePlayTrackList();
 
 const id = computed(() => String(route.params.id || ''));
 const playlist = ref<PlaylistInfo | null>(null);
+useHead({ title: computed(() => playlist.value?.title || 'Playlist') });
 const tracks = ref<any[]>([]);
 const pending = ref(true);
 const notFound = ref(false);

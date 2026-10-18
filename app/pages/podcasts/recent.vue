@@ -36,6 +36,8 @@ import { onMounted } from 'vue';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useRecentList } from '~/composables/useRecentList';
 
+useHead({ title: 'New episodes' });
+
 const { currentEpisode, play: playPodcastEpisode } = usePodcastPlayer();
 const { items, loading, error, loaded, hasMore, loadMore } = useRecentList('/api/podcasts/episodes/recent', 'episodes');
 

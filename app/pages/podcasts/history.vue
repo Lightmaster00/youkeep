@@ -80,6 +80,8 @@ import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { usePodcastProgress } from '~/composables/usePodcastProgress';
 import { toPlayableEpisode } from '~/utils/playableEpisode';
 
+useHead({ title: 'Podcast history' });
+
 // The logged-in user's started or played episodes, most recently listened
 // first, grouped by day. Removing one also drops its resume position (the
 // history is the progress itself).

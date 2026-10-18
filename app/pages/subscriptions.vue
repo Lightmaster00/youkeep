@@ -75,6 +75,8 @@ import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
+useHead({ title: 'Subscriptions' });
+
 const router = useRouter();
 
 const handleAvatarError = (event: Event) => {

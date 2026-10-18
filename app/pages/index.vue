@@ -169,6 +169,7 @@ const route = useRoute();
 const router = useRouter();
 
 const searchQuery = computed(() => route.query.q ? String(route.query.q) : '');
+useHead({ title: computed(() => (searchQuery.value ? `Search: ${searchQuery.value}` : 'Home')) });
 const page = computed(() => route.query.page ? parseInt(String(route.query.page), 10) : 1);
 
 const allVideos = ref<any[]>([]);

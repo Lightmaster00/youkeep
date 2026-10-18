@@ -36,6 +36,8 @@ import { onMounted } from 'vue';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useRecentList } from '~/composables/useRecentList';
 
+useHead({ title: 'Recently added music' });
+
 const { currentTrack, play: playMusicTrack } = useMusicPlayer();
 const { items, loading, error, loaded, hasMore, loadMore } = useRecentList('/api/music/playlists/recently-added', 'tracks');
 

@@ -45,6 +45,8 @@ import { useMusicDiscover } from '~/composables/useMusicDiscover';
 import { usePlayTrackList } from '~/composables/usePlayTrackList';
 import { useToast } from '~/composables/useToast';
 
+useHead({ title: 'Discover music' });
+
 // Music Discover: personal mixes and artists to explore (logged in), genres
 // and new albums (everyone). Empty rows are left out.
 const { user } = useAuth();

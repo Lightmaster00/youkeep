@@ -43,6 +43,8 @@ import { useRecentList } from '~/composables/useRecentList';
 import { useMusicLikes } from '~/composables/useMusicLikes';
 import { usePlayTrackList } from '~/composables/usePlayTrackList';
 
+useHead({ title: 'Liked songs' });
+
 const { items, total, loading, error, loaded, hasMore, loadMore } = useRecentList('/api/music/favorites', 'items');
 const likes = useMusicLikes();
 const { playAll, shuffleAll, playFrom, currentTrack } = usePlayTrackList();

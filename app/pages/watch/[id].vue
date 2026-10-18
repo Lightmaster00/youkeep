@@ -417,6 +417,7 @@ const { data: videoResponse, pending, error, refresh: refreshVideo } = await use
   return `/api/videos/${videoId.value}${token.value ? `?token=${token.value}` : ''}`;
 });
 const video = computed(() => videoResponse.value?.video || null);
+useHead({ title: computed(() => video.value?.title || (error.value ? 'Video not found' : 'Video')) });
 const comments = computed(() => videoResponse.value?.comments || []);
 const subtitles = computed(() => videoResponse.value?.subtitles || []);
 const chapters = computed(() => videoResponse.value?.chapters || []);

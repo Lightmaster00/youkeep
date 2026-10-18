@@ -12,6 +12,11 @@ import { serviceWorkerUrl } from '~/utils/clientCaches';
 
 const config = useRuntimeConfig();
 
+// "Channels — YouKeep"; a page without a title of its own is just "YouKeep".
+useHead({
+  titleTemplate: (title?: string) => (title && title !== 'YouKeep' ? `${title} — YouKeep` : 'YouKeep'),
+});
+
 onMounted(() => {
   // Not in development: Vite serves unhashed /_nuxt/ files there.
   if (import.meta.dev || !('serviceWorker' in navigator)) return;

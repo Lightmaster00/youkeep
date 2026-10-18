@@ -63,6 +63,8 @@ import { normalizeSettingsTab, type SettingsTab, type LibrarySection } from '~/u
 import LibraryTab from '~/components/settings/LibraryTab.vue';
 import DownloadsTab from '~/components/settings/DownloadsTab.vue';
 
+useHead({ title: 'Settings' });
+
 const { user: currentUser, isAdmin } = useAuth();
 const route = useRoute();
 const router = useRouter();

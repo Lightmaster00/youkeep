@@ -65,6 +65,8 @@ import { usePodcastDiscover } from '~/composables/usePodcastDiscover';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { toPlayableEpisode } from '~/utils/playableEpisode';
 
+useHead({ title: 'Discover podcasts' });
+
 // Podcasts Discover: popular and recently updated shows (filterable by
 // language), trending episodes, and suggestions based on the logged-in
 // user's follows. Empty rows are left out.

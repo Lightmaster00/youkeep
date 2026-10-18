@@ -75,6 +75,8 @@ import { useAuth } from '~/composables/useAuth';
 import { useHistoryList } from '~/composables/useHistoryList';
 import { usePlayTrackList } from '~/composables/usePlayTrackList';
 
+useHead({ title: 'Listening history' });
+
 // The logged-in user's played songs, one entry per song (its latest play),
 // grouped by day. Rows can be removed one by one, or the whole history cleared.
 const { user } = useAuth();

@@ -70,6 +70,8 @@ import { ref, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { safeRedirectPath } from '~/utils/safeRedirect';
 
+useHead({ title: 'Log in' });
+
 // Disable default layout for the login page
 definePageMeta({
   layout: false

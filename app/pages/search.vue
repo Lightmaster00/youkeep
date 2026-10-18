@@ -81,6 +81,8 @@ import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { highlightMatch } from '../utils/highlightMatch';
 
+useHead({ title: 'Search' });
+
 const route = useRoute();
 const query = computed(() => (route.query.q ? String(route.query.q) : ''));
 const { isEnabled } = useModules();

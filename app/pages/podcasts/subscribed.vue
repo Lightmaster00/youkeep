@@ -65,6 +65,8 @@ import { usePodcastProgress } from '~/composables/usePodcastProgress';
 import { useRecentList } from '~/composables/useRecentList';
 import { toPlayableEpisode } from '~/utils/playableEpisode';
 
+useHead({ title: 'Subscribed podcasts' });
+
 // The logged-in user's followed shows ("N new" badges), what they are in the
 // middle of, and the latest episodes of those shows.
 const { user } = useAuth();

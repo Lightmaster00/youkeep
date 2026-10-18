@@ -117,6 +117,7 @@ const route = useRoute();
 const router = useRouter();
 
 const artistId = computed(() => (route.query.artistId ? String(route.query.artistId) : ''));
+useHead({ title: 'Music' });
 
 // --- Grid view state ---
 const search = ref('');

@@ -224,6 +224,8 @@ import { ref, reactive, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { passwordProblem } from '~/utils/passwordRules';
 
+useHead({ title: 'Account' });
+
 const { user: currentUser, fetchUser } = useAuth();
 
 // --- Profile Info Logic ---

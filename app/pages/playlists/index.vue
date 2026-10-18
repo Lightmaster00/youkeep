@@ -131,6 +131,8 @@ import { ref } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 
+useHead({ title: 'Playlists' });
+
 const { user, isAdmin } = useAuth();
 const toast = useToast();
 
