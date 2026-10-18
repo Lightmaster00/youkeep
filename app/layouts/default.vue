@@ -829,7 +829,8 @@ onUnmounted(() => {
   z-index: 50;
 }
 
-.sidebar-inner:hover {
+.sidebar-inner:hover,
+.sidebar-inner:focus-within {
   width: var(--sidebar-width);
   overflow-y: auto;
   background-color: rgba(28, 24, 38, 0.96);
@@ -858,7 +859,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .sidebar-inner:hover {
+  .sidebar-inner:hover,
+  .sidebar-inner:focus-within {
     width: var(--sidebar-collapsed-width);
     background-color: transparent;
     backdrop-filter: none;

@@ -68,6 +68,18 @@ afterEach(() => {
 });
 
 describe('SidebarPanels', () => {
+  it('names every icon link for screen readers and touch (aria-label, title, tooltip) (#18)', async () => {
+    const w = await mount();
+    const links = w.findAll('.sidebar-link');
+    expect(links.length).toBeGreaterThan(5);
+    for (const a of links) {
+      const label = a.find('span').text();
+      expect(a.attributes('aria-label')).toBe(label);
+      expect(a.attributes('title')).toBe(label);
+      expect(a.attributes('data-label')).toBe(label);
+    }
+  });
+
   it('renders one panel per group with an accessible header button and region', async () => {
     const w = await mount();
     const headers = w.findAll('.sidebar-panel-header');

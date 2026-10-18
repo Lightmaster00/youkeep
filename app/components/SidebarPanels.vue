@@ -13,9 +13,11 @@
         :aria-expanded="openId === group.id ? 'true' : 'false'"
         :aria-controls="`sidebar-panel-${group.id}`"
         :title="group.label"
+        :aria-label="group.enabled ? group.label : `${group.label} (off)`"
+        :data-label="group.label"
         @click="toggle(group.id)"
       >
-        <i class="sidebar-link-icon" v-html="group.icon"></i>
+        <i class="sidebar-link-icon" aria-hidden="true" v-html="group.icon"></i>
         <span class="sidebar-divider-title">
           {{ group.label }}
           <span v-if="!group.enabled" class="badge badge-failed">Off</span>
@@ -37,8 +39,11 @@
             :to="link.to"
             class="sidebar-link"
             active-class="active"
+            :aria-label="link.label"
+            :title="link.label"
+            :data-label="link.label"
           >
-            <i class="sidebar-link-icon" v-html="link.icon"></i>
+            <i class="sidebar-link-icon" aria-hidden="true" v-html="link.icon"></i>
             <span>{{ link.label }}</span>
           </NuxtLink>
         </div>
@@ -196,7 +201,9 @@ watch(() => props.activeSpaceId, (spaceId) => {
 }
 
 .sidebar-inner:hover .sidebar-divider-title,
-.sidebar-inner:hover .sidebar-panel-chevron {
+.sidebar-inner:hover .sidebar-panel-chevron,
+.sidebar-inner:focus-within .sidebar-divider-title,
+.sidebar-inner:focus-within .sidebar-panel-chevron {
   opacity: 1;
 }
 
@@ -239,7 +246,8 @@ watch(() => props.activeSpaceId, (spaceId) => {
   transition: opacity 0.15s ease;
 }
 
-.sidebar-inner:hover .sidebar-link span {
+.sidebar-inner:hover .sidebar-link span,
+.sidebar-inner:focus-within .sidebar-link span {
   opacity: 1;
 }
 
@@ -284,6 +292,38 @@ watch(() => props.activeSpaceId, (spaceId) => {
   }
   .sidebar-link.active {
     border-bottom-color: var(--accent-primary);
+  }
+  /* Icons only on phones: the name shows as a tooltip on keyboard focus,
+     hover and while a finger presses the icon (long-press). */
+  .sidebar-link,
+  .sidebar-panel-header {
+    -webkit-touch-callout: none;
+  }
+  /* A transform would make the fixed tooltip relative to the link. */
+  .sidebar-link:hover {
+    transform: none;
+  }
+  .sidebar-link:focus-visible::after,
+  .sidebar-link:hover::after,
+  .sidebar-link:active::after,
+  .sidebar-panel-header:focus-visible::after,
+  .sidebar-panel-header:active::after {
+    content: attr(data-label);
+    position: fixed;
+    left: calc(var(--sidebar-collapsed-width) + 4px);
+    transform: translateY(-50%);
+    margin-top: 22px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgb(28, 24, 38);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 1200;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   }
 }
 </style>
