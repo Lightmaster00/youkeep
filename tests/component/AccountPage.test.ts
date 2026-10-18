@@ -41,6 +41,22 @@ const fill = async (w: any, current: string, next: string, confirm = next) => {
 const passwordCalls = () => fetchMock.mock.calls.filter(([u]) => u === '/api/account/password');
 
 describe('account page password change', () => {
+  it('shows a refused new password as a styled alert, a success as a status (#14)', async () => {
+    setUser(true);
+    passwordReply = () => { throw Object.assign(new Error('x'), { statusCode: 400, data: { statusMessage: 'Choose a different password.' } }); };
+    const w = await mountPage();
+    await fill(w, 'temp-secret-1', 'temp-secret-1');
+    const msg = w.find('[data-testid="password-message"]');
+    expect(msg.text()).toBe('Choose a different password.');
+    expect(msg.attributes('role')).toBe('alert');
+    expect(msg.classes()).toContain('error-msg');
+    passwordReply = () => ({ success: true });
+    await fill(w, 'temp-secret-1', 'brand-new-secret');
+    const ok = w.find('[data-testid="password-message"]');
+    expect(ok.attributes('role')).toBe('status');
+    expect(ok.classes()).toContain('success-msg');
+  });
+
   it('sends the current password with the new one', async () => {
     setUser();
     const w = await mountPage();

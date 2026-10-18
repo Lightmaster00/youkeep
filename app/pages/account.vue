@@ -6,7 +6,7 @@
     </div>
 
     <!-- Mandatory Password Change Warning -->
-    <div v-if="currentUser?.mustChangePassword" class="form-msg error-msg mt-3 mb-4 alert-box">
+    <div v-if="currentUser?.mustChangePassword" class="form-msg error-msg mt-3 mb-4 alert-box" role="alert">
       <strong>⚠️ Mandatory Security:</strong> You must change your temporary password before you can browse the app.
     </div>
 
@@ -62,7 +62,7 @@
               </div>
             </div>
 
-            <div v-if="profileMessage" class="form-msg mt-3" :class="profileSuccess ? 'success-msg' : 'error-msg'">
+            <div v-if="profileMessage" class="form-msg mt-3" :class="profileSuccess ? 'success-msg' : 'error-msg'" :role="profileSuccess ? 'status' : 'alert'" data-testid="profile-message">
               {{ profileMessage }}
             </div>
 
@@ -139,7 +139,7 @@
               />
             </div>
 
-            <div v-if="ownPasswordMessage" class="form-msg mt-3" :class="ownPasswordSuccess ? 'success-msg' : 'error-msg'">
+            <div v-if="ownPasswordMessage" class="form-msg mt-3" :class="ownPasswordSuccess ? 'success-msg' : 'error-msg'" :role="ownPasswordSuccess ? 'status' : 'alert'" data-testid="password-message">
               {{ ownPasswordMessage }}
             </div>
 
@@ -168,7 +168,7 @@
               <code ref="tokenCodeEl">{{ newToken }}</code>
               <UiButton variant="secondary" @click="copyNewToken">Copy</UiButton>
             </div>
-            <p v-if="copyMessage" class="copy-message">{{ copyMessage }}</p>
+            <p v-if="copyMessage" class="copy-message" role="status">{{ copyMessage }}</p>
             <UiButton variant="primary" class="mt-3" @click="dismissNewToken">I've copied my token</UiButton>
           </div>
 
@@ -186,7 +186,7 @@
               />
             </div>
 
-            <div v-if="tokenMessage" class="form-msg mt-3" :class="tokenSuccess ? 'success-msg' : 'error-msg'">
+            <div v-if="tokenMessage" class="form-msg mt-3" :class="tokenSuccess ? 'success-msg' : 'error-msg'" :role="tokenSuccess ? 'status' : 'alert'">
               {{ tokenMessage }}
             </div>
 
@@ -435,6 +435,41 @@ onMounted(() => {
   font-size: 15px;
 }
 
+/* Feedback under the forms: errors and successes look different, keep their
+   distance from the buttons above, and wrap long server messages. */
+.form-msg {
+  display: block;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.error-msg {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.success-msg {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.mt-3 {
+  margin-top: 16px;
+}
+
+.mt-4 {
+  margin-top: 20px;
+}
+
+.mb-4 {
+  margin-bottom: 20px;
+}
+
 .alert-box {
   background: rgba(239, 68, 68, 0.1);
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -458,11 +493,26 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-width: 0;
+}
+
+.account-grid > * {
+  min-width: 0;
 }
 
 .profile-box {
   padding: 30px;
   border-radius: 16px;
+  min-width: 0;
+}
+
+@media (max-width: 480px) {
+  .profile-box {
+    padding: 20px 16px;
+  }
+  .api-token-row {
+    flex-wrap: wrap;
+  }
 }
 
 .security-box {
@@ -476,6 +526,7 @@ onMounted(() => {
 }
 
 .profile-avatar-large {
+  flex-shrink: 0;
   width: 72px;
   height: 72px;
   border-radius: 50%;
@@ -502,6 +553,7 @@ onMounted(() => {
 }
 
 .security-icon {
+  flex-shrink: 0;
   color: var(--accent-primary);
   padding: 10px;
   background: rgba(139, 92, 246, 0.1);
@@ -547,7 +599,7 @@ h4 {
 
 .half-width {
   flex: 1;
-  min-width: 220px;
+  min-width: min(220px, 100%);
 }
 
 .form-row .form-group {
