@@ -122,3 +122,28 @@ describe('channel videos, lazily paged (#2, #34, R15)', () => {
     w.unmount();
   });
 });
+
+describe('Tracking options drawer (#19)', () => {
+  it('is inert while closed and a labelled modal dialog while open; Escape closes it', async () => {
+    as({ id: 'a', username: 'boss', role: 'admin' });
+    stats = { totalCount: 1, completedCount: 1, completedVideosCount: 1, completedShortsCount: 0 };
+    videoTotal = 1;
+    const w = await mountSuspended(ChannelsPage, { route: { path: '/channels', query: { channelId: 'ch1' } }, attachTo: document.body });
+    await flushPromises();
+    const drawer = () => w.find('[data-testid="channel-settings-drawer"]');
+    expect(drawer().attributes('inert')).toBeDefined();
+    expect(drawer().attributes('aria-hidden')).toBe('true');
+    expect(drawer().attributes('role')).toBe('dialog');
+    expect(drawer().attributes('aria-modal')).toBe('true');
+    expect(w.find('#channel-drawer-title').text()).toBe('Tracking options');
+
+    await w.find('.settings-trigger-btn').trigger('click');
+    await flushPromises();
+    expect(drawer().attributes('inert')).toBeUndefined();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Close');
+    await drawer().trigger('keydown', { key: 'Escape' });
+    await flushPromises();
+    expect(drawer().attributes('inert')).toBeDefined();
+    w.unmount();
+  });
+});

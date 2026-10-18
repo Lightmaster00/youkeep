@@ -5,25 +5,35 @@
       v-if="isAdmin"
       class="drawer-backdrop"
       :class="{ active: showDrawer }"
-      @click="$emit('update:showDrawer', false)"
+      aria-hidden="true"
+      @click="close"
     ></div>
 
     <!-- Admin Settings Drawer -->
     <div
       v-if="isAdmin && channel"
+      ref="drawerEl"
       class="settings-drawer"
       :class="{ open: showDrawer }"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="channel-drawer-title"
+      tabindex="-1"
+      :inert="!showDrawer"
+      :aria-hidden="showDrawer ? undefined : 'true'"
+      data-testid="channel-settings-drawer"
+      @keydown="onDrawerKeydown"
     >
       <div class="drawer-header">
-        <h3 class="drawer-title">Tracking options</h3>
-        <button class="drawer-close-btn" @click="$emit('update:showDrawer', false)">&times;</button>
+        <h3 id="channel-drawer-title" class="drawer-title">Tracking options</h3>
+        <button type="button" class="drawer-close-btn" aria-label="Close" @click="close">&times;</button>
       </div>
 
       <div class="drawer-body">
         <!-- Visibility -->
         <div class="form-group-item">
-          <label class="form-label" style="margin-bottom: 8px; font-weight: 600;">Channel visibility:</label>
-          <select :value="channel.visibility || 'public'" @change="handleUpdateChannelVisibility" class="form-input">
+          <label class="form-label" for="drawerChannelVisibility" style="margin-bottom: 8px; font-weight: 600;">Channel visibility:</label>
+          <select id="drawerChannelVisibility" :value="channel.visibility || 'public'" @change="handleUpdateChannelVisibility" class="form-input">
             <option value="public">🌍 Public (Everyone)</option>
             <option value="private">🔒 Private (Logged-in users)</option>
             <option value="ultra_private">🔑 Ultra Private (Admins only)</option>
@@ -92,14 +102,57 @@
 
 <script setup lang="ts">
 import { confirmAction } from '~/composables/useConfirm';
-import { reactive, ref, watch } from 'vue';
+import { reactive, ref, watch, nextTick } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { useChannelDetail } from '~/composables/useChannelDetail';
 import { useChannelsList } from '~/composables/useChannelsList';
 
-defineProps<{ showDrawer: boolean }>();
-defineEmits<{ 'update:showDrawer': [value: boolean] }>();
+const props = defineProps<{ showDrawer: boolean }>();
+const emit = defineEmits<{ 'update:showDrawer': [value: boolean] }>();
+
+// A modal dialog while open: Escape closes, Tab stays inside, the focus goes
+// in on open and back to the opener on close. Closed, it is inert.
+const drawerEl = ref<HTMLElement | null>(null);
+let openerEl: HTMLElement | null = null;
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function close() {
+  emit('update:showDrawer', false);
+}
+
+function onDrawerKeydown(e: KeyboardEvent) {
+  if (!props.showDrawer) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    close();
+    return;
+  }
+  if (e.key !== 'Tab' || !drawerEl.value) return;
+  const items = Array.from(drawerEl.value.querySelectorAll<HTMLElement>(FOCUSABLE));
+  if (items.length === 0) return;
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  if (e.shiftKey && (document.activeElement === first || document.activeElement === drawerEl.value)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+watch(() => props.showDrawer, async (open) => {
+  if (!import.meta.client) return;
+  if (open) {
+    openerEl = document.activeElement as HTMLElement | null;
+    await nextTick();
+    drawerEl.value?.querySelector<HTMLElement>('.drawer-close-btn')?.focus();
+  } else if (openerEl && document.contains(openerEl)) {
+    openerEl.focus();
+    openerEl = null;
+  }
+});
 
 const { isAdmin } = useAuth();
 const toast = useToast();
