@@ -26,7 +26,9 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#8b5cf6' },
         // A private, self-hosted app: keep every page out of search engines.
         { name: 'robots', content: 'noindex, nofollow' },
-        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        // The standard name (the apple- one alone is deprecated); iOS still
+        // reads apple-mobile-web-app-status-bar-style below.
+        { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
       ],
       link: [
