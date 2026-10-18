@@ -40,35 +40,77 @@
     </button>
 
     <div class="mini-player-controls">
-      <button @click="prev" class="mini-player-btn" title="Previous">
+      <button type="button" @click="prev" class="mini-player-btn" title="Previous" aria-label="Previous">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"></line></svg>
       </button>
-      <button @click="togglePlay" class="mini-player-btn mini-player-play-btn" title="Play/Pause">
+      <button type="button" @click="togglePlay" class="mini-player-btn mini-player-play-btn" :title="isPlaying ? 'Pause' : 'Play'" :aria-label="isPlaying ? 'Pause' : 'Play'">
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button @click="next" class="mini-player-btn" title="Next">
+      <button type="button" @click="next" class="mini-player-btn" title="Next" aria-label="Next">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line></svg>
       </button>
     </div>
 
+    <button
+      type="button"
+      class="mini-player-btn mini-player-more-btn"
+      :aria-expanded="moreOpen ? 'true' : 'false'"
+      aria-controls="music-player-more"
+      aria-label="More player controls"
+      title="More"
+      data-testid="music-more-btn"
+      @click="moreOpen = !moreOpen"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>
+    </button>
+
     <div class="mini-player-progress-row">
-      <span class="mini-player-time">{{ formatDuration(currentTime) }}</span>
-      <div class="mini-player-progress-bar" @click="onProgressClick" ref="progressBarRef">
-        <div class="mini-player-progress-fill" :style="{ width: progressPercent + '%' }"></div>
-      </div>
-      <span class="mini-player-time">{{ formatDuration(duration) }}</span>
+      <span class="mini-player-time" aria-hidden="true">{{ formatDuration(currentTime) }}</span>
+      <!-- A real slider: Arrow keys, Home/End and screen readers work. -->
+      <input
+        type="range"
+        class="mini-player-seek"
+        data-testid="music-seek"
+        min="0"
+        :max="Math.max(0, Math.floor(duration))"
+        step="1"
+        :value="Math.floor(currentTime)"
+        aria-label="Seek"
+        :aria-valuetext="`${formatDuration(currentTime)} of ${formatDuration(duration)}`"
+        :disabled="duration <= 0"
+        @input="onSeekInput"
+      />
+      <span class="mini-player-time" aria-hidden="true">{{ formatDuration(duration) }}</span>
     </div>
 
-    <div class="mini-player-extra-controls">
-      <button @click="toggleShuffle" class="mini-player-btn" :class="{ active: shuffleOn }" title="Shuffle">
+    <div
+      id="music-player-more"
+      class="mini-player-extra-controls"
+      :class="{ 'is-open': moreOpen }"
+      role="group"
+      aria-label="More player controls"
+      data-testid="music-more"
+      @keydown.esc="moreOpen = false"
+    >
+      <AddToPlaylistMenu :track-id="currentTrack.id" class="mini-player-more-only" />
+      <button
+        v-if="currentTrack.has_clip"
+        type="button"
+        @click="setClipMode(!clipMode)"
+        class="mini-player-btn mini-player-more-only"
+        :class="{ active: clipMode }"
+        :aria-label="clipMode ? 'Back to audio mode' : 'Watch the clip'"
+        :aria-pressed="clipMode"
+      >🎬</button>
+      <button type="button" @click="toggleShuffle" class="mini-player-btn" :class="{ active: shuffleOn }" title="Shuffle" aria-label="Shuffle" :aria-pressed="shuffleOn">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
       </button>
-      <button @click="cycleRepeat" class="mini-player-btn" :class="{ active: repeatMode !== 'off' }" title="Repeat">
+      <button type="button" @click="cycleRepeat" class="mini-player-btn" :class="{ active: repeatMode !== 'off' }" :title="`Repeat: ${repeatMode}`" :aria-label="`Repeat: ${repeatMode}`">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
         <span v-if="repeatMode === 'one'" class="repeat-one-badge">1</span>
       </button>
-      <button @click="startRadio" class="mini-player-btn" title="Start a radio">
+      <button type="button" @click="startRadio" class="mini-player-btn" title="Start a radio" aria-label="Start a radio">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path></svg>
       </button>
       <input
@@ -126,10 +168,8 @@ function onPlay() {
 }
 
 const audioElRef = ref<HTMLVideoElement | null>(null);
-const progressBarRef = ref<HTMLDivElement | null>(null);
 const volume = ref(1);
 
-const progressPercent = computed(() => (duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0));
 
 function onTimeUpdate() {
   if (!audioElRef.value) return;
@@ -155,13 +195,16 @@ function onAudioError() {
   setClipMode(false);
 }
 
-function onProgressClick(e: MouseEvent) {
-  if (!progressBarRef.value || duration.value <= 0) return;
-  const rect = progressBarRef.value.getBoundingClientRect();
-  if (rect.width <= 0) return;
-  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  seek(ratio * duration.value);
+function onSeekInput(e: Event) {
+  if (duration.value <= 0) return;
+  const value = Number((e.target as HTMLInputElement).value);
+  if (Number.isFinite(value)) seek(Math.min(duration.value, Math.max(0, value)));
 }
+
+// Phones: shuffle, repeat, radio, add-to-playlist, clip and volume live in a
+// "More" sheet instead of being hidden outright.
+const moreOpen = ref(false);
+watch(() => currentTrack.value?.id, () => { moreOpen.value = false; });
 
 function onVolumeChange() {
   if (audioElRef.value) audioElRef.value.volume = volume.value;
@@ -359,20 +402,24 @@ onMounted(async () => {
   width: 36px;
 }
 
-.mini-player-progress-bar {
+.mini-player-seek {
   flex: 1;
   min-width: 24px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  height: 16px;
+  margin: 0;
   cursor: pointer;
-  position: relative;
+  accent-color: var(--accent-primary);
+  background: transparent;
 }
 
-.mini-player-progress-fill {
-  height: 100%;
-  background: var(--accent-primary);
-  border-radius: 2px;
+.mini-player-seek:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.mini-player-more-btn,
+.mini-player-more-only {
+  display: none !important;
 }
 
 .mini-player-extra-controls {
@@ -456,19 +503,56 @@ onMounted(async () => {
     font-size: 10px;
   }
 
-  .mini-player-extra-controls {
-    gap: 6px;
+  /* The extra controls move into the "More" sheet above the bar. */
+  .mini-player-more-btn {
+    display: inline-flex !important;
   }
 
-  .mini-player-volume {
+  .mini-player-extra-controls {
     display: none;
+  }
+
+  .mini-player-extra-controls.is-open {
+    display: flex;
+    position: fixed;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--music-bar-height, 72px) + 8px);
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 14px;
+    background: rgb(22, 22, 32);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+    z-index: 950;
+  }
+
+  .mini-player-extra-controls.is-open .mini-player-more-only {
+    display: inline-flex !important;
+  }
+
+  .mini-player-extra-controls.is-open .mini-player-volume {
+    width: 140px;
   }
 }
 
 @media (max-width: 480px) {
+  /* Two rows: the controls, then a full-width seek bar. */
   .mini-player {
-    padding: 0 8px;
+    --music-bar-height: 84px;
+    height: auto;
+    min-height: 72px;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: 6px 8px;
     gap: 6px;
+  }
+
+  .mini-player-info {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .mini-player-cover {
@@ -478,7 +562,7 @@ onMounted(async () => {
 
   .mini-player-video {
     left: 8px;
-    bottom: 20px;
+    bottom: 40px;
     width: 32px;
     height: 32px;
   }
@@ -497,11 +581,9 @@ onMounted(async () => {
     display: none;
   }
 
-  .mini-player-extra-controls {
-    display: none;
-  }
-
   .mini-player-progress-row {
+    order: 10;
+    flex: 1 0 100%;
     gap: 4px;
   }
 

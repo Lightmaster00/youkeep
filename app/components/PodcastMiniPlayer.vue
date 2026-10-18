@@ -25,7 +25,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         <span class="podcast-mini-player-skip-label">15</span>
       </button>
-      <button @click="togglePlay" class="podcast-mini-player-btn podcast-mini-player-play-btn" title="Play/Pause" aria-label="Play/Pause">
+      <button type="button" @click="togglePlay" class="podcast-mini-player-btn podcast-mini-player-play-btn" :title="isPlaying ? 'Pause' : 'Play'" :aria-label="isPlaying ? 'Pause' : 'Play'">
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
@@ -36,11 +36,22 @@
     </div>
 
     <div class="podcast-mini-player-progress-row">
-      <span class="podcast-mini-player-time">{{ formatPodcastTime(currentTime) }}</span>
-      <div class="podcast-mini-player-progress-bar" @click="onProgressClick" ref="progressBarRef">
-        <div class="podcast-mini-player-progress-fill" :style="{ width: progressPercent + '%' }"></div>
-      </div>
-      <span class="podcast-mini-player-time">{{ formatPodcastTime(displayDuration) }}</span>
+      <span class="podcast-mini-player-time" aria-hidden="true">{{ formatPodcastTime(currentTime) }}</span>
+      <!-- A real slider: Arrow keys, Home/End and screen readers work. -->
+      <input
+        type="range"
+        class="podcast-mini-player-seek"
+        data-testid="podcast-seek"
+        min="0"
+        :max="Math.max(0, Math.floor(displayDuration))"
+        step="1"
+        :value="Math.floor(currentTime)"
+        aria-label="Seek"
+        :aria-valuetext="`${formatPodcastTime(currentTime)} of ${formatPodcastTime(displayDuration)}`"
+        :disabled="displayDuration <= 0"
+        @input="onSeekInput"
+      />
+      <span class="podcast-mini-player-time" aria-hidden="true">{{ formatPodcastTime(displayDuration) }}</span>
     </div>
 
     <div class="podcast-mini-player-extra-controls">
@@ -83,14 +94,10 @@ const showBar = computed(() => !!currentEpisode.value && (activeType.value === '
 
 const toast = useToast();
 const audioElRef = ref<HTMLAudioElement | null>(null);
-const progressBarRef = ref<HTMLDivElement | null>(null);
 
 // Before metadata loads, duration.value is 0 — fall back to the RSS duration
 // so the right-hand time label isn't stuck at 0:00 on a restored episode.
 const displayDuration = computed(() => duration.value || currentEpisode.value?.duration || 0);
-const progressPercent = computed(() =>
-  displayDuration.value > 0 ? (currentTime.value / displayDuration.value) * 100 : 0
-);
 
 function onTimeUpdate() {
   if (!audioElRef.value) return;
@@ -137,12 +144,10 @@ function onAudioError() {
   isPlaying.value = false;
 }
 
-function onProgressClick(e: MouseEvent) {
-  if (!progressBarRef.value || displayDuration.value <= 0) return;
-  const rect = progressBarRef.value.getBoundingClientRect();
-  if (rect.width <= 0) return;
-  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-  seek(ratio * displayDuration.value);
+function onSeekInput(e: Event) {
+  if (displayDuration.value <= 0) return;
+  const value = Number((e.target as HTMLInputElement).value);
+  if (Number.isFinite(value)) seek(Math.min(displayDuration.value, Math.max(0, value)));
 }
 
 function onRateChange(e: Event) {
@@ -335,20 +340,19 @@ onBeforeUnmount(() => {
   width: 52px;
 }
 
-.podcast-mini-player-progress-bar {
+.podcast-mini-player-seek {
   flex: 1;
   min-width: 24px;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  height: 16px;
+  margin: 0;
   cursor: pointer;
-  position: relative;
+  accent-color: var(--accent-primary);
+  background: transparent;
 }
 
-.podcast-mini-player-progress-fill {
-  height: 100%;
-  background: var(--accent-primary);
-  border-radius: 2px;
+.podcast-mini-player-seek:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .podcast-mini-player-extra-controls {
@@ -426,9 +430,20 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 480px) {
+  /* Two rows: every control (back 15 s, play, forward 30 s, speed), then a
+     full-width seek bar. */
   .podcast-mini-player {
-    padding: 0 8px;
+    height: auto;
+    min-height: 72px;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    padding: 6px 8px;
     gap: 6px;
+  }
+
+  .podcast-mini-player-info {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .podcast-mini-player-cover {
@@ -445,15 +460,9 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .podcast-mini-player-skip-btn {
-    display: none;
-  }
-
-  .podcast-mini-player-extra-controls {
-    display: none;
-  }
-
   .podcast-mini-player-progress-row {
+    order: 10;
+    flex: 1 0 100%;
     gap: 4px;
   }
 
