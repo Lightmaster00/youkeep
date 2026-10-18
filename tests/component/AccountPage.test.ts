@@ -105,6 +105,32 @@ describe('account page password change', () => {
     expect(w.find('[data-testid="profile-form"]').exists()).toBe(false);
     expect(w.find('[data-testid="profile-locked"]').exists()).toBe(true);
     expect(fetchMock.mock.calls.some(([u]) => u === '/api/account/tokens')).toBe(false);
+    expect(w.find('.api-tokens-box').exists()).toBe(false);
+    expect(w.text()).not.toContain('API tokens');
+  });
+
+  it('shows the API tokens box for a normal session', async () => {
+    setUser();
+    const w = await mountPage();
+    expect(w.find('.api-tokens-box').exists()).toBe(true);
+  });
+
+  it('clears all three password fields after a successful change', async () => {
+    setUser();
+    const w = await mountPage();
+    await fill(w, 'old-secret', 'new-secret-123');
+    expect(w.text()).toContain('changed successfully');
+    expect((w.find('#current_password').element as HTMLInputElement).value).toBe('');
+    expect((w.find('#own_password').element as HTMLInputElement).value).toBe('');
+    expect((w.find('#own_password_confirm').element as HTMLInputElement).value).toBe('');
+  });
+
+  it('keeps the typed current password after a refused change', async () => {
+    setUser();
+    passwordReply = () => { throw Object.assign(new Error('x'), { data: { statusMessage: 'Current password is incorrect.' } }); };
+    const w = await mountPage();
+    await fill(w, 'wrong-one', 'new-secret-123');
+    expect((w.find('#current_password').element as HTMLInputElement).value).toBe('wrong-one');
   });
 
   it('shows the profile form for a normal session', async () => {
