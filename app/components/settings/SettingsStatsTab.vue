@@ -2,6 +2,7 @@
   <div class="tab-pane">
     <DownloadsBlockedBanner />
     <OverviewActivityCard />
+    <OverviewReportsCard />
     <!-- Premium Welcome & Summary Banner -->
     <div class="dashboard-banner glass-panel">
       <div class="banner-content">
@@ -170,6 +171,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import OverviewActivityCard from '~/components/settings/OverviewActivityCard.vue';
+import OverviewReportsCard from '~/components/settings/OverviewReportsCard.vue';
 import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
 import { useAdminChannels } from '~/composables/useAdminChannels';
 
