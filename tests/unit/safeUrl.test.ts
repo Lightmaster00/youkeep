@@ -11,6 +11,13 @@ describe('classifyAddress', () => {
     ['169.254.169.254', 'blocked'], ['169.254.1.1', 'blocked'], ['0.0.0.0', 'blocked'], ['224.0.0.1', 'blocked'], ['255.255.255.255', 'blocked'],
     ['::', 'blocked'], ['fe80::1', 'blocked'], ['ff02::1', 'blocked'], ['fd00:ec2::254', 'blocked'],
     ['::ffff:127.0.0.1', 'private'], ['::ffff:169.254.169.254', 'blocked'], ['::ffff:8.8.8.8', null], ['64:ff9b::a9fe:a9fe', 'blocked'],
+    // Reserved 240.0.0.0/4 (incl. broadcast), IETF protocol assignments, benchmarking 198.18.0.0/15.
+    ['240.0.0.1', 'blocked'], ['250.1.2.3', 'blocked'], ['255.255.255.254', 'blocked'],
+    ['192.0.0.8', 'private'], ['192.0.0.255', 'private'], ['192.0.1.1', null],
+    ['198.18.0.1', 'private'], ['198.19.255.255', 'private'], ['198.17.255.255', null], ['198.20.0.1', null],
+    ['239.255.255.255', 'blocked'], ['223.255.255.255', null],
+    // Anything that is not an IP address at all is never contacted.
+    ['example.com', 'blocked'], ['', 'blocked'], ['1.2.3', 'blocked'], ['::ffff:zz', 'blocked'],
   ])('%s -> %s', (ip, expected) => {
     expect(classifyAddress(ip)).toBe(expected);
   });
