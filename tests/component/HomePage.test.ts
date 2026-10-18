@@ -56,4 +56,42 @@ describe('home page', () => {
     const w = await mountHome();
     expect(w.text()).toContain('Nothing here yet');
   });
+
+  it('searches when ?q= appears on "/" and returns to the feed when it goes (#3)', async () => {
+    feed.featured.large = { id: 'hero', title: 'Hero video', channel_title: 'C' };
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/home/feed') return feed;
+      if (url === '/api/channels') return { channels: [] };
+      if (url === '/api/videos') return opts.params?.q === 'sushi'
+        ? { videos: [{ id: 'v1', title: 'Sushi rolls', channel_title: 'C' }], pagination: { total: 1, totalPages: 1 } }
+        : { videos: [], pagination: { total: 0, totalPages: 0 } };
+      return {};
+    });
+    const w = await mountHome();
+    expect(w.text()).toContain('Hero video');
+    const router = useRouter();
+    await router.push('/?q=sushi');
+    await flushPromises();
+    expect(fetchMock.mock.calls.some(([u, o]) => u === '/api/videos' && o?.params?.q === 'sushi')).toBe(true);
+    expect(w.find('[data-testid="home-search-results"]').text()).toContain('Sushi rolls');
+    await router.push('/?q=nothing');
+    await flushPromises();
+    expect(w.find('[data-testid="home-search-empty"]').exists()).toBe(true);
+    await router.push('/');
+    await flushPromises();
+    expect(w.text()).toContain('Hero video');
+    expect(w.text()).not.toContain('Nothing here yet');
+  });
+
+  it('tells only guests to log in on an empty library (#22)', async () => {
+    useState('display_prefs').value = buildView({ homeHero: true, homeSections: ['recent'] }, null);
+    let w = await mountHome();
+    expect(w.find('[data-testid="home-empty"]').text()).toContain('Log in as administrator');
+    w.unmount();
+    clearNuxtData();
+    useState<any>('auth_user').value = { id: 'a', username: 'boss', role: 'admin' };
+    w = await mountHome();
+    expect(w.find('[data-testid="home-empty"]').text()).not.toContain('Log in');
+    w.unmount();
+  });
 });

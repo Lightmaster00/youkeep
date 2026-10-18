@@ -20,11 +20,12 @@
     <!-- Empty library -->
     <EmptyState
       v-else-if="!featuredLarge && feedSections.length === 0 && !searchQuery"
+      data-testid="home-empty"
       title="Nothing here yet"
-      description="Your archive is empty. Log in as administrator to add channels, music or podcasts."
+      :description="emptyLibraryCopy"
       icon="video"
-      :action-text="isAdmin ? 'Add channels' : undefined"
-      action-route="/settings?tab=library&section=videos"
+      :action-text="isAdmin ? 'Add channels' : (!auth.isLoggedIn.value ? 'Log in' : undefined)"
+      :action-route="isAdmin ? '/settings?tab=library&section=videos' : '/login'"
     />
 
     <!-- Search Mode -->
@@ -49,7 +50,13 @@
       </div>
 
       <h3 class="row-title">Videos matching "{{ searchQuery }}"</h3>
-      <div class="video-grid stagger-in">
+      <div v-if="searchPending && allVideos.length === 0" class="loading-state" data-testid="home-search-loading">
+        <div class="spinner"></div>
+      </div>
+      <p v-else-if="allVideos.length === 0" class="search-empty" data-testid="home-search-empty">
+        No videos match "{{ searchQuery }}".
+      </p>
+      <div v-else class="video-grid stagger-in" data-testid="home-search-results">
         <VideoCard v-for="video in allVideos" :key="video.id" :video="video" :search-query="searchQuery" @hidden="onVideoHidden" />
       </div>
 
@@ -142,7 +149,7 @@
 
 <script setup lang="ts">
 import { setImageFallback } from '~/utils/imageFallback';
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 
@@ -164,58 +171,58 @@ const router = useRouter();
 const searchQuery = computed(() => route.query.q ? String(route.query.q) : '');
 const page = computed(() => route.query.page ? parseInt(String(route.query.page), 10) : 1);
 
-const loading = ref(true);
 const allVideos = ref<any[]>([]);
 const searchPagination = ref<any>(null);
 
-// Fetch for search mode
+// Both fetches react to ?q= (typing in the header search on "/" and pressing
+// Enter only changes the query; clicking the logo from "/?q=..." only drops
+// it). Each one is a no-op in the other mode, instead of an `immediate` flag
+// frozen at the first render. useRequestFetch forwards the cookies on SSR.
 const feedSeed = useFeedSeed();
-const { data: searchData, pending: searchPending } = await useFetch<{ videos: any[], pagination: any }>(() => '/api/videos', {
-  query: computed(() => ({
-    page: page.value,
-    limit: 24,
-    q: searchQuery.value || undefined,
-    status: 'completed',
-    seed: feedSeed
-  })),
-  watch: [searchQuery, page],
-  immediate: !!searchQuery.value
-});
+const requestFetch = useRequestFetch();
+const inSearch = computed(() => !!searchQuery.value);
+
+const { data: searchData, pending: searchPending } = await useAsyncData<{ videos: any[]; pagination: any } | null>(
+  'home-search',
+  () => (searchQuery.value
+    ? requestFetch<any>('/api/videos', { params: { page: page.value, limit: 24, q: searchQuery.value, status: 'completed', seed: feedSeed } })
+    : Promise.resolve(null)),
+  { watch: [searchQuery, page] }
+);
 
 // Fetch for home feed (featured block + discovery rows)
-const { data: homeFeedData, pending: homeFeedPending } = await useFetch<{
+const { data: homeFeedData, pending: homeFeedPending } = await useAsyncData<{
   featured: { large: any; small: any[] };
   sections: any[];
-}>('/api/home/feed', {
-  immediate: !searchQuery.value
-});
+} | null>(
+  'home-feed',
+  () => (inSearch.value ? Promise.resolve(null) : requestFetch<any>('/api/home/feed')),
+  { watch: [inSearch] }
+);
 
 // Fetch channels for search
-const { data: channelsData } = await useFetch<{ channels: any[] }>(() => '/api/channels', {
-  query: computed(() => ({ search: searchQuery.value || undefined })),
-  watch: [searchQuery]
-});
+const { data: channelsData } = await useAsyncData<{ channels: any[] } | null>(
+  'home-search-channels',
+  () => (searchQuery.value ? requestFetch<any>('/api/channels', { params: { search: searchQuery.value } }) : Promise.resolve(null)),
+  { watch: [searchQuery] }
+);
 
 const searchedChannels = computed(() => {
   if (!searchQuery.value) return [];
   return channelsData.value?.channels || [];
 });
 
-// Reactive data
-const computeData = () => {
-  if (searchQuery.value) {
-    allVideos.value = searchData.value?.videos || [];
-    searchPagination.value = searchData.value?.pagination || null;
-  }
-  loading.value = searchQuery.value ? searchPending.value : false;
-};
-
-// Watch for data changes
-watch([searchData, searchQuery], computeData, { immediate: true });
-
-watch(homeFeedPending, (pending) => {
-  if (!searchQuery.value) loading.value = pending;
+watch(searchData, (data) => {
+  allVideos.value = data?.videos || [];
+  searchPagination.value = data?.pagination || null;
 }, { immediate: true });
+
+// The full-page spinner is for the home feed only; a search shows its own.
+const loading = computed(() => !inSearch.value && homeFeedPending.value && !homeFeedData.value);
+
+const emptyLibraryCopy = computed(() => (auth.isLoggedIn.value
+  ? (isAdmin.value ? 'Your archive is empty. Add channels, music or podcasts in Settings.' : 'Nothing has been archived yet.')
+  : 'Your archive is empty. Log in as administrator to add channels, music or podcasts.'));
 
 const featuredLarge = computed(() => homeFeedData.value?.featured?.large ?? null);
 const featuredSmall = computed(() => homeFeedData.value?.featured?.small ?? []);
@@ -280,6 +287,12 @@ const formatUploadDate = (dateStr: string | null): string => {
 </script>
 
 <style scoped>
+.search-empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 24px 0;
+}
+
 /* ===== Container ===== */
 .home-container {
   display: flex;
