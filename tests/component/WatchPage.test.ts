@@ -101,6 +101,24 @@ describe('watch page share (R10)', () => {
   });
 });
 
+describe('watch page share token', () => {
+  it('a guest with a share link fetches the video with its token and hands it to the player', async () => {
+    const w = await mountWatch({ token: 'share-tok' });
+    expect(fetchMock.mock.calls.map(([u]) => String(u))).toContain('/api/videos/vid1?token=share-tok');
+    expect(w.findComponent({ name: 'VideoPlayer' }).props('token')).toBe('share-tok');
+    w.unmount();
+  });
+
+  it('without a token, no token is sent', async () => {
+    const w = await mountWatch();
+    const videoCalls = fetchMock.mock.calls.map(([u]) => String(u)).filter((u) => u.startsWith('/api/videos/vid1'));
+    expect(videoCalls).toContain('/api/videos/vid1');
+    expect(videoCalls.some((u) => u.includes('token'))).toBe(false);
+    expect(w.findComponent({ name: 'VideoPlayer' }).props('token')).toBe('');
+    w.unmount();
+  });
+});
+
 describe('watch page for guests (R9, #21)', () => {
   it('offers Log in with a redirect back when the video is not found', async () => {
     videoReply = () => { throw Object.assign(new Error('nf'), { statusCode: 404, data: { statusMessage: 'Video not found.' } }); };
