@@ -41,6 +41,20 @@ const GROUPS: Record<string, string[]> = {
   'every .vue/.ts file under app, server and shared': ['app', 'server', 'shared'].flatMap((d) =>
     filesUnder(join(ROOT, d), ['.vue', '.ts'])
   ),
+  // What ships or is read next to the code: static files, styles, docs, scripts, the Unraid template.
+  'public files, styles and scripts': [
+    ...filesUnder(join(ROOT, 'public'), ['.js', '.json', '.webmanifest', '.txt', '.svg', '.html']),
+    ...filesUnder(join(ROOT, 'app/assets'), ['.css', '.scss', '.svg']),
+    ...filesUnder(join(ROOT, 'scripts'), ['.js', '.mjs', '.ts', '.sh']),
+    ...filesUnder(join(ROOT, 'unraid'), '.xml'),
+  ],
+  // docs/superpowers/ is left out on purpose: dated design plans and specs
+  // (English prose) that quote, verbatim, the French UI strings and code of the
+  // time they were written; rewriting those quotes would falsify the record.
+  'README and docs': [
+    join(ROOT, 'README.md'),
+    ...filesUnder(join(ROOT, 'docs'), '.md').filter((f) => !relative(ROOT, f).startsWith(join('docs', 'superpowers'))),
+  ],
 };
 
 const ACCENTED = /[àâäçéèêëîïôöùûüÿœæÀÂÄÇÉÈÊËÎÏÔÖÙÛÜŸŒÆ«»]/;
