@@ -4,6 +4,8 @@ import { defineVitestProject } from '@nuxt/test-utils/config';
 
 export default defineConfig({
   test: {
+    // One temporary root per run, removed at the end (see the file).
+    globalSetup: ['tests/setup/globalTmp.ts'],
     projects: [
       {
         // Nuxt's #shared alias, so plain-node tests can load app files that use it.
