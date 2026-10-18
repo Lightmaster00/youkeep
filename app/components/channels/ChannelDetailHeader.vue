@@ -27,12 +27,14 @@
           </span>
         </div>
         <p class="channel-profile-meta">
-          YouTube Channel • ID : {{ channel.id }} • {{ channelVideos.filter((v: any) => v.download_status === 'completed').length }} / {{ channelVideos.length }} videos archived
+          YouTube Channel • ID : {{ channel.id }} • {{ singleChannelData?.stats?.completedCount || 0 }} / {{ singleChannelData?.stats?.totalCount || 0 }} videos archived
         </p>
         <p class="channel-profile-desc">{{ channel.description || 'No description available.' }}</p>
 
         <div class="channel-actions-row">
           <button
+            v-if="isLoggedIn"
+            type="button"
             @click="handleToggleSubscription"
             class="btn subscribe-btn"
             :class="subscribed ? 'btn-secondary' : 'btn-primary'"
@@ -63,7 +65,7 @@
     </div>
 
     <!-- Non-synchronized Channel Warning Banner -->
-    <div v-if="singleChannelData?.stats && singleChannelData.stats.totalCount === 0" class="sync-warning-banner glass-panel">
+    <div v-if="isAdmin && singleChannelData?.stats && singleChannelData.stats.totalCount === 0" class="sync-warning-banner glass-panel">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #60a5fa; flex-shrink: 0; margin-top: 1px;" :class="{ 'spin-anim': triggeringSync }"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
       <div class="warning-text">
         <h4 style="font-size: 14px; font-weight: 700; color: white; margin: 0;">
@@ -88,18 +90,20 @@ import { useChannelsList } from '~/composables/useChannelsList';
 
 defineEmits<{ 'open-drawer': [] }>();
 
-const { isAdmin } = useAuth();
+const { isAdmin, isLoggedIn } = useAuth();
 const toast = useToast();
 
-const { channelId, channel, singleChannelData, channelVideos, refreshSingleChannel, refreshVideos } = await useChannelDetail();
+const { channelId, channel, singleChannelData, refreshSingleChannel } = await useChannelDetail();
 const { refreshChannels } = await useChannelsList();
 
 const subscribed = ref(false);
 const togglingSyncStatus = ref(false);
 const triggeringSync = ref(false);
 
+// Client-side only and only for a signed-in viewer: during SSR (no cookies
+// forwarded by a bare $fetch) or for a guest it could only answer 401.
 const fetchSubscriptionStatus = async () => {
-  if (!channelId.value) return;
+  if (!channelId.value || !isLoggedIn.value || import.meta.server) return;
   try {
     const res = await $fetch<any>(`/api/channels/${channelId.value}/subscription`);
     subscribed.value = res.subscribed;
@@ -148,7 +152,6 @@ async function handleTriggerManualSync() {
     });
     toast.success(res.message || 'Channel update completed.');
     refreshSingleChannel();
-    refreshVideos();
   } catch (err: any) {
     toast.error(err.data?.statusMessage || 'Failed to search videos.');
   } finally {
@@ -156,15 +159,23 @@ async function handleTriggerManualSync() {
   }
 };
 
-watch(channel, (newVal) => {
-  if (newVal) {
-    fetchSubscriptionStatus();
+// Channels this component already auto-synced: the sync's own refresh (and
+// every poll) hands back a fresh channel object, which must never trigger
+// another ingest (that looped: hundreds of POSTs per minute).
+const autoSynced = new Set<string>();
 
-    // Auto-check YouTube in background if the channel has never been scanned (totalCount === 0)
-    if (singleChannelData.value?.stats?.totalCount === 0 && !triggeringSync.value) {
-      handleTriggerManualSync();
-    }
-  }
+watch(() => channel.value?.id, (id) => {
+  if (id) fetchSubscriptionStatus();
+}, { immediate: true });
+
+// An admin opening a channel that was never scanned starts one background
+// search for its videos: once per channel per visit, never during SSR, never
+// for members or guests (they could not run it anyway).
+watch([channel, () => singleChannelData.value?.stats?.totalCount], ([ch, totalCount]) => {
+  if (import.meta.server || !ch || !isAdmin.value) return;
+  if (totalCount !== 0 || triggeringSync.value || autoSynced.has(ch.id)) return;
+  autoSynced.add(ch.id);
+  handleTriggerManualSync();
 }, { immediate: true });
 
 const formatVisibility = (vis: string): string => {
