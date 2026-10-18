@@ -58,6 +58,17 @@ describe('last admin and self protection', () => {
     expect(role('a2')).toBe('admin');
   });
 
+  it('refuses demoting the last admin via PUT when the caller was demoted meanwhile (409)', async () => {
+    insertUser(db, { id: 'a2', role: 'admin' });
+    // The caller passed requireSessionAdmin, then lost the admin role before the update ran.
+    const event = mockEvent(sessionCookie('sess-a1'), { method: 'PUT', params: { id: 'a2' }, body: { role: 'user' } });
+    const pending = updateHandler(event);
+    db.prepare("UPDATE users SET role = 'user' WHERE id = 'a1'").run();
+    await expect(pending).rejects.toMatchObject({ statusCode: 409 });
+    expect(role('a2')).toBe('admin');
+    expect(adminCount()).toBe(1);
+  });
+
   it('allows deleting another admin while one remains, and deleting a user named "admin"', async () => {
     insertUser(db, { id: 'a2', role: 'admin' });
     await expect(asAdmin(deleteHandler, { id: 'a2', method: 'DELETE' })).resolves.toMatchObject({ success: true });
@@ -93,6 +104,12 @@ describe('PUT /api/admin/users/:id field handling', () => {
   it('replaces channel access when channelAccess is an array', async () => {
     await asAdmin(updateHandler, { id: 'u1', method: 'PUT', body: { channelAccess: ['c2'] } });
     expect(access()).toEqual(['c2']);
+  });
+
+  it('promoting a user to admin clears their channel grants (even if an array is sent)', async () => {
+    await asAdmin(updateHandler, { id: 'u1', method: 'PUT', body: { role: 'admin', channelAccess: ['c2'] } });
+    expect(role('u1')).toBe('admin');
+    expect(access()).toEqual([]);
   });
 
   it('unknown channel ids are a 400 and change nothing', async () => {
