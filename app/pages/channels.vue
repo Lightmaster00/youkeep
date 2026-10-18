@@ -378,6 +378,23 @@ onUnmounted(() => poller.stop());
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  /* A long unbroken URL in the description must wrap, not widen the column
+     (on phones it pushed the title off the left edge). */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.channels-page .channel-profile-title,
+.channels-page .channel-profile-meta,
+.channels-page .channel-profile-desc {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .channels-page .channel-profile-info {
+    align-self: stretch;
+  }
 }
 
 .channels-page .title-row {

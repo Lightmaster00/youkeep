@@ -400,13 +400,18 @@ onMounted(() => {
 
 .playlist-grid-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  /* minmax(0, 1fr): a long unbroken word must not widen the track. */
+  grid-template-columns: 320px minmax(0, 1fr);
   gap: 30px;
+}
+
+.playlist-grid-layout > * {
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
   .playlist-grid-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -447,6 +452,7 @@ onMounted(() => {
 }
 
 .playlist-title {
+  overflow-wrap: anywhere;
   font-size: 22px;
   font-weight: 800;
   color: white;
@@ -466,6 +472,7 @@ onMounted(() => {
 }
 
 .playlist-desc {
+  overflow-wrap: anywhere;
   font-size: 13.5px;
   color: var(--text-secondary);
   line-height: 1.5;

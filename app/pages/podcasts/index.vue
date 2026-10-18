@@ -425,9 +425,23 @@ const getVisBadgeClass = (vis: string): string => {
   flex-shrink: 0;
 }
 
+.show-detail-info {
+  /* Long unbroken text (URLs) wraps instead of widening the header. */
+  min-width: 0;
+  max-width: 100%;
+  flex: 1;
+}
+
+@media (max-width: 480px) {
+  .show-detail-info {
+    align-self: stretch;
+  }
+}
+
 .show-detail-title {
   font-size: 24px;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .show-detail-author {
@@ -436,7 +450,12 @@ const getVisBadgeClass = (vis: string): string => {
   margin-top: 2px;
 }
 
+.show-detail-author {
+  overflow-wrap: anywhere;
+}
+
 .show-detail-desc {
+  overflow-wrap: anywhere;
   color: var(--text-secondary);
   margin-top: 8px;
   max-width: 720px;
