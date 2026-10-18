@@ -31,6 +31,16 @@ function seedVideos(n: number, channelId = 'c1') {
   }
 }
 
+describe('hero', () => {
+  it('never picks a vertical Short, even the most popular video', async () => {
+    insertChannel(db, { id: 'c1' });
+    insertVideo(db, { id: 'short1', channelId: 'c1', viewCount: 1e9, isShort: true });
+    insertVideo(db, { id: 'wide1', channelId: 'c1', viewCount: 10 });
+    const r: any = await handler(guestEvent());
+    expect(r.featured.large.id).toBe('wide1');
+  });
+});
+
 describe('homeSections', () => {
   it('keeps the historical guest order recent → popular by default, then honours the configured order and omissions', async () => {
     seedVideos(40);

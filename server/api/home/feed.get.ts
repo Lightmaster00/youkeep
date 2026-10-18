@@ -46,7 +46,7 @@ function getHiddenFilter(session: UserSession | null): { sql: string; params: an
 
 const FEED_VIDEO_COLUMNS = `
   v.id, v.title, v.duration, v.view_count, v.upload_date, v.created_at,
-  v.local_video_path, v.local_thumbnail_path, v.was_live, v.channel_id,
+  v.local_video_path, v.local_thumbnail_path, v.was_live, v.channel_id, v.is_short,
   c.title as channel_title, c.avatar_url as channel_avatar
 `;
 
@@ -156,7 +156,8 @@ export default defineEventHandler(async (event) => {
   }
 
   if (prefs.homeHero) {
-    large = popularPool[0] ?? null;
+    // The hero is a wide 16:9 banner: never a vertical Short.
+    large = popularPool.find(v => !(v as any).is_short) ?? null;
     if (large) usedIds.add(large.id);
 
     if (session) {
