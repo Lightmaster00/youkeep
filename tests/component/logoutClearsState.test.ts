@@ -2,7 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { defineComponent, h } from 'vue';
 import { useAuth } from '../../app/composables/useAuth';
-import { USER_LOCAL_STORAGE_KEYS } from '../../app/utils/userClientState';
+
+// Hard-coded on purpose: seeding from USER_LOCAL_STORAGE_KEYS itself would let
+// a key dropped from that constant go unnoticed (it would never be seeded).
+const PER_USER_LOCAL_KEYS = ['podcast_player_state', 'music_player_state', 'active_mini_player_type', 'youkeep:search-history'];
 
 async function setupAuth() {
   const holder: { auth?: ReturnType<typeof useAuth> } = {};
@@ -24,7 +27,7 @@ let cacheStore: string[];
 
 beforeEach(() => {
   useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
-  for (const key of USER_LOCAL_STORAGE_KEYS) window.localStorage.setItem(key, '{"x":1}');
+  for (const key of PER_USER_LOCAL_KEYS) window.localStorage.setItem(key, '{"x":1}');
   window.localStorage.setItem('youkeep:sidebar-panel', '"music"');
   window.localStorage.setItem('youkeep:client-owner', 'u1');
   window.sessionStorage.setItem('landing_applied', 'u1');
@@ -42,6 +45,9 @@ beforeEach(() => {
   useState('podcast_progress').value = { owner: 'u1', progress: { e1: { position: 10 } } };
   useState('display_prefs_for').value = 'u1';
   useState('modules_loaded').value = true;
+  useState('admin_active_counts').value = { videos: { pending: 3 } };
+  useState('downloads_blocked_reason').value = 'The downloads folder is not writable.';
+  (useNuxtApp().payload.data as any)['home-feed'] = { sections: [{ id: 'private-video' }] };
   cacheStore = ['youkeep-static-b1'];
   vi.stubGlobal('caches', {
     keys: vi.fn(async () => [...cacheStore]),
@@ -62,7 +68,7 @@ describe('logout', () => {
   it('clears every per-user storage key but keeps the sidebar choice', async () => {
     const auth = await setupAuth();
     await auth.logout();
-    for (const key of USER_LOCAL_STORAGE_KEYS) expect(window.localStorage.getItem(key)).toBeNull();
+    for (const key of PER_USER_LOCAL_KEYS) expect(window.localStorage.getItem(key)).toBeNull();
     expect(window.localStorage.getItem('podcast_player_state')).toBeNull();
     expect(window.localStorage.getItem('music_player_state')).toBeNull();
     expect(window.localStorage.getItem('youkeep:search-history')).toBeNull();
@@ -94,6 +100,9 @@ describe('logout', () => {
     expect(useState<any>('podcast_progress').value.progress).toEqual({});
     expect(useState('display_prefs_for').value).toBeUndefined();
     expect(useState('modules_loaded').value).toBe(false);
+    expect(useState('admin_active_counts').value).toBeNull();
+    expect(useState('downloads_blocked_reason').value).toBeNull();
+    expect((useNuxtApp().payload.data as any)['home-feed']).toBeUndefined();
     expect(cacheStore).toEqual([]);
     expect(useState('auth_user').value).toBeNull();
   });
