@@ -343,6 +343,8 @@ import VideoPlayer from '~/components/VideoPlayer.vue';
 import SaveToPlaylistModal from '~/components/SaveToPlaylistModal.vue';
 import ReportVideoModal from '~/components/ReportVideoModal.vue';
 import { canShareVideo, shareVideoLink } from '~/utils/shareVideo';
+import { parseStartTime } from '~/utils/videoResume';
+import { useVideoWatchProgress } from '~/composables/useVideoWatchProgress';
 
 const route = useRoute();
 const router = useRouter();
@@ -665,6 +667,15 @@ function findScrollableAncestor(el: HTMLElement | null): HTMLElement | null {
   }
   return null;
 }
+
+// Watch time (signed-in users) and resume position (everyone, per browser);
+// a link with ?t= starts there instead of resuming.
+useVideoWatchProgress({
+  videoEl: () => (videoPlayerRef.value as any)?.videoEl ?? null,
+  videoId,
+  isLoggedIn,
+  startAt: computed(() => parseStartTime(route.query.t)),
+});
 
 onMounted(() => {
   scrollTarget = findScrollableAncestor(playerContainerEl.value) ?? window;
