@@ -4,6 +4,7 @@ import createHandler from '../../server/api/admin/users/index.post';
 import updateHandler from '../../server/api/admin/users/[id].put';
 import deleteHandler from '../../server/api/admin/users/[id].delete';
 import resetHandler from '../../server/api/admin/users/[id]/reset-password.post';
+import listHandler from '../../server/api/admin/users/index.get';
 import { requireAdmin, hashPassword } from '../../server/utils/auth';
 import { createTestDb, insertUser, insertSession, insertChannel, grantChannelAccess, mockEvent, sessionCookie } from '../helpers/testDb';
 
@@ -126,6 +127,31 @@ describe('PUT /api/admin/users/:id field handling', () => {
     { channelAccess: [1] },
   ])('malformed body %j is a 400', async (body) => {
     await expect(asAdmin(updateHandler, { id: 'u1', method: 'PUT', body })).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+describe('GET /api/admin/users', () => {
+  it("lists every user with their own channel grants, and never a password hash", async () => {
+    insertUser(db, { id: 'u1', role: 'user' });
+    insertUser(db, { id: 'u2', role: 'user' });
+    insertChannel(db, { id: 'c1', visibility: 'ultra_private' });
+    insertChannel(db, { id: 'c2', visibility: 'ultra_private' });
+    grantChannelAccess(db, 'u1', 'c1');
+    grantChannelAccess(db, 'u1', 'c2');
+    grantChannelAccess(db, 'u2', 'c2');
+    const r: any = await asAdmin(listHandler, { method: 'GET' });
+    const byId = Object.fromEntries(r.users.map((u: any) => [u.id, u]));
+    expect(Object.keys(byId).sort()).toEqual(['a1', 'u1', 'u2']);
+    expect(byId.u1.channelAccess.sort()).toEqual(['c1', 'c2']);
+    expect(byId.u2.channelAccess).toEqual(['c2']);
+    expect(byId.a1.channelAccess).toEqual([]);
+    expect(JSON.stringify(r)).not.toContain('password');
+  });
+
+  it('is refused to a member', async () => {
+    insertUser(db, { id: 'u1', role: 'user' });
+    insertSession(db, { id: 'sess-u1', userId: 'u1' });
+    await expect(asAdmin(listHandler, { method: 'GET', session: 'sess-u1' })).rejects.toMatchObject({ statusCode: 403 });
   });
 });
 
