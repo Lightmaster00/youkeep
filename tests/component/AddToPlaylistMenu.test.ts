@@ -46,6 +46,19 @@ async function openMenu() {
 }
 
 describe('AddToPlaylistMenu', () => {
+  it('closes on Escape pressed on its button inside a track row (#26)', async () => {
+    const w = await mountSuspended(MusicTrackActions, { props: { trackId: 't1' }, attachTo: document.body });
+    mounted.push(w);
+    const btn = w.find('.add-to-playlist-btn');
+    await btn.trigger('click');
+    await flushPromises();
+    expect(panel()).not.toBeNull();
+    // The key bubbles from the button through the row's action wrapper.
+    btn.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await flushPromises();
+    expect(panel()).toBeNull();
+  });
+
   it('lists the user\'s playlists with a check on those that already hold the track', async () => {
     await openMenu();
     expect(fetchMock).toHaveBeenCalledWith('/api/music/user-playlists', { params: { containsTrack: 't1' } });

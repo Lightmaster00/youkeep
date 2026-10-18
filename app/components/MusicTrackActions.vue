@@ -1,5 +1,5 @@
 <template>
-  <span v-if="user" class="music-track-actions" @click.stop @keydown.stop>
+  <span v-if="user" class="music-track-actions" @click.stop @keydown.enter.stop @keydown.space.stop>
     <TrackLikeButton :track-id="trackId" />
     <AddToPlaylistMenu :track-id="trackId" class="music-track-actions-playlist" />
   </span>

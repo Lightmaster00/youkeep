@@ -30,7 +30,7 @@
         <template v-else>{{ track.album_title || '' }}</template>
       </span>
       <span class="mtl-duration">{{ formatDuration(track.duration) }}</span>
-      <span class="mtl-actions" @click.stop @keydown.stop>
+      <span class="mtl-actions" @click.stop @keydown.enter.stop @keydown.space.stop>
         <MusicTrackActions :track-id="track.id" />
         <slot name="actions" :track="track" :index="index" />
       </span>
