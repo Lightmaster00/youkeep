@@ -10,7 +10,9 @@
             </div>
             <div>
               <h3>{{ editingUserId ? 'Edit user' : 'Add a user' }}</h3>
-              <p class="section-desc">Create accounts, choose each person's role, and decide which ultra-private channels they can see.</p>
+              <p class="section-desc" data-testid="user-form-desc">{{ editingUserId
+                ? 'Change this person\'s role, password or the ultra-private channels they can see.'
+                : 'Create accounts, choose each person\'s role, and decide which ultra-private channels they can see.' }}</p>
             </div>
           </div>
 
@@ -106,11 +108,11 @@
               {{ userFormMessage }}
             </div>
 
-            <div class="form-actions mt-3">
+            <div class="form-actions user-form-actions mt-3">
               <button type="submit" class="btn btn-primary">
                 {{ editingUserId ? 'Save changes' : 'Create user' }}
               </button>
-              <button v-if="editingUserId" type="button" @click="cancelEditUser" class="btn btn-secondary-dark ml-2">
+              <button v-if="editingUserId" type="button" @click="cancelEditUser" class="btn btn-secondary-dark">
                 Cancel
               </button>
             </div>
@@ -347,3 +349,12 @@ const formatDate = (ts: number) => {
   return new Date(ts).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 </script>
+
+<style scoped>
+.user-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+</style>

@@ -38,6 +38,16 @@ const card = (w: any, username: string) =>
   w.findAll('.user-card-premium').find((c: any) => c.find('h4').text() === username)!;
 
 describe('SettingsUsersTab', () => {
+  it('describes editing, not creating, in the Edit user form (#37)', async () => {
+    const w = await mountTab();
+    expect(w.find('[data-testid="user-form-desc"]').text()).toContain('Create accounts');
+    await card(w, 'bob').find('button[title="Edit Profile"]').trigger('click');
+    await flushPromises();
+    expect(w.text()).toContain('Edit user');
+    expect(w.find('[data-testid="user-form-desc"]').text()).not.toContain('Create accounts');
+    expect(w.find('[data-testid="user-form-desc"]').text()).toContain("Change this person's role");
+  });
+
   it('disables Delete for yourself and for the last admin', async () => {
     users = [me, bob];
     const w = await mountTab();
