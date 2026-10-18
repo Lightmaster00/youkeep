@@ -478,6 +478,11 @@ const submitWatchTime = async () => {
   if (!videoId || secondsToLog <= 0) {
     return;
   }
+  // Guests watch public Shorts too, but have no history to add to (401).
+  if (!isLoggedInViewer.value) {
+    accumulatedSeconds.value = 0;
+    return;
+  }
 
   // Reset local accumulation counter immediately to avoid double submissions
   accumulatedSeconds.value = 0;
@@ -522,7 +527,7 @@ const watchNormal = (id: string) => {
   navigateTo(`/watch/${id}`);
 };
 
-const { isAdmin: isAdminViewer } = useAuth();
+const { isAdmin: isAdminViewer, isLoggedIn: isLoggedInViewer } = useAuth();
 const shareShort = async (video: Video) => {
   const res = await shareVideoLink(video, isAdminViewer.value);
   if (!res.ok) toast.error(res.message || 'Could not share this Short.');
