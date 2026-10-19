@@ -347,15 +347,16 @@ export async function ingestPodcastFeed(
   const db = getDb();
   const trimmedFeedUrl = feedUrl.trim();
 
+  // rss-parser's typings only list plain field names, but it accepts [source, target] pairs at runtime.
   const parser = new Parser({
-    customFields: {
+    customFields: ({
       feed: [['itunes:author', 'itunesAuthor'], ['itunes:image', 'itunesImage']],
       item: [
         ['itunes:episode', 'itunesEpisode'],
         ['itunes:season', 'itunesSeason'],
         ['itunes:duration', 'itunesDuration']
       ]
-    }
+    }) as any
   });
 
   let feed: any;

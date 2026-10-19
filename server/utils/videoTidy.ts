@@ -222,7 +222,10 @@ function isUnsafeFolderSegment(name: string): boolean {
 }
 
 type Classified =
-  | { status: 'tidy' | 'missing' | 'conflict' | 'notWritable' }
+  | { status: 'tidy' }
+  | { status: 'missing' }
+  | { status: 'conflict' }
+  | { status: 'notWritable' }
   | { status: 'move'; item: TidyPlanItem };
 
 function sizeOf(fsx: PlannerFs, p: string): number | null {
@@ -903,7 +906,7 @@ async function clearStalePartials(fsp: RunnerFs, item: TidyPlanItem): Promise<vo
   }
 }
 
-type ItemOutcome = { result: 'moved' | 'skipped' } | { result: 'error'; message: string };
+type ItemOutcome = { result: 'moved' } | { result: 'skipped' } | { result: 'error'; message: string };
 
 /** An unfinished download whose partial files may be moved: not completed, not downloading, no stored file. */
 function isIdleUnfinished(db: Database.Database, id: string, isBusy: (id: string) => boolean): boolean {

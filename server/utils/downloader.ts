@@ -1184,7 +1184,7 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
     });
 
     let skippedByDate = false;
-    child.stdout.on('data', (data) => {
+    child.stdout!.on('data', (data) => {
       if (DATE_FILTER_SKIP_RE.test(data.toString())) skippedByDate = true;
       const lines = data.toString().split(/[\r\n]+/);
       for (let i = lines.length - 1; i >= 0; i--) {
@@ -1245,7 +1245,7 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
     });
 
     let lastStderr = '';
-    child.stderr.on('data', (data) => {
+    child.stderr!.on('data', (data) => {
       const msg = data.toString().trim();
       if (DATE_FILTER_SKIP_RE.test(msg)) skippedByDate = true;
       addLog(`yt-dlp [${videoId}] stderr : ${msg}`);

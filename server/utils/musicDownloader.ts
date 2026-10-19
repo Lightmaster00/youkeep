@@ -628,7 +628,7 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
         settle(() => reject(err));
       });
 
-      child.stdout.on('data', (data) => {
+      child.stdout!.on('data', (data) => {
         const lines = data.toString().split(/[\r\n]+/);
         for (let i = lines.length - 1; i >= 0; i--) {
           const line = lines[i];
@@ -646,7 +646,7 @@ export function downloadMusicTrackFile(trackId: string, artistId: string, opts: 
       });
 
       let lastStderr = '';
-      child.stderr.on('data', (data) => {
+      child.stderr!.on('data', (data) => {
         const msg = data.toString().trim();
         addLog(`yt-dlp [${trackId}] stderr : ${msg}`);
         if (msg) lastStderr = msg;

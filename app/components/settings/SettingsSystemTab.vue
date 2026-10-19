@@ -373,7 +373,8 @@ let wipePollTimeout: any = null;
 async function loadWipePreview() {
   loadingWipePreview.value = true;
   try {
-    wipePreview.value = await $fetch('/api/admin/system/wipe-preview');
+    // The explicit type keeps TypeScript from expanding the whole route table here.
+    wipePreview.value = await $fetch<NonNullable<typeof wipePreview.value>>('/api/admin/system/wipe-preview');
   } catch (e: any) {
     toast.error(e?.data?.statusMessage || 'Failed to load the wipe preview.');
   } finally {

@@ -5,9 +5,10 @@ import { copyToClipboard } from '~/utils/clipboard';
 // else only a public video of a public channel, whose plain /watch link works
 // for every visitor. Otherwise there is no Share button.
 
-export function canShareVideo(video: { publicly_shareable?: number | boolean | null } | null | undefined, isAdmin: boolean): boolean {
+export function canShareVideo(video: object | null | undefined, isAdmin: boolean): boolean {
   if (!video) return false;
-  return isAdmin || video.publicly_shareable === 1 || video.publicly_shareable === true;
+  const flag = (video as { publicly_shareable?: number | boolean | null }).publicly_shareable;
+  return isAdmin || flag === 1 || flag === true;
 }
 
 export async function videoShareUrl(video: { id: string }, isAdmin: boolean): Promise<string> {

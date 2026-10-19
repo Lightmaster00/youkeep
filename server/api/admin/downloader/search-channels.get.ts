@@ -3,7 +3,7 @@ import { normalizeYoutubeDataApiChannel, extractYtInitialData, parseChannelSearc
 import { describeErrorForLog } from '../../../utils/redact';
 import { cachedSearch, isSearchTimeout, SEARCH_TIMEOUT_MS, SEARCH_TIMEOUT_MESSAGE } from '../../../utils/searchCache';
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async (event): Promise<{ channels: ChannelCandidate[] }> => {
   await requireAdmin(event);
   const query = getQuery(event);
   const q = query.q ? String(query.q).trim() : '';
@@ -21,13 +21,13 @@ export default defineEventHandler(async (event) => {
 
   if (youtubeApiKey) {
     try {
-      const channels = await cachedSearch<ChannelCandidate>('youtube-api', q, async () => {
-        const data = await globalThis.$fetch<any>('https://www.googleapis.com/youtube/v3/search', {
+      const channels: ChannelCandidate[] = await cachedSearch<ChannelCandidate>('youtube-api', q, async () => {
+        const data: any = await globalThis.$fetch<any>('https://www.googleapis.com/youtube/v3/search', {
           params: { part: 'snippet', type: 'channel', q, key: youtubeApiKey, maxResults: 25 },
           parseResponse: JSON.parse,
           timeout: SEARCH_TIMEOUT_MS,
         });
-        const items = Array.isArray(data?.items) ? data.items : [];
+        const items: any[] = Array.isArray(data?.items) ? data.items : [];
         return items
           .map(normalizeYoutubeDataApiChannel)
           .filter((c: any): c is ChannelCandidate => c !== null);

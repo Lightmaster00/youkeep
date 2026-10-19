@@ -461,7 +461,9 @@ export function applyAlbumMatch(
   return db.transaction((): ApplyOutcome => {
     const track = db.prepare('SELECT id, artist_id, album_id, album_match_status FROM music_tracks WHERE id = ?').get(trackId) as TrackRow | undefined;
     if (!isMatchable(track, opts.allowUnmatched === true)) {
-      if (track?.album_id && track.album_match_status === null) {
+      // `track` is narrowed away by the type guard above; read it as the plain row it is.
+      const existing = track as TrackRow | undefined;
+      if (existing?.album_id && existing.album_match_status === null) {
         db.prepare("UPDATE music_tracks SET album_match_status = 'manual' WHERE id = ?").run(trackId);
       }
       return 'skipped';

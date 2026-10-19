@@ -427,7 +427,8 @@ const errorStatus = computed(() => (error.value as any)?.statusCode ?? (error.va
 // Custom error message extractor
 const errorMsg = computed(() => {
   if (error.value) {
-    return error.value.data?.statusMessage || error.value.message;
+    const e = error.value as any;
+    return e.data?.statusMessage || e.message;
   }
   return '';
 });

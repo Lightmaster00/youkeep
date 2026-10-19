@@ -12,7 +12,7 @@
     @error="onAudioError"
   ></audio>
 
-  <div v-if="showBar" class="podcast-mini-player">
+  <div v-if="showBar && currentEpisode" class="podcast-mini-player">
     <img :src="currentEpisode.show_cover_url || fallbackCover" @error="handleCoverError" class="podcast-mini-player-cover" alt="" />
 
     <div class="podcast-mini-player-info">

@@ -275,7 +275,7 @@ const hoveredChapterTitle = computed(() => {
   const chaptersBeforeHover = (props.chapters || [])
     .filter((chapter) => chapter.start_time <= hoveredTime)
     .sort((a, b) => b.start_time - a.start_time);
-  return chaptersBeforeHover.length > 0 ? chaptersBeforeHover[0].title : null;
+  return chaptersBeforeHover.length > 0 ? chaptersBeforeHover[0]!.title : null;
 });
 
 const playbackSpeeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
