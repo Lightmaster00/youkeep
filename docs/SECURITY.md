@@ -19,6 +19,7 @@ Trust levels:
 - API tokens are 256-bit random secrets stored as SHA-256 hashes, shown once; read-only tokens may only make GET/HEAD requests; expired tokens are refused and purged.
 - Visibility (public / private / ultra-private) is checked on every page, API and media route, including byte-range requests.
 - Outbound requests to addresses that come from third parties (podcast feeds, enclosures, redirects) are refused when they resolve to loopback, link-local, cloud-metadata or (unless an admin typed a LAN feed) private addresses. The check runs again at connect time on the address actually used, so DNS rebinding cannot slip through, and on every redirect hop (at most 5).
+- Every `/api/**` response (all of them depend on who asks) is sent with `Cache-Control: no-store` and `Vary: Cookie, Authorization`, so no shared or browser cache keeps one user's data for another. Media files keep their own caching.
 - Response headers: Content-Security-Policy, `X-Content-Type-Options`, `Referrer-Policy`, frame protection, and `noindex` for crawlers.
 
 ## Known limitations

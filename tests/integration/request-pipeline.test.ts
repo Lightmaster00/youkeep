@@ -17,7 +17,7 @@ import videosHandler from '../../server/api/videos/index.get';
 import { createTestDb, insertChannel, insertVideo } from '../helpers/testDb';
 
 // The middleware chain in front of the routes, over real HTTP: Nitro runs
-// server/middleware/* in file order (csrf, forcePasswordChange, moduleGate,
+// server/middleware/* in file order (apiNoStore, csrf, forcePasswordChange, moduleGate,
 // requestGuards, securityHeaders) before the matched route; the security
 // ones are mounted here the same way, in front of real route handlers.
 // Every other route test calls handlers directly and skips this chain.
