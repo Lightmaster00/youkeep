@@ -4,9 +4,10 @@ import { flushPromises } from '@vue/test-utils';
 import authMiddleware from '../../app/middleware/auth.global';
 import LoginPage from '../../app/pages/login.vue';
 
+// `matched` comes from the app's real router, so an unknown path has none.
 const route = (fullPath: string) => {
   const url = new URL(fullPath, 'http://app.local');
-  return { path: url.pathname, fullPath, query: Object.fromEntries(url.searchParams) } as any;
+  return { path: url.pathname, fullPath, query: Object.fromEntries(url.searchParams), matched: useRouter().resolve(fullPath).matched } as any;
 };
 
 // Called as the router would: navigateTo then returns the target instead of navigating.
@@ -45,13 +46,9 @@ describe('auth middleware', () => {
     expect(await runMiddleware('/playlists/p1?token=')).toEqual({ path: '/login', query: { redirect: '/playlists/p1?token=' } });
   });
 
-  it('no longer lists the dead /categories route as public', async () => {
-    expect(await runMiddleware('/categories')).toEqual({ path: '/login', query: { redirect: '/categories' } });
-  });
-
   it('sends a guest to /login with the page to come back to', async () => {
-    const r: any = await runMiddleware('/history?x=1');
-    expect(r).toEqual({ path: '/login', query: { redirect: '/history?x=1' } });
+    const r: any = await runMiddleware('/music/history?x=1');
+    expect(r).toEqual({ path: '/login', query: { redirect: '/music/history?x=1' } });
   });
 
   it('sends a signed-in user on /login to the redirect target, but never off-site', async () => {
@@ -70,28 +67,27 @@ describe('auth middleware: public pages, admin pages and disabled modules', () =
     expect(await runMiddleware(p)).toBeUndefined();
   });
 
-  it.each(['/watch', '/history', '/subscriptions', '/account', '/admin', '/music', '/podcasts'])('a guest is sent to /login from %s', async (p) => {
+  it.each(['/subscriptions', '/account', '/settings', '/search', '/admin/downloader', '/music', '/music/history', '/podcasts', '/playlists/p1'])('a guest is sent to /login from %s', async (p) => {
     const r: any = await runMiddleware(p);
     expect(r === '/login' || r?.path === '/login').toBe(true);
   });
 
-  it.each(['/admin', '/admin/users', '/administrator'])('a member is sent home from %s', async (p) => {
+  it.each(['/admin/downloader', '/admin/downloader?tab=x'])('a member is sent home from %s', async (p) => {
     asUser('user');
     expect(await runMiddleware(p)).toBe('/');
   });
 
   it('an admin may open /admin pages', async () => {
     asUser('admin');
-    expect(await runMiddleware('/admin')).toBeUndefined();
-    expect(await runMiddleware('/admin/users')).toBeUndefined();
+    expect(await runMiddleware('/admin/downloader')).toBeUndefined();
   });
 
   it("a member is sent to the first enabled module's home from a disabled module's page", async () => {
     useState('modules').value = { video: false, music: true, podcasts: true };
     asUser('user');
-    expect(await runMiddleware('/channels/c1')).toBe('/music');
+    expect(await runMiddleware('/channels')).toBe('/music');
     expect(await runMiddleware('/watch/abc')).toBe('/music');
-    expect(await runMiddleware('/music/artists')).toBeUndefined();
+    expect(await runMiddleware('/music/history')).toBeUndefined();
     // Cross-module pages belong to no module.
     expect(await runMiddleware('/account')).toBeUndefined();
   });
@@ -99,7 +95,7 @@ describe('auth middleware: public pages, admin pages and disabled modules', () =
   it('an admin still reaches a disabled module', async () => {
     useState('modules').value = { video: false, music: true, podcasts: true };
     asUser('admin');
-    expect(await runMiddleware('/channels/c1')).toBeUndefined();
+    expect(await runMiddleware('/channels')).toBeUndefined();
   });
 
   it('a guest on a disabled module page is redirected too', async () => {
@@ -107,6 +103,23 @@ describe('auth middleware: public pages, admin pages and disabled modules', () =
     expect(await runMiddleware('/shorts')).toBeUndefined();
     useState('modules').value = { video: false, music: true, podcasts: true };
     expect(await runMiddleware('/shorts')).toBe('/music');
+  });
+});
+
+describe('auth middleware: unknown routes', () => {
+  // No page matches: the request goes through so app/error.vue renders the
+  // 404, instead of a guest landing on the login page.
+  it.each(['/no-such-page', '/categories', '/history', '/admin/nope', '/music/nope/deeper?x=1'])('a guest gets the 404 for %s', async (p) => {
+    expect(await runMiddleware(p)).toBeUndefined();
+  });
+
+  it.each(['/no-such-page', '/admin/nope'])('a signed-in member gets the 404 for %s', async (p) => {
+    useState('auth_user').value = { id: 'u1', username: 'bob', role: 'user' };
+    expect(await runMiddleware(p)).toBeUndefined();
+  });
+
+  it('real protected pages still send a guest to /login', async () => {
+    expect(await runMiddleware('/account')).toEqual({ path: '/login', query: { redirect: '/account' } });
   });
 });
 

@@ -10,6 +10,10 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     await auth.fetchUser();
   }
 
+  // No page matches this path: let it through so app/error.vue renders the
+  // 404 (a guest must not be sent to the login page for a typo).
+  if (to.matched.length === 0) return;
+
   // If not logged in and trying to reach a protected page
   const publicRoutes = ['/login', '/', '/channels', '/shorts'];
   // A personal playlist opened from its share link (?token=...) is readable by
