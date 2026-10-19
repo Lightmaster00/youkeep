@@ -1,14 +1,17 @@
 import dns from 'dns';
 import net from 'net';
+import { Agent } from 'undici';
 
 /**
  * Outbound requests to addresses that come from third parties (podcast feeds,
  * their enclosures and redirects) must never reach the server's own network:
  * loopback, the LAN, link-local, cloud metadata endpoints...
  *
- * Limitation: the name is resolved here and again by fetch() when it
- * connects, so a DNS answer that changes in between (rebinding) is not
- * caught. Every redirect hop is checked again.
+ * safeFetch checks the address up front (clear errors, redirect policy) and
+ * again when it connects: the connection uses an undici Agent whose DNS
+ * lookup validates every answer and hands the socket only validated
+ * addresses, so a name that changes its answer in between (DNS rebinding)
+ * cannot reach a refused address. Every redirect hop is checked again.
  */
 
 export class UnsafeUrlError extends Error {
@@ -137,6 +140,54 @@ export async function isPrivateNetworkUrl(raw: string, opts: { lookup?: LookupFn
   }
 }
 
+type NodeLookupCallback = (err: NodeJS.ErrnoException | null, address?: any, family?: number) => void;
+
+/**
+ * A net.connect-compatible lookup that resolves the name (through `lookup`,
+ * or safeUrlDeps.lookup at call time), refuses the whole answer when any
+ * address may not be contacted, and otherwise returns the validated
+ * addresses: the address checked is the address connected to.
+ */
+export function createValidatingLookup(opts: { allowPrivate: boolean; lookup?: LookupFn }) {
+  return (hostname: string, options: { all?: boolean } | number | undefined, callback: NodeLookupCallback): void => {
+    const all = typeof options === 'object' && options !== null && options.all === true;
+    (opts.lookup ?? safeUrlDeps.lookup)(hostname).then((answer) => {
+      if (answer.length === 0) throw new UnsafeUrlError(`The host ${hostname} could not be resolved.`);
+      for (const { address } of answer) {
+        const kind = classifyAddress(address);
+        if (kind === 'blocked' || (kind === 'private' && !opts.allowPrivate)) {
+          throw new UnsafeUrlError(`The address ${hostname} points to a network location that is not allowed.`);
+        }
+      }
+      const validated = answer.map(({ address }) => ({ address, family: net.isIPv6(address) ? 6 : 4 }));
+      if (all) callback(null, validated);
+      else callback(null, validated[0]!.address, validated[0]!.family);
+    }).catch((err) => callback(err));
+  };
+}
+
+// One pooled Agent per policy for the real resolver; a call that injects its
+// own resolver (tests) gets a dedicated Agent.
+const sharedAgents = new Map<boolean, Agent>();
+
+function agentFor(allowPrivate: boolean, lookup?: LookupFn): Agent {
+  if (lookup) return new Agent({ connect: { lookup: createValidatingLookup({ allowPrivate, lookup }) as any } });
+  let agent = sharedAgents.get(allowPrivate);
+  if (!agent) {
+    agent = new Agent({ connect: { lookup: createValidatingLookup({ allowPrivate }) as any } });
+    sharedAgents.set(allowPrivate, agent);
+  }
+  return agent;
+}
+
+/** fetch() wraps connection errors as TypeError('fetch failed'); surface ours. */
+function unwrapUnsafe(err: any): any {
+  for (let e = err, depth = 0; e && depth < 5; e = e.cause, depth++) {
+    if (e instanceof UnsafeUrlError) return e;
+  }
+  return err;
+}
+
 export const MAX_REDIRECTS = 5;
 
 /**
@@ -152,7 +203,17 @@ export async function safeFetch(raw: string, init: RequestInit & { allowPrivate:
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const { url, isPrivate } = await checkRemoteUrl(current, { allowPrivate: privateAllowed, lookup });
     if (hop === 0) privateAllowed = allowPrivate && isPrivate;
-    const response = await (fetchFn ?? fetch)(url, { ...requestInit, redirect: 'manual' });
+    let response: Response;
+    try {
+      response = await (fetchFn ?? fetch)(url, {
+        ...requestInit,
+        redirect: 'manual',
+        // Node's fetch takes an undici dispatcher; it is not in the DOM RequestInit type.
+        dispatcher: agentFor(privateAllowed, lookup),
+      } as RequestInit);
+    } catch (err) {
+      throw unwrapUnsafe(err);
+    }
     if (response.status >= 300 && response.status < 400 && response.headers.get('location')) {
       try { await response.body?.cancel(); } catch {}
       current = new URL(response.headers.get('location')!, url).toString();
