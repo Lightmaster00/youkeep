@@ -17,6 +17,11 @@ export interface UserSession {
 export const SESSION_COOKIE_NAME = 'youkeep_session';
 export const CSRF_COOKIE_NAME = 'csrf_token';
 export const SESSION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
+// Without "remember me" a session also ends after this long unused; with it,
+// only the 7-day lifetime applies.
+export const SESSION_IDLE_TIMEOUT = 1000 * 60 * 60 * 24; // 24 hours
+// sessions.last_seen_at is written at most this often per session.
+export const SESSION_SEEN_WRITE_INTERVAL_MS = 1000 * 60 * 5;
 
 // Cookies are marked Secure only when the request actually arrived over HTTPS
 // (directly, or via a reverse proxy sending X-Forwarded-Proto: https, which is
@@ -83,10 +88,19 @@ export function clearSessionCookies(event: H3Event): void {
   deleteCookie(event, CSRF_COOKIE_NAME, { path: '/' });
 }
 
-/** Deletes every expired session row; returns how many were removed. Never throws. */
+/**
+ * Deletes every expired session row, and sessions without "remember me" idle
+ * for over SESSION_IDLE_TIMEOUT (a missing last_seen_at counts from creation);
+ * returns how many were removed. Never throws.
+ */
 export function purgeExpiredSessions(): number {
   try {
-    return getDb().prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now()).changes;
+    const now = Date.now();
+    return getDb().prepare(`
+      DELETE FROM sessions
+      WHERE expires_at < ?
+         OR (remember = 0 AND COALESCE(last_seen_at, expires_at - ?) < ?)
+    `).run(now, SESSION_DURATION, now - SESSION_IDLE_TIMEOUT).changes;
   } catch (err) {
     console.error('YouKeep: could not purge expired sessions:', err);
     return 0;
@@ -136,16 +150,17 @@ export async function verifyPassword(password: string, hash: string | null | und
 
 export const MAX_SESSIONS_PER_USER = 20;
 
-export async function createSession(userId: string, event: H3Event): Promise<string> {
+export async function createSession(userId: string, event: H3Event, opts: { remember?: boolean } = {}): Promise<string> {
   const db = getDb();
   const sessionId = crypto.randomUUID();
-  const expiresAt = Date.now() + SESSION_DURATION;
+  const now = Date.now();
+  const expiresAt = now + SESSION_DURATION;
 
   db.transaction(() => {
     db.prepare(`
-      INSERT INTO sessions (id, user_id, expires_at)
-      VALUES (?, ?, ?)
-    `).run(sessionId, userId, expiresAt);
+      INSERT INTO sessions (id, user_id, expires_at, last_seen_at, remember)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(sessionId, userId, expiresAt, now, opts.remember === false ? 0 : 1);
     // Every session lasts SESSION_DURATION, so the earliest expiry is the
     // oldest login: keep only the newest MAX_SESSIONS_PER_USER.
     db.prepare(`
@@ -207,11 +222,14 @@ export async function getUserFromSession(event: H3Event): Promise<UserSession | 
 
   const db = getDb();
   const session = db.prepare(`
-    SELECT s.expires_at, u.id, u.username, u.role, u.must_change_password
+    SELECT s.expires_at, s.last_seen_at, s.remember, u.id, u.username, u.role, u.must_change_password
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.id = ?
-  `).get(sessionId) as { expires_at: number; id: string; username: string; role: 'admin' | 'user'; must_change_password: number } | undefined;
+  `).get(sessionId) as {
+    expires_at: number; last_seen_at: number | null; remember: number;
+    id: string; username: string; role: 'admin' | 'user'; must_change_password: number;
+  } | undefined;
 
   if (!session) {
     clearSessionCookies(event);
@@ -219,11 +237,19 @@ export async function getUserFromSession(event: H3Event): Promise<UserSession | 
     return getUserFromBearer(event);
   }
 
-  // Check expiration
-  if (Date.now() > session.expires_at) {
+  // Check expiration: the absolute lifetime, then (without "remember me")
+  // the idle timeout. A session from before last_seen_at existed counts
+  // from its creation.
+  const now = Date.now();
+  const lastSeen = session.last_seen_at ?? session.expires_at - SESSION_DURATION;
+  const idleExpired = session.remember === 0 && now - lastSeen > SESSION_IDLE_TIMEOUT;
+  if (now > session.expires_at || idleExpired) {
     db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
     clearSessionCookies(event);
     return getUserFromBearer(event);
+  }
+  if (session.last_seen_at === null || now - session.last_seen_at > SESSION_SEEN_WRITE_INTERVAL_MS) {
+    db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(now, sessionId);
   }
 
   return {

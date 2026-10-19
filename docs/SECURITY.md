@@ -14,7 +14,7 @@ Trust levels:
 ## What is protected
 
 - Passwords are hashed with bcrypt; login runs the same work for unknown users, and failed logins are rate-limited per client address and per address and user name.
-- Sessions are random IDs in `HttpOnly`, `SameSite=Lax` cookies (`Secure` over HTTPS), with a 7-day lifetime and at most 20 sessions per user. Changing or resetting a password ends the user's other sessions and revokes their API tokens.
+- Sessions are random IDs in `HttpOnly`, `SameSite=Lax` cookies (`Secure` over HTTPS), with a 7-day lifetime and at most 20 sessions per user. Unless "Keep me signed in" is ticked at login, a session also ends after 24 hours without use. Changing or resetting a password ends the user's other sessions and revokes their API tokens.
 - Every state-changing request from a browser session needs a CSRF token (double-submit, HMAC of the session).
 - API tokens are 256-bit random secrets stored as SHA-256 hashes, shown once; read-only tokens may only make GET/HEAD requests; expired tokens are refused and purged.
 - Visibility (public / private / ultra-private) is checked on every page, API and media route, including byte-range requests.

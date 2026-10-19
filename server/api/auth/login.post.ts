@@ -78,7 +78,8 @@ export default defineEventHandler(async (event) => {
   }
 
   clearLoginAttemptsFor(ip, username);
-  await createSession(user.id, event);
+  // "Remember me": without it the session also ends after 24 h unused.
+  await createSession(user.id, event, { remember: body.remember === true });
   if (!isKnownLoginIp(user.id, ip)) {
     recordSecurityEvent(event, 'login_new_ip', { userId: user.id, username: user.username });
   }

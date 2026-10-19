@@ -42,6 +42,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const passwordHash = await hashPassword(password);
+  // The fresh session below keeps this one's "remember me" choice.
+  const currentSessionId = getCookie(event, SESSION_COOKIE_NAME);
+  const current = currentSessionId
+    ? db.prepare('SELECT remember FROM sessions WHERE id = ?').get(currentSessionId) as { remember: number } | undefined
+    : undefined;
   db.transaction(() => {
     db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').run(passwordHash, userSession.id);
     db.prepare('DELETE FROM api_tokens WHERE user_id = ?').run(userSession.id);
@@ -51,8 +56,8 @@ export default defineEventHandler(async (event) => {
   recordSecurityEvent(event, 'password_changed', { userId: userSession.id, username: userSession.username, targetId: userSession.id });
 
   // ...and the caller gets a fresh one, so they stay signed in here.
-  if (getCookie(event, SESSION_COOKIE_NAME)) {
-    await createSession(userSession.id, event);
+  if (currentSessionId) {
+    await createSession(userSession.id, event, { remember: current ? current.remember !== 0 : true });
   }
 
   return { success: true };

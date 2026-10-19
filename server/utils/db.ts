@@ -437,6 +437,10 @@ export function openDatabase(dbPath: string): Database.Database {
   // migration keep full access and never expire.
   try { db.exec(`ALTER TABLE api_tokens ADD COLUMN expires_at INTEGER;`); } catch (e) {}
   try { db.exec(`ALTER TABLE api_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'full';`); } catch (e) {}
+  // Session idle timeout (server/utils/auth.ts): sessions from before this
+  // migration count as "remember me" so nobody is signed out by an upgrade.
+  try { db.exec(`ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE sessions ADD COLUMN remember INTEGER NOT NULL DEFAULT 1;`); } catch (e) {}
   // Security log (server/utils/securityLog.ts): capped and purged after 90 days.
   db.exec(`
     CREATE TABLE IF NOT EXISTS security_events (

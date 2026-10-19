@@ -142,6 +142,25 @@ describe('login page', () => {
     expect(await loginWith('/playlists/p1?token=t')).toEqual(['/playlists/p1?token=t']);
   });
 
+  it('sends "remember me" only when the box is ticked (off by default)', async () => {
+    const body = async (tick: boolean) => {
+      fetchMock.mockClear();
+      const w = await mountSuspended(LoginPage, { route: { path: '/login', query: {} } });
+      await flushPromises();
+      const box = w.find('input#remember_me');
+      expect((box.element as HTMLInputElement).checked).toBe(false);
+      expect(w.find('label[for="remember_me"]').text()).toBe('Keep me signed in');
+      if (tick) await box.setValue(true);
+      await w.find('input[type="text"]').setValue('bob');
+      await w.find('input[type="password"]').setValue('secret-123');
+      await w.find('form').trigger('submit');
+      await flushPromises();
+      return fetchMock.mock.calls.find(([u]) => u === '/api/auth/login')![1].body;
+    };
+    expect(await body(false)).toEqual({ username: 'bob', password: 'secret-123', remember: false });
+    expect(await body(true)).toEqual({ username: 'bob', password: 'secret-123', remember: true });
+  });
+
   it.each(['//evil.com', '/\\evil', 'https://x'])('ignores the open redirect %j', async (bad) => {
     expect(await loginWith(bad)).toEqual(['/']);
   });

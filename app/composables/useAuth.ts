@@ -30,11 +30,13 @@ export const useAuth = () => {
     }
   };
 
-  const login = async (username: string, password: string) => {
+  // remember: keep the session for its full 7 days even when unused (else it
+  // ends after 24 h of inactivity).
+  const login = async (username: string, password: string, remember = false) => {
     try {
       const response = await $fetch<{ success: boolean; user: UserSession }>('/api/auth/login', {
         method: 'POST',
-        body: { username, password }
+        body: { username, password, remember }
       });
 
       if (response.success) {

@@ -39,6 +39,11 @@
           />
         </div>
 
+        <div v-if="!setupRequired" class="remember-row">
+          <input type="checkbox" id="remember_me" v-model="rememberMe" :disabled="loadingSubmit" />
+          <label for="remember_me">Keep me signed in</label>
+        </div>
+
         <div v-if="setupRequired" class="form-group">
           <label class="form-label" for="confirmPassword">Confirm Password</label>
           <input 
@@ -83,6 +88,8 @@ const route = useRoute();
 const afterLogin = () => safeRedirectPath(route.query.redirect) || '/';
 const username = ref('');
 const password = ref('');
+// Off: the session ends after 24 h unused. On: it lasts its full 7 days.
+const rememberMe = ref(false);
 const confirmPassword = ref('');
 const errorMessage = ref('');
 const loadingSubmit = ref(false);
@@ -141,7 +148,7 @@ const handleLogin = async () => {
   errorMessage.value = '';
   loadingSubmit.value = true;
 
-  const res = await login(username.value, password.value);
+  const res = await login(username.value, password.value, rememberMe.value);
   loadingSubmit.value = false;
 
   if (res.success) {
@@ -215,6 +222,21 @@ const handleLogin = async () => {
   text-align: center;
   margin-bottom: 32px;
   line-height: 1.5;
+}
+
+.remember-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.remember-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
 }
 
 .login-form {

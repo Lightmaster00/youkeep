@@ -44,6 +44,8 @@ export function createTestDb(): Database.Database {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
       expires_at INTEGER NOT NULL,
+      last_seen_at INTEGER,
+      remember INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
