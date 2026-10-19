@@ -20,6 +20,7 @@ Trust levels:
 - Visibility (public / private / ultra-private) is checked on every page, API and media route, including byte-range requests.
 - Outbound requests to addresses that come from third parties (podcast feeds, enclosures, redirects) are refused when they resolve to loopback, link-local, cloud-metadata or (unless an admin typed a LAN feed) private addresses. The check runs again at connect time on the address actually used, so DNS rebinding cannot slip through, and on every redirect hop (at most 5).
 - Every `/api/**` response (all of them depend on who asks) is sent with `Cache-Control: no-store` and `Vary: Cookie, Authorization`, so no shared or browser cache keeps one user's data for another. Media files keep their own caching.
+- A security log records failed logins (address, attempted user name, reason), logins from a new address, password changes and resets, API token creation and revocation, user creation, deletion and role changes, and library wipe/tidy runs. Admins read it in Settings → System → Security log (browser session only, never with an API token). Entries are kept 90 days, at most 5000 of them; passwords, tokens, hashes and keys are never written to it.
 - Response headers: Content-Security-Policy, `X-Content-Type-Options`, `Referrer-Policy`, frame protection, and `noindex` for crawlers.
 
 ## Known limitations
@@ -43,6 +44,7 @@ Trust levels:
 - [ ] Behind a proxy, set `TRUST_PROXY` to the number of proxies in front of YouKeep (see the README), and publish the container port on `127.0.0.1` only when the proxy runs on the same host.
 - [ ] Use strong, unique passwords for every account, especially admins; do not keep the seeded `admin` password.
 - [ ] Prefer read-only API tokens with an expiry; revoke tokens you no longer use.
+- [ ] Review the security log in Settings → System from time to time.
 - [ ] Back up the data folder (database, settings) regularly; see Backups in the README.
 - [ ] Keep the Docker image updated (`docker compose pull && docker compose up -d`) for fixes to YouKeep, Node.js, yt-dlp and ffmpeg.
 

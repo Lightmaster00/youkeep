@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { bcryptHash, bcryptCompare } from './passwordWorker';
 import { getUserFromApiToken, purgeExpiredApiTokens } from './apiTokens';
 import { getForwardedProto } from './trustProxy';
+import { purgeSecurityEvents } from './securityLog';
 
 export interface UserSession {
   id: string;
@@ -94,10 +95,11 @@ export function purgeExpiredSessions(): number {
 
 export const SESSION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
 
-/** The hourly job: expired sessions and expired API tokens. */
+/** The hourly job: expired sessions and API tokens, old security log entries. */
 export function runAuthMaintenance(): void {
   purgeExpiredSessions();
   purgeExpiredApiTokens();
+  purgeSecurityEvents();
 }
 
 /** Runs runAuthMaintenance now and every hour; returns a function that stops it. */

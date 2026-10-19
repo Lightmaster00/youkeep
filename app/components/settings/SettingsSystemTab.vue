@@ -214,6 +214,17 @@
       </div>
     </details>
 
+    <details class="config-section glass-panel" data-testid="system-security" @toggle="onSecurityToggle">
+      <summary class="system-summary">
+        <span class="system-chevron" aria-hidden="true"></span>
+        <span class="system-summary-text">
+          <span class="system-summary-title">Security log</span>
+          <span class="section-desc">Recent sign-in failures, sign-ins from new addresses, and password, token and account changes.</span>
+        </span>
+      </summary>
+      <SecurityLogPanel v-if="securityOpen" class="mt-3" />
+    </details>
+
     <details class="config-section glass-panel danger-zone-panel" data-testid="system-danger">
       <summary class="system-summary">
         <span class="system-chevron" aria-hidden="true"></span>
@@ -281,6 +292,7 @@ import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import TidyLibraryPanel from '~/components/settings/TidyLibraryPanel.vue';
 import AlbumMatchPanel from '~/components/settings/AlbumMatchPanel.vue';
 import ServerResponsivenessPanel from '~/components/settings/ServerResponsivenessPanel.vue';
+import SecurityLogPanel from '~/components/settings/SecurityLogPanel.vue';
 import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
 
 const toast = useToast();
@@ -558,6 +570,12 @@ const onModuleChange = async (id: ModuleKey, event: Event) => {
     savingModuleId.value = null;
   }
 };
+
+// The security log is read only once its section is opened.
+const securityOpen = ref(false);
+function onSecurityToggle(event: Event) {
+  if ((event.target as HTMLDetailsElement).open) securityOpen.value = true;
+}
 
 function onToolsToggle(event: Event) {
   if ((event.target as HTMLDetailsElement).open) fetchDiagnostics();

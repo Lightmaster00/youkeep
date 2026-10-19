@@ -59,6 +59,17 @@ export function createTestDb(): Database.Database {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE security_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      ip TEXT,
+      user_id TEXT,
+      username TEXT,
+      details TEXT
+    );
+    CREATE INDEX idx_security_events_created_at ON security_events(created_at);
+
     CREATE TABLE user_preferences (
       user_id TEXT PRIMARY KEY,
       data TEXT NOT NULL,

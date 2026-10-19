@@ -2,6 +2,7 @@ import { defineEventHandler, createError } from 'h3';
 import crypto from 'crypto';
 import { getDb } from '../../../../utils/db';
 import { requireSessionAdmin, hashPassword } from '../../../../utils/auth';
+import { recordSecurityEvent } from '../../../../utils/securityLog';
 
 export default defineEventHandler(async (event) => {
   const currentAdmin = await requireSessionAdmin(event);
@@ -46,6 +47,7 @@ export default defineEventHandler(async (event) => {
     // Sign the user out everywhere: they log in again with the temporary password.
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
   })();
+  recordSecurityEvent(event, 'password_reset', { userId: currentAdmin.id, username: currentAdmin.username, targetId: userId, targetName: user.username });
 
   return {
     success: true,

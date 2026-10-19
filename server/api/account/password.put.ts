@@ -3,6 +3,7 @@ import { requireSessionUser, hashPassword, verifyPassword, createSession, SESSIO
 import { getDb } from '../../utils/db';
 import { readJsonObject, validatePassword } from '../../utils/validation';
 import { isLoginLocked, recordFailedLogin, clearLoginAttempts } from '../../utils/rateLimit';
+import { recordSecurityEvent } from '../../utils/securityLog';
 
 // Changing your own password requires the current one. For a user flagged
 // must_change_password the "current" password is the temporary one an admin
@@ -47,6 +48,7 @@ export default defineEventHandler(async (event) => {
     // Every session of this user is signed out (a stolen cookie stops working)...
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userSession.id);
   })();
+  recordSecurityEvent(event, 'password_changed', { userId: userSession.id, username: userSession.username, targetId: userSession.id });
 
   // ...and the caller gets a fresh one, so they stay signed in here.
   if (getCookie(event, SESSION_COOKIE_NAME)) {

@@ -4,6 +4,7 @@ import { getDb } from '../../utils/db';
 import { verifyPassword, createSession } from '../../utils/auth';
 import { loginLockStatus, recordFailedLoginAttempt, clearLoginAttemptsFor } from '../../utils/rateLimit';
 import { getClientIp, trustedProxyHops } from '../../utils/trustProxy';
+import { recordSecurityEvent, isKnownLoginIp } from '../../utils/securityLog';
 
 export default defineEventHandler(async (event) => {
   const body = await readJsonObject(event);
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
   // A locked-out attempt is refused even with the right password.
   const { locked, retryAfterMs } = loginLockStatus(ip, username);
   if (locked) {
+    recordSecurityEvent(event, 'login_failed', { username, reason: 'rate_limited' });
     const minutes = Math.ceil((retryAfterMs || 0) / 1000 / 60);
     // Behind a reverse proxy without TRUST_PROXY every visitor shares the
     // proxy's address, so one person's failures lock everyone out.
@@ -59,6 +61,7 @@ export default defineEventHandler(async (event) => {
   const after = loginLockStatus(ip, username);
   if (after.locked) {
     if (!user || !passwordOk) recordFailedLoginAttempt(ip, username);
+    recordSecurityEvent(event, 'login_failed', { userId: user?.id ?? null, username, reason: 'rate_limited' });
     throw createError({
       statusCode: 429,
       statusMessage: `Too many failed login attempts. Try again in ${Math.ceil((after.retryAfterMs || 0) / 1000 / 60)} minute(s).`
@@ -67,6 +70,7 @@ export default defineEventHandler(async (event) => {
 
   if (!user || !passwordOk) {
     recordFailedLoginAttempt(ip, username);
+    recordSecurityEvent(event, 'login_failed', { userId: user?.id ?? null, username, reason: user ? 'wrong_password' : 'unknown_user' });
     throw createError({
       statusCode: 401,
       statusMessage: 'Invalid username or password.'
@@ -75,6 +79,9 @@ export default defineEventHandler(async (event) => {
 
   clearLoginAttemptsFor(ip, username);
   await createSession(user.id, event);
+  if (!isKnownLoginIp(user.id, ip)) {
+    recordSecurityEvent(event, 'login_new_ip', { userId: user.id, username: user.username });
+  }
 
   return {
     success: true,

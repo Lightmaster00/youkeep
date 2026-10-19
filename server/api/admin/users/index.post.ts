@@ -4,9 +4,10 @@ import { getDb } from '../../../utils/db';
 import { requireSessionAdmin, hashPassword } from '../../../utils/auth';
 import { readJsonObject, validateUsername, validatePassword, isUsernameTaken, optionalStringArray } from '../../../utils/validation';
 import { assertChannelsExist, replaceChannelAccess, CHANNEL_ACCESS_MAX } from '../../../utils/userAdmin';
+import { recordSecurityEvent } from '../../../utils/securityLog';
 
 export default defineEventHandler(async (event) => {
-  await requireSessionAdmin(event);
+  const admin = await requireSessionAdmin(event);
   const body = await readJsonObject(event);
 
   if (body.username === undefined || body.username === '' || body.role === undefined) {
@@ -62,6 +63,7 @@ export default defineEventHandler(async (event) => {
   });
 
   createUserTransaction();
+  recordSecurityEvent(event, 'user_created', { userId: admin.id, username: admin.username, targetId: userId, targetName: username, role });
 
   return {
     success: true,

@@ -28,10 +28,10 @@ const mountTab = async () => {
 };
 
 describe('SettingsSystemTab', () => {
-  it('groups the page under five sections in order', async () => {
+  it('groups the page under six sections in order', async () => {
     const w = await mountTab();
     const ids = w.findAll('[data-testid^="system-"]').map((s: any) => s.attributes('data-testid'));
-    expect(ids).toEqual(['system-modules', 'system-default-display', 'system-search', 'system-tools', 'system-danger']);
+    expect(ids).toEqual(['system-modules', 'system-default-display', 'system-search', 'system-tools', 'system-security', 'system-danger']);
     expect(w.find('[data-testid="system-default-display"]').text()).toContain('Default display');
     expect(w.find('[data-testid="system-search"]').text()).toContain('Search providers');
     expect(w.find('[data-testid="system-search"]').text()).toContain('Current space only');
@@ -39,13 +39,25 @@ describe('SettingsSystemTab', () => {
 
   it('keeps Tools & logs and Danger zone collapsed', async () => {
     const w = await mountTab();
-    for (const id of ['system-tools', 'system-danger']) {
+    for (const id of ['system-tools', 'system-security', 'system-danger']) {
       const el = w.find(`[data-testid="${id}"]`);
       expect(el.element.tagName).toBe('DETAILS');
       expect(el.attributes('open')).toBeUndefined();
     }
     expect(w.find('[data-testid="system-tools"] summary').text()).toContain('Tools & logs');
     expect(w.find('[data-testid="system-danger"] summary').text()).toContain('Danger zone');
+    expect(w.find('[data-testid="system-security"] summary').text()).toContain('Security log');
+  });
+
+  it('reads the security log only once its section is opened', async () => {
+    const w = await mountTab();
+    const calls = () => fetchMock.mock.calls.filter(([u]) => String(u).startsWith('/api/admin/security-events'));
+    expect(calls()).toHaveLength(0);
+    const details = w.find('[data-testid="system-security"]');
+    (details.element as HTMLDetailsElement).open = true;
+    await details.trigger('toggle');
+    await flushPromises();
+    expect(calls()).toHaveLength(1);
   });
 
   it('loads the log on mount', async () => {

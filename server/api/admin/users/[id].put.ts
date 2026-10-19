@@ -3,6 +3,7 @@ import { getDb } from '../../../utils/db';
 import { requireSessionAdmin, hashPassword } from '../../../utils/auth';
 import { readJsonObject, validatePassword, optionalStringArray } from '../../../utils/validation';
 import { assertNotLastAdmin, assertChannelsExist, replaceChannelAccess, CHANNEL_ACCESS_MAX } from '../../../utils/userAdmin';
+import { recordSecurityEvent } from '../../../utils/securityLog';
 
 export default defineEventHandler(async (event) => {
   const currentAdmin = await requireSessionAdmin(event);
@@ -50,6 +51,7 @@ export default defineEventHandler(async (event) => {
   // Hashed before the (synchronous) transaction: hashing is async.
   const newPasswordHash = newPassword ? await hashPassword(newPassword) : null;
 
+  let roleChange: { from: string; to: string } | null = null;
   const updateUserTransaction = db.transaction(() => {
     const current = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as { role: string } | undefined;
     if (!current) {
@@ -59,6 +61,7 @@ export default defineEventHandler(async (event) => {
     if (role && role !== current.role) {
       if (role === 'user') assertNotLastAdmin(db, userId);
       db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, userId);
+      roleChange = { from: current.role, to: role };
     }
 
     if (newPasswordHash) {
@@ -78,6 +81,9 @@ export default defineEventHandler(async (event) => {
   });
 
   updateUserTransaction();
+  const actor = { userId: currentAdmin.id, username: currentAdmin.username, targetId: userId };
+  if (roleChange) recordSecurityEvent(event, 'user_role_changed', { ...actor, ...(roleChange as { from: string; to: string }) });
+  if (newPasswordHash) recordSecurityEvent(event, 'password_changed', { ...actor, by: 'admin' });
 
   return { success: true };
 });

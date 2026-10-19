@@ -437,6 +437,19 @@ export function openDatabase(dbPath: string): Database.Database {
   // migration keep full access and never expire.
   try { db.exec(`ALTER TABLE api_tokens ADD COLUMN expires_at INTEGER;`); } catch (e) {}
   try { db.exec(`ALTER TABLE api_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'full';`); } catch (e) {}
+  // Security log (server/utils/securityLog.ts): capped and purged after 90 days.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS security_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      ip TEXT,
+      user_id TEXT,
+      username TEXT,
+      details TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_security_events_created_at ON security_events(created_at);
+  `);
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
   // and the FTS/share_token indexes above already cover the rest).

@@ -2,6 +2,7 @@ import { defineEventHandler, createError } from 'h3';
 import { getDb } from '../../../utils/db';
 import { requireSessionAdmin } from '../../../utils/auth';
 import { assertNotLastAdmin } from '../../../utils/userAdmin';
+import { recordSecurityEvent } from '../../../utils/securityLog';
 
 export default defineEventHandler(async (event) => {
   const currentAdmin = await requireSessionAdmin(event);
@@ -35,6 +36,7 @@ export default defineEventHandler(async (event) => {
     assertNotLastAdmin(db, userId);
     db.prepare('DELETE FROM users WHERE id = ?').run(userId);
   })();
+  recordSecurityEvent(event, 'user_deleted', { userId: currentAdmin.id, username: currentAdmin.username, targetId: userId });
 
   return { success: true };
 });

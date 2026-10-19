@@ -2,6 +2,7 @@ import { defineEventHandler, createError } from 'h3';
 import { requireSessionUser } from '../../../utils/auth';
 import { createApiToken, type ApiTokenScope } from '../../../utils/apiTokens';
 import { readJsonObject } from '../../../utils/validation';
+import { recordSecurityEvent } from '../../../utils/securityLog';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_EXPIRY_DAYS = 90;
@@ -39,5 +40,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const result = createApiToken(userSession.id, label, { scope, expiresAt });
+  recordSecurityEvent(event, 'token_created', { userId: userSession.id, username: userSession.username, tokenId: result.id, tokenLabel: label, scope, expiresAt });
   return { id: result.id, label, scope, expiresAt, token: result.token };
 });
