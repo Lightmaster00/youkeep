@@ -433,6 +433,10 @@ export function openDatabase(dbPath: string): Database.Database {
   // never matched: mark it 'manual' the first time it is seen.
   db.exec(`UPDATE music_tracks SET album_match_status = 'manual' WHERE album_id IS NOT NULL AND album_match_status IS NULL;`);
   ensurePodcastPubTs(db);
+  // API token expiry and scope ('full' | 'read'): tokens created before this
+  // migration keep full access and never expire.
+  try { db.exec(`ALTER TABLE api_tokens ADD COLUMN expires_at INTEGER;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE api_tokens ADD COLUMN scope TEXT NOT NULL DEFAULT 'full';`); } catch (e) {}
 
   // Indexes on frequently filtered/joined columns that lack one (primary keys
   // and the FTS/share_token indexes above already cover the rest).

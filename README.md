@@ -85,7 +85,13 @@ Everything that is not media lives in the app data folder (`/app/data`, e.g. `./
 
 ### API tokens
 
-Tokens created in Account give scripts and other clients access with the rights of their owner (an admin's token can manage channels, downloads and settings). They have no scopes, no read-only mode and no expiry: create one per client and revoke it when unused. A token can never manage accounts or credentials (create tokens, change passwords, manage users, search-platform keys), nor wipe the library, tidy it or change the downloads folder: those need a browser session.
+Tokens created in Account give scripts and other clients access with the rights of their owner (an admin's token can manage channels, downloads and settings). Send one as `Authorization: Bearer yk_...`. The secret is shown once, at creation; only its hash is stored.
+
+- **Scope.** *Read-only* (the default) tokens may only make `GET`/`HEAD` requests; any other method gets `403 This API token is read-only.`, admin routes included. *Full access* tokens can also change things. Tokens created before scopes existed keep full access.
+- **Expiry.** 30 days, 90 days (the default), 1 year or never. Expired tokens are refused at once and deleted by the hourly cleanup. Tokens created before expiry existed never expire.
+- The token list in Account shows each token's scope, expiry and when it was last used (updated at most once a minute).
+
+Create one token per client and revoke it when unused. A token can never manage accounts or credentials (create tokens, change passwords, manage users, search-platform keys), nor wipe the library, tidy it or change the downloads folder: those need a browser session.
 
 ---
 

@@ -172,7 +172,7 @@
             <UiButton variant="primary" class="mt-3" @click="dismissNewToken">I've copied my token</UiButton>
           </div>
 
-          <form v-else @submit.prevent="handleCreateToken" class="mt-4">
+          <form v-else @submit.prevent="handleCreateToken" class="mt-4 token-create-form">
             <div class="form-group">
               <label class="form-label" for="token_label">Token name</label>
               <input
@@ -185,6 +185,26 @@
                 required
               />
             </div>
+
+            <div class="token-options">
+              <div class="form-group">
+                <label class="form-label" for="token_scope">Access</label>
+                <select id="token_scope" v-model="newTokenScope" class="form-input">
+                  <option value="read">Read-only</option>
+                  <option value="full">Full access</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="token_expiry">Expires after</label>
+                <select id="token_expiry" v-model="newTokenExpiry" class="form-input">
+                  <option value="30">30 days</option>
+                  <option value="90">90 days</option>
+                  <option value="365">1 year</option>
+                  <option value="never">Never</option>
+                </select>
+              </div>
+            </div>
+            <p class="section-desc token-scope-hint">A read-only token can only read (GET requests); full access can also change things on your behalf.</p>
 
             <div v-if="tokenMessage" class="form-msg mt-3" :class="tokenSuccess ? 'success-msg' : 'error-msg'" :role="tokenSuccess ? 'status' : 'alert'">
               {{ tokenMessage }}
@@ -200,9 +220,13 @@
           <div v-if="apiTokens.length > 0" class="api-tokens-list mt-4">
             <div v-for="token in apiTokens" :key="token.id" class="api-token-row">
               <div class="api-token-info">
-                <span class="api-token-label">{{ token.label }}</span>
+                <span class="api-token-label">
+                  {{ token.label }}
+                  <span class="api-token-scope" :class="token.scope === 'read' ? 'scope-read' : 'scope-full'">{{ token.scope === 'read' ? 'Read-only' : 'Full access' }}</span>
+                </span>
                 <span class="api-token-meta">
                   Created {{ formatTokenDate(token.createdAt) }} ·
+                  <span :class="{ 'token-expired': isTokenExpired(token) }">{{ tokenExpiryText(token) }}</span> ·
                   {{ token.lastUsedAt ? `Last used ${formatTokenDate(token.lastUsedAt)}` : 'Never used' }}
                 </span>
               </div>
@@ -338,12 +362,16 @@ const handleChangeOwnPassword = async () => {
 interface ApiToken {
   id: string;
   label: string;
+  scope: 'read' | 'full';
   createdAt: number;
+  expiresAt: number | null;
   lastUsedAt: number | null;
 }
 
 const apiTokens = ref<ApiToken[]>([]);
 const newTokenLabel = ref('');
+const newTokenScope = ref<'read' | 'full'>('read');
+const newTokenExpiry = ref<'30' | '90' | '365' | 'never'>('90');
 const newToken = ref('');
 const creatingToken = ref(false);
 const tokenMessage = ref('');
@@ -366,10 +394,16 @@ const handleCreateToken = async () => {
   try {
     const result = await $fetch<{ id: string; label: string; token: string }>('/api/account/tokens', {
       method: 'POST',
-      body: { label: newTokenLabel.value }
+      body: {
+        name: newTokenLabel.value,
+        scope: newTokenScope.value,
+        expiresInDays: newTokenExpiry.value === 'never' ? null : Number(newTokenExpiry.value)
+      }
     });
     newToken.value = result.token;
     newTokenLabel.value = '';
+    newTokenScope.value = 'read';
+    newTokenExpiry.value = '90';
     await fetchApiTokens();
   } catch (err: any) {
     tokenSuccess.value = false;
@@ -409,6 +443,15 @@ const handleRevokeToken = async (tokenId: string) => {
   } finally {
     revokingTokenId.value = '';
   }
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const isTokenExpired = (token: ApiToken): boolean => token.expiresAt !== null && token.expiresAt <= Date.now();
+const tokenExpiryText = (token: ApiToken): string => {
+  if (token.expiresAt === null) return 'Never expires';
+  if (isTokenExpired(token)) return 'Expired';
+  const days = Math.ceil((token.expiresAt - Date.now()) / DAY_MS);
+  return days === 1 ? 'Expires in 1 day' : `Expires in ${days} days`;
 };
 
 const formatTokenDate = (timestamp: number): string => {
@@ -668,6 +711,45 @@ h4 {
 .api-token-meta {
   font-size: 12.5px;
   color: var(--text-secondary);
+}
+
+.token-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.token-options .form-group {
+  flex: 1;
+  min-width: min(180px, 100%);
+}
+
+.token-scope-hint {
+  font-size: 12.5px;
+}
+
+.api-token-scope {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  vertical-align: middle;
+  border: 1px solid currentColor;
+}
+
+.api-token-scope.scope-read {
+  color: var(--text-secondary);
+}
+
+.api-token-scope.scope-full {
+  color: var(--accent-primary-hover);
+}
+
+.token-expired {
+  color: #f87171;
+  font-weight: 600;
 }
 
 </style>

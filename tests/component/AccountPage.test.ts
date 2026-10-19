@@ -140,6 +140,72 @@ describe('account page password change', () => {
   });
 });
 
+describe('account page API tokens', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  let tokens: any[];
+  beforeEach(() => {
+    tokens = [];
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, opts?: any) => {
+      if (url === '/api/account/tokens' && opts?.method === 'POST') return { id: 'new', label: opts.body.name, token: 'yk_secret_value' };
+      if (url === '/api/account/tokens') return { tokens };
+      return base(url, opts);
+    });
+  });
+
+  const createCalls = () => fetchMock.mock.calls.filter(([u, o]) => u === '/api/account/tokens' && o?.method === 'POST');
+
+  it('creates a read-only 90-day token by default and reveals it once', async () => {
+    setUser();
+    const w = await mountPage();
+    expect((w.find('#token_scope').element as HTMLSelectElement).value).toBe('read');
+    expect((w.find('#token_expiry').element as HTMLSelectElement).value).toBe('90');
+    await w.find('#token_label').setValue('phone');
+    await w.find('form.token-create-form').trigger('submit');
+    await flushPromises();
+    expect(createCalls()[0]![1].body).toEqual({ name: 'phone', scope: 'read', expiresInDays: 90 });
+    expect(w.find('.new-token-reveal').text()).toContain('yk_secret_value');
+  });
+
+  it('sends full scope and null expiry for "Never"', async () => {
+    setUser();
+    const w = await mountPage();
+    await w.find('#token_label').setValue('script');
+    await w.find('#token_scope').setValue('full');
+    await w.find('#token_expiry').setValue('never');
+    await w.find('form.token-create-form').trigger('submit');
+    await flushPromises();
+    expect(createCalls()[0]![1].body).toEqual({ name: 'script', scope: 'full', expiresInDays: null });
+  });
+
+  it('offers 30 days, 90 days, 1 year and Never', async () => {
+    setUser();
+    const w = await mountPage();
+    const options = w.findAll('#token_expiry option').map((o) => o.text());
+    expect(options).toEqual(['30 days', '90 days', '1 year', 'Never']);
+    expect(w.findAll('#token_scope option').map((o) => o.text())).toEqual(['Read-only', 'Full access']);
+  });
+
+  it('lists scope, expiry and last use', async () => {
+    const now = Date.now();
+    tokens = [
+      { id: 'a', label: 'reader', scope: 'read', createdAt: now, expiresAt: now + 10 * DAY - 1000, lastUsedAt: null },
+      { id: 'b', label: 'writer', scope: 'full', createdAt: now, expiresAt: null, lastUsedAt: now },
+      { id: 'c', label: 'stale', scope: 'full', createdAt: now - 100 * DAY, expiresAt: now - DAY, lastUsedAt: null },
+    ];
+    setUser();
+    const w = await mountPage();
+    const rows = w.findAll('.api-token-row');
+    expect(rows[0]!.find('.api-token-scope').text()).toBe('Read-only');
+    expect(rows[0]!.text()).toContain('Expires in 10 days');
+    expect(rows[0]!.text()).toContain('Never used');
+    expect(rows[1]!.find('.api-token-scope').text()).toBe('Full access');
+    expect(rows[1]!.text()).toContain('Never expires');
+    expect(rows[1]!.text()).toContain('Last used');
+    expect(rows[2]!.text()).toContain('Expired');
+  });
+});
+
 describe('passwordProblem', () => {
   it('counts characters, not UTF-16 units, for the minimum', () => {
     expect(passwordProblem('😀😀😀😀😀😀😀😀')).toBeNull();

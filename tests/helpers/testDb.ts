@@ -54,6 +54,8 @@ export function createTestDb(): Database.Database {
       token_hash TEXT NOT NULL UNIQUE,
       created_at INTEGER NOT NULL,
       last_used_at INTEGER,
+      expires_at INTEGER,
+      scope TEXT NOT NULL DEFAULT 'full',
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 

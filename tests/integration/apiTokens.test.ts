@@ -35,7 +35,7 @@ describe('listApiTokens', () => {
 
     const result = listApiTokens('u1');
     expect(result).toEqual([
-      { id: 't1', label: 'Phone', createdAt: expect.any(Number), lastUsedAt: null }
+      { id: 't1', label: 'Phone', scope: 'full', createdAt: expect.any(Number), expiresAt: null, lastUsedAt: null }
     ]);
     expect(JSON.stringify(result)).not.toContain('hash1');
   });

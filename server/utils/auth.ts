@@ -1,7 +1,7 @@
 import { H3Event, getCookie, getHeader, setCookie, deleteCookie, createError } from 'h3';
 import crypto from 'crypto';
 import { bcryptHash, bcryptCompare } from './passwordWorker';
-import { getUserFromApiToken } from './apiTokens';
+import { getUserFromApiToken, purgeExpiredApiTokens } from './apiTokens';
 import { getForwardedProto } from './trustProxy';
 
 export interface UserSession {
@@ -94,10 +94,16 @@ export function purgeExpiredSessions(): number {
 
 export const SESSION_PURGE_INTERVAL_MS = 60 * 60 * 1000;
 
-/** Purges expired sessions now and every hour; returns a function that stops it. */
-export function startSessionCleanup(): () => void {
+/** The hourly job: expired sessions and expired API tokens. */
+export function runAuthMaintenance(): void {
   purgeExpiredSessions();
-  const timer = setInterval(purgeExpiredSessions, SESSION_PURGE_INTERVAL_MS);
+  purgeExpiredApiTokens();
+}
+
+/** Runs runAuthMaintenance now and every hour; returns a function that stops it. */
+export function startSessionCleanup(): () => void {
+  runAuthMaintenance();
+  const timer = setInterval(runAuthMaintenance, SESSION_PURGE_INTERVAL_MS);
   timer.unref?.();
   return () => clearInterval(timer);
 }
@@ -186,7 +192,7 @@ function getUserFromBearer(event: H3Event): UserSession | null {
   const bearer = authHeader?.match(/^Bearer\s+(.+)$/i);
   const token = bearer?.[1]?.trim();
   if (!token) return null;
-  return getUserFromApiToken(token);
+  return getUserFromApiToken(token, event.method ?? event.node?.req?.method ?? 'GET');
 }
 
 export async function getUserFromSession(event: H3Event): Promise<UserSession | null> {
