@@ -81,9 +81,18 @@
           @action="navigateTo('/')"
         />
 
+        <!-- Long videos, then Shorts in their own section (never interleaved);
+             each row keeps its place number in the playlist. -->
         <div v-else class="videos-list">
+          <section
+            v-for="group in videoGroups"
+            :key="group.kind"
+            class="videos-list playlist-kind-section"
+            :data-testid="`playlist-${group.kind}`"
+          >
+          <h2 v-if="videoGroups.length > 1" class="playlist-kind-title">{{ group.title }}</h2>
           <div 
-            v-for="(video, index) in videos" 
+            v-for="video in group.items" 
             :key="video.id" 
             class="video-row glass-panel"
             role="link"
@@ -93,7 +102,7 @@
             @keydown.enter.self.prevent="playVideo(video.id)"
             @keydown.space.self.prevent="playVideo(video.id)"
           >
-            <div class="video-index">{{ index + 1 }}</div>
+            <div class="video-index">{{ placeOf(video) }}</div>
             
             <MediaFrame
               class="video-thumbnail-container"
@@ -124,6 +133,7 @@
               </button>
             </div>
           </div>
+          </section>
         </div>
       </div>
     </div>
@@ -179,7 +189,8 @@
 import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { splitShorts } from '~/utils/videoKinds';
 import { useRoute } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
@@ -192,6 +203,14 @@ const toast = useToast();
 const playlist = ref<any>(null);
 useHead({ title: computed(() => playlist.value?.title || 'Playlist') });
 const videos = ref<any[]>([]);
+const videoGroups = computed(() => {
+  const { videos: long, shorts } = splitShorts(videos.value);
+  return [
+    { kind: 'videos', title: 'Videos', items: long },
+    { kind: 'shorts', title: 'Shorts', items: shorts },
+  ].filter((g) => g.items.length > 0);
+});
+const placeOf = (video: any) => videos.value.indexOf(video) + 1;
 const pending = ref(true);
 const error = ref<string | null>(null);
 const showSettingsModal = ref(false);
@@ -568,6 +587,17 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.videos-list:has(> .playlist-kind-section) {
+  gap: 28px;
+}
+
+.playlist-kind-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
 }
 
 .video-row {

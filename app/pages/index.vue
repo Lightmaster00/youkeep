@@ -54,7 +54,7 @@
         <div class="spinner"></div>
       </div>
       <p v-else-if="allVideos.length === 0" class="search-empty" data-testid="home-search-empty">
-        No videos match "{{ searchQuery }}".
+        {{ searchShorts.length > 0 ? 'No long videos match' : 'No videos match' }} "{{ searchQuery }}".
       </p>
       <div v-else class="video-grid stagger-in" data-testid="home-search-results">
         <VideoCard v-for="video in allVideos" :key="video.id" :video="video" :search-query="searchQuery" @hidden="onVideoHidden" />
@@ -71,6 +71,14 @@
           Next
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
+      </div>
+
+      <!-- Matching Shorts: their own section after the long videos. -->
+      <div v-if="searchShorts.length > 0" class="search-shorts-section" data-testid="home-search-shorts">
+        <h3 class="row-title">Shorts matching "{{ searchQuery }}"</h3>
+        <div class="video-shorts-grid">
+          <VideoCard v-for="video in searchShorts" :key="video.id" :video="video" :search-query="searchQuery" @hidden="onVideoHidden" />
+        </div>
       </div>
     </div>
 
@@ -187,10 +195,22 @@ const inSearch = computed(() => !!searchQuery.value);
 const { data: searchData, pending: searchPending } = await useAsyncData<{ videos: any[]; pagination: any } | null>(
   'home-search',
   () => (searchQuery.value
-    ? requestFetch<any>('/api/videos', { params: { page: page.value, limit: 24, q: searchQuery.value, status: 'completed', seed: feedSeed } })
+    ? requestFetch<any>('/api/videos', { params: { page: page.value, limit: 24, q: searchQuery.value, status: 'completed', seed: feedSeed, type: 'video' } })
     : Promise.resolve(null)),
   { watch: [searchQuery, page] }
 );
+
+// Matching Shorts (first 12) for the section after the long videos. A
+// failure only hides that section.
+const { data: searchShortsData } = await useAsyncData<any[]>(
+  'home-search-shorts',
+  async () => (searchQuery.value
+    ? ((await requestFetch<any>('/api/videos', { params: { limit: 12, q: searchQuery.value, status: 'completed', seed: feedSeed, type: 'short' } }).catch(() => null))?.videos || [])
+    : []),
+  { watch: [searchQuery], default: () => [] }
+);
+const searchShorts = ref<any[]>([]);
+watch(searchShortsData, (list) => { searchShorts.value = list || []; }, { immediate: true });
 
 // Fetch for home feed (featured block + discovery rows)
 const { data: homeFeedData, pending: homeFeedPending } = await useAsyncData<{
@@ -262,6 +282,7 @@ const onVideoHidden = (id: string) => {
     }
   }
   allVideos.value = allVideos.value.filter(v => v.id !== id);
+  searchShorts.value = searchShorts.value.filter(v => v.id !== id);
 };
 
 /* Formatters */
@@ -289,6 +310,10 @@ const formatUploadDate = (dateStr: string | null): string => {
 </script>
 
 <style scoped>
+.search-shorts-section {
+  margin-top: 32px;
+}
+
 .search-empty {
   color: var(--text-secondary);
   font-size: 14px;

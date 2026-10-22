@@ -72,9 +72,18 @@
         icon="video"
       />
 
-      <div v-else class="video-grid">
+      <!-- Long videos, then Shorts in their own section, never interleaved. -->
+      <template v-else>
+      <section
+        v-for="group in playlistGroups"
+        :key="group.kind"
+        class="channel-playlist-kind"
+        :data-testid="`channel-playlist-${group.kind}`"
+      >
+        <h3 v-if="playlistGroups.length > 1" class="section-title channel-playlist-kind-title">{{ group.title }}</h3>
+      <div :class="group.kind === 'shorts' ? 'shorts-grid' : 'video-grid'">
         <VideoCard
-          v-for="video in selectedPlaylistData.videos"
+          v-for="video in group.items"
           :key="video.id"
           :video="video"
           :show-channel-info="false"
@@ -92,6 +101,8 @@
           </template>
         </VideoCard>
       </div>
+      </section>
+      </template>
     </template>
   </div>
 </template>
@@ -100,6 +111,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useChannelDetail } from '~/composables/useChannelDetail';
+import { splitShorts } from '~/utils/videoKinds';
 
 const toast = useToast();
 
@@ -117,6 +129,13 @@ const channelPlaylists = computed(() => {
 
 const selectedPlaylistId = ref('');
 const selectedPlaylistData = ref<any>(null);
+const playlistGroups = computed(() => {
+  const { videos, shorts } = splitShorts<any>(selectedPlaylistData.value?.videos);
+  return [
+    { kind: 'videos', title: 'Videos', items: videos },
+    { kind: 'shorts', title: 'Shorts', items: shorts },
+  ].filter((g) => g.items.length > 0);
+});
 const loadingPlaylistDetail = ref(false);
 const syncingPlaylists = ref(false);
 

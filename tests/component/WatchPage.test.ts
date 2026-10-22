@@ -203,22 +203,49 @@ describe('watch page playlist panel (#2, #4)', () => {
   });
 });
 
-describe('watch page sidebar thumbnails', () => {
-  it('frames each related video in the shared 16:9 media frame, YouTube fallback mqdefault', async () => {
-    fetchMock.mockImplementation(async (url: string) => {
-      if (url.startsWith('/api/videos/vid1')) return videoReply();
-      if (url.startsWith('/api/videos')) return { videos: [
-        { id: 'r1', title: 'Related one', duration: 60, view_count: 1, upload_date: '20260101', is_short: 0 },
-        { id: 'r2', title: 'Related two', duration: 60, view_count: 1, upload_date: '20260101', is_short: 0, local_thumbnail_path: '/downloads/c/r2.jpg' },
-      ] };
-      return {};
-    });
+describe('watch page sidebar: related videos', () => {
+  const related = (type: string) => (type === 'short'
+    ? [{ id: 's1', title: 'Other short', duration: 20, view_count: 1, upload_date: '20260101', is_short: 1 }]
+    : [
+      { id: 'r1', title: 'Related one', duration: 60, view_count: 1, upload_date: '20260101', is_short: 0 },
+      { id: 'r2', title: 'Related two', duration: 60, view_count: 1, upload_date: '20260101', is_short: 0, local_thumbnail_path: '/downloads/c/r2.jpg' },
+    ]);
+  const relatedCalls = () => requestFetchMock.mock.calls.filter(([u]) => u === '/api/videos');
+
+  it('a long video gets long videos only, each in the shared 16:9 frame, YouTube fallback mqdefault', async () => {
+    requestFetchMock.mockImplementation(async (url: string, opts: any) => (url === '/api/videos' ? { videos: related(opts.params.type) } : {}));
     const w = await mountWatch();
+    expect(relatedCalls().map(([, o]) => o.params.type)).toEqual(['video']);
     const frames = w.findAll('.recommendation-card .rec-thumbnail-wrapper');
     expect(frames).toHaveLength(2);
     for (const f of frames) expect(f.classes()).toEqual(expect.arrayContaining(['media-frame', 'media-frame--video']));
     const srcs = w.findAll('.recommendation-card img.rec-thumbnail-img').map((i) => i.attributes('src'));
     expect(srcs).toEqual(['https://i.ytimg.com/vi/r1/mqdefault.jpg', '/downloads/c/r2.jpg?w=320']);
+    expect(w.findAll('.recommendation-card [data-testid="short-badge"]')).toHaveLength(0);
+    w.unmount();
+  });
+
+  it('a Short gets other Shorts, as vertical frames with a SHORT badge', async () => {
+    videoReply = () => ({ video: baseVideo({ is_short: 1 }), comments: [] });
+    requestFetchMock.mockImplementation(async (url: string, opts: any) => (url === '/api/videos' ? { videos: related(opts.params.type) } : {}));
+    const w = await mountWatch();
+    expect(relatedCalls().map(([, o]) => o.params.type)).toEqual(['short']);
+    expect(w.text()).toContain('Other short');
+    expect(w.text()).not.toContain('Related one');
+    expect(w.find('.recommendation-card .rec-thumbnail-wrapper').classes()).toContain('media-frame--short');
+    expect(w.find('.recommendation-card [data-testid="short-badge"]').text()).toBe('SHORT');
+    w.unmount();
+  });
+
+  it('a Short with no other Short falls back to long videos rather than an empty sidebar', async () => {
+    videoReply = () => ({ video: baseVideo({ is_short: 1 }), comments: [] });
+    requestFetchMock.mockImplementation(async (url: string, opts: any) => {
+      if (url !== '/api/videos') return {};
+      return { videos: opts.params.type === 'short' ? [{ id: 'vid1', title: 'A video', is_short: 1 }] : related('video') };
+    });
+    const w = await mountWatch();
+    expect(relatedCalls().map(([, o]) => o.params.type)).toEqual(['short', 'video']);
+    expect(w.text()).toContain('Related one');
     w.unmount();
   });
 });

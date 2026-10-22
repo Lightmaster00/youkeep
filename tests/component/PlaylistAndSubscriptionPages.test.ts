@@ -71,6 +71,32 @@ describe('personal playlist page', () => {
       .toEqual(['https://i.ytimg.com/vi/v1/mqdefault.jpg', 'https://i.ytimg.com/vi/v2/mqdefault.jpg']);
   });
 
+  it('a playlist holding Shorts lists its long videos, then its Shorts, under two headers', async () => {
+    const mixed = [
+      { id: 'v1', title: 'First clip', duration: 61, is_short: 0 },
+      { id: 's1', title: 'A short', duration: 20, is_short: 1 },
+      { id: 'v2', title: 'Second clip', duration: 62, is_short: 0 },
+    ];
+    fetchMock.mockImplementation(async (url: string) => (url.startsWith('/api/playlists/personal/p1') ? { playlist, videos: mixed } : {}));
+    const w = await mountPlaylist('p1', { token: 'share-tok' });
+    expect(w.findAll('.playlist-kind-title').map((h) => h.text())).toEqual(['Videos', 'Shorts']);
+    const videoRows = w.find('[data-testid="playlist-videos"]').findAll('.video-row');
+    const shortRows = w.find('[data-testid="playlist-shorts"]').findAll('.video-row');
+    expect(videoRows.map((r) => r.find('.video-title').text())).toEqual(['First clip', 'Second clip']);
+    expect(shortRows.map((r) => r.find('.video-title').text())).toEqual(['A short']);
+    // Each row keeps its place number in the playlist.
+    expect(videoRows.map((r) => r.find('.video-index').text())).toEqual(['1', '3']);
+    expect(shortRows[0]!.find('.video-index').text()).toBe('2');
+    expect(shortRows[0]!.find('.video-thumbnail-container').classes()).toContain('media-frame--short');
+    expect(shortRows[0]!.find('[data-testid="short-badge"]').text()).toBe('SHORT');
+  });
+
+  it('a playlist of long videos only shows no section headers', async () => {
+    const w = await mountPlaylist('p1', { token: 'share-tok' });
+    expect(w.findAll('.playlist-kind-title')).toHaveLength(0);
+    expect(w.findAll('.video-row')).toHaveLength(2);
+  });
+
   it('a refused playlist shows the error state, not someone else\'s content', async () => {
     const w = await mountPlaylist('nope', { token: 'wrong' });
     expect(w.text()).toContain('Error Loading Playlist');
@@ -121,5 +147,48 @@ describe('subscriptions page', () => {
     expect(videosCall[1]).toMatchObject({ params: { subscribed: 'true', status: 'completed' } });
     expect(w.text()).toContain('Followed one');
     expect(w.text()).toContain('Subscribed video');
+  });
+});
+
+describe('subscriptions page: Videos then Shorts', () => {
+  beforeEach(() => {
+    useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/channels') return { channels: [{ id: 'c1', title: 'Followed one', avatar_url: null }] };
+      if (url === '/api/videos') {
+        if (opts.params?.type === 'short') return { videos: [{ id: 'sh1', title: 'Followed short', is_short: 1 }], pagination: { total: 1, totalPages: 1 } };
+        const p = opts.params?.page ?? 1;
+        return { videos: [{ id: `v${p}`, title: `Long video ${p}`, is_short: 0 }], pagination: { total: 2, totalPages: 2 } };
+      }
+      return {};
+    });
+  });
+
+  it('asks for long videos and Shorts separately and shows them in two sections, Videos first', async () => {
+    const w = await mountSuspended(SubscriptionsPage, { route: '/subscriptions' });
+    await flushPromises();
+    const videoCalls = fetchMock.mock.calls.filter(([u]) => u === '/api/videos');
+    expect(videoCalls.map(([, o]) => o.params.type).sort()).toEqual(['short', 'video']);
+    for (const [, o] of videoCalls) expect(o.params).toMatchObject({ subscribed: 'true', status: 'completed' });
+    expect(w.findAll('h2.subs-section-title').map((h) => h.text())).toEqual(['Videos', 'Shorts']);
+    const videos = w.find('[data-testid="subs-videos"]');
+    const shorts = w.find('[data-testid="subs-shorts"]');
+    expect(videos.text()).toContain('Long video 1');
+    expect(videos.text()).not.toContain('Followed short');
+    expect(shorts.text()).toContain('Followed short');
+    expect(shorts.find('.media-frame--short').exists()).toBe(true);
+    expect(shorts.find('[data-testid="short-badge"]').text()).toBe('SHORT');
+    w.unmount();
+  });
+
+  it('"Show more videos" loads the next page of long videos, keeping the Shorts below', async () => {
+    const w = await mountSuspended(SubscriptionsPage, { route: '/subscriptions' });
+    await flushPromises();
+    await w.find('[data-testid="subs-videos-more"]').trigger('click');
+    await flushPromises();
+    expect(w.find('[data-testid="subs-videos"]').text()).toContain('Long video 2');
+    expect(w.find('[data-testid="subs-videos-more"]').exists()).toBe(false);
+    expect(w.find('[data-testid="subs-shorts"]').text()).toContain('Followed short');
+    w.unmount();
   });
 });

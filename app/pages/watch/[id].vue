@@ -293,7 +293,7 @@
           <div class="spinner"></div>
         </div>
 
-        <div v-else-if="!relatedData?.videos || relatedData.videos.length <= 1" class="sidebar-empty">
+        <div v-else-if="filteredRelatedVideos.length === 0" class="sidebar-empty">
           <p>No other archived videos available.</p>
         </div>
 
@@ -450,9 +450,23 @@ const errorMsg = computed(() => {
 
 // Fetch other recommended videos (completed only)
 const feedSeed = useFeedSeed();
-const { data: relatedData, pending: relatedPending } = await useFetch<{ videos: any[] }>(() => {
-  return `/api/videos?limit=10&status=completed&seed=${feedSeed}`;
-});
+// A long video is followed by long videos only; a Short by other Shorts (long
+// videos only when there is no other Short). useRequestFetch forwards the
+// viewer's cookies on SSR, so private videos are suggested too.
+const relatedFetch = useRequestFetch();
+const relatedType = computed<'video' | 'short'>(() => (video.value?.is_short ? 'short' : 'video'));
+const { data: relatedData, pending: relatedPending } = await useAsyncData<{ videos: any[] }>(
+  () => `watch-related:${videoId.value}:${relatedType.value}`,
+  async () => {
+    const load = async (type: 'video' | 'short') =>
+      ((await relatedFetch<any>('/api/videos', { params: { limit: 10, status: 'completed', seed: feedSeed, type } }))?.videos || []) as any[];
+    const first = await load(relatedType.value);
+    if (relatedType.value === 'short' && !first.some((v) => v.id !== videoId.value)) {
+      return { videos: await load('video') };
+    }
+    return { videos: first };
+  },
+);
 
 // Filter out the currently playing video from the sidebar recommendations list
 const filteredRelatedVideos = computed(() => {

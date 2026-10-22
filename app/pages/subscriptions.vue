@@ -43,7 +43,7 @@
 
     <!-- Empty State -->
     <EmptyState
-      v-else-if="videos.length === 0"
+      v-else-if="videos.length === 0 && shorts.length === 0"
       :title="inactiveChannelIds.length === channels.length && channels.length > 0 ? 'All channels are disabled' : 'No videos in your subscriptions'"
       description="Subscribe to YouTube channels in the archive to see their downloaded videos here."
       icon="book"
@@ -51,28 +51,45 @@
       action-route="/channels"
     />
 
-    <!-- Video Grid -->
-    <div v-else class="video-grid-wrapper">
-      <div class="video-grid">
-        <VideoCard
-          v-for="video in videos"
-          :key="video.id"
-          :video="video"
-          @hidden="onVideoHidden"
-        />
-      </div>
+    <!-- Long videos, then Shorts in their own section: never interleaved.
+         "Show more" (not an endless scroll) keeps the Shorts reachable. -->
+    <template v-else>
+      <section class="subs-section" data-testid="subs-videos">
+        <h2 class="subs-section-title">Videos</h2>
+        <p v-if="videos.length === 0" class="subs-section-empty">No long videos from these channels yet.</p>
+        <div v-else class="video-grid">
+          <VideoCard
+            v-for="video in videos"
+            :key="video.id"
+            :video="video"
+            @hidden="onVideoHidden"
+          />
+        </div>
+        <div v-if="hasMore && videos.length > 0" class="subs-show-more">
+          <button type="button" class="btn btn-secondary" data-testid="subs-videos-more" :disabled="loadingMore" @click="loadMoreVideos">
+            {{ loadingMore ? 'Loading...' : 'Show more videos' }}
+          </button>
+        </div>
+      </section>
 
-      <!-- Infinite Scroll Trigger -->
-      <div ref="loadMoreTrigger" class="infinite-scroll-trigger">
-        <div v-if="loadingMore" class="spinner small-spinner"></div>
-      </div>
-    </div>
+      <section v-if="shorts.length > 0" class="subs-section" data-testid="subs-shorts">
+        <h2 class="subs-section-title">Shorts</h2>
+        <div class="video-shorts-grid">
+          <VideoCard
+            v-for="video in shorts"
+            :key="video.id"
+            :video="video"
+            @hidden="onVideoHidden"
+          />
+        </div>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 useHead({ title: 'Subscriptions' });
@@ -90,11 +107,11 @@ const inactiveChannelIds = ref<string[]>([]);
 const pending = ref(true);
 const loadingMore = ref(false);
 const hasMore = ref(true);
-const loadMoreTrigger = ref<HTMLElement | null>(null);
+const shorts = ref<any[]>([]);
 
 const feedSeed = useFeedSeed();
-let observer: IntersectionObserver | null = null;
 let fetchRequestId = 0;
+const SHORTS_LIMIT = 24;
 
 // Fetch channels
 const fetchChannels = async () => {
@@ -119,19 +136,24 @@ const fetchVideos = async (isLoadMore = false) => {
     hasMore.value = true;
   }
 
+  const params = (extra: Record<string, unknown>) => ({
+    subscribed: 'true',
+    excludeChannels: inactiveChannelIds.value.length > 0 ? inactiveChannelIds.value.join(',') : undefined,
+    status: 'completed',
+    seed: feedSeed,
+    ...extra,
+  });
+
   try {
-    const res = await $fetch<any>('/api/videos', {
-      params: {
-        page: page.value,
-        limit: 16,
-        subscribed: 'true',
-        excludeChannels: inactiveChannelIds.value.length > 0 ? inactiveChannelIds.value.join(',') : undefined,
-        status: 'completed',
-        seed: feedSeed
-      }
-    });
+    // The Shorts come with the first page only; a failure there just hides
+    // their section.
+    const [res, shortsRes] = await Promise.all([
+      $fetch<any>('/api/videos', { params: params({ page: page.value, limit: 16, type: 'video' }) }),
+      isLoadMore ? Promise.resolve(null) : $fetch<any>('/api/videos', { params: params({ limit: SHORTS_LIMIT, type: 'short' }) }).catch(() => null),
+    ]);
 
     if (requestId !== fetchRequestId) return;
+    if (!isLoadMore) shorts.value = shortsRes?.videos || [];
 
     if (isLoadMore) {
       videos.value.push(...res.videos);
@@ -153,33 +175,15 @@ const fetchVideos = async (isLoadMore = false) => {
   }
 };
 
-// Setup observer reactively when trigger element is bound
-watch(loadMoreTrigger, (el) => {
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
-  if (el) {
-    observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value && !pending.value) {
-        page.value++;
-        fetchVideos(true);
-      }
-    }, { rootMargin: '200px' });
-    observer.observe(el);
-  }
-});
+const loadMoreVideos = () => {
+  if (!hasMore.value || loadingMore.value || pending.value) return;
+  page.value++;
+  fetchVideos(true);
+};
 
 onMounted(async () => {
   await fetchChannels();
   await fetchVideos();
-});
-
-onUnmounted(() => {
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
 });
 
 const toggleChannelFilter = (id: string) => {
@@ -196,6 +200,7 @@ watch(inactiveChannelIds, () => {
 
 const onVideoHidden = (id: string) => {
   videos.value = videos.value.filter((v: any) => v.id !== id);
+  shorts.value = shorts.value.filter((v: any) => v.id !== id);
 };
 </script>
 
@@ -296,11 +301,24 @@ const onVideoHidden = (id: string) => {
   border-width: 2.5px;
 }
 
-.infinite-scroll-trigger {
-  width: 100%;
-  height: 60px;
+.subs-section {
+  margin-bottom: 36px;
+}
+
+.subs-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 14px 0;
+}
+
+.subs-section-empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.subs-show-more {
   display: flex;
-  align-items: center;
   justify-content: center;
   margin-top: 20px;
 }

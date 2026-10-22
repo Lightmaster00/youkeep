@@ -95,3 +95,29 @@ describe('home page', () => {
     w.unmount();
   });
 });
+
+describe('home search (/?q=): Videos then Shorts', () => {
+  it('shows matching long videos, then matching Shorts in their own section', async () => {
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/channels') return { channels: [] };
+      if (url === '/api/videos') return opts.params?.type === 'short'
+        ? { videos: [{ id: 's1', title: 'Sushi short', is_short: 1 }], pagination: { total: 1, totalPages: 1 } }
+        : { videos: [{ id: 'v1', title: 'Sushi rolls', is_short: 0 }], pagination: { total: 1, totalPages: 1 } };
+      return {};
+    });
+    const w = await mountSuspended(HomePage, { route: '/?q=sushi' });
+    await flushPromises();
+    const types = fetchMock.mock.calls.filter(([u]) => u === '/api/videos').map(([, o]) => o.params.type).sort();
+    expect(types).toEqual(['short', 'video']);
+    const results = w.find('[data-testid="home-search-results"]');
+    const shorts = w.find('[data-testid="home-search-shorts"]');
+    expect(results.text()).toContain('Sushi rolls');
+    expect(results.text()).not.toContain('Sushi short');
+    expect(shorts.text()).toContain('Sushi short');
+    expect(shorts.find('.media-frame--short').exists()).toBe(true);
+    // The Shorts section comes after the videos.
+    const html = w.html();
+    expect(html.indexOf('home-search-results')).toBeLessThan(html.indexOf('home-search-shorts'));
+    w.unmount();
+  });
+});
