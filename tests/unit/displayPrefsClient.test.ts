@@ -58,7 +58,7 @@ describe('isHomeFullyHidden', () => {
     [{ homeHero: false, homeSections: ['subscriptions'] }, true, false],
     [{ homeHero: false, homeSections: ['suggested', 'subscriptions'] }, false, true],
     [{ homeHero: false, homeSections: ['popular'] }, false, false],
-    [{ homeHero: false, homeSections: ['suggested', 'recent'] }, false, false],
+    [{ homeHero: false, homeSections: ['suggested', 'popular'] }, false, false],
   ] as const)('%j (loggedIn=%s) → %s', (prefs, loggedIn, expected) => {
     expect(isHomeFullyHidden({ homeHero: prefs.homeHero, homeSections: [...prefs.homeSections] }, loggedIn)).toBe(expected);
   });

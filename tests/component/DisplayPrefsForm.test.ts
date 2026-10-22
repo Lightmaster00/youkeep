@@ -18,9 +18,17 @@ const rowOrder = (w: any) =>
 
 describe('DisplayPrefsForm — home section', () => {
   it('lists visible sections in order, then hidden ones', async () => {
-    useState<any>('display_prefs').value = buildView({}, { homeSections: ['popular', 'recent'] });
+    useState<any>('display_prefs').value = buildView({}, { homeSections: ['popular', 'suggested'] });
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    expect(rowOrder(w)).toEqual(['popular', 'recent', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes']);
+    expect(rowOrder(w)).toEqual(['popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes']);
+  });
+
+  it('offers no "Recently added" video row any more', async () => {
+    useState<any>('modules').value = { video: true, music: true, podcasts: true };
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'admin' } });
+    expect(w.find('[data-testid="section-row-recent"]').exists()).toBe(false);
+    const labels = w.findAll('[data-testid^="section-row-"]').map((r: any) => r.text());
+    expect(labels.filter((t: string) => /Recently added(?! music)/.test(t))).toEqual([]);
   });
 
   it('lists the music and podcast rows unticked by default, with English labels', async () => {
@@ -34,11 +42,11 @@ describe('DisplayPrefsForm — home section', () => {
   });
 
   it('opts in to a music row by appending it to the stored order', async () => {
-    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic'] }));
+    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['popular', 'suggested', 'subscriptions', 'recentMusic'] }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
     await w.find('[data-testid="section-row-recentMusic"] input[type="checkbox"]').setValue(true);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic'] });
+    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['popular', 'suggested', 'subscriptions', 'recentMusic'] });
   });
 
   it('marks the row of a module that is off', async () => {
@@ -50,43 +58,43 @@ describe('DisplayPrefsForm — home section', () => {
   });
 
   it('sends the swapped array when ↓ is clicked', async () => {
-    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['popular', 'recent', 'suggested', 'subscriptions'] }));
+    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['suggested', 'popular', 'subscriptions'] }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    await w.find('[data-testid="down-recent"]').trigger('click');
+    await w.find('[data-testid="down-popular"]').trigger('click');
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/account/preferences');
     expect(opts.method).toBe('PUT');
-    expect(opts.body).toEqual({ homeSections: ['popular', 'recent', 'suggested', 'subscriptions'] });
+    expect(opts.body).toEqual({ homeSections: ['suggested', 'popular', 'subscriptions'] });
   });
 
   it('removes a section from the array when its checkbox is unticked', async () => {
-    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['recent', 'suggested', 'subscriptions'] }));
+    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['suggested', 'subscriptions'] }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
     const box = w.find('[data-testid="section-row-popular"] input[type="checkbox"]');
     await box.setValue(false);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['recent', 'suggested', 'subscriptions'] });
+    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['suggested', 'subscriptions'] });
   });
 
   it('appends a re-enabled section at the end (not canonical order)', async () => {
     useState<any>('display_prefs').value = buildView({}, { homeSections: ['popular'] });
-    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['popular', 'recent'] }));
+    fetchMock.mockResolvedValue(buildView({}, { homeSections: ['popular', 'suggested'] }));
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
-    await w.find('[data-testid="section-row-recent"] input[type="checkbox"]').setValue(true);
+    await w.find('[data-testid="section-row-suggested"] input[type="checkbox"]').setValue(true);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['popular', 'recent'] });
+    expect(fetchMock.mock.calls[0][1].body).toEqual({ homeSections: ['popular', 'suggested'] });
   });
 
   it('applies move boundaries to visible rows only; hidden rows have no moves', async () => {
-    useState<any>('display_prefs').value = buildView({}, { homeSections: ['popular', 'recent'] });
+    useState<any>('display_prefs').value = buildView({}, { homeSections: ['popular', 'suggested'] });
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
     const dis = (id: string) => w.find(`[data-testid="${id}"]`).attributes('disabled') !== undefined;
-    expect(dis('down-recent')).toBe(true);
+    expect(dis('down-suggested')).toBe(true);
     expect(dis('up-popular')).toBe(true);
     expect(dis('down-popular')).toBe(false);
-    expect(dis('up-recent')).toBe(false);
-    for (const id of ['suggested', 'subscriptions', 'recentMusic', 'newEpisodes']) {
+    expect(dis('up-suggested')).toBe(false);
+    for (const id of ['subscriptions', 'recentMusic', 'newEpisodes']) {
       expect(dis(`up-${id}`)).toBe(true);
       expect(dis(`down-${id}`)).toBe(true);
     }

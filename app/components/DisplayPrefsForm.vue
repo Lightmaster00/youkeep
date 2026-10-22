@@ -182,7 +182,6 @@ function onNavChange(to: string, event: Event) {
 }
 
 const SECTION_LABELS: Record<HomeSectionId, string> = {
-  recent: 'Recently added',
   popular: 'Popular',
   suggested: 'Suggested for you',
   subscriptions: 'From channels you follow',

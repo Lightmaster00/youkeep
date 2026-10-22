@@ -84,7 +84,7 @@ describe('home page', () => {
   });
 
   it('tells only guests to log in on an empty library (#22)', async () => {
-    useState('display_prefs').value = buildView({ homeHero: true, homeSections: ['recent'] }, null);
+    useState('display_prefs').value = buildView({ homeHero: true, homeSections: ['popular'] }, null);
     let w = await mountHome();
     expect(w.find('[data-testid="home-empty"]').text()).toContain('Log in as administrator');
     w.unmount();

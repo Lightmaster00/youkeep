@@ -14,7 +14,7 @@ interface FeedVideo {
   duration: number | null;
   view_count: number | null;
   upload_date: string | null;
-  created_at?: number; // present on pool-sourced videos (recent/popular/subscriptions), absent on suggestion-sourced ones — not read by any consumer, so this is safe
+  created_at?: number; // present on pool-sourced videos (newest/popular/subscriptions), absent on suggestion-sourced ones — not read by any consumer, so this is safe
   local_video_path: string | null;
   local_thumbnail_path: string | null;
   was_live?: number;
@@ -51,7 +51,6 @@ const FEED_VIDEO_COLUMNS = `
 `;
 
 const SECTION_TITLES: Record<HomeSectionId, string> = {
-  recent: 'Recently added',
   popular: 'Popular',
   suggested: 'Suggested for you',
   subscriptions: 'By followed channel',
@@ -108,7 +107,7 @@ export default defineEventHandler(async (event) => {
 
   // Same SELECT/ORDER BY for the up-front pools (hero) and the lazy re-queries
   // done by the section builders. `limit` is a server-side integer.
-  const queryPool = (kind: 'popular' | 'recent', limit: number): FeedVideo[] => {
+  const queryPool = (kind: 'popular' | 'newest', limit: number): FeedVideo[] => {
     const popular = kind === 'popular';
     const ranking: PopularRanking = POPULAR_ORDER[prefs.popularRanking] ? prefs.popularRanking : 'localViewers';
     const metric = popular ? POPULAR_METRIC(cutoff)[ranking] : { column: '', join: '' };
@@ -126,7 +125,9 @@ export default defineEventHandler(async (event) => {
   };
 
   const popularPool = queryPool('popular', POOL_SIZE);
-  const recentPool = queryPool('recent', POOL_SIZE);
+  // Newest videos: only the hero's small slots draw from it (there is no
+  // "Recently added" row any more).
+  const newestPool = queryPool('newest', POOL_SIZE);
 
   const usedIds = new Set<string>();
 
@@ -168,7 +169,7 @@ export default defineEventHandler(async (event) => {
         usedIds.add(suggestion.id);
       }
     }
-    for (const v of recentPool) {
+    for (const v of newestPool) {
       if (small.length >= 4) break;
       if (usedIds.has(v.id)) continue;
       if (subscribedChannelIds.has(v.channel_id)) continue;
@@ -182,12 +183,8 @@ export default defineEventHandler(async (event) => {
   const rowSize = prefs.rowSize;
 
   // Lazy builders re-query sized from what earlier sections already claimed, so
-  // moving 'recent'/'popular' below big sections never starves them.
+  // moving 'popular' below big sections never starves it.
   const builders: Record<HomeSectionId, () => any | null> = {
-    recent: () => {
-      const videos = claim(queryPool('recent', usedIds.size + rowSize).filter(v => !usedIds.has(v.id)).slice(0, rowSize));
-      return videos.length > 0 ? { id: 'recent', title: SECTION_TITLES.recent, videos } : null;
-    },
     popular: () => {
       const videos = claim(queryPool('popular', usedIds.size + rowSize).filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'popular', title: SECTION_TITLES.popular, videos } : null;

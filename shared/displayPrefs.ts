@@ -8,16 +8,20 @@ export const DENSITIES: readonly Density[] = ['compact', 'comfortable', 'spaciou
 export const LANDING_SPACES: readonly LandingSpace[] = ['auto', 'video', 'music', 'podcasts'];
 export const HIDEABLE_NAV_LINKS = ['/shorts', '/channels', '/subscriptions', '/playlists'] as const;
 
-export type HomeSectionId = 'recent' | 'popular' | 'suggested' | 'subscriptions' | 'recentMusic' | 'newEpisodes';
+export type HomeSectionId = 'popular' | 'suggested' | 'subscriptions' | 'recentMusic' | 'newEpisodes';
 export type PopularRanking = 'localViewers' | 'youtubeViews' | 'trending7d' | 'watchTime';
 
-export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes'];
+export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes'];
+// Home section ids that existed once and were removed ('recent' was the video
+// "Recently added" row). Stored or submitted lists that still name one are
+// accepted and the id is dropped, so old preferences never fail to load.
+export const RETIRED_HOME_SECTION_IDS: readonly string[] = ['recent'];
 // Sections a logged-out visitor can see (the others need a user). The server
 // mirrors this by returning null for guests in the suggested/subscriptions
 // builders of server/api/home/feed.get.ts: update both together.
 // recentMusic/newEpisodes are listed because guests may see public content;
 // the music/podcast visibility rules still filter what they get.
-export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['recent', 'popular', 'recentMusic', 'newEpisodes'];
+export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['popular', 'recentMusic', 'newEpisodes'];
 // The home rows that belong to a module other than Video (hidden when it is off).
 export const MEDIA_HOME_SECTION_MODULE: Readonly<Partial<Record<HomeSectionId, 'music' | 'podcasts'>>> = {
   recentMusic: 'music',
@@ -52,7 +56,7 @@ export const APP_DEFAULTS: DisplayPrefs = {
   density: 'comfortable',
   hiddenNavLinks: [],
   landingSpace: 'auto',
-  homeSections: ['recent', 'popular', 'suggested', 'subscriptions'],
+  homeSections: ['popular', 'suggested', 'subscriptions'],
   homeHero: true,
   popularRanking: 'localViewers',
   rowSize: 15,
@@ -64,6 +68,16 @@ export class InvalidPrefError extends Error {
   constructor(key: string, message: string) {
     super(message);
     this.name = 'InvalidPrefError';
+    this.key = key;
+  }
+}
+
+// Thrown for a homeSections list made only of retired ids: callers treat the
+// key as absent (inherit the default), never as an error.
+class RetiredOnlyError extends Error {
+  key: string;
+  constructor(key: string) {
+    super(`${key} only named removed sections.`);
     this.key = key;
   }
 }
@@ -101,14 +115,20 @@ function validateValue(key: PrefKey, value: unknown): DisplayPrefs[PrefKey] {
   if (key === 'homeSections') {
     if (!Array.isArray(value)) throw new InvalidPrefError(key, 'homeSections must be an array.');
     const seen = new Set<string>();
+    const kept: string[] = [];
     for (const item of value) {
+      if (typeof item === 'string' && RETIRED_HOME_SECTION_IDS.includes(item)) continue;
       if (typeof item !== 'string' || !(HOME_SECTION_IDS as readonly string[]).includes(item)) {
         throw new InvalidPrefError(key, `homeSections may only contain: ${HOME_SECTION_IDS.join(', ')}.`);
       }
       if (seen.has(item)) throw new InvalidPrefError(key, 'homeSections must not contain duplicates.');
       seen.add(item);
+      kept.push(item);
     }
-    return [...value] as HomeSectionId[];
+    // A list that named only retired ids would now hide every row: treat it as
+    // never chosen, so the inherited default applies instead of an empty home.
+    if (kept.length === 0 && value.length > 0) throw new RetiredOnlyError(key);
+    return kept as HomeSectionId[];
   }
   // hiddenNavLinks
   if (!Array.isArray(value)) {
@@ -143,7 +163,13 @@ export function validatePartial(input: unknown): ValidatedChange {
       remove.push(key);
       continue;
     }
-    (set as Record<string, unknown>)[key] = validateValue(key, value);
+    try {
+      (set as Record<string, unknown>)[key] = validateValue(key, value);
+    } catch (err) {
+      // Only retired ids: the same as clearing the key.
+      if (err instanceof RetiredOnlyError) remove.push(key);
+      else throw err;
+    }
   }
   return { set, remove };
 }

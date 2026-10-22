@@ -15,7 +15,7 @@ describe('validatePartial', () => {
   it('accepts a valid value for every key, including empty arrays', () => {
     const all = {
       density: 'compact', hiddenNavLinks: ['/shorts', '/playlists'], landingSpace: 'music',
-      homeSections: ['popular', 'recent'], homeHero: false, popularRanking: 'watchTime', rowSize: 30, subscriptionChannels: 16,
+      homeSections: ['popular', 'suggested'], homeHero: false, popularRanking: 'watchTime', rowSize: 30, subscriptionChannels: 16,
     };
     expect(validatePartial(all)).toEqual({ set: all, remove: [] });
     expect(validatePartial({ hiddenNavLinks: [], homeSections: [] }).set).toEqual({ hiddenNavLinks: [], homeSections: [] });
@@ -37,9 +37,9 @@ describe('validatePartial', () => {
     [{ rowSize: 12 }, 'rowSize'],
     [{ rowSize: '15' }, 'rowSize'],
     [{ subscriptionChannels: 7 }, 'subscriptionChannels'],
-    [{ homeSections: 'recent' }, 'homeSections'],
-    [{ homeSections: ['recent', 'bogus'] }, 'homeSections'],
-    [{ homeSections: ['recent', 'recent'] }, 'homeSections'],
+    [{ homeSections: 'popular' }, 'homeSections'],
+    [{ homeSections: ['popular', 'bogus'] }, 'homeSections'],
+    [{ homeSections: ['popular', 'popular'] }, 'homeSections'],
     [{ homeSections: ['recentMusic', 'recentMusic'] }, 'homeSections'],
     [{ homeSections: ['recentmusic'] }, 'homeSections'],
     [{ hiddenNavLinks: 'shorts' }, 'hiddenNavLinks'],
@@ -56,13 +56,13 @@ describe('validatePartial', () => {
 
 describe('music and podcast home sections', () => {
   it('accepts recentMusic and newEpisodes in any order, mixed with the video sections', () => {
-    expect(validatePartial({ homeSections: ['newEpisodes', 'recent', 'recentMusic'] }).set)
-      .toEqual({ homeSections: ['newEpisodes', 'recent', 'recentMusic'] });
-    expect(HOME_SECTION_IDS).toEqual(['recent', 'popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes']);
+    expect(validatePartial({ homeSections: ['newEpisodes', 'popular', 'recentMusic'] }).set)
+      .toEqual({ homeSections: ['newEpisodes', 'popular', 'recentMusic'] });
+    expect(HOME_SECTION_IDS).toEqual(['popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes']);
   });
 
   it('keeps them out of the app default so stored and inherited prefs do not change silently', () => {
-    expect(APP_DEFAULTS.homeSections).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
+    expect(APP_DEFAULTS.homeSections).toEqual(['popular', 'suggested', 'subscriptions']);
     expect(buildView({}, {}).effective.homeSections).not.toContain('recentMusic');
     expect(buildView({}, {}).effective.homeSections).not.toContain('newEpisodes');
   });
@@ -87,7 +87,7 @@ describe('parseStoredPartial', () => {
     expect(parseStoredPartial(JSON.stringify({ density: 'compact', rowSize: 99, landingSpace: 'music', bogus: 1 })))
       .toEqual({ density: 'compact', landingSpace: 'music' });
     expect(parseStoredPartial(JSON.stringify({ density: null, rowSize: 10 }))).toEqual({ rowSize: 10 });
-    expect(parseStoredPartial(JSON.stringify({ hiddenNavLinks: ['/shorts', '/nope'], homeSections: ['recent', 'bogus'], density: 'compact' })))
+    expect(parseStoredPartial(JSON.stringify({ hiddenNavLinks: ['/shorts', '/nope'], homeSections: ['popular', 'bogus'], density: 'compact' })))
       .toEqual({ density: 'compact' });
   });
 
@@ -108,9 +108,9 @@ describe('mergePrefs / applyChange', () => {
   it('copies arrays so callers cannot mutate the defaults', () => {
     const merged = mergePrefs(APP_DEFAULTS, null);
     merged.hiddenNavLinks.push('/shorts');
-    merged.homeSections.push('recent');
+    merged.homeSections.push('recentMusic');
     expect(APP_DEFAULTS.hiddenNavLinks).toEqual([]);
-    expect(APP_DEFAULTS.homeSections).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
+    expect(APP_DEFAULTS.homeSections).toEqual(['popular', 'suggested', 'subscriptions']);
   });
 
   it('applyChange sets then removes keys', () => {
@@ -134,5 +134,31 @@ describe('buildView', () => {
 
   it('gives a logged-in user with no choices an empty overrides object, not null', () => {
     expect(buildView({}, {}).overrides).toEqual({});
+  });
+});
+
+describe('the retired "recent" (Recently added) video section', () => {
+  it('is no longer a section id, for anyone', () => {
+    expect(HOME_SECTION_IDS).not.toContain('recent');
+    expect(GUEST_HOME_SECTIONS).toEqual(['popular', 'recentMusic', 'newEpisodes']);
+    expect(APP_DEFAULTS.homeSections).toEqual(['popular', 'suggested', 'subscriptions']);
+  });
+
+  it('a stored list naming it is read back without it, keeping the rest and its order', () => {
+    expect(parseStoredPartial(JSON.stringify({ homeSections: ['subscriptions', 'recent', 'popular'], density: 'compact' })))
+      .toEqual({ homeSections: ['subscriptions', 'popular'], density: 'compact' });
+  });
+
+  it('a stored list naming only it falls back to the inherited default instead of an empty home', () => {
+    expect(parseStoredPartial(JSON.stringify({ homeSections: ['recent'] }))).toEqual({});
+    expect(buildView(parseStoredPartial(JSON.stringify({ homeSections: ['recent'] })), {}).effective.homeSections)
+      .toEqual(['popular', 'suggested', 'subscriptions']);
+    // An explicitly empty list is still a choice and is kept.
+    expect(parseStoredPartial(JSON.stringify({ homeSections: [] }))).toEqual({ homeSections: [] });
+  });
+
+  it('a write naming it (an old client) is accepted with the id dropped, never a 400', () => {
+    expect(validatePartial({ homeSections: ['recent', 'popular'] })).toEqual({ set: { homeSections: ['popular'] }, remove: [] });
+    expect(validatePartial({ homeSections: ['recent'] })).toEqual({ set: {}, remove: ['homeSections'] });
   });
 });
