@@ -442,6 +442,25 @@ export function openDatabase(dbPath: string): Database.Database {
   // migration count as "remember me" so nobody is signed out by an upgrade.
   try { db.exec(`ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER;`); } catch (e) {}
   try { db.exec(`ALTER TABLE sessions ADD COLUMN remember INTEGER NOT NULL DEFAULT 1;`); } catch (e) {}
+  // Home, subscriptions and recommendations: YouTube categories and tags (JSON
+  // arrays, filled after a download or by the metadata backfill), the
+  // server-side resume position, and "seen" marks of subscription videos.
+  try { db.exec(`ALTER TABLE videos ADD COLUMN categories TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE videos ADD COLUMN tags TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE videos ADD COLUMN metadata_enriched_at INTEGER;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE user_history ADD COLUMN position_seconds INTEGER NOT NULL DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE user_history ADD COLUMN duration_seconds INTEGER;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE user_history ADD COLUMN position_updated_at INTEGER;`); } catch (e) {}
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_seen_videos (
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, video_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
+    );
+  `);
   // Security log (server/utils/securityLog.ts): capped and purged after 90 days.
   db.exec(`
     CREATE TABLE IF NOT EXISTS security_events (
@@ -501,6 +520,8 @@ export function openDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_music_tracks_artist_status ON music_tracks(artist_id, download_status);
     CREATE INDEX IF NOT EXISTS idx_podcast_episodes_show_status ON podcast_episodes(show_id, download_status);
+    CREATE INDEX IF NOT EXISTS idx_videos_channel_upload ON videos(channel_id, upload_date);
+    CREATE INDEX IF NOT EXISTS idx_user_seen_videos_video_id ON user_seen_videos(video_id);
   `);
 
   // A row without an id cannot be updated or deleted by id (TEXT PRIMARY KEY

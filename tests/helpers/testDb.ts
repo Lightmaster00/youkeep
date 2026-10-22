@@ -118,6 +118,9 @@ export function createTestDb(): Database.Database {
       is_manually_queued INTEGER DEFAULT 0,
       local_video_path TEXT,
       local_thumbnail_path TEXT,
+      categories TEXT,
+      tags TEXT,
+      metadata_enriched_at INTEGER,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE
     );
@@ -133,7 +136,35 @@ export function createTestDb(): Database.Database {
       video_id TEXT NOT NULL,
       watched_at INTEGER NOT NULL,
       watch_time_seconds INTEGER DEFAULT 0,
+      position_seconds INTEGER NOT NULL DEFAULT 0,
+      duration_seconds INTEGER,
+      position_updated_at INTEGER,
       PRIMARY KEY (user_id, video_id)
+    );
+
+    CREATE TABLE user_seen_videos (
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, video_id)
+    );
+
+    CREATE TABLE personal_playlists (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      user_id TEXT NOT NULL,
+      visibility TEXT DEFAULT 'private' CHECK(visibility IN ('public', 'unlisted', 'private')),
+      share_token TEXT UNIQUE,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE personal_playlist_videos (
+      playlist_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      position INTEGER NOT NULL,
+      PRIMARY KEY (playlist_id, video_id),
+      FOREIGN KEY (playlist_id) REFERENCES personal_playlists(id) ON DELETE CASCADE
     );
 
     CREATE TABLE user_hidden_videos (
@@ -369,10 +400,13 @@ export function insertVideo(db: Database.Database, opts: {
   localVideoPath?: string | null;
   localThumbnailPath?: string | null;
   createdAt?: number;
+  categories?: string[] | null;
+  tags?: string[] | null;
+  metadataEnrichedAt?: number | null;
 }) {
   db.prepare(`
-    INSERT INTO videos (id, title, description, channel_id, visibility, share_token, download_status, upload_date, duration, view_count, is_short, local_video_path, local_thumbnail_path, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO videos (id, title, description, channel_id, visibility, share_token, download_status, upload_date, duration, view_count, is_short, local_video_path, local_thumbnail_path, created_at, categories, tags, metadata_enriched_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     opts.id,
     opts.title ?? `Video ${opts.id}`,
@@ -387,7 +421,10 @@ export function insertVideo(db: Database.Database, opts: {
     opts.isShort ? 1 : 0,
     opts.localVideoPath ?? null,
     opts.localThumbnailPath ?? null,
-    opts.createdAt ?? Date.now()
+    opts.createdAt ?? Date.now(),
+    opts.categories ? JSON.stringify(opts.categories) : null,
+    opts.tags ? JSON.stringify(opts.tags) : null,
+    opts.metadataEnrichedAt ?? null
   );
 }
 
@@ -447,11 +484,29 @@ export function sessionCookie(sessionId: string): string {
   return `youkeep_session=${sessionId}`;
 }
 
-export function insertUserHistory(db: Database.Database, opts: { userId: string; videoId: string; watchTimeSeconds?: number; watchedAt?: number }) {
+export function insertUserHistory(db: Database.Database, opts: {
+  userId: string; videoId: string; watchTimeSeconds?: number; watchedAt?: number;
+  positionSeconds?: number; durationSeconds?: number | null; positionUpdatedAt?: number | null;
+}) {
   db.prepare(`
-    INSERT INTO user_history (user_id, video_id, watched_at, watch_time_seconds)
-    VALUES (?, ?, ?, ?)
-  `).run(opts.userId, opts.videoId, opts.watchedAt ?? Date.now(), opts.watchTimeSeconds ?? 0);
+    INSERT INTO user_history (user_id, video_id, watched_at, watch_time_seconds, position_seconds, duration_seconds, position_updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    opts.userId, opts.videoId, opts.watchedAt ?? Date.now(), opts.watchTimeSeconds ?? 0,
+    opts.positionSeconds ?? 0, opts.durationSeconds ?? null, opts.positionUpdatedAt ?? null,
+  );
+}
+
+export function insertSeenVideo(db: Database.Database, opts: { userId: string; videoId: string; seenAt?: number }) {
+  db.prepare('INSERT INTO user_seen_videos (user_id, video_id, seen_at) VALUES (?, ?, ?)').run(opts.userId, opts.videoId, opts.seenAt ?? Date.now());
+}
+
+export function insertPersonalPlaylist(db: Database.Database, opts: { id: string; userId: string; title?: string; visibility?: string; createdAt?: number; videoIds?: string[] }) {
+  db.prepare('INSERT INTO personal_playlists (id, title, user_id, visibility, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(opts.id, opts.title ?? `Playlist ${opts.id}`, opts.userId, opts.visibility ?? 'private', opts.createdAt ?? Date.now());
+  (opts.videoIds ?? []).forEach((videoId, position) => {
+    db.prepare('INSERT INTO personal_playlist_videos (playlist_id, video_id, position) VALUES (?, ?, ?)').run(opts.id, videoId, position);
+  });
 }
 
 export function insertHiddenVideo(db: Database.Database, opts: { userId: string; videoId: string }) {
