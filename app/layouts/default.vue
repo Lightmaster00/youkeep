@@ -4,7 +4,7 @@
     <header class="header">
       <div class="header-left">
         <NuxtLink to="/" class="logo">
-          <span class="logo-you">You</span><span class="logo-keep">Keep</span>
+          <AppLogo size="md" />
         </NuxtLink>
       </div>
 
@@ -489,30 +489,13 @@ onUnmounted(() => {
 .logo {
   display: flex;
   align-items: center;
-  font-family: var(--font-title);
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
 }
 
-.logo-you {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
-}
-
-.logo-keep {
-  color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(4px);
-  padding: 1px 7px;
-  border-radius: 8px;
-  margin-left: 4px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
+/* On phones the mark alone is enough; the name would crowd the search box. */
+@media (max-width: 480px) {
+  .logo :deep(.app-logo-word) {
+    display: none;
+  }
 }
 
 .search-form {

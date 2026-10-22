@@ -1,7 +1,7 @@
 <template>
   <div class="error-page">
     <NuxtLink to="/" class="error-logo" aria-label="YouKeep home">
-      <span class="error-logo-you">You</span><span class="error-logo-keep">Keep</span>
+      <AppLogo size="lg" />
     </NuxtLink>
     <main class="error-card" role="main">
       <p class="error-code" aria-hidden="true">{{ statusCode }}</p>
@@ -57,23 +57,7 @@ function retry() {
   color: var(--text-primary);
 }
 .error-logo {
-  font-family: var(--font-title);
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.error-logo-you {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.error-logo-keep {
-  margin-left: 4px;
-  padding: 1px 7px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-weight: 600;
+  display: inline-flex;
 }
 .error-card {
   max-width: 440px;

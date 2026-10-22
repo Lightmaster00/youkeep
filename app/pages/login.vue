@@ -2,7 +2,7 @@
   <div class="login-container">
     <div class="login-card glass-panel">
       <div class="logo-container">
-        <span class="logo-you">You</span><span class="logo-keep">Keep</span>
+        <AppLogo size="lg" />
       </div>
       
       <h2 class="login-title">
@@ -184,30 +184,7 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  font-family: var(--font-title);
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
   margin-bottom: 24px;
-}
-
-.logo-you {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
-}
-
-.logo-keep {
-  color: var(--text-primary);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(4px);
-  padding: 1px 9px;
-  border-radius: 8px;
-  margin-left: 4px;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
 }
 
 .login-title {

@@ -13,7 +13,7 @@ const BUILD_ID = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE_PREFIX = 'youkeep-static-';
 const CACHE_NAME = CACHE_PREFIX + BUILD_ID;
 const PRECACHE = ['/favicon.ico', '/icon.svg'];
-const STATIC_FILES = ['/favicon.ico', '/icon.svg', '/default-playlist.png'];
+const STATIC_FILES = ['/favicon.ico', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/default-playlist.png'];
 
 // 'cache' (cache-first, versioned static asset) or 'network' (do not touch:
 // the browser handles it, offline navigations simply fail).
