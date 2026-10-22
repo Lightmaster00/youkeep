@@ -23,7 +23,7 @@ export default defineNuxtConfig({
     head: {
       title: 'YouKeep',
       meta: [
-        { name: 'theme-color', content: '#8b5cf6' },
+        { name: 'theme-color', content: '#4338CA' },
         // A private, self-hosted app: keep every page out of search engines.
         { name: 'robots', content: 'noindex, nofollow' },
         // The standard name (the apple- one alone is deprecated); iOS still
@@ -35,7 +35,7 @@ export default defineNuxtConfig({
         { rel: 'manifest', href: '/manifest.webmanifest' },
         { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' },
         { rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' },
-        { rel: 'apple-touch-icon', href: '/icon.svg' }
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' }
       ]
     }
   }
