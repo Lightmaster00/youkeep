@@ -17,6 +17,7 @@ import { decodeChildOutput, isShuttingDown, killProcessTree, spawnInGroup, track
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
 import { usableStoredSchedule } from './validation';
+import { SYNC_TYPE_CONFIG } from './autoSync';
 
 /** Longest folder name (UTF-8 bytes) we create; most file systems stop at 255. */
 export const MAX_FOLDER_NAME_BYTES = 240;
@@ -2180,6 +2181,7 @@ export async function syncAllChannels(): Promise<void> {
     activeFlagSettingKey: 'sync_all_active',
     pausedSettingKey: 'downloader_paused',
     moduleId: 'video',
+    syncType: 'video',
     fetchEntities: () => listChannelsToSync(db),
     processEntity: async (ch) => {
       // Paused by an admin since the list was read: leave it paused.
@@ -2356,7 +2358,7 @@ export function initScheduler(): void {
   const scheduleSetting = db.prepare("SELECT value FROM settings WHERE key = 'sync_cron_schedule'").get() as { value: string } | undefined;
   
   const enabled = enabledSetting ? enabledSetting.value === '1' : false;
-  const cronExpression = scheduleSetting?.value || '0 3 * * *';
+  const cronExpression = scheduleSetting?.value || SYNC_TYPE_CONFIG.video.defaultSchedule;
 
   if (getActiveCronJob()) {
     getActiveCronJob()!.stop();

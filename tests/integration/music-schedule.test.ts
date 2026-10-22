@@ -29,7 +29,7 @@ describe('GET /api/admin/music/schedule', () => {
 
   it('defaults to disabled with the default schedule, then reflects persisted settings', async () => {
     const cookie = loginAs('admin1', 'admin');
-    expect(await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }))).toEqual({ enabled: false, schedule: '30 3 * * *' });
+    expect(await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }))).toEqual({ enabled: false, schedule: '30 */6 * * *' });
     insertSetting(db, { key: 'music_sync_cron_enabled', value: '1' });
     insertSetting(db, { key: 'music_sync_cron_schedule', value: '0 * * * *' });
     expect(await getHandler(mockEvent(cookie, { path: '/api/admin/music/schedule' }))).toEqual({ enabled: true, schedule: '0 * * * *' });

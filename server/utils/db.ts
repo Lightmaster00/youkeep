@@ -4,6 +4,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getDataDir } from './dataDir';
 import { ensurePodcastPubTs } from './podcastPubDate';
+import { applyAutoSyncDefaults, SYNC_TYPE_CONFIG } from './autoSync';
 import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migrateFtsRenameTriggers, runPlannerMaintenance } from './dbTuning';
 
 let dbInstance: Database.Database | null = null;
@@ -684,8 +685,8 @@ export function openDatabase(dbPath: string): Database.Database {
 
   const cronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'sync_cron_schedule'").get() as { count: number };
   if (cronScheduleCheck.count === 0) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('sync_cron_schedule', '0 3 * * *')").run();
-    console.log('Seeded setting sync_cron_schedule: 0 3 * * *');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('sync_cron_schedule', ?)").run(SYNC_TYPE_CONFIG.video.defaultSchedule);
+    console.log(`Seeded setting sync_cron_schedule: ${SYNC_TYPE_CONFIG.video.defaultSchedule}`);
   }
 
   const musicSyncAllCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_all_active'").get() as { count: number };
@@ -702,8 +703,8 @@ export function openDatabase(dbPath: string): Database.Database {
 
   const musicCronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_cron_schedule'").get() as { count: number };
   if (musicCronScheduleCheck.count === 0) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_schedule', '30 3 * * *')").run();
-    console.log('Seeded setting music_sync_cron_schedule: 30 3 * * *');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_schedule', ?)").run(SYNC_TYPE_CONFIG.music.defaultSchedule);
+    console.log(`Seeded setting music_sync_cron_schedule: ${SYNC_TYPE_CONFIG.music.defaultSchedule}`);
   }
 
   const podcastSyncAllCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_all_active'").get() as { count: number };
@@ -720,9 +721,12 @@ export function openDatabase(dbPath: string): Database.Database {
 
   const podcastCronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_cron_schedule'").get() as { count: number };
   if (podcastCronScheduleCheck.count === 0) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_cron_schedule', '0 4 * * *')").run();
-    console.log('Seeded setting podcast_sync_cron_schedule: 0 4 * * *');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_cron_schedule', ?)").run(SYNC_TYPE_CONFIG.podcast.defaultSchedule);
+    console.log(`Seeded setting podcast_sync_cron_schedule: ${SYNC_TYPE_CONFIG.podcast.defaultSchedule}`);
   }
+
+  // One-time: automatic sync on by default (new and existing installs).
+  applyAutoSyncDefaults(db);
 
   const defaultDirCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'default_downloads_dir'").get() as { count: number };
   if (defaultDirCheck.count === 0) {

@@ -16,6 +16,7 @@ import { decodeChildOutput, isShuttingDown, killProcessTree, spawnInGroup, track
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
 import { usableStoredSchedule } from './validation';
+import { SYNC_TYPE_CONFIG } from './autoSync';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's own worker state.
@@ -1107,6 +1108,7 @@ export async function syncAllMusicArtists(): Promise<void> {
     activeFlagSettingKey: 'music_sync_all_active',
     pausedSettingKey: 'music_downloader_paused',
     moduleId: 'music',
+    syncType: 'music',
     fetchEntities: () => listMusicArtistsToSync(db),
     processEntity: async (artist) => {
       // Paused by an admin since the list was read: leave it paused.
@@ -1158,7 +1160,7 @@ export function initMusicScheduler(): void {
   const scheduleSetting = db.prepare("SELECT value FROM settings WHERE key = 'music_sync_cron_schedule'").get() as { value: string } | undefined;
 
   const enabled = enabledSetting ? enabledSetting.value === '1' : false;
-  const cronExpression = scheduleSetting?.value || '30 3 * * *';
+  const cronExpression = scheduleSetting?.value || SYNC_TYPE_CONFIG.music.defaultSchedule;
 
   if (getActiveMusicCronJob()) {
     getActiveMusicCronJob()!.stop();

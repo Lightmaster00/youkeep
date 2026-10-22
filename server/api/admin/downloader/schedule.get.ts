@@ -1,4 +1,5 @@
 import { defineEventHandler } from 'h3';
+import { SYNC_TYPE_CONFIG } from '../../../utils/autoSync';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -9,6 +10,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     enabled: enabledSetting ? enabledSetting.value === '1' : false,
-    schedule: scheduleSetting?.value || '0 3 * * *'
+    schedule: scheduleSetting?.value || SYNC_TYPE_CONFIG.video.defaultSchedule
   };
 });

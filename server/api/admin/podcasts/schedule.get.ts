@@ -1,5 +1,6 @@
 import { defineEventHandler } from 'h3';
 import { requireAdmin } from '../../../utils/auth';
+import { SYNC_TYPE_CONFIG } from '../../../utils/autoSync';
 
 export default defineEventHandler(async (event) => {
   await requireAdmin(event);
@@ -10,6 +11,6 @@ export default defineEventHandler(async (event) => {
 
   return {
     enabled: enabledSetting ? enabledSetting.value === '1' : false,
-    schedule: scheduleSetting?.value || '0 4 * * *'
+    schedule: scheduleSetting?.value || SYNC_TYPE_CONFIG.podcast.defaultSchedule
   };
 });
