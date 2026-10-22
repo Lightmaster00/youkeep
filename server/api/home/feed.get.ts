@@ -106,7 +106,8 @@ export default defineEventHandler(async (event) => {
   const cutoff = Date.now() - TRENDING_WINDOW_MS;
 
   // Same SELECT/ORDER BY for the up-front pools (hero) and the lazy re-queries
-  // done by the section builders. `limit` is a server-side integer.
+  // done by the section builders. `limit` is a server-side integer. Every
+  // video row of the home is long videos only: Shorts live on /shorts.
   const queryPool = (kind: 'popular' | 'newest', limit: number): FeedVideo[] => {
     const popular = kind === 'popular';
     const ranking: PopularRanking = POPULAR_ORDER[prefs.popularRanking] ? prefs.popularRanking : 'localViewers';
@@ -117,6 +118,7 @@ export default defineEventHandler(async (event) => {
       JOIN channels c ON v.channel_id = c.id
       ${metric.join}
       WHERE v.download_status = 'completed'
+        AND v.is_short = 0
         AND ${visibility.sql}
         ${hidden.sql}
       ORDER BY ${popular ? POPULAR_ORDER[ranking] : 'v.created_at DESC'}
@@ -157,12 +159,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (prefs.homeHero) {
-    // The hero is a wide 16:9 banner: never a vertical Short.
-    large = popularPool.find(v => !(v as any).is_short) ?? null;
+    // The pools hold long videos only, so the 16:9 hero is never a Short.
+    large = popularPool[0] ?? null;
     if (large) usedIds.add(large.id);
 
     if (session) {
-      const suggestions = getRecommendedVideos(db, session, { type: 'all', limit: 10 }) as unknown as FeedVideo[];
+      const suggestions = getRecommendedVideos(db, session, { type: 'video', limit: 10 }) as unknown as FeedVideo[];
       const suggestion = suggestions.find(v => !usedIds.has(v.id) && !subscribedChannelIds.has(v.channel_id));
       if (suggestion) {
         small.push(suggestion);
@@ -191,7 +193,7 @@ export default defineEventHandler(async (event) => {
     },
     suggested: () => {
       if (!session) return null;
-      const suggestions = getRecommendedVideos(db, session, { type: 'all', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
+      const suggestions = getRecommendedVideos(db, session, { type: 'video', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
       const videos = claim(suggestions.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'suggested', title: SECTION_TITLES.suggested, videos } : null;
     },
@@ -214,6 +216,7 @@ export default defineEventHandler(async (event) => {
           JOIN channels c ON v.channel_id = c.id
           WHERE v.channel_id = ?
             AND v.download_status = 'completed'
+            AND v.is_short = 0
             AND ${visibility.sql}
             ${hidden.sql}
           ORDER BY v.created_at DESC

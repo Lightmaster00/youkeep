@@ -106,6 +106,14 @@ describe('personal playlists (H1)', () => {
     expect(ids(await personalGet(ev(BOB, '/x', { id: 'pb' })))).toEqual(['vP']);
   });
 
+  it('each playlist video says whether it is a Short (the page shows Shorts as their own section)', async () => {
+    personalPlaylist('pb', 'bob', 'private', ['vP', 'vPH']);
+    db.prepare("UPDATE videos SET is_short = 1 WHERE id = 'vPH'").run();
+    const kinds = (r: any) => r.videos.map((v: any) => [v.id, v.is_short]);
+    expect(kinds(await personalGet(ev(BOB, '/x', { id: 'pb' })))).toEqual([['vP', 0], ['vPH', 1]]);
+    expect(kinds(await playlistGet(ev(BOB, '/x', { id: 'pb' })))).toEqual([['vP', 0], ['vPH', 1]]);
+  });
+
   it('list counts and thumbnails only cover videos the viewer can see; share tokens stay with the owner', async () => {
     personalPlaylist('pc', 'carol', 'public', ['vPU', 'vU', 'vP']);
     personalPlaylist('pb', 'bob', 'private', ['vP']);

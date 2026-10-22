@@ -41,6 +41,46 @@ describe('hero', () => {
   });
 });
 
+describe('Shorts never mix into the video rows', () => {
+  // Shorts that would win every ranking: most viewed, newest, from the
+  // followed and most watched channel.
+  function seedWithShorts() {
+    seedVideos(20, 'c1');
+    for (let i = 0; i < 10; i++) {
+      insertVideo(db, { id: `c1s${i}`, channelId: 'c1', uploadDate: '20270101', viewCount: 1e9 - i, createdAt: Date.now() + 1000 + i, isShort: true });
+    }
+  }
+  const everyVideoId = (r: any) => [
+    r.featured.large?.id,
+    ...r.featured.small.map((v: any) => v.id),
+    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : (s.channels || []).flatMap((c: any) => c.videos.map((v: any) => v.id))),
+  ].filter(Boolean);
+
+  it('for a guest (hero and popular)', async () => {
+    seedWithShorts();
+    const r: any = await handler(guestEvent());
+    expect(everyVideoId(r).length).toBeGreaterThan(5);
+    expect(everyVideoId(r).filter((id: string) => /s\d/.test(id))).toEqual([]);
+  });
+
+  it('for a subscriber who watches Shorts (hero, popular, suggested, by followed channel)', async () => {
+    seedWithShorts();
+    seedVideos(20, 'c2');
+    seedVideos(10, 'c3');
+    insertVideo(db, { id: 'c3s0', channelId: 'c3', uploadDate: '20270101', viewCount: 5, createdAt: Date.now() + 5000, isShort: true });
+    setAdminDefaults({ rowSize: 10 });
+    const event = loginAs('viewer');
+    insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
+    insertSubscription(db, { userId: 'viewer', channelId: 'c3' });
+    insertUserHistory(db, { userId: 'viewer', videoId: 'c1s0', watchTimeSeconds: 5000, watchedAt: Date.now() });
+    const r: any = await handler(event);
+    expect(sectionIds(r)).toEqual(['popular', 'suggested', 'subscriptions']);
+    const all = everyVideoId(r);
+    expect(all.length).toBeGreaterThan(10);
+    expect(all.filter((id: string) => /s\d/.test(id))).toEqual([]);
+  });
+});
+
 describe('homeSections', () => {
   it('gives a guest only popular by default, then honours the configured order and omissions', async () => {
     seedVideos(40);
