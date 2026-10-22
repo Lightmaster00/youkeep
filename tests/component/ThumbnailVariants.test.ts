@@ -26,7 +26,7 @@ describe('cards ask for a resized thumbnail', () => {
     expect([img.getAttribute('width'), img.getAttribute('height')]).toEqual(['480', '270']);
 
     const remote = await mountSuspended(VideoCard, { props: { video: { ...video, id: 'v2', local_thumbnail_path: undefined } } });
-    expect(srcOf(remote, '.thumbnail-img')).toBe('https://i.ytimg.com/vi/v2/hqdefault.jpg');
+    expect(srcOf(remote, '.thumbnail-img')).toBe('https://i.ytimg.com/vi/v2/mqdefault.jpg');
   });
 
   it('track, episode, album and artist tiles: 320 px', async () => {

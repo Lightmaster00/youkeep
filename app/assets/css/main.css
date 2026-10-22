@@ -944,3 +944,40 @@ textarea.form-input {
 .description-text {
   overflow-wrap: anywhere;
 }
+
+/* Media frame: the one box every thumbnail and hover preview sits in
+   (app/components/MediaFrame.vue renders it). The box has a fixed aspect
+   ratio (16:9 for videos, 9:16 for Shorts, 1:1 for music and podcasts) and
+   the image or video inside is cropped to it with object-fit: cover, so a 4:3
+   letterboxed YouTube thumbnail loses its black bars and nothing overflows.
+   The background is the placeholder shown while the image loads. Pages size
+   the frame (its width); they never set its aspect ratio. */
+.media-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  /* Keeps a scaled (hover zoom) child clipped to the rounded corners in Safari. */
+  isolation: isolate;
+  background: var(--media-placeholder, #15121d);
+}
+.media-frame--short { aspect-ratio: 9 / 16; }
+.media-frame--square { aspect-ratio: 1 / 1; }
+.media-frame__media {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  object-position: center;
+}
+/* A hover preview video: invisible (the poster image shows through) until
+   its first frame plays. */
+.media-frame__preview {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.media-frame__preview.is-playing { opacity: 1; }

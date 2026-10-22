@@ -32,7 +32,7 @@
             <!-- Blurred Background (for landscape videos) -->
             <div 
               class="reel-blur-bg" 
-              :style="{ backgroundImage: cssUrl(video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`) }"
+              :style="{ backgroundImage: cssUrl(video.local_thumbnail_path || youtubeThumb(video.id, 'short')) }"
             ></div>
 
             <!-- Video Player -->
@@ -41,6 +41,7 @@
                 :ref="el => { if (el) videoRefs[index] = el as HTMLVideoElement }"
                 class="reel-video"
                 :src="video.local_video_path"
+                :poster="video.local_thumbnail_path || youtubeThumb(video.id, 'short')"
                 loop
                 preload="metadata"
                 playsinline
@@ -172,6 +173,7 @@
 <script setup lang="ts">
 import { canShareVideo, shareVideoLink } from '~/utils/shareVideo';
 import { cssUrl } from '~/utils/cssUrl';
+import { youtubeThumb } from '~/utils/thumb';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { useToast } from '~/composables/useToast';

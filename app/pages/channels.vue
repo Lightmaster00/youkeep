@@ -507,21 +507,15 @@ onUnmounted(() => poller.stop());
   cursor: pointer;
 }
 
+/* Ratio, cropping and placeholder come from .media-frame (main.css). */
 .channels-page .video-card.premium-card .thumbnail-wrapper {
-  position: relative;
-  aspect-ratio: 16/9;
   border-radius: var(--border-radius-md);
-  overflow: hidden;
   box-shadow: var(--shadow-sm);
-  background: #000;
   border: 1px solid transparent;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .channels-page .video-card.premium-card .thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -947,19 +941,5 @@ onUnmounted(() => poller.stop());
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 20px;
 }
-.channels-page .short-badge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  background: #ff0000;
-  color: white;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  z-index: 2;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
+
 </style>

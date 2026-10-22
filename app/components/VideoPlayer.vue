@@ -13,7 +13,7 @@
     <video
       ref="videoPlayer"
       class="video-player"
-      :poster="video.local_thumbnail_path || (video.id ? `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg` : '')"
+      :poster="video.local_thumbnail_path || youtubeThumb(video.id, video.is_short ? 'short' : 'video')"
       :src="video.local_video_path ? `${video.local_video_path}${tokenQuery}` : ''"
       preload="metadata"
       :loop="video?.is_short === 1"
@@ -212,6 +212,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { youtubeThumb } from '~/utils/thumb';
 
 const props = defineProps<{
   video: any;
@@ -394,7 +395,7 @@ const updateMediaSession = () => {
       album: 'YouKeep Archive',
       artwork: [
         {
-          src: props.video.local_thumbnail_path || (props.video.id ? `https://i.ytimg.com/vi/${props.video.id}/hqdefault.jpg` : ''),
+          src: props.video.local_thumbnail_path || youtubeThumb(props.video.id, props.video.is_short ? 'short' : 'video'),
           sizes: '512x512',
           type: 'image/jpeg'
         }

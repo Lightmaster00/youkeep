@@ -261,11 +261,18 @@
                 <span v-else>{{ rel.position }}</span>
               </span>
               
-              <div class="rec-thumbnail-wrapper" style="width: 100px; aspect-ratio: 16/9; position: relative; border-radius: 6px; overflow: hidden; flex-shrink: 0;">
-                <img :src="rel.local_thumbnail_path || `https://i.ytimg.com/vi/${rel.id}/hqdefault.jpg`" class="rec-thumbnail-img" style="width: 100%; height: 100%; object-fit: cover;" alt="Thumbnail" />
+              <MediaFrame
+                class="rec-thumbnail-wrapper rec-thumbnail-wrapper--queue"
+                :kind="rel.is_short ? 'short' : 'video'"
+                :src="videoThumbSrc(rel, 160)"
+                :fallback="youtubeThumb(rel.id, rel.is_short ? 'short' : 'video')"
+                img-class="rec-thumbnail-img"
+                alt="Thumbnail"
+              >
+                <span v-if="rel.is_short" class="rec-short-badge" data-testid="short-badge">SHORT</span>
                 <span class="rec-duration">{{ formatDuration(rel.duration) }}</span>
                 <VideoDropdownMenu :video="rel" @hidden="onVideoHidden" />
-              </div>
+              </MediaFrame>
               
               <div class="rec-info" style="display: flex; flex-direction: column; min-width: 0; flex: 1; justify-content: center;">
                 <h4 class="rec-title" :title="rel.title" style="font-size: 12.5px; font-weight: 600; line-height: 1.3; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ rel.title }}</h4>
@@ -297,11 +304,18 @@
             class="recommendation-card premium-card"
             @click="playRecommendedVideo(rel.id)"
           >
-            <div class="rec-thumbnail-wrapper">
-              <img :src="rel.local_thumbnail_path || `https://i.ytimg.com/vi/${rel.id}/hqdefault.jpg`" class="rec-thumbnail-img" alt="Thumbnail" />
+            <MediaFrame
+              class="rec-thumbnail-wrapper"
+              :kind="rel.is_short ? 'short' : 'video'"
+              :src="videoThumbSrc(rel, 320)"
+              :fallback="youtubeThumb(rel.id, rel.is_short ? 'short' : 'video')"
+              img-class="rec-thumbnail-img"
+              alt="Thumbnail"
+            >
+              <span v-if="rel.is_short" class="rec-short-badge" data-testid="short-badge">SHORT</span>
               <span class="rec-duration">{{ formatDuration(rel.duration) }}</span>
               <VideoDropdownMenu :video="rel" @hidden="onVideoHidden" />
-            </div>
+            </MediaFrame>
             
             <div class="rec-info">
               <h4 class="rec-title" :title="rel.title">{{ rel.title }}</h4>
@@ -335,6 +349,7 @@
 
 <script setup lang="ts">
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
+import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from '~/composables/useToast';
@@ -1254,14 +1269,35 @@ code.tech-value {
   padding: 8px;
 }
 
+/* Ratio, cropping and placeholder come from .media-frame (main.css): only
+   the width is set here. A Short's frame is vertical, so it is narrower. */
 .rec-thumbnail-wrapper {
-  position: relative;
   width: 168px;
-  aspect-ratio: 16/9;
   border-radius: var(--border-radius-md);
-  overflow: hidden;
-  background: #000;
   flex-shrink: 0;
+}
+.rec-thumbnail-wrapper.media-frame--short {
+  width: 72px;
+}
+.rec-thumbnail-wrapper--queue {
+  width: 100px;
+  border-radius: 6px;
+}
+.rec-thumbnail-wrapper--queue.media-frame--short {
+  width: 44px;
+}
+.rec-short-badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  background: #ff0033;
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 2;
 }
 
 /* The 72px nav rail + 24px content-area padding on each side means content
@@ -1279,7 +1315,7 @@ code.tech-value {
    this tier active, and the 168px thumbnail is confirmed to already fit
    cleanly at 481px (title clip 0), so 480px is a safe boundary. */
 @media (max-width: 480px) {
-  .rec-thumbnail-wrapper {
+  .rec-thumbnail-wrapper:not(.media-frame--short) {
     width: 100px;
   }
 }
@@ -1290,12 +1326,6 @@ code.tech-value {
   bottom: 0; left: 0; right: 0; height: 40%;
   background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
   pointer-events: none;
-}
-
-.rec-thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .rec-duration {

@@ -1,42 +1,46 @@
 <template>
   <UiCard
     class="video-card"
+    :class="{ 'video-card--short': isShort }"
     :style="{ cursor: clickable ? 'pointer' : 'default' }"
     @click="playVideo"
     @mouseenter="handleCardMouseEnter"
     @mouseleave="handleCardMouseLeave"
   >
-    <!-- Thumbnail Wrapper -->
-    <div class="thumbnail-wrapper">
-      <img
-        :src="thumbUrl(video.local_thumbnail_path, 480) || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`"
-        @error="handleThumbnailError"
-        class="thumbnail-img"
-        alt="Thumbnail"
-        width="480"
-        height="270"
-        loading="lazy"
-        decoding="async"
-        referrerpolicy="no-referrer"
-      />
+    <!-- Thumbnail: the shared media frame (16:9, or 9:16 for a Short). The
+         hover preview plays in the same frame, cropped the same way. -->
+    <MediaFrame
+      class="thumbnail-wrapper"
+      :kind="isShort ? 'short' : 'video'"
+      :src="thumbSrc"
+      :fallback="remoteThumb"
+      img-class="thumbnail-img"
+      alt="Thumbnail"
+    >
       <video
-        v-if="isPreviewActive"
+        v-if="isPreviewActive && !previewFailed"
         ref="previewVideoEl"
         :src="video.local_video_path"
-        class="thumbnail-preview-video"
+        :poster="thumbSrc"
+        class="thumbnail-preview-video media-frame__media media-frame__preview"
+        :class="{ 'is-playing': previewPlaying }"
         muted
         playsinline
+        preload="metadata"
+        @playing="previewPlaying = true"
+        @error="handlePreviewError"
         @timeupdate="handlePreviewTimeUpdate"
       ></video>
-      <span v-if="isPreviewActive" class="preview-badge">PREVIEW</span>
-      <div v-if="isPreviewActive" class="preview-progress">
+      <span v-if="previewShown" class="preview-badge">PREVIEW</span>
+      <div v-if="previewShown" class="preview-progress">
         <div class="preview-progress-fill" :style="{ width: previewProgressPercent + '%' }"></div>
       </div>
+      <span v-if="isShort" class="short-card-badge" data-testid="short-badge">SHORT</span>
       <span v-if="video.was_live === 1" class="replay-badge">REPLAY</span>
       <span class="duration-badge">{{ formattedDuration }}</span>
       <VideoDropdownMenu :video="video" @hidden="$emit('hidden', video.id)" />
       <slot name="thumbnail-overlay" />
-    </div>
+    </MediaFrame>
 
     <!-- Video Details -->
     <div class="video-info">
@@ -80,7 +84,7 @@
 
 <script setup lang="ts">
 import { setImageFallback } from '~/utils/imageFallback';
-import { thumbUrl } from '~/utils/thumb';
+import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { useVideoPreview } from '~/composables/useVideoPreview';
 import { highlightMatch } from '../utils/highlightMatch';
@@ -98,6 +102,7 @@ const props = withDefaults(defineProps<{
     local_thumbnail_path?: string;
     local_video_path?: string;
     was_live?: number;
+    is_short?: number | boolean;
   };
   showChannelInfo?: boolean;
   clickable?: boolean;
@@ -118,15 +123,23 @@ const PREVIEW_START_RATIO = 0.10;
 const PREVIEW_END_RATIO = 0.40;
 
 const instanceId = nextInstanceId('video-card');
+const isShort = computed(() => !!props.video.is_short);
+const thumbSrc = computed(() => videoThumbSrc(props.video, 480));
+const remoteThumb = computed(() => youtubeThumb(props.video.id, isShort.value ? 'short' : 'video'));
 const watchTarget = computed(() => props.to || `/watch/${props.video.id}`);
 const { activePreviewId } = useVideoPreview();
 const isPreviewActive = computed(() => activePreviewId.value === instanceId);
 const previewVideoEl = ref<HTMLVideoElement | null>(null);
 const previewProgressPercent = ref(0);
+// The preview fades in over the thumbnail only once its first frame plays;
+// a file that fails to load is not retried on later hovers.
+const previewPlaying = ref(false);
+const previewFailed = ref(false);
+const previewShown = computed(() => isPreviewActive.value && previewPlaying.value && !previewFailed.value);
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
 const handleCardMouseEnter = () => {
-  if (!props.video.local_video_path || !props.video.duration) return;
+  if (!props.video.local_video_path || !props.video.duration || previewFailed.value) return;
   hoverTimer = setTimeout(() => {
     activePreviewId.value = instanceId;
   }, HOVER_DELAY_MS);
@@ -140,6 +153,11 @@ const handleCardMouseLeave = () => {
   if (activePreviewId.value === instanceId) {
     activePreviewId.value = null;
   }
+};
+
+const handlePreviewError = () => {
+  previewFailed.value = true;
+  if (activePreviewId.value === instanceId) activePreviewId.value = null;
 };
 
 const handlePreviewTimeUpdate = () => {
@@ -157,6 +175,7 @@ const handlePreviewTimeUpdate = () => {
 watch(isPreviewActive, (active) => {
   if (!active) {
     previewProgressPercent.value = 0;
+    previewPlaying.value = false;
     return;
   }
   const duration = props.video.duration;
@@ -188,10 +207,6 @@ const handleAvatarError = (event: Event) => {
 const playVideo = () => {
   if (!props.clickable) return;
   navigateTo(watchTarget.value);
-};
-
-const handleThumbnailError = (event: Event) => {
-  setImageFallback(event, `https://i.ytimg.com/vi/${props.video.id}/hqdefault.jpg`);
 };
 
 const formattedDuration = computed(() => {
@@ -259,24 +274,18 @@ const formattedUploadDate = computed(() => {
 }
 
 /* ===== Thumbnail ===== */
+/* Ratio, cropping and placeholder come from .media-frame (main.css). */
 .thumbnail-wrapper {
-  position: relative;
-  aspect-ratio: 16/9;
   border-radius: 12px;
-  overflow: hidden;
-  background: #0a0a0f;
   border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
+/* The image is rendered by MediaFrame, hence :deep. */
+.thumbnail-wrapper :deep(.thumbnail-img) {
   transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-.video-card:hover .thumbnail-img {
+.video-card:hover .thumbnail-wrapper :deep(.thumbnail-img) {
   transform: scale(1.05);
 }
 
@@ -292,12 +301,26 @@ const formattedUploadDate = computed(() => {
 }
 
 .thumbnail-preview-video {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   z-index: 1;
+}
+
+.short-card-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: #ff0033;
+  color: white;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  z-index: 2;
+}
+
+/* A preview badge takes the corner while a Short previews. */
+.video-card--short .preview-badge {
+  top: 32px;
 }
 
 .preview-badge {

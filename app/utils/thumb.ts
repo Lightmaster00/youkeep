@@ -15,3 +15,27 @@ export function thumbUrl<T extends string | null | undefined>(src: T, width: Thu
   if (/[?&]w=/.test(src)) return src;
   return `${src}${src.includes('?') ? '&' : '?'}w=${width}`;
 }
+
+/**
+ * YouTube's own thumbnail of a video, for when no local one exists. A long
+ * video gets mqdefault (320x180, true 16:9); hqdefault is 4:3 with black bars
+ * above and below. A Short keeps hqdefault: its vertical frame sits
+ * pillarboxed in the middle of the 4:3 image, so a 9:16 cover box shows
+ * exactly that frame and none of the bars.
+ */
+export function youtubeThumb(id: string | null | undefined, kind: 'video' | 'short' | 'hero' = 'video'): string {
+  if (!id) return '';
+  return `https://i.ytimg.com/vi/${encodeURIComponent(id)}/${YOUTUBE_THUMB_FILE[kind]}.jpg`;
+}
+
+// 'hero' (the home banner) asks for the 1280x720 maxresdefault, also 16:9,
+// which some videos lack: its error handler then falls back to mqdefault.
+const YOUTUBE_THUMB_FILE = { video: 'mqdefault', short: 'hqdefault', hero: 'maxresdefault' } as const;
+
+/** The image a video card shows: the resized local thumbnail, else YouTube's. */
+export function videoThumbSrc(
+  video: { id: string; local_thumbnail_path?: string | null; is_short?: number | boolean | null },
+  width: ThumbWidth,
+): string {
+  return thumbUrl(video.local_thumbnail_path, width) || youtubeThumb(video.id, video.is_short ? 'short' : 'video');
+}

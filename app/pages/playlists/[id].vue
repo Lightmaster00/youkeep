@@ -16,15 +16,18 @@
       <div class="sidebar-stack" style="display: flex; flex-direction: column; gap: 20px;">
         <!-- Sidebar Playlist Details -->
         <div class="playlist-sidebar-info glass-panel">
-        <div class="sidebar-cover">
-          <img 
-            v-if="videos.length" 
-            :src="videos[0].local_thumbnail_path || `https://i.ytimg.com/vi/${videos[0].id}/hqdefault.jpg`" 
-            @error="handleThumbnailError($event, videos[0].id)"
-            class="playlist-cover-img" 
-            alt="Playlist Cover" 
-          />
-          <svg v-else xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(255,255,255,0.6);"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        <MediaFrame
+          v-if="videos.length"
+          class="sidebar-cover"
+          kind="video"
+          :src="videoThumbSrc(videos[0], 480)"
+          :fallback="youtubeThumb(videos[0].id, videos[0].is_short ? 'short' : 'video')"
+          img-class="playlist-cover-img"
+          loading="eager"
+          alt="Playlist Cover"
+        />
+        <div v-else class="sidebar-cover sidebar-cover--empty">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(255,255,255,0.6);"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
         </div>
         <div class="sidebar-details">
           <h1 class="playlist-title">{{ playlist.title }}</h1>
@@ -92,15 +95,17 @@
           >
             <div class="video-index">{{ index + 1 }}</div>
             
-            <div class="video-thumbnail-container">
-              <img 
-                :src="video.local_thumbnail_path || `https://i.ytimg.com/vi/${video.id}/hqdefault.jpg`" 
-                @error="handleThumbnailError($event, video.id)"
-                class="video-thumbnail" 
-                alt="Thumbnail" 
-              />
+            <MediaFrame
+              class="video-thumbnail-container"
+              :kind="video.is_short ? 'short' : 'video'"
+              :src="videoThumbSrc(video, 320)"
+              :fallback="youtubeThumb(video.id, video.is_short ? 'short' : 'video')"
+              img-class="video-thumbnail"
+              alt="Thumbnail"
+            >
+              <span v-if="video.is_short" class="video-short-badge" data-testid="short-badge">SHORT</span>
               <span class="video-duration">{{ formatDuration(video.duration) }}</span>
-            </div>
+            </MediaFrame>
 
             <div class="video-info">
               <h3 class="video-title">{{ video.title }}</h3>
@@ -173,7 +178,7 @@
 <script setup lang="ts">
 import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
-import { setImageFallback } from '~/utils/imageFallback';
+import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
 import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
@@ -251,10 +256,6 @@ const deletePlaylist = async () => {
   } catch (e: any) {
     toast.error(e.message || 'Failed to delete playlist.');
   }
-};
-
-const handleThumbnailError = (event: Event, videoId: string) => {
-  setImageFallback(event, `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`);
 };
 
 const playVideo = (videoId: string) => {
@@ -430,22 +431,20 @@ onMounted(() => {
   top: 100px;
 }
 
+/* With a video: a 16:9 media frame (main.css). Without: the same box, empty. */
 .sidebar-cover {
-  height: 180px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
   border-radius: var(--border-radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-cover--empty {
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(99, 102, 241, 0.25) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-secondary);
-  border: 1px solid rgba(255, 255, 255, 0.05);
   overflow: hidden;
-}
-
-.playlist-cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .sidebar-details {
@@ -594,20 +593,29 @@ onMounted(() => {
   font-size: 14px;
 }
 
+/* Ratio and cropping come from .media-frame (main.css). */
 .video-thumbnail-container {
   width: 120px;
-  aspect-ratio: 16/9;
   border-radius: 6px;
-  overflow: hidden;
-  position: relative;
-  background: rgba(0, 0, 0, 0.2);
   flex-shrink: 0;
 }
 
-.video-thumbnail {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.video-thumbnail-container.media-frame--short {
+  width: 54px;
+}
+
+.video-short-badge {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  background: #ff0033;
+  color: white;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  z-index: 2;
 }
 
 .video-thumbnail-placeholder {

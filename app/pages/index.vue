@@ -81,7 +81,7 @@
       <div v-if="featuredLarge" class="featured-bento">
         <div class="featured-large" @click="navigateTo(`/watch/${featuredLarge.id}`)">
           <div class="hero-backdrop">
-            <img :src="featuredLarge.local_thumbnail_path || `https://i.ytimg.com/vi/${featuredLarge.id}/maxresdefault.jpg`" @error="handleHeroError" class="hero-bg-img" alt="" fetchpriority="high" />
+            <img :src="featuredLarge.local_thumbnail_path || youtubeThumb(featuredLarge.id, 'hero')" @error="handleHeroError" class="hero-bg-img media-frame__media" alt="" width="1280" height="720" fetchpriority="high" decoding="async" />
             <div class="hero-gradient-left"></div>
             <div class="hero-gradient-bottom"></div>
           </div>
@@ -149,6 +149,7 @@
 
 <script setup lang="ts">
 import { setImageFallback } from '~/utils/imageFallback';
+import { youtubeThumb } from '~/utils/thumb';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
@@ -240,7 +241,7 @@ const handleAvatarError = (event: Event) => {
 };
 
 const handleHeroError = (event: Event) => {
-  setImageFallback(event, `https://i.ytimg.com/vi/${featuredLarge.value?.id}/hqdefault.jpg`);
+  setImageFallback(event, youtubeThumb(featuredLarge.value?.id));
 };
 
 const onVideoHidden = (id: string) => {
@@ -344,15 +345,17 @@ const formatUploadDate = (dateStr: string | null): string => {
   cursor: pointer;
 }
 
+/* The hero is a backdrop sized by the bento grid (not a fixed-ratio card):
+   the image is still cropped by the media-frame cover rule, centred, over
+   the same placeholder colour while it loads. */
 .hero-backdrop {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  background: var(--media-placeholder, #15121d);
 }
 
 .hero-bg-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   filter: brightness(0.55);
   transition: transform 8s ease, filter 0.5s ease;
 }
@@ -455,10 +458,6 @@ const formatUploadDate = (dateStr: string | null): string => {
 .featured-small {
   min-height: 0;
   overflow: visible;
-}
-
-.featured-small :deep(.thumbnail-wrapper) {
-  aspect-ratio: 16 / 7;
 }
 
 .featured-small :deep(.video-info) {

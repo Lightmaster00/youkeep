@@ -61,6 +61,16 @@ describe('personal playlist page', () => {
     expect(w.findAll('.video-row-actions button').length).toBe(2);
   });
 
+  it('frames the cover and every row thumbnail in the shared 16:9 media frame', async () => {
+    const w = await mountPlaylist('p1', { token: 'share-tok' });
+    expect(w.find('.sidebar-cover').classes()).toEqual(expect.arrayContaining(['media-frame', 'media-frame--video']));
+    const rows = w.findAll('.video-row .video-thumbnail-container');
+    expect(rows).toHaveLength(2);
+    for (const f of rows) expect(f.classes()).toContain('media-frame--video');
+    expect(w.findAll('.video-row img').map((i) => i.attributes('src')))
+      .toEqual(['https://i.ytimg.com/vi/v1/mqdefault.jpg', 'https://i.ytimg.com/vi/v2/mqdefault.jpg']);
+  });
+
   it('a refused playlist shows the error state, not someone else\'s content', async () => {
     const w = await mountPlaylist('nope', { token: 'wrong' });
     expect(w.text()).toContain('Error Loading Playlist');
@@ -77,6 +87,9 @@ describe('playlists index page', () => {
     expect(urls()).toContain('/api/playlists/personal');
     expect(w.text()).toContain('Road trip');
     expect(w.text()).toContain('Chill');
+    const covers = w.findAll('.thumbnail-wrapper');
+    expect(covers).toHaveLength(2);
+    for (const c of covers) expect(c.classes()).toEqual(expect.arrayContaining(['media-frame', 'media-frame--video']));
   });
 
   it('never calls the user-only API for a guest (expired session)', async () => {

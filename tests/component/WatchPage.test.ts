@@ -202,3 +202,23 @@ describe('watch page playlist panel (#2, #4)', () => {
     w.unmount();
   });
 });
+
+describe('watch page sidebar thumbnails', () => {
+  it('frames each related video in the shared 16:9 media frame, YouTube fallback mqdefault', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith('/api/videos/vid1')) return videoReply();
+      if (url.startsWith('/api/videos')) return { videos: [
+        { id: 'r1', title: 'Related one', duration: 60, view_count: 1, upload_date: '20260101', is_short: 0 },
+        { id: 'r2', title: 'Related two', duration: 60, view_count: 1, upload_date: '20260101', is_short: 0, local_thumbnail_path: '/downloads/c/r2.jpg' },
+      ] };
+      return {};
+    });
+    const w = await mountWatch();
+    const frames = w.findAll('.recommendation-card .rec-thumbnail-wrapper');
+    expect(frames).toHaveLength(2);
+    for (const f of frames) expect(f.classes()).toEqual(expect.arrayContaining(['media-frame', 'media-frame--video']));
+    const srcs = w.findAll('.recommendation-card img.rec-thumbnail-img').map((i) => i.attributes('src'));
+    expect(srcs).toEqual(['https://i.ytimg.com/vi/r1/mqdefault.jpg', '/downloads/c/r2.jpg?w=320']);
+    w.unmount();
+  });
+});

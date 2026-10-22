@@ -49,8 +49,6 @@
         @hidden="onVideoHidden"
       >
         <template #thumbnail-overlay>
-          <span v-if="variant === 'shorts'" class="short-badge">Short</span>
-
           <!-- Admin Actions on Thumbnail -->
           <div v-if="isAdmin" class="admin-video-actions" @click.stop>
 
