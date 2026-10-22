@@ -15,17 +15,21 @@ vi.mock('../../server/utils/downloader', () => ({
   startQueueWorker: rec('startQueueWorker'),
   updateYtdl: vi.fn(() => { calls.push('updateYtdl'); return new Promise<void>((r) => { releaseUpdate = r; }); }),
   resumeInterruptedChannelImports: rec('resumeInterruptedChannelImports'),
+  syncAllChannels: rec('syncAllChannels'),
+  getDownloadsDirState: () => ({ blockedReason: null }),
 }));
 vi.mock('../../server/utils/musicDownloader', () => ({
   resetStaleMusicDownloads: rec('resetStaleMusicDownloads'),
   startMusicQueueWorker: rec('startMusicQueueWorker'),
   initMusicScheduler: rec('initMusicScheduler'),
   resumeInterruptedArtistImports: rec('resumeInterruptedArtistImports'),
+  syncAllMusicArtists: rec('syncAllMusicArtists'),
 }));
 vi.mock('../../server/utils/podcastDownloader', () => ({
   resetStalePodcastDownloads: rec('resetStalePodcastDownloads'),
   startPodcastQueueWorker: rec('startPodcastQueueWorker'),
   initPodcastScheduler: rec('initPodcastScheduler'),
+  syncAllPodcastShows: rec('syncAllPodcastShows'),
 }));
 vi.mock('../../server/utils/videoDurations', () => ({
   backfillMissingVideoDurations: vi.fn(async () => ({ checked: 0, updated: 0 })),
@@ -34,6 +38,10 @@ vi.mock('../../server/utils/videoDurations', () => ({
 vi.mock('../../server/utils/albumMatchRunner', () => ({ scheduleStartupAlbumMatch: rec('scheduleStartupAlbumMatch') }));
 vi.mock('../../server/utils/thumbnails', () => ({ sweepThumbCache: rec('sweepThumbCache', 0), startThumbCacheSweep: vi.fn(() => () => {}) }));
 vi.mock('../../server/utils/concurrency', () => ({ resetSyncAllFlags: rec('resetSyncAllFlags') }));
+let catchUpDeps: any = null;
+vi.mock('../../server/utils/autoSync', () => ({
+  scheduleStartupCatchUp: vi.fn((deps: any) => { calls.push('scheduleStartupCatchUp'); catchUpDeps = deps; return () => calls.push('cancelStartupCatchUp'); }),
+}));
 vi.mock('../../server/utils/background', () => ({ runInBackground: (name: string, fn: () => unknown) => { calls.push(`bg:${name}`); fn(); } }));
 vi.mock('../../server/utils/auth', () => ({ startSessionCleanup: vi.fn(() => { calls.push('startSessionCleanup'); return () => calls.push('stopSessionCleanup'); }) }));
 
@@ -68,6 +76,19 @@ describe('scheduler plugin', () => {
     }
     expect(calls).toContain('resumeInterruptedChannelImports');
     expect(calls).toContain('resumeInterruptedArtistImports');
+  });
+
+  it('schedules the startup catch-up after the sync-all flags are reset, with the three sync-all runners, and cancels it on close', () => {
+    const nitro = fakeNitro();
+    scheduler(nitro);
+    expect(calls.indexOf('scheduleStartupCatchUp')).toBeGreaterThan(calls.indexOf('resetSyncAllFlags'));
+    catchUpDeps.runners.video();
+    catchUpDeps.runners.music();
+    catchUpDeps.runners.podcast();
+    expect(calls).toEqual(expect.arrayContaining(['syncAllChannels', 'syncAllMusicArtists', 'syncAllPodcastShows']));
+    expect(catchUpDeps.blockedReason()).toBeNull();
+    nitro.close();
+    expect(calls).toContain('cancelStartupCatchUp');
   });
 });
 

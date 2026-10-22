@@ -1,14 +1,15 @@
 import { defineNitroPlugin } from 'nitropack/dist/runtime/plugin';
-import { initScheduler, resetStaleDownloads, startQueueWorker, updateYtdl, resumeInterruptedChannelImports } from '../utils/downloader';
+import { initScheduler, resetStaleDownloads, startQueueWorker, updateYtdl, resumeInterruptedChannelImports, syncAllChannels, getDownloadsDirState } from '../utils/downloader';
 import { backfillMissingVideoDurations, backfillMissingVideoSizes } from '../utils/videoDurations';
 import { getDb } from '../utils/db';
-import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports } from '../utils/musicDownloader';
-import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler } from '../utils/podcastDownloader';
+import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports, syncAllMusicArtists } from '../utils/musicDownloader';
+import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler, syncAllPodcastShows } from '../utils/podcastDownloader';
 import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
 import { startThumbCacheSweep, sweepThumbCache } from '../utils/thumbnails';
 import { startAfterUpdate } from '../utils/startup';
 import { resetSyncAllFlags } from '../utils/concurrency';
 import { runInBackground } from '../utils/background';
+import { scheduleStartupCatchUp } from '../utils/autoSync';
 
 // Fire-and-forget: fills NULL durations of already-downloaded videos via ffprobe.
 function runDurationBackfill() {
@@ -65,6 +66,14 @@ export default defineNitroPlugin((nitroApp) => {
     resetStalePodcastDownloads();
     // A restart during a sync-all must not leave it "running" forever.
     resetSyncAllFlags(getDb());
+
+    // A server that was off when a scheduled sync was due catches up once,
+    // 60 s after boot, for every type whose last sync is overdue.
+    nitroApp.hooks.hook('close', scheduleStartupCatchUp({
+      getDb,
+      runners: { video: syncAllChannels, music: syncAllMusicArtists, podcast: syncAllPodcastShows },
+      blockedReason: () => getDownloadsDirState().blockedReason,
+    }));
 
     // Check and update yt-dlp in the background; the queue workers start when
     // it settles, or after a guard delay if it hangs (never blocked by it).
