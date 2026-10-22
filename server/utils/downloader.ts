@@ -8,7 +8,7 @@ import { getDb } from './db';
 import { getDataDir } from './dataDir';
 import { parseChaptersFromInfoData, buildSponsorBlockMarkArgs, buildSponsorBlockRemoveArgs } from './chapters';
 import { parseMaxConcurrentDownloads, hasCapacityForMoreDownloads, hasEnoughDiskSpace, resetStaleDownloadsForTable, runSyncAllEntities, workerErrorBackoffMs } from './concurrency';
-import { extractInfoFields } from './videoInfo';
+import { extractInfoFields, saveDownloadedVideo, sanitizeCategories, sanitizeTags, type VideoInfoFields } from './videoInfo';
 import { enqueueBackgroundImport } from './backgroundImports';
 import { isEffectivelyPaused, isModuleEnabled } from './modules';
 import { channelBaseDirs, isContained, isValidMediaId, resolveVideoPaths, locateDownloadedFiles, removeVideoFiles, removeVideoLeftovers, storedFileCandidates, type VideoPaths } from './videoPaths';
@@ -1284,23 +1284,12 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
         const thumbnailUrlPath = found.thumbnailUrl;
         const infoJsonFile = found.infoJsonFile;
         
-        let desc = null;
-        let views = null;
-        let uploadDate = null;
-        let likeCount = null;
-        let wasLive = 0;
-        let duration: number | null = null;
+        let info: VideoInfoFields | null = null;
 
         if (fs.existsSync(infoJsonFile)) {
           try {
             const infoData = JSON.parse(fs.readFileSync(infoJsonFile, 'utf8'));
-            const info = extractInfoFields(infoData);
-            desc = info.description;
-            views = info.views;
-            uploadDate = info.uploadDate;
-            likeCount = info.likeCount;
-            wasLive = info.wasLive;
-            duration = info.duration;
+            info = extractInfoFields(infoData);
 
             // Ingest comments
             if (infoData.comments && Array.isArray(infoData.comments)) {
@@ -1358,30 +1347,7 @@ export function downloadVideoFile(videoId: string, channelId: string): Promise<v
         const fileSize = videoUrlPath && fs.existsSync(videoFile) ? fs.statSync(videoFile).size : null;
 
         try {
-          db.prepare(`
-            UPDATE videos
-            SET local_video_path = ?,
-                local_thumbnail_path = ?,
-                description = COALESCE(?, description),
-                view_count = COALESCE(?, view_count),
-                upload_date = COALESCE(?, upload_date),
-                like_count = COALESCE(?, like_count),
-                duration = COALESCE(?, duration),
-                size_bytes = ?,
-                was_live = ?
-            WHERE id = ?
-          `).run(
-            videoUrlPath,
-            thumbnailUrlPath,
-            desc,
-            views,
-            uploadDate,
-            likeCount,
-            duration,
-            fileSize,
-            wasLive,
-            videoId
-          );
+          saveDownloadedVideo(db, videoId, { videoPath: videoUrlPath, thumbnailPath: thumbnailUrlPath, sizeBytes: fileSize, info });
           settle(() => resolve());
         } catch (dbErr: any) {
           // The video/thumbnail files downloaded successfully, but the DB write that
@@ -2284,7 +2250,10 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
           view_count = COALESCE(?, view_count),
           like_count = COALESCE(?, like_count),
           duration = COALESCE(?, duration),
-          upload_date = COALESCE(?, upload_date)
+          upload_date = COALESCE(?, upload_date),
+          categories = ?,
+          tags = ?,
+          metadata_enriched_at = ?
         WHERE id = ?
       `).run(
         infoData.title || null,
@@ -2293,6 +2262,9 @@ export async function refreshCompletedVideosMetadata(): Promise<void> {
         infoData.like_count ?? null,
         infoData.duration ?? null,
         infoData.upload_date || null,
+        JSON.stringify(sanitizeCategories(infoData.categories)),
+        JSON.stringify(sanitizeTags(infoData.tags)),
+        Date.now(),
         video.id
       );
       updated++;
