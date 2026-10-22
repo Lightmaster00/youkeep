@@ -2,7 +2,11 @@
   <BaseModal :show="show" title="Save to playlist" @close="emit('close')">
     <p class="stp-desc">Choose the playlists for <strong>{{ videoTitle || 'this video' }}</strong>:</p>
 
-    <div v-if="loading" class="stp-empty">Loading playlists...</div>
+    <div v-if="!user" class="stp-empty" data-testid="stp-signed-out">
+      Sign in to save videos to your playlists.
+      <NuxtLink to="/login" class="stp-signin" @click="emit('close')">Sign in</NuxtLink>
+    </div>
+    <div v-else-if="loading" class="stp-empty">Loading playlists...</div>
     <div v-else-if="ownPlaylists.length === 0" class="stp-empty" data-testid="stp-empty">
       You have no playlists yet. Create one below.
     </div>
@@ -23,7 +27,7 @@
       </li>
     </ul>
 
-    <div class="stp-create">
+    <div v-if="user" class="stp-create">
       <button v-if="!showForm" type="button" class="btn btn-secondary stp-full" @click="openForm">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         Create new playlist
@@ -59,6 +63,7 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
+import { isUnauthorizedError } from '~/utils/sessionExpiry';
 
 const props = defineProps<{ show: boolean; videoId: string; videoTitle?: string }>();
 const emit = defineEmits<{ close: [] }>();
@@ -89,13 +94,19 @@ function visibilityLabel(v: string) {
 }
 
 async function load() {
+  // Signed out (an expired session): the user-only API is never called.
+  if (!user.value) {
+    playlists.value = [];
+    return;
+  }
   loading.value = true;
   try {
     const data = await $fetch<any>('/api/playlists/personal', { params: { videoId: props.videoId } });
     playlists.value = data?.playlists || [];
-  } catch {
+  } catch (err) {
     playlists.value = [];
-    toast.error('Failed to load playlists.');
+    // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
+    if (!isUnauthorizedError(err)) toast.error('Failed to load playlists.');
   } finally {
     loading.value = false;
   }
@@ -118,7 +129,7 @@ async function toggle(pl: any, checked: boolean, event?: Event) {
     pl.contains_video = checked ? 1 : 0;
     toast.success(checked ? `Added to ${pl.title}.` : `Removed from ${pl.title}.`);
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Failed to update the playlist.');
+    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || 'Failed to update the playlist.');
     if (event) (event.target as HTMLInputElement).checked = !checked;
   } finally {
     busyId.value = '';
@@ -150,7 +161,7 @@ async function create() {
     newVisibility.value = 'private';
     showForm.value = false;
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Failed to create the playlist.');
+    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || 'Failed to create the playlist.');
   } finally {
     creating.value = false;
   }
@@ -160,6 +171,7 @@ async function create() {
 <style scoped>
 .stp-desc { margin: 0; font-size: 13px; color: var(--text-secondary); overflow-wrap: anywhere; }
 .stp-empty { text-align: center; color: var(--text-muted); font-size: 13px; padding: 16px 0; }
+.stp-signin { display: inline-block; margin-left: 6px; color: var(--accent-primary, #a78bfa); font-weight: 600; }
 .stp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
 .stp-item {
   display: flex; gap: 12px; align-items: center; padding: 10px 12px; border-radius: var(--border-radius-md);

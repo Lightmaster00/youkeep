@@ -178,6 +178,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
+import { isUnauthorizedError } from '~/utils/sessionExpiry';
 
 const route = useRoute();
 const { user, isAdmin } = useAuth();
@@ -202,7 +203,8 @@ const fetchPlaylistDetails = async () => {
     videos.value = data.videos || [];
   } catch (e: any) {
     error.value = e.statusMessage || 'Failed to load playlist.';
-    toast.error(error.value || 'Error loading playlist.');
+    // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
+    if (!isUnauthorizedError(e)) toast.error(error.value || 'Error loading playlist.');
   } finally {
     pending.value = false;
   }

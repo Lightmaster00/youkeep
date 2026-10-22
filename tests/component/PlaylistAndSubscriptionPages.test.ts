@@ -78,6 +78,23 @@ describe('playlists index page', () => {
     expect(w.text()).toContain('Road trip');
     expect(w.text()).toContain('Chill');
   });
+
+  it('never calls the user-only API for a guest (expired session)', async () => {
+    const w = await mountSuspended(PlaylistsIndex, { route: '/playlists' });
+    await flushPromises();
+    expect(urls()).not.toContain('/api/playlists/personal');
+    expect(w.find('.loading-state').exists()).toBe(false);
+  });
+
+  it('shows no raw 401 error toast (the session-expiry handler reports it once)', async () => {
+    const { useToast } = await import('../../app/composables/useToast');
+    useToast().toasts.value = [];
+    useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
+    fetchMock.mockImplementation(async () => { throw Object.assign(new Error('[GET] "/api/playlists/personal": 401 Unauthorized'), { statusCode: 401 }); });
+    await mountSuspended(PlaylistsIndex, { route: '/playlists' });
+    await flushPromises();
+    expect(useToast().toasts.value).toEqual([]);
+  });
 });
 
 describe('subscriptions page', () => {

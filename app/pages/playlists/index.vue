@@ -130,6 +130,7 @@
 import { ref } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
+import { isUnauthorizedError } from '~/utils/sessionExpiry';
 
 useHead({ title: 'Playlists' });
 
@@ -148,12 +149,19 @@ const newPlaylist = ref({
 });
 
 const fetchPlaylists = async () => {
+  // Signed out (an expired session): the user-only API is never called.
+  if (!user.value) {
+    playlists.value = [];
+    pending.value = false;
+    return;
+  }
   pending.value = true;
   try {
     const data = await $fetch<any>('/api/playlists/personal');
     playlists.value = data.playlists || [];
   } catch (e: any) {
-    toast.error(e.message || 'Failed to load playlists.');
+    // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
+    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || 'Failed to load playlists.');
   } finally {
     pending.value = false;
   }
@@ -173,7 +181,7 @@ const handleCreatePlaylist = async () => {
     newPlaylist.value = { title: '', description: '', visibility: 'private' };
     await fetchPlaylists();
   } catch (e: any) {
-    toast.error(e.message || 'Failed to create playlist.');
+    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || 'Failed to create playlist.');
   } finally {
     creating.value = false;
   }
