@@ -142,15 +142,15 @@ describe('login page', () => {
     expect(await loginWith('/playlists/p1?token=t')).toEqual(['/playlists/p1?token=t']);
   });
 
-  it('sends "remember me" only when the box is ticked (off by default)', async () => {
-    const body = async (tick: boolean) => {
+  it('"Keep me signed in" is ticked by default; unticking it sends remember: false', async () => {
+    const body = async (keep: boolean) => {
       fetchMock.mockClear();
       const w = await mountSuspended(LoginPage, { route: { path: '/login', query: {} } });
       await flushPromises();
       const box = w.find('input#remember_me');
-      expect((box.element as HTMLInputElement).checked).toBe(false);
+      expect((box.element as HTMLInputElement).checked).toBe(true);
       expect(w.find('label[for="remember_me"]').text()).toBe('Keep me signed in');
-      if (tick) await box.setValue(true);
+      if (!keep) await box.setValue(false);
       await w.find('input[type="text"]').setValue('bob');
       await w.find('input[type="password"]').setValue('secret-123');
       await w.find('form').trigger('submit');
