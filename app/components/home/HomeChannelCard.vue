@@ -15,7 +15,7 @@
       <span class="channel-card__count">{{ countLabel }}</span>
     </NuxtLink>
     <span v-if="channel.categories?.length" class="channel-card__chips">
-      <span v-for="cat in channel.categories.slice(0, 2)" :key="cat" class="channel-card__chip">{{ cat }}</span>
+      <CategoryChip v-for="cat in channel.categories.slice(0, 2)" :key="cat" :name="cat" size="sm" />
     </span>
     <button
       v-if="canSubscribe"
@@ -33,9 +33,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
-import { useToast } from '~/composables/useToast';
+import CategoryChip from '~/components/channels/CategoryChip.vue';
+import { useChannelSubscribe } from '~/composables/useChannelSubscribe';
 
 // A channel to discover: avatar, name, video count, top categories and a
 // Subscribe button. Subscribing is optimistic: the button flips at once and
@@ -48,9 +49,11 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ (e: 'subscription', id: string, subscribed: boolean): void }>();
 
-const toast = useToast();
-const subscribed = ref(props.initiallySubscribed);
-const busy = ref(false);
+const { subscribed, busy, toggle } = useChannelSubscribe(
+  () => props.channel.id,
+  () => props.initiallySubscribed,
+  (id, value) => emit('subscription', id, value),
+);
 
 const countLabel = computed(() => {
   const n = props.channel.video_count ?? 0;
@@ -59,22 +62,6 @@ const countLabel = computed(() => {
 
 function onAvatarError(event: Event) {
   setImageFallback(event, FALLBACK_AVATAR);
-}
-
-async function toggle() {
-  if (busy.value) return;
-  const next = !subscribed.value;
-  subscribed.value = next;
-  busy.value = true;
-  try {
-    await $fetch(`/api/channels/${encodeURIComponent(props.channel.id)}/${next ? 'subscribe' : 'unsubscribe'}`, { method: 'POST' });
-    emit('subscription', props.channel.id, next);
-  } catch (err: any) {
-    subscribed.value = !next;
-    toast.error(err?.data?.statusMessage || (next ? 'Could not subscribe.' : 'Could not unsubscribe.'));
-  } finally {
-    busy.value = false;
-  }
 }
 </script>
 
@@ -142,19 +129,6 @@ async function toggle() {
   gap: 4px;
   max-width: 100%;
   min-height: 20px;
-}
-
-.channel-card__chip {
-  max-width: 100%;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(139, 92, 246, 0.12);
-  color: #c4b5fd;
-  font-size: 11px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .channel-card__subscribe {
