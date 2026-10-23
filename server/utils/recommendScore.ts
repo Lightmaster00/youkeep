@@ -54,10 +54,22 @@ export interface UserProfile {
   hasSignal: boolean;
 }
 
+/** Values to fill the `reasonKind` wording with ("Because you watched {title}", "Popular in {category}"). */
+export type ReasonParams = { title?: string; category?: string };
+
+/** The params a client needs to word a reason in its own language, or undefined when it needs none. */
+export function reasonParamsOf(reason: Reason, seedTitle?: string): ReasonParams | undefined {
+  if (reason.kind === 'because-watched' && seedTitle) return { title: seedTitle };
+  if (reason.kind === 'category' && reason.ref?.category) return { category: reason.ref.category };
+  return undefined;
+}
+
 export interface Ranked<T> {
   video: T;
   score: number;
   reason: Reason;
+  /** Structured values behind `reason.label`, for clients that translate it. */
+  reasonParams?: ReasonParams;
   /** Picked by the exploration slots (an unseen channel and category). */
   exploration: boolean;
 }
@@ -287,7 +299,9 @@ export function rankCandidates<T extends ScoreCandidate>(candidates: T[], profil
       + WEIGHTS.subscription * (profile.subscribed.has(c.channel_id) ? 1 : 0)
       + WEIGHTS.freshness * freshness(c, opts.now)
       + WEIGHTS.popularity * pop.get(c.id)!;
-    return { video: c, score: score * jitter(c), reason: personalReason(c, profile, opts.now), exploration: false };
+    const reason = personalReason(c, profile, opts.now);
+    const params = reasonParamsOf(reason, profile.channelSeed.get(c.channel_id)?.title);
+    return { video: c, score: score * jitter(c), reason, ...(params ? { reasonParams: params } : {}), exploration: false };
   }).sort(byScore);
 
   // Exploration: a share of the slots goes to unseen channels and categories
@@ -302,7 +316,12 @@ export function rankCandidates<T extends ScoreCandidate>(candidates: T[], profil
   const explorePool = exploreCount > 0
     ? ranked
       .filter((r) => isUnseen(r.video) && pop.get(r.video.id)! >= median && pop.get(r.video.id)! > 0)
-      .map((r) => ({ ...r, score: pop.get(r.video.id)! * jitter(r.video), exploration: true, reason: explorationReason(r.video, opts.now) }))
+      .map((r) => {
+        const reason = explorationReason(r.video, opts.now);
+        const { reasonParams: _old, ...rest } = r;
+        const params = reasonParamsOf(reason);
+        return { ...rest, score: pop.get(r.video.id)! * jitter(r.video), exploration: true, reason, ...(params ? { reasonParams: params } : {}) };
+      })
       .sort(byScore)
     : [];
   const explore: Ranked<T>[] = [];
@@ -358,7 +377,7 @@ export function rankSimilar<T extends ScoreCandidate>(
       + 0.25 * jaccard(c.tags, seedVideo.tags);
     if (similarity <= 0) continue;
     const score = (similarity + 0.05 * popularityOf(c, logMax)) * (1 + seedJitter(opts.seed, c.id));
-    ranked.push({ video: c, score, reason, exploration: false });
+    ranked.push({ video: c, score, reason, reasonParams: { title: seedVideo.title }, exploration: false });
   }
   ranked.sort(byScore);
   return diversify(ranked, limit, opts.maxPerChannel ?? DEFAULT_MAX_PER_CHANNEL);

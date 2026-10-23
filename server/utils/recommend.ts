@@ -8,6 +8,7 @@ import {
   type HistoryItem,
   type Ranked,
   type Reason,
+  type ReasonParams,
   type ScoreCandidate,
   type UserProfile,
 } from './recommendScore';
@@ -33,6 +34,9 @@ export interface RecommendedVideo {
   publicly_shareable: number;
   categories: string[];
   reason?: Reason;
+  /** `reason.kind` and the values of its wording, so a client can translate the English `reason.label`. */
+  reasonKind?: Reason['kind'];
+  reasonParams?: ReasonParams;
 }
 
 export type RecommendType = 'short' | 'video' | 'all';
@@ -194,9 +198,9 @@ export function getViewerProfile(db: Database.Database, viewer: VideoViewer | nu
 }
 
 function present(ranked: Ranked<PoolVideo>[], reasonLabels: boolean): RecommendedVideo[] {
-  return ranked.map(({ video, reason }) => {
+  return ranked.map(({ video, reason, reasonParams }) => {
     const { tags: _tags, local_viewers: _lv, ...rest } = video;
-    return reasonLabels ? { ...rest, reason } : rest;
+    return reasonLabels ? { ...rest, reason, reasonKind: reason.kind, ...(reasonParams ? { reasonParams } : {}) } : rest;
   });
 }
 

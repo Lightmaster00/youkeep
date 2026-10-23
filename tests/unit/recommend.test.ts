@@ -99,6 +99,9 @@ describe('getBecauseYouWatched', () => {
     expect(r.seed).toEqual({ id: 'seed', title: 'Seed video' });
     expect(r.videos.map((v) => v.id)).toEqual(['sameChannel', 'sameCat']);
     expect(r.videos[0]!.reason!.label).toBe('Because you watched Seed video');
+    // Additive structured fields, so a client can word the reason in its own language.
+    expect(r.videos[0]!.reasonKind).toBe('because-watched');
+    expect(r.videos[0]!.reasonParams).toEqual({ title: 'Seed video' });
   });
 
   it('is null without any watched video', () => {

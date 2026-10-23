@@ -209,4 +209,13 @@ describe('similar videos (because you watched)', () => {
     expect(ids(r)).toEqual(['same', 'cat', 'tag']);
     expect(r[0]!.reason).toEqual({ kind: 'because-watched', label: 'Because you watched Seed', ref: { videoId: 's' } });
   });
+
+  it('hands clients the structured reason (kind and params) next to the English label', () => {
+    const cat = rankCandidates([cand('a', 'x', { categories: ['Cooking'] })], buildProfile([watched('w1', 'seen', { categories: ['Cooking'] })], [], NOW), opts());
+    expect(cat[0]!.reasonParams).toEqual({ category: 'Cooking' });
+    const because = rankCandidates([cand('a', 'seen')], buildProfile([watched('w1', 'seen', { title: 'How to bake bread' })], [], NOW), opts());
+    expect(because[0]!.reasonParams).toEqual({ title: 'How to bake bread' });
+    const similar = rankSimilar([cand('same', 'sc')], { id: 's', title: 'Seed', channel_id: 'sc', categories: [], tags: [] }, buildProfile([], [], NOW), opts());
+    expect(similar[0]!.reasonParams).toEqual({ title: 'Seed' });
+  });
 });
