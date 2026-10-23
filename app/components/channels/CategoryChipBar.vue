@@ -12,7 +12,7 @@
     ref="bar"
     class="category-bar"
     role="toolbar"
-    aria-label="Filter by category"
+    :aria-label="t('channels.filterByCategory')"
     data-testid="category-bar"
     @keydown="onKeydown"
   >
@@ -23,7 +23,7 @@
       :aria-pressed="!modelValue ? 'true' : 'false'"
       data-testid="category-chip-all"
       @click="emit('update:modelValue', '')"
-    >All</button>
+    >{{ t('common.all') }}</button>
     <CategoryChip
       v-for="cat in categories"
       :key="cat.name"
@@ -44,6 +44,7 @@ import CategoryChip from '~/components/channels/CategoryChip.vue';
 // with its channel count. Toggle buttons (aria-pressed); the arrow keys and
 // Home/End move between them, Enter/Space or a click picks. Picking the
 // active category again goes back to "All".
+const { t } = useI18n();
 const props = defineProps<{
   categories: { name: string; count: number }[];
   modelValue: string;

@@ -3,7 +3,7 @@
     <!-- Playlist List View -->
     <template v-if="!selectedPlaylistId">
       <div class="videos-section-header" style="display: flex; align-items: center; justify-content: space-between;">
-        <h2 class="section-title">Playlists</h2>
+        <h2 class="section-title">{{ t('channels.tabPlaylists') }}</h2>
         <button
           @click="handleSyncPlaylists"
           class="btn btn-secondary btn-sm"
@@ -19,8 +19,8 @@
 
       <EmptyState
         v-else-if="channelPlaylists.length === 0"
-        title="No playlists found"
-        description="No public playlists are listed for this channel. Click 'Sync Playlists' above to scan for public playlists."
+        :title="t('channels.noPlaylistsTitle')"
+        :description="t('channels.noPlaylistsDesc')"
         icon="folder"
       />
 
@@ -32,7 +32,7 @@
           @click="openPlaylist(playlist.id)"
           style="cursor: pointer;"
         >
-          <MediaFrame class="thumbnail-wrapper" kind="video" :src="playlist.thumbnail_url" img-class="thumbnail-img" alt="Playlist Thumbnail">
+          <MediaFrame class="thumbnail-wrapper" kind="video" :src="playlist.thumbnail_url" img-class="thumbnail-img" :alt="t('channels.tabPlaylists')">
             <!-- Overlay to make it look like a playlist card -->
             <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 40%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(2px); z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-top-right-radius: inherit; border-bottom-right-radius: inherit;">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
@@ -56,7 +56,7 @@
       <div class="videos-section-header" style="display: flex; align-items: center; gap: 12px;">
         <button @click="closePlaylist" class="btn btn-secondary btn-sm" style="display: inline-flex; align-items: center; gap: 6px;">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-          Back to playlists
+          {{ t('channels.backToPlaylists') }}
         </button>
         <h2 class="section-title" style="margin-left: 8px;">{{ selectedPlaylistData?.playlist?.title }}</h2>
       </div>
@@ -67,8 +67,8 @@
 
       <EmptyState
         v-else-if="!selectedPlaylistData?.videos?.length"
-        title="Empty playlist"
-        description="This playlist does not contain any videos."
+        :title="t('channels.emptyPlaylistTitle')"
+        :description="t('channels.emptyPlaylistDesc')"
         icon="video"
       />
 
@@ -114,6 +114,7 @@ import { useChannelDetail } from '~/composables/useChannelDetail';
 import { splitShorts } from '~/utils/videoKinds';
 
 const toast = useToast();
+const { t } = useI18n();
 
 const { channelId } = await useChannelDetail();
 // Shared with the video grids of this page, which drop these ids too.
@@ -132,8 +133,8 @@ const selectedPlaylistData = ref<any>(null);
 const playlistGroups = computed(() => {
   const { videos, shorts } = splitShorts<any>(selectedPlaylistData.value?.videos);
   return [
-    { kind: 'videos', title: 'Videos', items: videos },
-    { kind: 'shorts', title: 'Shorts', items: shorts },
+    { kind: 'videos', title: t('channels.tabVideos'), items: videos },
+    { kind: 'shorts', title: t('channels.tabShorts'), items: shorts },
   ].filter((g) => g.items.length > 0);
 });
 const loadingPlaylistDetail = ref(false);
@@ -145,7 +146,7 @@ const openPlaylist = async (playlistId: string) => {
   try {
     selectedPlaylistData.value = await $fetch(`/api/playlists/${playlistId}`);
   } catch (err) {
-    toast.error('Failed to load playlist details.');
+    toast.error(t('channels.playlistLoadFailed'));
   } finally {
     loadingPlaylistDetail.value = false;
   }
@@ -201,10 +202,10 @@ const onVideoHidden = (id: string) => {
 
 const formatStatus = (status: string): string => {
   switch (status) {
-    case 'pending': return 'Pending';
-    case 'downloading': return 'Downloading';
-    case 'completed': return 'Completed';
-    case 'failed': return 'Failed';
+    case 'pending': return t('channels.status.pending');
+    case 'downloading': return t('channels.status.downloading');
+    case 'completed': return t('channels.status.completed');
+    case 'failed': return t('channels.status.failed');
     default: return status;
   }
 };

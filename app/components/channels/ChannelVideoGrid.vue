@@ -14,14 +14,14 @@
 
       <div class="filters-group">
         <div class="filter-item">
-          <label>Sort by:</label>
+          <label>{{ t('channels.sortBy') }}</label>
           <select v-model="sortBy" class="filter-select">
-            <option value="date_desc">Latest</option>
-            <option value="date_asc">Oldest</option>
-            <option value="views_desc">Most viewed</option>
-            <option value="views_asc">Least viewed</option>
-            <option v-if="variant === 'videos'" value="duration_desc">Longest</option>
-            <option v-if="variant === 'videos'" value="duration_asc">Shortest</option>
+            <option value="date_desc">{{ t('channels.sortLatest') }}</option>
+            <option value="date_asc">{{ t('channels.sortOldest') }}</option>
+            <option value="views_desc">{{ t('channels.sortMostViewed') }}</option>
+            <option value="views_asc">{{ t('channels.sortLeastViewed') }}</option>
+            <option v-if="variant === 'videos'" value="duration_desc">{{ t('channels.sortLongest') }}</option>
+            <option v-if="variant === 'videos'" value="duration_asc">{{ t('channels.sortShortest') }}</option>
           </select>
         </div>
       </div>
@@ -87,9 +87,9 @@
     </div>
 
     <div v-if="displayedVideos.length > 0 && (hasMore || total > CHANNEL_PAGE_SIZE)" class="channel-show-more" :data-testid="`channel-${variant}-more`">
-      <p class="channel-show-more-count" aria-live="polite">Showing {{ displayedVideos.length }} of {{ total }}</p>
+      <p class="channel-show-more-count" aria-live="polite">{{ t('channels.showing', { shown: displayedVideos.length, total }) }}</p>
       <button v-if="hasMore" type="button" class="btn btn-secondary" :disabled="loadingMore" @click="loadMore">
-        {{ loadingMore ? 'Loading...' : 'Show more' }}
+        {{ loadingMore ? t('common.loadingDots') : t('common.showMore') }}
       </button>
     </div>
   </div>
@@ -108,6 +108,7 @@ import { useChannelVideoPages, CHANNEL_PAGE_SIZE } from '~/composables/useChanne
 
 const props = defineProps<{ variant: 'videos' | 'shorts' }>();
 
+const { t } = useI18n();
 const { isAdmin } = useAuth();
 const toast = useToast();
 
@@ -138,7 +139,7 @@ watch(completedCount, (now, before) => {
   if (import.meta.client && now !== before) reload().catch(() => {});
 });
 
-const searchPlaceholder = computed(() => props.variant === 'videos' ? 'Search archived video...' : 'Search Short...');
+const searchPlaceholder = computed(() => props.variant === 'videos' ? t('channels.searchVideos') : t('channels.searchShorts'));
 
 const displayedVideos = computed(() => {
   const hidden = new Set(hiddenIds.value);
@@ -146,21 +147,21 @@ const displayedVideos = computed(() => {
 });
 
 const emptyTitle = computed(() => {
-  if (searchTerm.value) return 'No matching videos';
+  if (searchTerm.value) return t('channels.emptyNoMatch');
   if (props.variant === 'videos') {
-    return indexedCount.value === 0 ? 'Channel not synchronized' : 'No videos archived locally';
+    return indexedCount.value === 0 ? t('channels.emptyNotSynced') : t('channels.emptyNoneLocal');
   }
-  return 'No Shorts archived';
+  return t('channels.emptyNoShorts');
 });
 
 const emptyDescription = computed(() => {
-  if (searchTerm.value) return `Nothing in this channel matches "${searchTerm.value}".`;
+  if (searchTerm.value) return t('channels.emptyNoMatchDesc', { query: searchTerm.value });
   if (props.variant === 'videos') {
     return indexedCount.value === 0
-      ? 'No videos have been indexed for this channel yet. You need to start a sync to fetch available videos from YouTube.'
-      : `There are currently ${indexedCount.value} videos indexed in our database, but none have been successfully downloaded yet.`;
+      ? t('channels.emptyNotSyncedDesc')
+      : t('channels.emptyIndexedDesc', { count: indexedCount.value });
   }
-  return 'No Shorts have been downloaded for this channel yet. Make sure the Shorts archiving option is enabled in the channel settings.';
+  return t('channels.emptyNoShortsDesc');
 });
 
 const emptyActionText = computed(() => {
@@ -176,7 +177,7 @@ const onVideoHidden = (id: string) => {
 
 const copyShareLink = async (video: any) => {
   const res = await shareVideoLink(video, isAdmin.value);
-  if (!res.ok) toast.error(res.message || 'Could not share this video.');
+  if (!res.ok) toast.error(res.message || t('channels.shareFailed'));
   else if (res.message) toast.success(res.message);
 };
 

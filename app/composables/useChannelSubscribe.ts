@@ -12,6 +12,7 @@ export function useChannelSubscribe(
   onChange?: (id: string, subscribed: boolean) => void,
 ): { subscribed: Ref<boolean>; busy: Ref<boolean>; toggle: () => Promise<void> } {
   const toast = useToast();
+  const { t } = useI18n();
   const subscribed = ref(initial());
   const busy = ref(false);
   // A new value from the parent (a reload) wins, unless a request is running.
@@ -30,7 +31,7 @@ export function useChannelSubscribe(
       onChange?.(id, next);
     } catch (err: any) {
       subscribed.value = !next;
-      toast.error(err?.data?.statusMessage || (next ? 'Could not subscribe.' : 'Could not unsubscribe.'));
+      toast.error(err?.data?.statusMessage || (next ? t('channels.subscribeFailed') : t('channels.unsubscribeFailed')));
     } finally {
       busy.value = false;
     }

@@ -2,45 +2,45 @@
   <div class="channel-directory-view">
     <div class="dir-head">
       <div class="dir-head__title">
-        <h1 class="page-title">Channels</h1>
+        <h1 class="page-title">{{ t('channels.titleChannels') }}</h1>
         <span v-if="!listPending && total > 0" class="dir-head__count" data-testid="dir-total">{{ totalLabel }}</span>
       </div>
       <form class="dir-toolbar" role="search" @submit.prevent="applySearchNow">
         <label class="dir-search">
-          <span class="sr-only">Search channels</span>
+          <span class="sr-only">{{ t('channels.search') }}</span>
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           <input
             v-model="searchText"
             type="search"
             class="dir-search__input"
-            placeholder="Search channels"
+            :placeholder="t('channels.search')"
             maxlength="100"
             autocomplete="off"
             data-testid="dir-search"
           />
         </label>
         <label class="dir-select">
-          <span class="sr-only">Sort channels</span>
+          <span class="sr-only">{{ t('channels.sortLabel') }}</span>
           <select class="form-input" :value="filters.sort" data-testid="dir-sort" @change="setFilters({ sort: ($event.target as HTMLSelectElement).value })">
-            <option value="title">Name (A–Z)</option>
-            <option value="videos">Most videos</option>
-            <option value="recent">Recently updated</option>
-            <option v-if="isLoggedIn" value="watched">Most watched</option>
+            <option value="title">{{ t('channels.sortName') }}</option>
+            <option value="videos">{{ t('channels.sortVideos') }}</option>
+            <option value="recent">{{ t('channels.sortRecent') }}</option>
+            <option v-if="isLoggedIn" value="watched">{{ t('channels.sortWatched') }}</option>
           </select>
         </label>
         <label v-if="isLoggedIn" class="dir-select">
-          <span class="sr-only">Show channels</span>
+          <span class="sr-only">{{ t('channels.showChannels') }}</span>
           <select class="form-input" :value="filters.following" data-testid="dir-following" @change="setFilters({ following: ($event.target as HTMLSelectElement).value })">
-            <option value="">All channels</option>
-            <option value="1">Following</option>
-            <option value="0">Not following</option>
+            <option value="">{{ t('channels.allChannelsLower') }}</option>
+            <option value="1">{{ t('channels.following') }}</option>
+            <option value="0">{{ t('channels.notFollowing') }}</option>
           </select>
         </label>
       </form>
     </div>
 
     <section v-if="showDiscover" class="dir-discover" aria-labelledby="dir-discover-title" data-testid="dir-discover">
-      <h2 id="dir-discover-title" class="dir-section-title">Discover</h2>
+      <h2 id="dir-discover-title" class="dir-section-title">{{ t('channels.discover') }}</h2>
       <div v-if="discoverPending" class="dir-discover__row" aria-hidden="true">
         <UiSkeleton v-for="n in 4" :key="n" height="128px" rounded="lg" class="dir-discover__item" />
       </div>
@@ -83,27 +83,27 @@
 
     <EmptyState
       v-else-if="listError"
-      title="Could not load the channels"
-      description="The server did not answer. Try again in a moment."
+      :title="t('channels.loadFailedTitle')"
+      :description="t('channels.loadFailedDesc')"
       icon="channels"
-      action-text="Try again"
+      :action-text="t('common.tryAgain')"
       @action="refreshList()"
     />
 
     <EmptyState
       v-else-if="channels.length === 0 && isFiltered"
       data-testid="dir-no-match"
-      title="No channels match these filters"
-      description="Try another category or search, or clear the filters."
+      :title="t('channels.noMatchTitle')"
+      :description="t('channels.noMatchDesc')"
       icon="channels"
-      action-text="Clear filters"
+      :action-text="t('channels.clearFilters')"
       @action="clearFilters"
     />
 
     <EmptyState
       v-else-if="channels.length === 0"
-      title="No channels archived"
-      description="Start adding YouTube channels in the downloader settings to see them here."
+      :title="t('channels.noneTitle')"
+      :description="t('channels.noneDesc')"
       icon="channels"
       :action-text="isAdmin ? 'Add a channel' : undefined"
       action-route="/settings?tab=library&section=videos"
@@ -123,7 +123,7 @@
       </div>
       <div v-if="channels.length < total" class="dir-more">
         <button type="button" class="btn btn-secondary" :disabled="loadingMore" data-testid="dir-show-more" @click="showMore">
-          {{ loadingMore ? 'Loading…' : 'Show more' }}
+          {{ loadingMore ? t('common.loading') : t('common.showMore') }}
         </button>
       </div>
     </template>
@@ -145,6 +145,7 @@ const PAGE_SIZE = 48;
 const SORTS = ['title', 'videos', 'recent', 'watched'];
 const SEARCH_DEBOUNCE_MS = 300;
 
+const { t, locale } = useI18n();
 const { isAdmin, isLoggedIn } = useAuth();
 const toast = useToast();
 const route = useRoute();
@@ -230,7 +231,7 @@ const channels = computed(() => {
   return [...(firstPage.value?.channels ?? []), ...morePages.value].filter((c) => !seen.has(c.id) && seen.add(c.id));
 });
 const total = computed(() => firstPage.value?.total ?? 0);
-const totalLabel = computed(() => `${total.value.toLocaleString('en-US')} ${total.value === 1 ? 'channel' : 'channels'}`);
+const totalLabel = computed(() => t('channels.count', { count: total.value.toLocaleString(locale.value) }, total.value));
 
 async function showMore() {
   if (loadingMore.value) return;
@@ -241,7 +242,7 @@ async function showMore() {
     const res = await $fetch<{ channels: any[] }>('/api/channels', { params: { ...listParams.value, page, limit: PAGE_SIZE } });
     if (request === moreRequest) morePages.value = [...morePages.value, ...(res?.channels ?? [])];
   } catch (err: any) {
-    if (request === moreRequest) toast.error(err?.data?.statusMessage || 'Could not load more channels.');
+    if (request === moreRequest) toast.error(err?.data?.statusMessage || t('channels.loadMoreFailed'));
   } finally {
     if (request === moreRequest) loadingMore.value = false;
   }

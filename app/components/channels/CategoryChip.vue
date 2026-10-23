@@ -5,19 +5,19 @@
     class="category-chip"
     :class="[`category-chip--${size}`, { 'is-active': pressed }]"
     :aria-pressed="pressed ? 'true' : 'false'"
-    :title="pressed ? `Show every category` : `Show ${name} channels`"
+    :title="pressed ? t('channels.showEveryCategory') : t('channels.showCategory', { name })"
     :data-testid="`category-chip-${name}`"
     @click.stop.prevent="emit('select', name)"
   >
     <span class="category-chip__label">{{ name }}</span>
-    <span v-if="count !== undefined" class="category-chip__count">{{ count.toLocaleString('en-US') }}</span>
+    <span v-if="count !== undefined" class="category-chip__count">{{ count.toLocaleString(locale) }}</span>
   </button>
   <NuxtLink
     v-else
     :to="{ path: '/channels', query: { category: name } }"
     class="category-chip"
     :class="`category-chip--${size}`"
-    :title="`Show ${name} channels`"
+    :title="t('channels.showCategory', { name })"
     :data-testid="`category-chip-${name}`"
     @click.stop
   >
@@ -30,6 +30,7 @@
 // category itself (`pressed` given: emits select), otherwise a link to the
 // channels directory filtered by this category. Home, Subscriptions, the
 // channel page and the directory all draw categories with it.
+const { t, locale } = useI18n();
 withDefaults(defineProps<{
   name: string;
   pressed?: boolean;

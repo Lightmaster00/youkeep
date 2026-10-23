@@ -14,7 +14,7 @@
         :src="channel.avatar_url || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'"
         @error="handleAvatarError"
         class="channel-profile-avatar"
-        alt="Avatar"
+        :alt="t('video.avatar')"
       />
       <div class="channel-profile-info">
         <div class="title-row" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -27,12 +27,12 @@
           </span>
         </div>
         <p class="channel-profile-meta">
-          YouTube Channel • ID : {{ channel.id }} • {{ singleChannelData?.stats?.completedCount || 0 }} / {{ singleChannelData?.stats?.totalCount || 0 }} videos archived
+          {{ t('channels.headerMeta', { id: channel.id, done: singleChannelData?.stats?.completedCount || 0, total: singleChannelData?.stats?.totalCount || 0 }) }}
         </p>
         <div v-if="channel.categories?.length" class="channel-profile-categories" data-testid="channel-categories">
           <CategoryChip v-for="cat in channel.categories" :key="cat" :name="cat" />
         </div>
-        <p class="channel-profile-desc">{{ channel.description || 'No description available.' }}</p>
+        <p class="channel-profile-desc">{{ channel.description || t('channels.noDescription') }}</p>
 
         <div class="channel-actions-row">
           <button
@@ -44,7 +44,7 @@
           >
             <svg v-if="subscribed" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>{{ subscribed ? 'Subscribed' : "Subscribe" }}</span>
+            <span>{{ subscribed ? t('common.subscribed') : t('common.subscribe') }}</span>
           </button>
           <button
             v-if="isAdmin"
@@ -94,6 +94,7 @@ import CategoryChip from '~/components/channels/CategoryChip.vue';
 
 defineEmits<{ 'open-drawer': [] }>();
 
+const { t } = useI18n();
 const { isAdmin, isLoggedIn } = useAuth();
 const toast = useToast();
 
@@ -122,9 +123,9 @@ const handleToggleSubscription = async () => {
   try {
     await $fetch(`/api/channels/${channelId.value}/${endpoint}`, { method: 'POST' });
     subscribed.value = !subscribed.value;
-    toast.success(subscribed.value ? 'Subscription saved.' : 'Subscription removed.');
+    toast.success(subscribed.value ? t('channels.subscriptionSaved') : t('channels.subscriptionRemoved'));
   } catch (err: any) {
-    toast.error(err.data?.statusMessage || 'Action failed.');
+    toast.error(err.data?.statusMessage || t('channels.actionFailed'));
   }
 };
 
@@ -184,10 +185,10 @@ watch([channel, () => singleChannelData.value?.stats?.totalCount], ([ch, totalCo
 
 const formatVisibility = (vis: string): string => {
   switch (vis) {
-    case 'public': return 'Public';
-    case 'private': return 'Private';
-    case 'ultra_private': return 'Ultra Private';
-    default: return vis || 'Public';
+    case 'public': return t('channels.visibility.public');
+    case 'private': return t('channels.visibility.private');
+    case 'ultra_private': return t('channels.visibility.ultraPrivate');
+    default: return vis || t('channels.visibility.public');
   }
 };
 

@@ -5,7 +5,7 @@
       <!-- Back Button -->
       <button @click="goBack" class="btn btn-secondary back-btn">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        All Channels
+        {{ t('channels.all') }}
       </button>
 
       <ChannelDetailHeader @open-drawer="showDrawer = true" />
@@ -20,7 +20,7 @@
           @click="activeTab = 'archived'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
-          Videos <span class="tab-count">{{ singleChannelData?.stats?.completedVideosCount || 0 }}</span>
+          {{ t('channels.tabVideos') }} <span class="tab-count">{{ singleChannelData?.stats?.completedVideosCount || 0 }}</span>
         </button>
         <button
           type="button"
@@ -29,7 +29,7 @@
           @click="activeTab = 'shorts'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
-          Shorts <span class="tab-count">{{ singleChannelData?.stats?.completedShortsCount || 0 }}</span>
+          {{ t('channels.tabShorts') }} <span class="tab-count">{{ singleChannelData?.stats?.completedShortsCount || 0 }}</span>
         </button>
         <button
           type="button"
@@ -38,7 +38,7 @@
           @click="activeTab = 'playlists'; channelPlaylistsTabRef?.closePlaylist()"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-          Playlists <span class="tab-count">{{ channelPlaylistsTabRef?.channelPlaylists?.length || 0 }}</span>
+          {{ t('channels.tabPlaylists') }} <span class="tab-count">{{ channelPlaylistsTabRef?.channelPlaylists?.length || 0 }}</span>
         </button>
       </div>
 
@@ -53,10 +53,10 @@
     <EmptyState
       v-else-if="channelNotFound"
       data-testid="channel-not-found"
-      title="Channel not found"
-      description="This channel does not exist or is not available to you."
+      :title="t('channels.notFoundTitle')"
+      :description="t('channels.notFoundDesc')"
       icon="channels"
-      action-text="All channels"
+      :action-text="t('channels.allChannelsLower')"
       action-route="/channels"
     />
 
@@ -79,17 +79,18 @@ import ChannelPlaylistsTab from '~/components/channels/ChannelPlaylistsTab.vue';
 import ChannelSettingsDrawer from '~/components/channels/ChannelSettingsDrawer.vue';
 
 const router = useRouter();
+const { t } = useI18n();
 
 const { channelId, channel, channelNotFound, singleChannelData, refreshSingleChannel } = await useChannelDetail();
-useHead({ title: computed(() => channel.value?.title || (channelNotFound.value ? 'Channel not found' : 'Channels')) });
+useHead({ title: computed(() => channel.value?.title || (channelNotFound.value ? t('channels.notFoundTitle') : t('channels.titleChannels'))) });
 
 // The tab lives in the URL (?tab=), so reload and Back keep it.
 const route = useRoute();
 const CHANNEL_TABS = ['archived', 'shorts', 'playlists'];
 const activeTab = computed<string>({
   get: () => {
-    const t = String(route.query.tab || '');
-    return CHANNEL_TABS.includes(t) ? t : 'archived';
+    const current = String(route.query.tab || '');
+    return CHANNEL_TABS.includes(current) ? current : 'archived';
   },
   set: (value) => {
     router.replace({ query: { ...route.query, tab: value === 'archived' ? undefined : value } });

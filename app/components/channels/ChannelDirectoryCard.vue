@@ -1,6 +1,6 @@
 <template>
   <article class="dir-card" :data-testid="`dir-channel-${channel.id}`">
-    <NuxtLink :to="{ path: '/channels', query: { channelId: channel.id } }" class="dir-card__main" :aria-label="`Open ${channel.title}`">
+    <NuxtLink :to="{ path: '/channels', query: { channelId: channel.id } }" class="dir-card__main" :aria-label="t('channels.open', { title: channel.title })">
       <span class="dir-card__avatar-wrap">
         <img
           :src="channel.avatar_url || FALLBACK_AVATAR"
@@ -22,7 +22,7 @@
         v-if="subscribed && (channel.new_count ?? 0) > 0"
         class="dir-card__new"
         data-testid="dir-channel-new"
-      >{{ channel.new_count!.toLocaleString('en-US') }} new</span>
+      >{{ t('channels.newBadge', { count: channel.new_count!.toLocaleString(locale) }, channel.new_count!) }}</span>
     </NuxtLink>
     <div class="dir-card__footer">
       <span class="dir-card__chips">
@@ -40,11 +40,11 @@
         class="btn btn-sm dir-card__subscribe"
         :class="subscribed ? 'btn-secondary' : 'btn-primary'"
         :aria-pressed="subscribed ? 'true' : 'false'"
-        :aria-label="`${subscribed ? 'Unsubscribe from' : 'Subscribe to'} ${channel.title}`"
+        :aria-label="subscribed ? t('channels.unsubscribeFrom', { title: channel.title }) : t('channels.subscribeTo', { title: channel.title })"
         :disabled="busy"
         data-testid="dir-channel-subscribe"
         @click="toggle"
-      >{{ subscribed ? 'Following' : 'Subscribe' }}</button>
+      >{{ subscribed ? t('channels.following') : t('common.subscribe') }}</button>
     </div>
   </article>
 </template>
@@ -79,6 +79,7 @@ const emit = defineEmits<{
   (e: 'subscription', id: string, subscribed: boolean): void;
 }>();
 
+const { t, locale } = useI18n();
 const { subscribed, busy, toggle } = useChannelSubscribe(
   () => props.channel.id,
   () => !!props.channel.subscribed,
@@ -87,7 +88,7 @@ const { subscribed, busy, toggle } = useChannelSubscribe(
 
 const countLabel = computed(() => {
   const n = props.channel.completed_count ?? props.channel.video_count ?? 0;
-  return `${n.toLocaleString('en-US')} ${n === 1 ? 'video' : 'videos'}`;
+  return t('video.count', { count: n.toLocaleString(locale.value) }, n);
 });
 
 function onAvatarError(event: Event) {
