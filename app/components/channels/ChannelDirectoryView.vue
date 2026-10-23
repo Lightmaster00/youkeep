@@ -134,6 +134,7 @@
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
+import { useHydrated } from '~/composables/useHydrated';
 import CategoryChipBar from '~/components/channels/CategoryChipBar.vue';
 import ChannelDirectoryCard from '~/components/channels/ChannelDirectoryCard.vue';
 
@@ -262,7 +263,10 @@ const { data: discoverData, pending: discoverPending } = useLazyAsyncData(
   { server: false, watch: [isLoggedIn] },
 );
 const discoverChannels = computed(() => discoverData.value?.channels ?? []);
-const showDiscover = computed(() => isLoggedIn.value && !isFiltered.value && (discoverPending.value || discoverChannels.value.length > 0));
+// `server: false` is "pending" on the client's very first render but idle in the
+// server HTML: wait for hydration so the skeleton strip does not mismatch.
+const hydrated = useHydrated();
+const showDiscover = computed(() => hydrated.value && isLoggedIn.value && !isFiltered.value && (discoverPending.value || discoverChannels.value.length > 0));
 
 // A Subscribe click on one card (grid or Discover) shows on every card of that channel.
 const subscriptionChanges = reactive(new Map<string, boolean>());
