@@ -78,6 +78,19 @@ const MIGRATED = [
   'app/components/channels/ChannelDirectoryView.vue',
   'app/components/channels/ChannelPlaylistsTab.vue',
   'app/components/channels/ChannelVideoGrid.vue',
+  // Watch, playlists and Shorts (batch B).
+  'app/pages/watch/[id].vue',
+  'app/pages/playlists/index.vue',
+  'app/pages/playlists/[id].vue',
+  'app/pages/shorts.vue',
+  'app/components/VideoPlayer.vue',
+  'app/components/VideoDropdownMenu.vue',
+  'app/components/SaveToPlaylistModal.vue',
+  'app/components/AddToPlaylistMenu.vue',
+  'app/components/ReportVideoModal.vue',
+  'app/components/PlaylistCoverMosaic.vue',
+  'app/components/BaseModal.vue',
+  'app/components/ClipboardFallbackHost.vue',
 ];
 
 export function templateOf(source: string): string {
@@ -105,7 +118,7 @@ const LITERAL_ALLOWLIST: Array<{ file: string; attr: string; reason: string }> =
 export function hardCodedText(source: string): string[] {
   const tpl = templateOf(source);
   const hits: string[] = [];
-  for (const m of tpl.matchAll(/>\s*([A-Za-z][A-Za-z' ]{2,}?)\s*</g)) hits.push(`text "${m[1]}"`);
+  for (const m of tpl.matchAll(/>\s*([A-Za-z][A-Za-z' .,!?:…-]{2,}?)\s*</g)) hits.push(`text "${m[1]}"`);
   // Literal (non-bound) attributes: ` placeholder="..."`, not `:placeholder` / `v-bind:`.
   for (const m of tpl.matchAll(/(?<![:\w@#.-])(placeholder|aria-label|title|alt)="([^"]*[A-Za-z][^"]*)"/g)) hits.push(`${m[1]}="${m[2]}"`);
   return hits;
@@ -114,6 +127,7 @@ export function hardCodedText(source: string): string[] {
 describe('no hard-coded text in migrated files', () => {
   it('the guard itself detects literals (self-test)', () => {
     expect(hardCodedText('<template><h1>Hello</h1></template>')).toHaveLength(1);
+    expect(hardCodedText('<template><p>Loading Shorts...</p></template>')).toHaveLength(1);
     expect(hardCodedText('<template><input placeholder="Name"></template>')).toHaveLength(1);
     expect(hardCodedText('<template><button aria-label="Close">{{ t(\'x\') }}</button></template>')).toHaveLength(1);
     expect(hardCodedText('<template><input :placeholder="t(\'x\')"><b>{{ t(\'y\') }}</b></template>')).toHaveLength(0);
