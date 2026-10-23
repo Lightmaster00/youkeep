@@ -3,16 +3,16 @@
     <!-- Loading State -->
     <div v-if="pending && videos.length === 0" class="loading-state">
       <div class="spinner"></div>
-      <p>Loading Shorts...</p>
+      <p>{{ t('shorts.loading') }}</p>
     </div>
 
     <!-- Empty State -->
     <EmptyState
       v-else-if="videos.length === 0"
-      title="No Shorts available"
-      description="There are no archived videos in YouKeep yet or ready to be recommended."
+      :title="t('shorts.emptyTitle')"
+      :description="t('shorts.emptyDesc')"
       icon="shorts"
-      action-text="Back to Home"
+      :action-text="t('watch.backHome')"
       action-route="/"
     />
 
@@ -71,9 +71,9 @@
 
             <!-- Top-Right Actions -->
             <div class="top-right-actions">
-              <button v-if="canShareVideo(video, isAdminViewer)" type="button" class="share-btn-top" @click.stop="shareShort(video)" title="Share" aria-label="Share">
+              <button v-if="canShareVideo(video, isAdminViewer)" type="button" class="share-btn-top" @click.stop="shareShort(video)" :title="t('common.share')" :aria-label="t('common.share')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-                <span>Share</span>
+                <span>{{ t('common.share') }}</span>
               </button>
               <VideoDropdownMenu :video="video" />
             </div>
@@ -110,7 +110,7 @@
         <!-- Infinite Loading Indicator inside feed -->
         <div v-if="loadingMore" class="feed-loading-more">
           <div class="spinner-sm"></div>
-          <span>Loading suggestions...</span>
+          <span>{{ t('shorts.loadingMore') }}</span>
         </div>
       </div>
 
@@ -118,15 +118,15 @@
       <div class="comments-pane glass-panel">
         <div class="comments-pane-header">
           <div class="comments-header-top">
-            <h4>Comments ({{ commentsMap[activeTrackingVideoId || '']?.length || 0 }})</h4>
+            <h4>{{ t('shorts.comments', { count: (commentsMap[activeTrackingVideoId || '']?.length || 0).toLocaleString(locale) }) }}</h4>
             <select v-model="commentSortOrder" class="comment-sort-select">
-              <option value="likes">Top comments</option>
-              <option value="date">Newest first</option>
-              <option value="oldest">Oldest first</option>
+              <option value="likes">{{ t('shorts.sortTop') }}</option>
+              <option value="date">{{ t('shorts.sortNewest') }}</option>
+              <option value="oldest">{{ t('shorts.sortOldest') }}</option>
             </select>
           </div>
           <p v-if="activeIndex !== -1 && videos[activeIndex]" class="video-date-sub">
-            Published on {{ formatVideoDate(videos[activeIndex]?.upload_date) }}
+            {{ t('shorts.publishedOn', { date: formatVideoDate(videos[activeIndex]?.upload_date) }) }}
           </p>
         </div>
         <div class="comments-pane-body">
@@ -134,7 +134,7 @@
             <div class="spinner-sm"></div>
           </div>
           <div v-else-if="!activeTrackingVideoId || !commentsMap[activeTrackingVideoId || ''] || commentsMap[activeTrackingVideoId || '']?.length === 0" class="comments-pane-empty">
-            No comments for this Short.
+            {{ t('shorts.noComments') }}
           </div>
           <div v-else class="comments-pane-list">
             <div v-for="comment in sortedComments" :key="comment.id" class="comment-pane-item">
@@ -143,7 +143,7 @@
                 :src="comment.author_thumbnail" 
                 @error="handleAvatarError"
                 class="comment-pane-avatar" 
-                alt="Avatar"
+                :alt="t('video.avatar')"
               />
               <div v-else class="comment-pane-avatar-fallback">
                 {{ comment.author.charAt(0).toUpperCase() }}
@@ -180,7 +180,8 @@ import { useToast } from '~/composables/useToast';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 
-useHead({ title: 'Shorts' });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => t('nav.shorts')) });
 
 interface Video {
   id: string;
@@ -292,7 +293,7 @@ const fetchRecommendations = async (append = false) => {
       videos.value = mapped;
     }
   } catch (e) {
-    toast.error('Error fetching recommended videos.');
+    toast.error(t('shorts.loadFailed'));
   } finally {
     pending.value = false;
     loadingMore.value = false;
@@ -533,24 +534,24 @@ const watchNormal = (id: string) => {
 
 const { isAdmin: isAdminViewer, isLoggedIn: isLoggedInViewer } = useAuth();
 const shareShort = async (video: Video) => {
-  const res = await shareVideoLink(video, isAdminViewer.value);
-  if (!res.ok) toast.error(res.message || 'Could not share this Short.');
+  const res = await shareVideoLink(video, isAdminViewer.value, t);
+  if (!res.ok) toast.error(res.message || t('shorts.shareFailed'));
   else if (res.message) toast.success(res.message);
 };
 
 const formatVideoDate = (dateStr: string | null | undefined): string => {
-  if (!dateStr || dateStr.length !== 8) return 'Unknown date';
+  if (!dateStr || dateStr.length !== 8) return t('common.unknownDate');
   const year = dateStr.slice(0, 4);
   const month = dateStr.slice(4, 6);
   const day = dateStr.slice(6, 8);
   const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString(locale.value, { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const formatCommentDate = (timestamp: number | null): string => {
-  if (!timestamp) return 'Unknown date';
+  if (!timestamp) return t('common.unknownDate');
   const date = new Date(timestamp);
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleDateString(locale.value, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 const formatSeconds = (sec: number): string => {

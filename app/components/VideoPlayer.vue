@@ -36,7 +36,7 @@
         :srclang="sub.code"
         :label="sub.label"
       />
-      Your browser does not support video playback.
+      {{ t('player.unsupported') }}
     </video>
 
     <!-- Buffering Spinner Overlay -->
@@ -87,7 +87,7 @@
         <!-- Left Controls -->
         <div class="controls-left">
           <!-- Play / Pause -->
-          <button class="ctrl-btn" @click="togglePlay" :title="isPaused ? 'Play (Space)' : 'Pause (Space)'">
+          <button class="ctrl-btn" @click="togglePlay" :title="isPaused ? t('player.play') : t('player.pause')">
             <svg v-if="isPaused" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="white" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
           </button>
@@ -97,7 +97,7 @@
             v-if="hasPrevVideo"
             class="ctrl-btn skip-btn"
             @click="emit('prev')"
-            title="Previous Video"
+            :title="t('player.prev')"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="4" x2="5" y2="20" stroke="white" stroke-width="2"></line></svg>
           </button>
@@ -107,24 +107,24 @@
             v-if="hasNextVideo"
             class="ctrl-btn skip-btn"
             @click="emit('next')"
-            title="Next Video"
+            :title="t('player.next')"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="4" x2="19" y2="20" stroke="white" stroke-width="2"></line></svg>
           </button>
 
           <!-- Skip Backward 10s -->
-          <button class="ctrl-btn skip-btn" @click="skip(-10)" title="Rewind 10s (←)">
+          <button class="ctrl-btn skip-btn" @click="skip(-10)" :title="t('player.rewind')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path><text x="12" y="16" font-size="7" fill="white" stroke="none" text-anchor="middle" font-weight="bold">10</text></svg>
           </button>
 
           <!-- Skip Forward 10s -->
-          <button class="ctrl-btn skip-btn" @click="skip(10)" title="Forward 10s (→)">
+          <button class="ctrl-btn skip-btn" @click="skip(10)" :title="t('player.forward')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path><text x="12" y="16" font-size="7" fill="white" stroke="none" text-anchor="middle" font-weight="bold">10</text></svg>
           </button>
 
           <!-- Volume -->
           <div class="volume-control">
-            <button class="ctrl-btn" @click="toggleMute" :title="isMuted ? 'Unmute (M)' : 'Mute (M)'">
+            <button class="ctrl-btn" @click="toggleMute" :title="isMuted ? t('player.unmute') : t('player.mute')">
               <svg v-if="isMuted || currentVolume === 0" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>
               <svg v-else-if="currentVolume < 0.5" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
               <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
@@ -148,7 +148,7 @@
         <div class="controls-right">
           <!-- Speed Selector -->
           <div class="speed-control" ref="speedMenuRef">
-            <button class="ctrl-btn speed-btn" @click="toggleSpeedMenu" title="Playback Speed">
+            <button class="ctrl-btn speed-btn" @click="toggleSpeedMenu" :title="t('player.speed')">
               <span class="speed-label">{{ currentSpeed === 1 ? '1x' : currentSpeed + 'x' }}</span>
             </button>
             <div v-if="showSpeedMenu" class="speed-menu" :style="{ maxHeight: menuMaxHeight }">
@@ -159,7 +159,7 @@
                 :class="{ active: currentSpeed === speed }"
                 @click="setSpeed(speed)"
               >
-                {{ speed === 1 ? 'Normal' : speed + 'x' }}
+                {{ speed === 1 ? t('player.speedNormal') : speed + 'x' }}
               </button>
             </div>
           </div>
@@ -170,7 +170,7 @@
               class="ctrl-btn cc-btn"
               :class="{ active: activeSubtitleCode !== 'off' }"
               @click="toggleSubtitlesMenu"
-              title="Subtitles/CC"
+              :title="t('player.subtitles')"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect><line x1="7" y1="10" x2="11" y2="10"></line><line x1="7" y1="14" x2="17" y2="14"></line><line x1="15" y1="10" x2="17" y2="10"></line></svg>
             </button>
@@ -180,7 +180,7 @@
                 :class="{ active: activeSubtitleCode === 'off' }"
                 @click="selectSubtitle('off')"
               >
-                Off
+                {{ t('common.off') }}
               </button>
               <button
                 v-for="sub in subtitles"
@@ -195,12 +195,12 @@
           </div>
 
           <!-- Theater Mode -->
-          <button class="ctrl-btn theater-btn" @click="toggleTheaterMode" :title="isTheaterMode ? 'Exit Theater Mode' : 'Theater Mode'">
+          <button class="ctrl-btn theater-btn" @click="toggleTheaterMode" :title="isTheaterMode ? t('player.exitTheater') : t('player.theater')">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect></svg>
           </button>
 
           <!-- Fullscreen -->
-          <button class="ctrl-btn" @click="toggleFullscreen" title="Fullscreen (F)">
+          <button class="ctrl-btn" @click="toggleFullscreen" :title="t('player.fullscreen')">
             <svg v-if="!isFullscreen" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
             <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
           </button>
@@ -213,6 +213,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { youtubeThumb } from '~/utils/thumb';
+
+const { t } = useI18n();
 
 const props = defineProps<{
   video: any;
@@ -390,9 +392,9 @@ const updateMediaSession = () => {
   if (process.client && 'mediaSession' in navigator && props.video) {
     const v = videoPlayer.value;
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: props.video.title || 'YouKeep Video',
+      title: props.video.title || t('player.mediaTitle'),
       artist: props.video.channel_title || 'YouKeep',
-      album: 'YouKeep Archive',
+      album: t('player.mediaAlbum'),
       artwork: [
         {
           src: props.video.local_thumbnail_path || youtubeThumb(props.video.id, props.video.is_short ? 'short' : 'video'),

@@ -2,21 +2,21 @@
   <div class="watch-container">
     <div v-if="pending" class="loading-state">
       <div class="spinner"></div>
-      <p>Loading video...</p>
+      <p>{{ t('watch.loading') }}</p>
     </div>
 
     <template v-else-if="error || !video">
       <EmptyState
-        :title="errorStatus === 404 || !error ? 'Video not found' : 'Loading error'"
-        :description="errorStatus === 404 || !error ? 'This video does not exist or is not available to you.' : (errorMsg || 'The video could not be loaded.')"
+        :title="errorStatus === 404 || !error ? t('watch.notFoundTitle') : t('watch.loadErrorTitle')"
+        :description="errorStatus === 404 || !error ? t('watch.notFoundDesc') : (errorMsg || t('watch.loadErrorDesc'))"
         data-testid="video-not-found"
         icon="video"
-        action-text="Back to Home"
+        :action-text="t('watch.backHome')"
         action-route="/"
       />
       <div v-if="!isLoggedIn" class="watch-login-hint" data-testid="watch-login-hint">
-        <p>This video may be private. Log in to see it if you have access.</p>
-        <NuxtLink class="btn btn-primary" :to="loginLink">Log in</NuxtLink>
+        <p>{{ t('watch.privateHint') }}</p>
+        <NuxtLink class="btn btn-primary" :to="loginLink">{{ t('home.logIn') }}</NuxtLink>
       </div>
     </template>
 
@@ -47,10 +47,10 @@
           <div class="mini-player-info">
             <p class="mini-player-title">{{ video.title }}</p>
           </div>
-          <button class="mini-player-btn" @click.stop="toggleMiniPlayerPlayback" title="Play/Pause">
+          <button class="mini-player-btn" @click.stop="toggleMiniPlayerPlayback" :title="t('watch.playPause')">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="white" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           </button>
-          <button class="mini-player-close" @click.stop="closeMiniPlayer" title="Close">
+          <button class="mini-player-close" @click.stop="closeMiniPlayer" :title="t('common.close')">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
@@ -58,7 +58,7 @@
         <!-- Video Header Info -->
         <div class="title-row">
           <h1 class="video-title">{{ video.title }}</h1>
-          <span v-if="video.was_live === 1" class="replay-pill">REPLAY</span>
+          <span v-if="video.was_live === 1" class="replay-pill">{{ t('video.replayBadge') }}</span>
         </div>
 
 
@@ -69,7 +69,7 @@
             class="channel-info"
             role="link"
             tabindex="0"
-            :aria-label="`Open channel ${video.channel_title}`"
+            :aria-label="t('watch.openChannel', { title: video.channel_title })"
             @click="navigateToChannel(video.channel_id)"
             @keydown.enter.self.prevent="navigateToChannel(video.channel_id)"
           >
@@ -77,18 +77,18 @@
               :src="video.channel_avatar || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23666\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><path d=\'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-3.33 0-10 1.67-10 5v2h20v-2c0-3.33-6.67-5-10-5z\'></path></svg>'" 
               @error="handleAvatarError"
               class="channel-avatar" 
-              alt="Avatar"
+              :alt="t('video.avatar')"
             />
             <div>
               <h3 class="channel-name">{{ video.channel_title }}</h3>
-              <p class="sub-count">Archived in YouKeep</p>
+              <p class="sub-count">{{ t('watch.archivedIn') }}</p>
             </div>
           </div>
           
           <div class="action-buttons">
             <button v-if="canShare" type="button" class="btn btn-secondary" data-testid="watch-share" @click="shareVideo">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-              Share
+              {{ t('common.share') }}
             </button>
             <div v-if="hasWatchOptions" class="dropdown-wrapper" ref="dropdownWrapperRef" @keydown.esc="closeWatchOptionsMenu(true)">
               <button
@@ -96,8 +96,8 @@
                 type="button"
                 class="btn btn-secondary watch-more-btn"
                 data-testid="watch-more"
-                aria-label="More options"
-                title="More options"
+                :aria-label="t('common.moreOptions')"
+                :title="t('common.moreOptions')"
                 aria-haspopup="menu"
                 :aria-expanded="isWatchOptionsMenuOpen ? 'true' : 'false'"
                 @click.stop="toggleWatchOptionsMenu"
@@ -109,17 +109,17 @@
                 <div v-if="isWatchOptionsMenuOpen" class="watch-options-menu" role="menu" data-testid="watch-options-menu" :style="watchMenuStyle">
                   <button v-if="isLoggedIn" type="button" role="menuitem" class="dropdown-item" @click="openPlaylistsModalWrapper">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="15" y1="10" x2="9" y2="10"/></svg>
-                    Save
+                    {{ t('common.save') }}
                   </button>
                   <button v-if="video?.local_video_path" type="button" role="menuitem" class="dropdown-item" @click="downloadLocalCopyWrapper">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download
+                    {{ t('common.download') }}
                   </button>
                   <template v-if="isLoggedIn">
                     <div class="dropdown-divider" role="separator"></div>
                     <button type="button" role="menuitem" class="dropdown-item text-danger" data-testid="watch-report" @click="openReport">
                       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-                      Report
+                      {{ t('common.report') }}
                     </button>
                   </template>
                 </div>
@@ -131,19 +131,19 @@
         <!-- Collapsible Description Box -->
         <div class="description-box glass-panel" :class="{ expanded: descriptionExpanded }">
           <div class="description-meta">
-            <span class="view-count">{{ formatViews(video.view_count) }} views</span>
+            <span class="view-count">{{ t('video.views', { views: formatViews(video.view_count) }) }}</span>
             <span class="meta-dot">•</span>
             <span class="upload-date">{{ formatUploadDate(video.upload_date) }}</span>
             <template v-if="video.like_count">
               <span class="meta-dot">•</span>
-              <span class="like-count">👍 {{ formatViews(video.like_count) }} likes</span>
+              <span class="like-count">{{ t('watch.likes', { count: formatViews(video.like_count) }) }}</span>
             </template>
           </div>
           
-          <p class="description-text">{{ video.description || 'No description available.' }}</p>
+          <p class="description-text">{{ video.description || t('channels.noDescription') }}</p>
           
           <button class="toggle-desc-btn" @click="descriptionExpanded = !descriptionExpanded">
-            {{ descriptionExpanded ? 'Show less' : 'Show more' }}
+            {{ descriptionExpanded ? t('watch.showLess') : t('common.showMore') }}
           </button>
         </div>
 
@@ -152,7 +152,7 @@
           <div class="tech-details-header" @click="techDetailsExpanded = !techDetailsExpanded">
             <div class="tech-details-title-row">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gradient"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-              <h3 class="tech-details-label">Archive Technical Details</h3>
+              <h3 class="tech-details-label">{{ t('watch.techTitle') }}</h3>
             </div>
             <svg 
               xmlns="http://www.w3.org/2000/svg" 
@@ -170,24 +170,24 @@
           <div v-show="techDetailsExpanded" class="tech-details-content">
             <div class="tech-grid">
               <div class="tech-item">
-                <span class="tech-label">YouTube ID:</span>
+                <span class="tech-label">{{ t('watch.ytId') }}</span>
                 <code class="tech-value">{{ video.id }}</code>
               </div>
               <div class="tech-item">
-                <span class="tech-label">Local Import Date:</span>
+                <span class="tech-label">{{ t('watch.importDate') }}</span>
                 <span class="tech-value">{{ formatTimestamp(video.created_at) }}</span>
               </div>
               <div class="tech-item">
-                <span class="tech-label">Disk space occupied:</span>
+                <span class="tech-label">{{ t('watch.diskSpace') }}</span>
                 <span class="tech-value">{{ formatBytes(video.size_bytes) }}</span>
               </div>
               <div class="tech-item" v-if="video.local_video_path">
-                <span class="tech-label">Server path:</span>
+                <span class="tech-label">{{ t('watch.serverPath') }}</span>
                 <code class="tech-value" :title="video.local_video_path">{{ video.local_video_path }}</code>
               </div>
               <div class="tech-item">
-                <span class="tech-label">Download status:</span>
-                <span class="badge badge-completed">{{ video.download_status }}</span>
+                <span class="tech-label">{{ t('watch.downloadStatus') }}</span>
+                <span class="badge badge-completed">{{ statusLabel(video.download_status) }}</span>
               </div>
             </div>
           </div>
@@ -197,11 +197,11 @@
         <div class="comments-section glass-panel">
           <h3 class="comments-title">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-            <span>{{ comments.length }} Comments</span>
+            <span>{{ t('watch.comments', { count: comments.length.toLocaleString(locale) }, comments.length) }}</span>
           </h3>
 
           <div v-if="comments.length === 0" class="comments-empty">
-            No archived comments for this video.
+            {{ t('watch.noComments') }}
           </div>
 
           <div v-else class="comments-list">
@@ -210,7 +210,7 @@
                 v-if="comment.author_thumbnail" 
                 :src="comment.author_thumbnail" 
                 class="comment-avatar" 
-                alt="Avatar"
+                :alt="t('video.avatar')"
               />
               <div v-else class="comment-avatar-fallback">
                 {{ comment.author.charAt(0).toUpperCase() }}
@@ -218,7 +218,7 @@
               <div class="comment-body">
                 <div class="comment-header">
                   <span class="comment-author">{{ comment.author }}</span>
-                  <span class="comment-time">{{ comment.time_text || 'some time ago' }}</span>
+                  <span class="comment-time">{{ comment.time_text || t('watch.someTimeAgo') }}</span>
                 </div>
                 <p class="comment-text">{{ comment.text }}</p>
                 <div class="comment-footer">
@@ -236,7 +236,7 @@
         <!-- Playlist Sidebar View -->
         <template v-if="playlistId && playlist">
           <div class="playlist-header-sidebar glass-panel" style="padding: 14px; border-radius: var(--border-radius-md); background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.15); margin-bottom: 16px;">
-            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent-primary); letter-spacing: 0.05em;">Playlist</span>
+            <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent-primary); letter-spacing: 0.05em;">{{ t('watch.playlist') }}</span>
             <h3 style="font-size: 15px; font-weight: 700; color: white; margin-top: 4px; line-height: 1.3;">{{ playlist.title }}</h3>
             <p style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
               {{ playlist.channel_title }} • {{ playlistVideos.findIndex((v: any) => v.id === videoId) + 1 }} / {{ playlistVideos.length }}
@@ -267,9 +267,9 @@
                 :src="videoThumbSrc(rel, 160)"
                 :fallback="youtubeThumb(rel.id, rel.is_short ? 'short' : 'video')"
                 img-class="rec-thumbnail-img"
-                alt="Thumbnail"
+                :alt="t('video.thumbnail')"
               >
-                <span v-if="rel.is_short" class="rec-short-badge" data-testid="short-badge">SHORT</span>
+                <span v-if="rel.is_short" class="rec-short-badge" data-testid="short-badge">{{ t('video.shortBadge') }}</span>
                 <span class="rec-duration">{{ formatDuration(rel.duration) }}</span>
                 <VideoDropdownMenu :video="rel" @hidden="onVideoHidden" />
               </MediaFrame>
@@ -277,8 +277,8 @@
               <div class="rec-info" style="display: flex; flex-direction: column; min-width: 0; flex: 1; justify-content: center;">
                 <h4 class="rec-title" :title="rel.title" style="font-size: 12.5px; font-weight: 600; line-height: 1.3; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ rel.title }}</h4>
                 <div class="rec-metadata" style="font-size: 11px; margin-top: 4px;">
-                  <span v-if="rel.download_status !== 'completed'" style="color: #ef4444; font-weight: 500;">Not downloaded</span>
-                  <span v-else style="color: var(--text-secondary);">Downloaded</span>
+                  <span v-if="rel.download_status !== 'completed'" style="color: #ef4444; font-weight: 500;">{{ t('watch.notDownloaded') }}</span>
+                  <span v-else style="color: var(--text-secondary);">{{ t('watch.downloaded') }}</span>
                 </div>
               </div>
             </div>
@@ -287,14 +287,14 @@
           <hr style="border: 0; height: 1px; background: rgba(255,255,255,0.06); margin: 20px 0;" />
         </template>
 
-        <h2 class="sidebar-title">{{ playlistId ? 'Other suggestions' : 'Other archived videos' }}</h2>
+        <h2 class="sidebar-title">{{ playlistId ? t('watch.otherSuggestions') : t('watch.otherArchived') }}</h2>
         
         <div v-if="relatedPending" class="sidebar-loading">
           <div class="spinner"></div>
         </div>
 
         <div v-else-if="filteredRelatedVideos.length === 0" class="sidebar-empty">
-          <p>No other archived videos available.</p>
+          <p>{{ t('watch.noOthers') }}</p>
         </div>
 
         <div v-else class="recommendations-list">
@@ -310,9 +310,9 @@
               :src="videoThumbSrc(rel, 320)"
               :fallback="youtubeThumb(rel.id, rel.is_short ? 'short' : 'video')"
               img-class="rec-thumbnail-img"
-              alt="Thumbnail"
+              :alt="t('video.thumbnail')"
             >
-              <span v-if="rel.is_short" class="rec-short-badge" data-testid="short-badge">SHORT</span>
+              <span v-if="rel.is_short" class="rec-short-badge" data-testid="short-badge">{{ t('video.shortBadge') }}</span>
               <span class="rec-duration">{{ formatDuration(rel.duration) }}</span>
               <VideoDropdownMenu :video="rel" @hidden="onVideoHidden" />
             </MediaFrame>
@@ -321,7 +321,7 @@
               <h4 class="rec-title" :title="rel.title">{{ rel.title }}</h4>
               <p class="rec-channel">{{ rel.channel_title }}</p>
               <div class="rec-metadata">
-                <span>{{ formatViews(rel.view_count) }} views</span>
+                <span>{{ t('video.views', { views: formatViews(rel.view_count) }) }}</span>
                 <span>•</span>
                 <span>{{ formatUploadDate(rel.upload_date) }}</span>
               </div>
@@ -358,10 +358,12 @@ import VideoPlayer from '~/components/VideoPlayer.vue';
 import SaveToPlaylistModal from '~/components/SaveToPlaylistModal.vue';
 import ReportVideoModal from '~/components/ReportVideoModal.vue';
 import { canShareVideo, shareVideoLink } from '~/utils/shareVideo';
+import { formatViewCount } from '~/utils/formatCount';
 import { parseStartTime } from '~/utils/videoResume';
 import { useVideoWatchProgress } from '~/composables/useVideoWatchProgress';
 
 const route = useRoute();
+const { t, te, locale } = useI18n();
 const router = useRouter();
 const toast = useToast();
 const { isLoggedIn, isAdmin } = useAuth();
@@ -432,7 +434,7 @@ const { data: videoResponse, pending, error, refresh: refreshVideo } = await use
   return `/api/videos/${videoId.value}${token.value ? `?token=${token.value}` : ''}`;
 });
 const video = computed(() => videoResponse.value?.video || null);
-useHead({ title: computed(() => video.value?.title || (error.value ? 'Video not found' : 'Video')) });
+useHead({ title: computed(() => video.value?.title || (error.value ? t('watch.notFoundTitle') : t('watch.titleFallback'))) });
 const comments = computed(() => videoResponse.value?.comments || []);
 const subtitles = computed(() => videoResponse.value?.subtitles || []);
 const chapters = computed(() => videoResponse.value?.chapters || []);
@@ -533,7 +535,7 @@ const handleVideoEnded = () => {
     if (currentIndex >= 0 && currentIndex < playlistVideos.value.length - 1) {
       const nextVideo = playlistVideos.value[currentIndex + 1];
       if (nextVideo.download_status === 'completed') {
-        toast.info(`Playing next video: ${nextVideo.title}`);
+        toast.info(t('watch.playingNext', { title: nextVideo.title }));
         autoNextTimer = setTimeout(() => {
           autoNextTimer = null;
           navigateTo(playlistQuery(nextVideo.id));
@@ -586,8 +588,8 @@ const hasWatchOptions = computed(() => isLoggedIn.value || !!video.value?.local_
 
 const shareVideo = async () => {
   if (!video.value) return;
-  const res = await shareVideoLink(video.value, isAdmin.value);
-  if (!res.ok) toast.error(res.message || 'Could not share this video.');
+  const res = await shareVideoLink(video.value, isAdmin.value, t);
+  if (!res.ok) toast.error(res.message || t('watch.shareFailed'));
   else if (res.message) toast.success(res.message);
 };
 
@@ -627,6 +629,7 @@ const handleAvatarError = (event: Event) => {
 
 const formatViews = (views: number | null): string => {
   if (views === null || views === undefined) return '0';
+  if (!locale.value.startsWith('en')) return formatViewCount(views, locale.value);
   if (views >= 1000000) {
     return (views / 1000000).toFixed(1).replace('.0', '') + 'M';
   }
@@ -637,28 +640,34 @@ const formatViews = (views: number | null): string => {
 };
 
 const formatUploadDate = (dateStr: string | null): string => {
-  if (!dateStr || dateStr.length !== 8) return 'Unknown date';
+  if (!dateStr || dateStr.length !== 8) return t('common.unknownDate');
   const year = dateStr.slice(0, 4);
   const month = dateStr.slice(4, 6);
   const day = dateStr.slice(6, 8);
   
   const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString(locale.value, { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const formatTimestamp = (ts: number | null): string => {
-  if (!ts) return 'Unknown';
+  if (!ts) return t('watch.unknown');
   const date = new Date(ts);
-  return date.toLocaleString('en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString(locale.value, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
 const formatBytes = (bytes: number | null): string => {
-  if (bytes === null || bytes === undefined) return 'Unknown';
-  if (bytes === 0) return '0 B';
+  if (bytes === null || bytes === undefined) return t('watch.unknown');
+  if (bytes === 0) return `0 ${t('watch.unit.B')}`;
   const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'].map((u) => t(`watch.unit.${u}`));
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)).toLocaleString(locale.value, { useGrouping: false }) + ' ' + sizes[i];
+};
+
+// The download state words reuse the channel status labels; anything unknown stays as the server sent it.
+const statusLabel = (status: string | null | undefined): string => {
+  const key = `channels.status.${status}`;
+  return status && te(key) ? t(key) : (status ?? '');
 };
 
 const onVideoHidden = (id: string) => {
