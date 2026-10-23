@@ -5,6 +5,7 @@ import { getDb } from '../utils/db';
 import { resetStaleMusicDownloads, startMusicQueueWorker, initMusicScheduler, resumeInterruptedArtistImports, syncAllMusicArtists } from '../utils/musicDownloader';
 import { resetStalePodcastDownloads, startPodcastQueueWorker, initPodcastScheduler, syncAllPodcastShows } from '../utils/podcastDownloader';
 import { scheduleStartupAlbumMatch } from '../utils/albumMatchRunner';
+import { scheduleStartupMetadataBackfill } from '../utils/metadataBackfill';
 import { startThumbCacheSweep, sweepThumbCache } from '../utils/thumbnails';
 import { startAfterUpdate } from '../utils/startup';
 import { resetSyncAllFlags } from '../utils/concurrency';
@@ -39,6 +40,12 @@ function resumeInterruptedImports() {
     scheduleStartupAlbumMatch();
   } catch (err) {
     console.error('YouKeep Scheduler Plugin: could not schedule album matching:', err);
+  }
+  // Categories/tags of videos downloaded before they were captured, 120 s after boot.
+  try {
+    scheduleStartupMetadataBackfill();
+  } catch (err) {
+    console.error('YouKeep Scheduler Plugin: could not schedule the video category lookup:', err);
   }
 }
 

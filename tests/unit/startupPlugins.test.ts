@@ -36,6 +36,7 @@ vi.mock('../../server/utils/videoDurations', () => ({
   backfillMissingVideoSizes: vi.fn(async () => ({ checked: 0, updated: 0 })),
 }));
 vi.mock('../../server/utils/albumMatchRunner', () => ({ scheduleStartupAlbumMatch: rec('scheduleStartupAlbumMatch') }));
+vi.mock('../../server/utils/metadataBackfill', () => ({ scheduleStartupMetadataBackfill: rec('scheduleStartupMetadataBackfill') }));
 vi.mock('../../server/utils/thumbnails', () => ({ sweepThumbCache: rec('sweepThumbCache', 0), startThumbCacheSweep: vi.fn(() => () => {}) }));
 vi.mock('../../server/utils/concurrency', () => ({ resetSyncAllFlags: rec('resetSyncAllFlags') }));
 let catchUpDeps: any = null;
@@ -76,6 +77,8 @@ describe('scheduler plugin', () => {
     }
     expect(calls).toContain('resumeInterruptedChannelImports');
     expect(calls).toContain('resumeInterruptedArtistImports');
+    // The video category lookup is scheduled once the workers run (it waits 120 s itself).
+    expect(at('scheduleStartupMetadataBackfill')).toBeGreaterThan(at('startQueueWorker'));
   });
 
   it('schedules the startup catch-up after the sync-all flags are reset, with the three sync-all runners, and cancels it on close', () => {

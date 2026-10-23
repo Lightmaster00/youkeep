@@ -871,6 +871,12 @@ export function openDatabase(dbPath: string): Database.Database {
     console.log('Seeded setting album_matching_enabled: 1');
   }
 
+  const metadataBackfillCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'metadata_backfill_enabled'").get() as { count: number };
+  if (metadataBackfillCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('metadata_backfill_enabled', '1')").run();
+    console.log('Seeded setting metadata_backfill_enabled: 1');
+  }
+
   // After the migrations: planner statistics (ANALYZE when there are none).
   runPlannerMaintenance(db);
 

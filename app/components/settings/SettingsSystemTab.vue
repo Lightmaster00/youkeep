@@ -184,6 +184,8 @@
 
     <AlbumMatchPanel v-if="modules.music" class="mt-3" />
 
+    <VideoCategoriesPanel v-if="modules.video" class="mt-3" />
+
     <ServerResponsivenessPanel class="mt-3" />
 
   <div class="logs-container glass-panel">
@@ -291,6 +293,7 @@ import { useToast } from '~/composables/useToast';
 import { useDownloadsQueue } from '~/composables/useDownloadsQueue';
 import TidyLibraryPanel from '~/components/settings/TidyLibraryPanel.vue';
 import AlbumMatchPanel from '~/components/settings/AlbumMatchPanel.vue';
+import VideoCategoriesPanel from '~/components/settings/VideoCategoriesPanel.vue';
 import ServerResponsivenessPanel from '~/components/settings/ServerResponsivenessPanel.vue';
 import SecurityLogPanel from '~/components/settings/SecurityLogPanel.vue';
 import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
