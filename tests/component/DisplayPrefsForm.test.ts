@@ -23,6 +23,19 @@ describe('DisplayPrefsForm — home section', () => {
     expect(rowOrder(w)).toEqual(['popular', 'forYou', 'continue', 'subscriptions', 'becauseYouWatched', 'byCategory', 'shorts', 'playlists', 'discoverChannels', 'recentMusic', 'newEpisodes']);
   });
 
+  it('lists every row of the new home with its English label', async () => {
+    useState<any>('modules').value = { video: true, music: true, podcasts: true };
+    useState<any>('display_prefs').value = buildView({}, { homeSections: [...APP_DEFAULTS.homeSections, 'recentMusic', 'newEpisodes'] });
+    const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'user' } });
+    const labels = w.findAll('[data-testid^="section-row-"] .check-row').map((r: any) => r.text());
+    expect(labels).toEqual([
+      'Continue watching', 'From your subscriptions', 'Recommended for you', 'Popular', 'Because you watched',
+      'Browse by category', 'Shorts', 'Your playlists', 'Channels to discover', 'Recently added music', 'New podcast episodes',
+    ]);
+    // Each row keeps its move buttons, named after the row.
+    expect(w.find('[data-testid="up-byCategory"]').attributes('aria-label')).toBe('Move Browse by category up');
+  });
+
   it('offers no "Recently added" video row any more', async () => {
     useState<any>('modules').value = { video: true, music: true, podcasts: true };
     const w = await mountSuspended(DisplayPrefsForm, { props: { mode: 'admin' } });
