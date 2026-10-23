@@ -6,33 +6,33 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Search for an artist or a track..."
+          :placeholder="t('music.searchPlaceholder')"
           class="form-input music-search-input"
         />
         <template v-if="!search">
           <select v-model="genre" class="form-input">
-            <option value="">All genres</option>
+            <option value="">{{ t('music.allGenres') }}</option>
             <option v-for="g in facets.genres" :key="g" :value="g">{{ g }}</option>
           </select>
           <select v-model="language" class="form-input">
-            <option value="">All languages</option>
-            <option v-for="l in facets.languages" :key="l" :value="l">{{ languageName(l) }}</option>
+            <option value="">{{ t('music.allLanguages') }}</option>
+            <option v-for="l in facets.languages" :key="l" :value="l">{{ languageName(l, locale) }}</option>
           </select>
           <select v-model="year" class="form-input">
-            <option value="">All years</option>
+            <option value="">{{ t('music.allYears') }}</option>
             <option v-for="y in facets.years" :key="y" :value="y">{{ y }}</option>
           </select>
         </template>
       </div>
 
       <template v-if="search">
-        <div v-if="trackSearchPending || trackSearchFor !== search" class="music-loading">Loading...</div>
-        <div v-else-if="trackSearchError" class="music-error">Search failed.</div>
+        <div v-if="trackSearchPending || trackSearchFor !== search" class="music-loading">{{ t('common.loadingDots') }}</div>
+        <div v-else-if="trackSearchError" class="music-error">{{ t('music.searchFailed') }}</div>
         <EmptyState
           v-else-if="trackSearchResults.length === 0"
           icon="music"
-          title="No results"
-          description="No tracks match this search."
+          :title="t('music.noResults')"
+          :description="t('music.noTracksMatch')"
         />
         <div v-else class="track-search-results">
           <div
@@ -61,21 +61,21 @@
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </div>
             <div class="playlist-card-info">
-              <h4 class="playlist-card-label">{{ playlist.label }}</h4>
-              <p class="playlist-card-count">{{ playlist.tracks.length }} track(s)</p>
+              <h4 class="playlist-card-label">{{ playlistLabel(playlist) }}</h4>
+              <p class="playlist-card-count">{{ t('music.trackCountPlain', { count: playlist.tracks.length.toLocaleString(locale) }, playlist.tracks.length) }}</p>
             </div>
           </div>
         </div>
 
-        <div v-if="gridPending" class="music-loading">Loading...</div>
+        <div v-if="gridPending" class="music-loading">{{ t('common.loadingDots') }}</div>
 
-        <div v-else-if="gridError" class="music-error">Failed to load artists.</div>
+        <div v-else-if="gridError" class="music-error">{{ t('music.loadArtistsFailed') }}</div>
 
         <EmptyState
           v-else-if="artists.length === 0"
           icon="music"
-          :title="hasActiveFilters ? 'No results' : 'No artists archived'"
-          :description="hasActiveFilters ? 'No results for these filters.' : 'No artists archived yet.'"
+          :title="hasActiveFilters ? t('music.noResults') : t('music.noArtistsTitle')"
+          :description="hasActiveFilters ? t('music.noResultsFilters') : t('music.noArtistsDesc')"
         />
 
         <div v-else class="artist-grid">
@@ -88,7 +88,7 @@
             <img :src="a.avatar_url || fallbackAvatar" @error="handleAvatarError" class="artist-card-avatar" alt="" />
             <div class="artist-card-body">
               <h3 class="artist-card-name">{{ a.name }}</h3>
-              <p class="artist-card-meta">{{ a.track_count }} track(s)</p>
+              <p class="artist-card-meta">{{ t('music.trackCountPlain', { count: a.track_count.toLocaleString(locale) }, a.track_count) }}</p>
               <span v-if="isAdmin" class="badge" :class="visibilityBadgeClass(a.visibility)">{{ formatVisibility(a.visibility) }}</span>
             </div>
           </div>
@@ -117,7 +117,8 @@ const route = useRoute();
 const router = useRouter();
 
 const artistId = computed(() => (route.query.artistId ? String(route.query.artistId) : ''));
-useHead({ title: 'Music' });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => t('music.title')) });
 
 // --- Grid view state ---
 const search = ref('');
@@ -132,29 +133,39 @@ const gridError = ref(false);
 const hasActiveFilters = computed(() => !!(search.value || genre.value || language.value || year.value));
 
 // --- Automatic playlists ---
-const playlists = ref<Array<{ key: string; label: string; tracks: any[] }>>([]);
+// The label is worded from the key when shown, so it follows the UI language.
+const playlists = ref<Array<{ key: string; genre?: string; tracks: any[] }>>([]);
+
+function playlistLabel(p: { key: string; genre?: string }): string {
+  switch (p.key) {
+    case 'most-played': return t('music.mix.mostPlayed');
+    case 'recently-added': return t('music.mix.recentlyAdded');
+    case 'rediscover': return t('music.mix.rediscover');
+    default: return t('music.mix.genre', { genre: p.genre ?? '' });
+  }
+}
 
 async function fetchPlaylists() {
-  const results: Array<{ key: string; label: string; tracks: any[] }> = [];
+  const results: Array<{ key: string; genre?: string; tracks: any[] }> = [];
 
   try {
     const mostPlayed = await $fetch<any>('/api/music/playlists/most-played');
     if (mostPlayed.tracks?.length > 0) {
-      results.push({ key: 'most-played', label: 'Most played', tracks: mostPlayed.tracks });
+      results.push({ key: 'most-played', tracks: mostPlayed.tracks });
     }
   } catch (e) { /* silently skip this card on error */ }
 
   try {
     const recentlyAdded = await $fetch<any>('/api/music/playlists/recently-added');
     if (recentlyAdded.tracks?.length > 0) {
-      results.push({ key: 'recently-added', label: 'Recently added', tracks: recentlyAdded.tracks });
+      results.push({ key: 'recently-added', tracks: recentlyAdded.tracks });
     }
   } catch (e) { /* silently skip this card on error */ }
 
   try {
     const rediscover = await $fetch<any>('/api/music/playlists/rediscover');
     if (rediscover.tracks?.length > 0) {
-      results.push({ key: 'rediscover', label: 'Rediscover', tracks: rediscover.tracks });
+      results.push({ key: 'rediscover', tracks: rediscover.tracks });
     }
   } catch (e) { /* silently skip this card on error */ }
 
@@ -162,7 +173,7 @@ async function fetchPlaylists() {
     try {
       const genreMix = await $fetch<any>('/api/music/playlists/genre-mix', { params: { genre: g } });
       if (genreMix.tracks?.length > 0) {
-        results.push({ key: `genre-${g}`, label: `Mix ${g}`, tracks: genreMix.tracks });
+        results.push({ key: `genre-${g}`, genre: g, tracks: genreMix.tracks });
       }
     } catch (e) { /* silently skip this card on error */ }
   }

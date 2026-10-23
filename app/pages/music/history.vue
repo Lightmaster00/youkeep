@@ -1,30 +1,30 @@
 <template>
   <div class="history-page">
     <div class="history-header">
-      <h1 class="page-title history-title">History</h1>
+      <h1 class="page-title history-title">{{ t('nav.history') }}</h1>
       <button
         v-if="user && items.length > 0"
         type="button"
         class="btn btn-danger-outline"
         @click="confirmingClear = true"
       >
-        Clear history
+        {{ t('music.history.clear') }}
       </button>
     </div>
 
     <EmptyState
       v-if="!user"
       icon="music"
-      title="Log in to see your history"
-      description="The songs you play are kept per account."
+      :title="t('music.history.loginTitle')"
+      :description="t('music.history.loginDesc')"
     />
 
     <template v-else>
       <EmptyState
         v-if="loaded && items.length === 0 && !hasMore && !error"
         icon="music"
-        title="No listening history yet"
-        description="Songs you play show up here."
+        :title="t('music.history.emptyTitle')"
+        :description="t('music.history.emptyDesc')"
       />
       <section v-for="day in days" :key="day.key" class="history-day" :aria-label="day.label">
         <h2 class="history-day-heading">{{ day.label }}</h2>
@@ -37,8 +37,8 @@
             <button
               type="button"
               class="history-remove-btn"
-              :aria-label="`Remove ${track.title} from history`"
-              title="Remove from history"
+              :aria-label="t('music.history.removeLabel', { title: track.title })"
+              :title="t('music.history.removeTitle')"
               @click="remove(track)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -47,21 +47,21 @@
         </MusicTrackList>
       </section>
 
-      <div v-if="loading" class="history-status">Loading...</div>
+      <div v-if="loading" class="history-status">{{ t('common.loadingDots') }}</div>
       <div v-else-if="error" class="history-status">
-        Failed to load your history.
-        <button class="btn btn-secondary" @click="loadMore">Retry</button>
+        {{ t('music.history.loadFailed') }}
+        <button class="btn btn-secondary" @click="loadMore">{{ t('common.retry') }}</button>
       </div>
       <div v-else-if="hasMore" class="history-more">
-        <button class="btn btn-secondary" @click="loadMore">Load more</button>
+        <button class="btn btn-secondary" @click="loadMore">{{ t('common.loadMore') }}</button>
       </div>
     </template>
 
     <ConfirmDialog
       :show="confirmingClear"
-      title="Clear history?"
-      message="Every song will be removed from your listening history. This cannot be undone."
-      confirm-label="Clear history"
+      :title="t('music.history.clearTitle')"
+      :message="t('music.history.clearMessage')"
+      :confirm-label="t('music.history.clear')"
       :busy="clearing"
       @confirm="clearAll"
       @cancel="confirmingClear = false"
@@ -70,12 +70,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useHistoryList } from '~/composables/useHistoryList';
 import { usePlayTrackList } from '~/composables/usePlayTrackList';
 
-useHead({ title: 'Listening history' });
+const { t } = useI18n();
+useHead({ title: computed(() => t('music.head.history')) });
 
 // The logged-in user's played songs, one entry per song (its latest play),
 // grouped by day. Rows can be removed one by one, or the whole history cleared.
@@ -85,8 +86,8 @@ const {
   items, days, loading, error, loaded, hasMore, loadMore, remove, confirmingClear, clearing, clearAll,
 } = useHistoryList<any>('/api/music/history', {
   timestampOf: (t) => t.playedAt,
-  removeError: 'Could not remove the song from your history.',
-  clearError: 'Could not clear your history.',
+  removeError: () => t('music.history.removeFailed'),
+  clearError: () => t('music.history.clearFailed'),
 });
 
 onMounted(() => {

@@ -1,12 +1,12 @@
 <template>
   <div class="recent-page">
-    <h1 class="page-title recent-title">Recently added</h1>
+    <h1 class="page-title recent-title">{{ t('music.mix.recentlyAdded') }}</h1>
 
     <EmptyState
       v-if="loaded && items.length === 0 && !error"
       icon="music"
-      title="Nothing here yet"
-      description="Tracks appear here as soon as they are downloaded."
+      :title="t('music.recent.emptyTitle')"
+      :description="t('music.recent.emptyDesc')"
     />
 
     <div v-else class="media-grid">
@@ -20,23 +20,24 @@
       />
     </div>
 
-    <div v-if="loading" class="recent-status">Loading...</div>
+    <div v-if="loading" class="recent-status">{{ t('common.loadingDots') }}</div>
     <div v-else-if="error" class="recent-status">
-      Failed to load tracks.
-      <button class="btn btn-secondary load-more-btn" @click="loadMore">Retry</button>
+      {{ t('music.recent.loadFailed') }}
+      <button class="btn btn-secondary load-more-btn" @click="loadMore">{{ t('common.retry') }}</button>
     </div>
     <div v-else-if="hasMore" class="recent-more">
-      <button class="btn btn-secondary load-more-btn" @click="loadMore">Load more</button>
+      <button class="btn btn-secondary load-more-btn" @click="loadMore">{{ t('common.loadMore') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useMusicPlayer } from '~/composables/useMusicPlayer';
 import { useRecentList } from '~/composables/useRecentList';
 
-useHead({ title: 'Recently added music' });
+const { t } = useI18n();
+useHead({ title: computed(() => t('music.head.recent')) });
 
 const { currentTrack, play: playMusicTrack } = useMusicPlayer();
 const { items, loading, error, loaded, hasMore, loadMore } = useRecentList('/api/music/playlists/recently-added', 'tracks');

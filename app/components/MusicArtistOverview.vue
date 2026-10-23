@@ -1,7 +1,7 @@
 <template>
   <div class="mao">
-    <section v-if="overview.popular.length > 0" class="mao-section" aria-label="Popular">
-      <h2 class="mao-title">Popular</h2>
+    <section v-if="overview.popular.length > 0" class="mao-section" :aria-label="t('music.artist.popular')">
+      <h2 class="mao-title">{{ t('music.artist.popular') }}</h2>
       <MusicTrackList
         :tracks="overview.popular"
         :active-id="currentTrack?.id"
@@ -18,12 +18,12 @@
         data-testid="popular-show-more"
         @click="emit('show-songs')"
       >
-        Show more
+        {{ t('common.showMore') }}
       </button>
     </section>
 
-    <section v-if="overview.latest" class="mao-section" aria-label="Latest release">
-      <h2 class="mao-title">Latest release</h2>
+    <section v-if="overview.latest" class="mao-section" :aria-label="t('music.artist.latest')">
+      <h2 class="mao-title">{{ t('music.artist.latest') }}</h2>
       <NuxtLink
         v-if="overview.latest.kind === 'album'"
         :to="`/music/album/${overview.latest.album.id}`"
@@ -46,16 +46,16 @@
         <img :src="overview.latest.track.local_thumbnail_path || overview.latest.track.album_cover_url || fallbackCover" class="mao-latest-cover" alt="" @error="onCoverError" />
         <span class="mao-latest-text">
           <span class="mao-latest-title">{{ overview.latest.track.title }}</span>
-          <span class="mao-latest-meta">Song</span>
+          <span class="mao-latest-meta">{{ t('music.song') }}</span>
         </span>
       </button>
     </section>
 
-    <DiscoverRow v-if="overview.albums.length > 0" title="Albums">
+    <DiscoverRow v-if="overview.albums.length > 0" :title="t('music.artist.albums')">
       <MusicAlbumTile v-for="album in overview.albums" :key="album.id" :album="album" :show-artist="false" />
     </DiscoverRow>
 
-    <DiscoverRow v-if="overview.singles.length > 0" title="Singles & EPs">
+    <DiscoverRow v-if="overview.singles.length > 0" :title="t('music.artist.singles')">
       <MusicAlbumTile v-for="album in overview.singles" :key="album.id" :album="album" :show-artist="false" />
     </DiscoverRow>
   </div>
@@ -69,17 +69,18 @@ import { usePlayTrackList } from '~/composables/usePlayTrackList';
 // Overview tab of the artist page: Popular (5 rows, "Show more" opens the
 // Songs tab), the latest release, and the Albums / Singles & EPs rows (each
 // only when not empty).
+const { t } = useI18n();
 const props = defineProps<{ overview: any }>();
 const emit = defineEmits<{ 'show-songs': []; edit: [track: any] }>();
 
 const { playFrom, currentTrack } = usePlayTrackList();
 
-const TYPE_LABELS: Record<string, string> = { album: 'Album', single: 'Single', ep: 'EP' };
+const TYPE_KEYS: Record<string, string> = { album: 'music.albumType.album', single: 'music.albumType.single', ep: 'music.albumType.ep' };
 
 const latestAlbumMeta = computed(() => {
   const album = props.overview.latest?.album;
   if (!album) return '';
-  return [TYPE_LABELS[album.album_type] ?? 'Album', album.release_year].filter(Boolean).join(' · ');
+  return [t(TYPE_KEYS[album.album_type] ?? 'music.albumType.album'), album.release_year].filter(Boolean).join(' · ');
 });
 
 const fallbackCover = 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23666\' stroke-width=\'1.5\'><circle cx=\'12\' cy=\'12\' r=\'10\'></circle><circle cx=\'12\' cy=\'12\' r=\'3\'></circle></svg>';

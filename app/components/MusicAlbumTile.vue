@@ -3,7 +3,7 @@
     <img :src="thumbUrl(album.cover_url, 320) || fallbackCover" class="album-tile-cover" alt="" width="320" height="320" loading="lazy" decoding="async" @error="onCoverError" />
     <span class="album-tile-title">{{ album.title }}</span>
     <span v-if="metaLine" class="album-tile-meta">{{ metaLine }}</span>
-    <span v-if="trackCount != null" class="album-tile-meta">{{ trackCount === 1 ? '1 track' : `${trackCount} tracks` }}</span>
+    <span v-if="trackCount != null" class="album-tile-meta">{{ t('music.trackCount', { count: Number(trackCount).toLocaleString(locale) }, Number(trackCount)) }}</span>
   </NuxtLink>
 </template>
 
@@ -14,12 +14,13 @@ import { computed } from 'vue';
 
 // One album tile (Discover "New albums", the artist page rows); opens the
 // album page. The artist name is left out on the artist's own page.
+const { t, locale } = useI18n();
 const props = withDefaults(defineProps<{ album: any; showArtist?: boolean }>(), { showArtist: true });
 
-const ALBUM_TYPE_LABELS: Record<string, string> = { single: 'Single', ep: 'EP' };
+const ALBUM_TYPE_KEYS: Record<string, string> = { single: 'music.albumType.single', ep: 'music.albumType.ep' };
 
 const metaLine = computed(() => [
-  props.showArtist ? props.album.artist_name : ALBUM_TYPE_LABELS[props.album.album_type],
+  props.showArtist ? props.album.artist_name : (ALBUM_TYPE_KEYS[props.album.album_type] ? t(ALBUM_TYPE_KEYS[props.album.album_type]!) : undefined),
   props.album.release_year,
 ].filter(Boolean).join(' · '));
 const trackCount = computed(() => props.album.trackCount ?? props.album.track_count ?? null);

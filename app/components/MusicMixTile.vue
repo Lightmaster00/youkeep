@@ -1,17 +1,18 @@
 <template>
-  <button type="button" class="mix-tile" :aria-label="`Play ${title}`" @click="emit('play')">
+  <button type="button" class="mix-tile" :aria-label="t('music.playTitle', { title })" @click="emit('play')">
     <span class="mix-tile-art" aria-hidden="true">
       <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
     </span>
     <span class="mix-tile-title">{{ title }}</span>
     <span v-if="subtitle" class="mix-tile-meta">{{ subtitle }}</span>
-    <span v-else-if="count != null" class="mix-tile-meta">{{ count === 1 ? '1 track' : `${count} tracks` }}</span>
+    <span v-else-if="count != null" class="mix-tile-meta">{{ t('music.trackCount', { count: count.toLocaleString(locale) }, count) }}</span>
   </button>
 </template>
 
 <script setup lang="ts">
 // One "Made for you" mix of the Music Discover page; clicking plays it. The
 // meta line is `subtitle` when given, else the track count.
+const { t, locale } = useI18n();
 defineProps<{ title: string; count?: number; subtitle?: string }>();
 const emit = defineEmits<{ play: [] }>();
 </script>

@@ -2,11 +2,11 @@
   <div class="map">
     <NuxtLink to="/music" class="btn btn-secondary map-back">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      Music
+      {{ t('music.title') }}
     </NuxtLink>
 
-    <div v-if="pending" class="map-status">Loading...</div>
-    <div v-else-if="failed || !overview" class="map-status">Artist not found.</div>
+    <div v-if="pending" class="map-status">{{ t('common.loadingDots') }}</div>
+    <div v-else-if="failed || !overview" class="map-status">{{ t('music.artist.notFound') }}</div>
 
     <template v-else>
       <MusicArtistHeader
@@ -17,27 +17,27 @@
         @shuffle="playArtist(true)"
       />
 
-      <div class="map-tabs" role="tablist" aria-label="Artist sections">
+      <div class="map-tabs" role="tablist" :aria-label="t('music.artist.sections')">
         <button
-          v-for="t in TABS"
-          :key="t.key"
+          v-for="item in TABS"
+          :key="item.key"
           type="button"
           role="tab"
           class="map-tab"
-          :class="{ active: tab === t.key }"
-          :aria-selected="tab === t.key"
-          :data-testid="`artist-tab-${t.key}`"
-          @click="selectTab(t.key)"
+          :class="{ active: tab === item.key }"
+          :aria-selected="tab === item.key"
+          :data-testid="`artist-tab-${item.key}`"
+          @click="selectTab(item.key)"
         >
-          {{ t.label }}
+          {{ t(item.labelKey) }}
         </button>
       </div>
 
       <EmptyState
         v-if="overview.counts.tracks === 0"
         icon="music"
-        title="No tracks archived"
-        description="No completed tracks for this artist yet."
+        :title="t('music.artist.emptyTitle')"
+        :description="t('music.artist.emptyDesc')"
       />
 
       <template v-else>
@@ -49,17 +49,17 @@
         />
 
         <div v-else-if="tab === 'albums'" class="map-albums">
-          <DiscoverRow v-if="overview.albums.length > 0" title="Albums" layout="wrap">
+          <DiscoverRow v-if="overview.albums.length > 0" :title="t('music.artist.albums')" layout="wrap">
             <MusicAlbumTile v-for="album in overview.albums" :key="album.id" :album="album" :show-artist="false" />
           </DiscoverRow>
-          <DiscoverRow v-if="overview.singles.length > 0" title="Singles & EPs" layout="wrap">
+          <DiscoverRow v-if="overview.singles.length > 0" :title="t('music.artist.singles')" layout="wrap">
             <MusicAlbumTile v-for="album in overview.singles" :key="album.id" :album="album" :show-artist="false" />
           </DiscoverRow>
           <EmptyState
             v-if="overview.albums.length === 0 && overview.singles.length === 0"
             icon="music"
-            title="No albums yet"
-            description="This artist's songs are listed in the Songs tab."
+            :title="t('music.artist.noAlbumsTitle')"
+            :description="t('music.artist.noAlbumsDesc')"
           />
         </div>
 
@@ -92,14 +92,15 @@ import { usePlayTrackList } from '~/composables/usePlayTrackList';
 const props = defineProps<{ artistId: string }>();
 
 type ArtistTab = 'overview' | 'albums' | 'songs';
-const TABS: Array<{ key: ArtistTab; label: string }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'albums', label: 'Albums' },
-  { key: 'songs', label: 'Songs' },
+const TABS: Array<{ key: ArtistTab; labelKey: string }> = [
+  { key: 'overview', labelKey: 'music.artist.tabOverview' },
+  { key: 'albums', labelKey: 'music.artist.tabAlbums' },
+  { key: 'songs', labelKey: 'music.artist.tabSongs' },
 ];
 // The header's Play / Shuffle queue: the artist's songs, most popular first.
 const PLAY_QUEUE_LIMIT = 200;
 
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { playAll, shuffleAll } = usePlayTrackList();
@@ -110,7 +111,7 @@ const failed = ref(false);
 const editingTrack = ref<any>(null);
 
 const tabFromQuery = (value: unknown): ArtistTab =>
-  TABS.some((t) => t.key === value) ? (value as ArtistTab) : 'overview';
+  TABS.some((tab) => tab.key === value) ? (value as ArtistTab) : 'overview';
 
 const tab = computed(() => tabFromQuery(route.query.tab));
 const songsOpened = ref(tab.value === 'songs');

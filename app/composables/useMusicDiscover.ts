@@ -1,9 +1,11 @@
 import { ref } from 'vue';
 import { useAuth } from './useAuth';
 
+// `artistName` is only set on the artist mix; the page words each mix's title
+// from its key, so it follows the UI language.
 export interface DiscoverMix {
-  key: string;
-  title: string;
+  key: 'liked' | 'most-played' | 'artist' | 'rediscover';
+  artistName?: string;
   tracks: any[];
 }
 
@@ -58,12 +60,12 @@ export function useMusicDiscover() {
     ]);
     const top = topArtistOf(mostPlayed);
     const artistMix = top ? await tracksOf('/api/music/playlists/artist-mix', { artistId: top.id }) : [];
-    mixes.value = [
-      { key: 'liked', title: 'Mix from your liked songs', tracks: liked },
-      { key: 'most-played', title: 'Most played', tracks: mostPlayed },
-      { key: 'artist', title: top ? `${top.name} mix` : '', tracks: artistMix },
-      { key: 'rediscover', title: 'Rediscover', tracks: rediscover },
-    ].filter((m) => m.tracks.length > 0);
+    mixes.value = ([
+      { key: 'liked', tracks: liked },
+      { key: 'most-played', tracks: mostPlayed },
+      { key: 'artist', artistName: top?.name ?? '', tracks: artistMix },
+      { key: 'rediscover', tracks: rediscover },
+    ] as DiscoverMix[]).filter((m) => m.tracks.length > 0);
   }
 
   async function load() {

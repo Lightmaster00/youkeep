@@ -4,10 +4,10 @@
       v-if="track.has_clip"
       type="button"
       class="badge mte-clip"
-      title="Watch the clip"
+      :title="t('music.extras.clipTitle')"
       @click="toggleClip"
     >
-      Clip
+      {{ t('music.extras.clip') }}
     </button>
     <button
       v-else-if="isAdmin"
@@ -49,6 +49,7 @@ const emit = defineEmits<{ edit: [track: any] }>();
 const { isAdmin } = useAuth();
 const { currentTrack, clipMode, setClipMode } = useMusicPlayer();
 const { playFrom } = usePlayTrackList();
+const { t } = useI18n();
 const toast = useToast();
 const downloading = ref(false);
 

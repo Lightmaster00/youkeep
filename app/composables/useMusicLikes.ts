@@ -20,6 +20,7 @@ const inFlight = new Set<string>();
 export function useMusicLikes() {
   const { user } = useAuth();
   const toast = useToast();
+  const { t } = useI18n();
   const state = useState<LikesState>('music_likes', () => ({ owner: null, liked: {} }));
 
   function cache(): Record<string, boolean> {
@@ -87,7 +88,7 @@ export function useMusicLikes() {
       return !was;
     } catch {
       cache()[trackId] = was;
-      toast.error(was ? 'Could not remove the song from Liked songs.' : 'Could not add the song to Liked songs.');
+      toast.error(was ? t('music.liked.removeFailed') : t('music.liked.addFailed'));
       return null;
     } finally {
       inFlight.delete(trackId);

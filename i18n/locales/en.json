@@ -28,7 +28,11 @@
     "copyUnavailable": "Copying is not available here. The text is selected: press Ctrl+C (or Cmd+C) to copy it.",
     "textToCopy": "Text to copy",
     "shareLinkCopied": "Share link copied.",
-    "shareLinkFailed": "Could not create the share link."
+    "shareLinkFailed": "Could not create the share link.",
+    "loadMore": "Load more",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "historyCleared": "History cleared"
   },
   "language": {
     "title": "Language",
@@ -550,6 +554,182 @@
       "MB": "MB",
       "GB": "GB",
       "TB": "TB"
+    }
+  },
+  "music": {
+    "title": "Music",
+    "searchPlaceholder": "Search for an artist or a track...",
+    "allGenres": "All genres",
+    "allLanguages": "All languages",
+    "allYears": "All years",
+    "noResults": "No results",
+    "noTracksMatch": "No tracks match this search.",
+    "searchFailed": "Search failed.",
+    "loadArtistsFailed": "Failed to load artists.",
+    "noArtistsTitle": "No artists archived",
+    "noArtistsDesc": "No artists archived yet.",
+    "noResultsFilters": "No results for these filters.",
+    "trackCountPlain": "{count} track(s)",
+    "trackCount": "{count} track | {count} tracks",
+    "songCount": "{count} song | {count} songs",
+    "albumCount": "{count} album | {count} albums",
+    "singleCount": "{count} single or EP | {count} singles and EPs",
+    "play": "Play",
+    "pause": "Pause",
+    "shuffle": "Shuffle",
+    "playTitle": "Play {title}",
+    "song": "Song",
+    "kicker": {
+      "playlist": "Playlist",
+      "genre": "Genre",
+      "artist": "Artist"
+    },
+    "albumType": {
+      "album": "Album",
+      "single": "Single",
+      "ep": "EP"
+    },
+    "head": {
+      "discover": "Discover music",
+      "recent": "Recently added music",
+      "history": "Listening history",
+      "playlists": "Music playlists"
+    },
+    "mix": {
+      "mostPlayed": "Most played",
+      "recentlyAdded": "Recently added",
+      "rediscover": "Rediscover",
+      "genre": "Mix {genre}",
+      "liked": "Mix from your liked songs",
+      "artist": "{name} mix",
+      "radio": "Radio",
+      "radioFrom": "From {title}",
+      "radioFailed": "Could not start the radio."
+    },
+    "discover": {
+      "madeForYou": "Made for you",
+      "browseGenre": "Browse by genre",
+      "newAlbums": "New albums",
+      "artists": "Artists to explore",
+      "emptyTitle": "Nothing to discover yet",
+      "emptyDesc": "Genres, albums and mixes appear here once tracks are downloaded."
+    },
+    "liked": {
+      "emptyTitle": "No liked songs yet",
+      "emptyDesc": "Tap the heart on any track to keep it here.",
+      "loadFailed": "Failed to load liked songs.",
+      "add": "Add to Liked songs",
+      "remove": "Remove from Liked songs",
+      "addFailed": "Could not add the song to Liked songs.",
+      "removeFailed": "Could not remove the song from Liked songs."
+    },
+    "recent": {
+      "emptyTitle": "Nothing here yet",
+      "emptyDesc": "Tracks appear here as soon as they are downloaded.",
+      "loadFailed": "Failed to load tracks."
+    },
+    "history": {
+      "clear": "Clear history",
+      "loginTitle": "Log in to see your history",
+      "loginDesc": "The songs you play are kept per account.",
+      "emptyTitle": "No listening history yet",
+      "emptyDesc": "Songs you play show up here.",
+      "loadFailed": "Failed to load your history.",
+      "clearTitle": "Clear history?",
+      "clearMessage": "Every song will be removed from your listening history. This cannot be undone.",
+      "removeLabel": "Remove {title} from history",
+      "removeTitle": "Remove from history",
+      "removeFailed": "Could not remove the song from your history.",
+      "clearFailed": "Could not clear your history."
+    },
+    "genre": {
+      "emptyTitle": "No tracks in this genre",
+      "emptyDesc": "Tracks of this genre appear here once they are downloaded."
+    },
+    "album": {
+      "notFound": "Album not found.",
+      "emptyTitle": "No tracks downloaded",
+      "emptyDesc": "Tracks of this album appear here once they are downloaded."
+    },
+    "userPlaylists": {
+      "new": "New playlist",
+      "name": "Name",
+      "namePlaceholder": "My playlist",
+      "description": "Description (optional)",
+      "emptyTitle": "No playlists yet",
+      "emptyDesc": "Create a playlist, then add songs to it from any track.",
+      "loadFailed": "Failed to load playlists.",
+      "created": "Created {title}",
+      "createFailed": "Could not create the playlist."
+    },
+    "playlist": {
+      "notFoundTitle": "Playlist not found",
+      "notFoundDesc": "It may have been deleted.",
+      "loadFailed": "Failed to load the playlist.",
+      "nameAria": "Playlist name",
+      "descriptionAria": "Playlist description",
+      "edit": "Edit",
+      "delete": "Delete playlist",
+      "emptyTitle": "This playlist is empty",
+      "emptyDesc": "Add songs from the Music library with the playlist button on any track.",
+      "moveUpLabel": "Move {title} up",
+      "moveUp": "Move up",
+      "moveDownLabel": "Move {title} down",
+      "moveDown": "Move down",
+      "removeLabel": "Remove {title} from this playlist",
+      "remove": "Remove from this playlist",
+      "deleteTitle": "Delete playlist?",
+      "deleteText": "\"{title}\" will be deleted. The songs stay in your library.",
+      "saveFailed": "Could not save the playlist.",
+      "reorderFailed": "Could not reorder the playlist.",
+      "removeFailed": "Could not remove the song from the playlist.",
+      "deleted": "Playlist deleted",
+      "deleteFailed": "Could not delete the playlist."
+    },
+    "extras": {
+      "clipTitle": "Watch the clip",
+      "clip": "Clip"
+    },
+    "artist": {
+      "notFound": "Artist not found.",
+      "sections": "Artist sections",
+      "tabOverview": "Overview",
+      "tabAlbums": "Albums",
+      "tabSongs": "Songs",
+      "emptyTitle": "No tracks archived",
+      "emptyDesc": "No completed tracks for this artist yet.",
+      "noAlbumsTitle": "No albums yet",
+      "noAlbumsDesc": "This artist's songs are listed in the Songs tab.",
+      "albums": "Albums",
+      "singles": "Singles & EPs",
+      "popular": "Popular",
+      "latest": "Latest release",
+      "sortBy": "Sort by",
+      "sortPopular": "Popular",
+      "sortNewest": "Newest",
+      "sortOldest": "Oldest",
+      "sortTitle": "A–Z",
+      "noSongsTitle": "No songs yet",
+      "noSongsDesc": "Songs of this artist appear here once they are downloaded.",
+      "loadSongsFailed": "Failed to load songs."
+    },
+    "player": {
+      "audioMode": "Back to audio mode",
+      "previous": "Previous",
+      "next": "Next",
+      "moreControls": "More player controls",
+      "more": "More",
+      "seek": "Seek",
+      "seekValue": "{current} of {total}",
+      "repeat": "Repeat: {mode}",
+      "repeatMode": {
+        "off": "off",
+        "all": "all",
+        "one": "one"
+      },
+      "radio": "Start a radio",
+      "volume": "Volume",
+      "error": "Error playing audio."
     }
   }
 }

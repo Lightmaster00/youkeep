@@ -1,7 +1,7 @@
 <template>
   <div class="genre-page">
     <MusicCollectionHeader
-      kicker="Genre"
+      :kicker="t('music.kicker.genre')"
       :title="name"
       :subtitle="loaded ? countLabel : ''"
       :can-play="items.length > 0"
@@ -12,8 +12,8 @@
     <EmptyState
       v-if="loaded && items.length === 0 && !error"
       icon="music"
-      title="No tracks in this genre"
-      description="Tracks of this genre appear here once they are downloaded."
+      :title="t('music.genre.emptyTitle')"
+      :description="t('music.genre.emptyDesc')"
     />
     <MusicTrackList
       v-else
@@ -22,13 +22,13 @@
       @play="(track) => playFrom(track, items)"
     />
 
-    <div v-if="loading" class="genre-status">Loading...</div>
+    <div v-if="loading" class="genre-status">{{ t('common.loadingDots') }}</div>
     <div v-else-if="error" class="genre-status">
-      Failed to load tracks.
-      <button class="btn btn-secondary" @click="loadMore">Retry</button>
+      {{ t('music.recent.loadFailed') }}
+      <button class="btn btn-secondary" @click="loadMore">{{ t('common.retry') }}</button>
     </div>
     <div v-else-if="hasMore" class="genre-more">
-      <button class="btn btn-secondary" @click="loadMore">Load more</button>
+      <button class="btn btn-secondary" @click="loadMore">{{ t('common.loadMore') }}</button>
     </div>
   </div>
 </template>
@@ -45,14 +45,15 @@ definePageMeta({ key: (route) => route.fullPath });
 
 const route = useRoute();
 const name = computed(() => String(route.params.name ?? ''));
-useHead({ title: computed(() => name.value || 'Genre') });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => name.value || t('music.kicker.genre')) });
 const { items, total, loading, error, loaded, hasMore, loadMore } = useRecentList(
   `/api/music/genres/${encodeURIComponent(name.value)}/tracks`,
   'tracks'
 );
 const { playAll, shuffleAll, playFrom, currentTrack } = usePlayTrackList();
 
-const countLabel = computed(() => (total.value === 1 ? '1 song' : `${total.value} songs`));
+const countLabel = computed(() => t('music.songCount', { count: total.value.toLocaleString(locale.value) }, total.value));
 
 onMounted(loadMore);
 </script>

@@ -32,22 +32,22 @@
       @click="setClipMode(!clipMode)"
       class="mini-player-btn mini-player-clip-toggle"
       :class="{ active: clipMode }"
-      :title="clipMode ? 'Back to audio mode' : 'Watch the clip'"
-      :aria-label="clipMode ? 'Back to audio mode' : 'Watch the clip'"
+      :title="clipMode ? t('music.player.audioMode') : t('music.extras.clipTitle')"
+      :aria-label="clipMode ? t('music.player.audioMode') : t('music.extras.clipTitle')"
       :aria-pressed="clipMode"
     >
       🎬
     </button>
 
     <div class="mini-player-controls">
-      <button type="button" @click="prev" class="mini-player-btn" title="Previous" aria-label="Previous">
+      <button type="button" @click="prev" class="mini-player-btn" :title="t('music.player.previous')" :aria-label="t('music.player.previous')">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5" stroke="currentColor" stroke-width="2"></line></svg>
       </button>
-      <button type="button" @click="togglePlay" class="mini-player-btn mini-player-play-btn" :title="isPlaying ? 'Pause' : 'Play'" :aria-label="isPlaying ? 'Pause' : 'Play'">
+      <button type="button" @click="togglePlay" class="mini-player-btn mini-player-play-btn" :title="isPlaying ? t('music.pause') : t('music.play')" :aria-label="isPlaying ? t('music.pause') : t('music.play')">
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button type="button" @click="next" class="mini-player-btn" title="Next" aria-label="Next">
+      <button type="button" @click="next" class="mini-player-btn" :title="t('music.player.next')" :aria-label="t('music.player.next')">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2"></line></svg>
       </button>
     </div>
@@ -57,8 +57,8 @@
       class="mini-player-btn mini-player-more-btn"
       :aria-expanded="moreOpen ? 'true' : 'false'"
       aria-controls="music-player-more"
-      aria-label="More player controls"
-      title="More"
+      :aria-label="t('music.player.moreControls')"
+      :title="t('music.player.more')"
       data-testid="music-more-btn"
       @click="moreOpen = !moreOpen"
     >
@@ -76,8 +76,8 @@
         :max="Math.max(0, Math.floor(duration))"
         step="1"
         :value="Math.floor(currentTime)"
-        aria-label="Seek"
-        :aria-valuetext="`${formatDuration(currentTime)} of ${formatDuration(duration)}`"
+        :aria-label="t('music.player.seek')"
+        :aria-valuetext="t('music.player.seekValue', { current: formatDuration(currentTime), total: formatDuration(duration) })"
         :disabled="duration <= 0"
         @input="onSeekInput"
       />
@@ -89,7 +89,7 @@
       class="mini-player-extra-controls"
       :class="{ 'is-open': moreOpen }"
       role="group"
-      aria-label="More player controls"
+      :aria-label="t('music.player.moreControls')"
       data-testid="music-more"
       @keydown.esc="moreOpen = false"
     >
@@ -100,17 +100,17 @@
         @click="setClipMode(!clipMode)"
         class="mini-player-btn mini-player-more-only"
         :class="{ active: clipMode }"
-        :aria-label="clipMode ? 'Back to audio mode' : 'Watch the clip'"
+        :aria-label="clipMode ? t('music.player.audioMode') : t('music.extras.clipTitle')"
         :aria-pressed="clipMode"
       >🎬</button>
-      <button type="button" @click="toggleShuffle" class="mini-player-btn" :class="{ active: shuffleOn }" title="Shuffle" aria-label="Shuffle" :aria-pressed="shuffleOn">
+      <button type="button" @click="toggleShuffle" class="mini-player-btn" :class="{ active: shuffleOn }" :title="t('music.shuffle')" :aria-label="t('music.shuffle')" :aria-pressed="shuffleOn">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>
       </button>
-      <button type="button" @click="cycleRepeat" class="mini-player-btn" :class="{ active: repeatMode !== 'off' }" :title="`Repeat: ${repeatMode}`" :aria-label="`Repeat: ${repeatMode}`">
+      <button type="button" @click="cycleRepeat" class="mini-player-btn" :class="{ active: repeatMode !== 'off' }" :title="repeatLabel" :aria-label="repeatLabel">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path></svg>
         <span v-if="repeatMode === 'one'" class="repeat-one-badge">1</span>
       </button>
-      <button type="button" @click="startRadio" class="mini-player-btn" title="Start a radio" aria-label="Start a radio">
+      <button type="button" @click="startRadio" class="mini-player-btn" :title="t('music.player.radio')" :aria-label="t('music.player.radio')">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"></path><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"></path><circle cx="12" cy="12" r="2"></circle><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"></path><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"></path></svg>
       </button>
       <input
@@ -121,8 +121,8 @@
         v-model.number="volume"
         @input="onVolumeChange"
         class="mini-player-volume"
-        title="Volume"
-        aria-label="Volume"
+        :title="t('music.player.volume')"
+        :aria-label="t('music.player.volume')"
       />
     </div>
   </div>
@@ -144,6 +144,10 @@ const {
 } = useMusicPlayer();
 
 const toast = useToast();
+const { t } = useI18n();
+
+// "Repeat: off" / "Répéter : désactivé"
+const repeatLabel = computed(() => t('music.player.repeat', { mode: t(`music.player.repeatMode.${repeatMode.value}`) }));
 
 // Podcast playback is a separate <audio> element in PodcastMiniPlayer.vue;
 // never let both stream at once. PodcastMiniPlayer.vue holds the mirror-image
@@ -190,7 +194,7 @@ function onEnded() {
 function onAudioError() {
   // The track restored on page load is stale: the player clears it silently.
   if (restoring.value || !currentTrack.value) return;
-  toast.error('Error playing audio.');
+  toast.error(t('music.player.error'));
   isPlaying.value = false;
   setClipMode(false);
 }

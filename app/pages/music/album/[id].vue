@@ -2,11 +2,11 @@
   <div class="album-page">
     <NuxtLink :to="backLink" class="btn btn-secondary ap-back">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      {{ album ? album.artistName : 'Music' }}
+      {{ album ? album.artistName : t('music.title') }}
     </NuxtLink>
 
-    <div v-if="pending" class="ap-status">Loading...</div>
-    <div v-else-if="failed || !album" class="ap-status">Album not found.</div>
+    <div v-if="pending" class="ap-status">{{ t('common.loadingDots') }}</div>
+    <div v-else-if="failed || !album" class="ap-status">{{ t('music.album.notFound') }}</div>
 
     <template v-else>
       <MusicCollectionHeader
@@ -33,8 +33,8 @@
       <EmptyState
         v-if="tracks.length === 0"
         icon="music"
-        title="No tracks downloaded"
-        description="Tracks of this album appear here once they are downloaded."
+        :title="t('music.album.emptyTitle')"
+        :description="t('music.album.emptyDesc')"
       />
       <MusicTrackList
         v-else
@@ -79,18 +79,19 @@ const route = useRoute();
 const { isAdmin } = useAuth();
 const { playAll, shuffleAll, playFrom, currentTrack } = usePlayTrackList();
 
+const { t, locale } = useI18n();
 const album = ref<any>(null);
-useHead({ title: computed(() => album.value?.title || 'Album') });
+useHead({ title: computed(() => album.value?.title || t('music.albumType.album')) });
 const tracks = ref<any[]>([]);
 const pending = ref(true);
 const failed = ref(false);
 const editingTrack = ref<any>(null);
 const editingAlbum = ref(false);
 
-const TYPE_LABELS: Record<string, string> = { album: 'Album', single: 'Single', ep: 'EP' };
-const typeLabel = computed(() => TYPE_LABELS[album.value?.type] ?? 'Album');
+const TYPE_KEYS: Record<string, string> = { album: 'music.albumType.album', single: 'music.albumType.single', ep: 'music.albumType.ep' };
+const typeLabel = computed(() => t(TYPE_KEYS[album.value?.type] ?? 'music.albumType.album'));
 const subtitle = computed(() => {
-  const count = tracks.value.length === 1 ? '1 song' : `${tracks.value.length} songs`;
+  const count = t('music.songCount', { count: tracks.value.length.toLocaleString(locale.value) }, tracks.value.length);
   return [album.value?.year, count].filter(Boolean).join(' · ');
 });
 const backLink = computed(() => (album.value ? { path: '/music', query: { artistId: album.value.artistId } } : '/music'));

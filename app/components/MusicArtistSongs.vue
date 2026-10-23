@@ -1,20 +1,20 @@
 <template>
   <div class="mas">
     <div class="mas-toolbar">
-      <label class="mas-sort-label" for="artist-songs-sort">Sort by</label>
+      <label class="mas-sort-label" for="artist-songs-sort">{{ t('music.artist.sortBy') }}</label>
       <select id="artist-songs-sort" v-model="sort" class="form-input mas-sort" data-testid="songs-sort">
-        <option value="popular">Popular</option>
-        <option value="newest">Newest</option>
-        <option value="oldest">Oldest</option>
-        <option value="title">A–Z</option>
+        <option value="popular">{{ t('music.artist.sortPopular') }}</option>
+        <option value="newest">{{ t('music.artist.sortNewest') }}</option>
+        <option value="oldest">{{ t('music.artist.sortOldest') }}</option>
+        <option value="title">{{ t('music.artist.sortTitle') }}</option>
       </select>
     </div>
 
     <EmptyState
       v-if="loaded && items.length === 0 && !error"
       icon="music"
-      title="No songs yet"
-      description="Songs of this artist appear here once they are downloaded."
+      :title="t('music.artist.noSongsTitle')"
+      :description="t('music.artist.noSongsDesc')"
     />
     <MusicTrackList
       v-else
@@ -27,13 +27,13 @@
       </template>
     </MusicTrackList>
 
-    <div v-if="loading" class="mas-status">Loading...</div>
+    <div v-if="loading" class="mas-status">{{ t('common.loadingDots') }}</div>
     <div v-else-if="error" class="mas-status">
-      Failed to load songs.
-      <button type="button" class="btn btn-secondary" @click="loadMore">Retry</button>
+      {{ t('music.artist.loadSongsFailed') }}
+      <button type="button" class="btn btn-secondary" @click="loadMore">{{ t('common.retry') }}</button>
     </div>
     <div v-else-if="hasMore" class="mas-more">
-      <button type="button" class="btn btn-secondary" data-testid="songs-load-more" @click="loadMore">Load more</button>
+      <button type="button" class="btn btn-secondary" data-testid="songs-load-more" @click="loadMore">{{ t('common.loadMore') }}</button>
     </div>
   </div>
 </template>
@@ -44,6 +44,7 @@ import { usePlayTrackList } from '~/composables/usePlayTrackList';
 
 // Songs tab of the artist page: every downloaded track of the artist, whether or
 // not it belongs to an album, sortable, paged with "Load more".
+const { t } = useI18n();
 const props = defineProps<{ artistId: string }>();
 const emit = defineEmits<{ edit: [track: any] }>();
 

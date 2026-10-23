@@ -1,8 +1,8 @@
 <template>
   <div class="liked-page">
     <MusicCollectionHeader
-      kicker="Playlist"
-      title="Liked songs"
+      :kicker="t('music.kicker.playlist')"
+      :title="t('nav.likedSongs')"
       :subtitle="loaded ? countLabel : ''"
       :can-play="visible.length > 0"
       @play="playAll(visible)"
@@ -16,8 +16,8 @@
     <EmptyState
       v-if="loaded && visible.length === 0 && !hasMore"
       icon="music"
-      title="No liked songs yet"
-      description="Tap the heart on any track to keep it here."
+      :title="t('music.liked.emptyTitle')"
+      :description="t('music.liked.emptyDesc')"
     />
     <MusicTrackList
       v-else
@@ -26,13 +26,13 @@
       @play="(track) => playFrom(track, visible)"
     />
 
-    <div v-if="loading" class="liked-status">Loading...</div>
+    <div v-if="loading" class="liked-status">{{ t('common.loadingDots') }}</div>
     <div v-else-if="error" class="liked-status">
-      Failed to load liked songs.
-      <button class="btn btn-secondary" @click="loadMore">Retry</button>
+      {{ t('music.liked.loadFailed') }}
+      <button class="btn btn-secondary" @click="loadMore">{{ t('common.retry') }}</button>
     </div>
     <div v-else-if="hasMore" class="liked-more">
-      <button class="btn btn-secondary" @click="loadMore">Load more</button>
+      <button class="btn btn-secondary" @click="loadMore">{{ t('common.loadMore') }}</button>
     </div>
   </div>
 </template>
@@ -43,7 +43,8 @@ import { useRecentList } from '~/composables/useRecentList';
 import { useMusicLikes } from '~/composables/useMusicLikes';
 import { usePlayTrackList } from '~/composables/usePlayTrackList';
 
-useHead({ title: 'Liked songs' });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => t('nav.likedSongs')) });
 
 const { items, total, loading, error, loaded, hasMore, loadMore } = useRecentList('/api/music/favorites', 'items');
 const likes = useMusicLikes();
@@ -58,7 +59,7 @@ const visible = computed(() => items.value.filter((t) => likes.isLiked(t.id)));
 
 const countLabel = computed(() => {
   const count = Math.max(0, total.value - (items.value.length - visible.value.length));
-  return count === 1 ? '1 song' : `${count} songs`;
+  return t('music.songCount', { count: count.toLocaleString(locale.value) }, count);
 });
 
 onMounted(loadMore);

@@ -28,7 +28,11 @@
     "copyUnavailable": "La copie n'est pas disponible ici. Le texte est sélectionné : appuyez sur Ctrl+C (ou Cmd+C) pour le copier.",
     "textToCopy": "Texte à copier",
     "shareLinkCopied": "Lien de partage copié.",
-    "shareLinkFailed": "Impossible de créer le lien de partage."
+    "shareLinkFailed": "Impossible de créer le lien de partage.",
+    "loadMore": "Charger plus",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "historyCleared": "Historique effacé"
   },
   "language": {
     "title": "Langue",
@@ -550,6 +554,182 @@
       "MB": "Mo",
       "GB": "Go",
       "TB": "To"
+    }
+  },
+  "music": {
+    "title": "Musique",
+    "searchPlaceholder": "Rechercher un artiste ou un titre...",
+    "allGenres": "Tous les genres",
+    "allLanguages": "Toutes les langues",
+    "allYears": "Toutes les années",
+    "noResults": "Aucun résultat",
+    "noTracksMatch": "Aucun titre ne correspond à cette recherche.",
+    "searchFailed": "La recherche a échoué.",
+    "loadArtistsFailed": "Impossible de charger les artistes.",
+    "noArtistsTitle": "Aucun artiste archivé",
+    "noArtistsDesc": "Aucun artiste archivé pour l'instant.",
+    "noResultsFilters": "Aucun résultat pour ces filtres.",
+    "trackCountPlain": "{count} titre | {count} titres",
+    "trackCount": "{count} titre | {count} titres",
+    "songCount": "{count} titre | {count} titres",
+    "albumCount": "{count} album | {count} albums",
+    "singleCount": "{count} single ou EP | {count} singles et EP",
+    "play": "Lire",
+    "pause": "Pause",
+    "shuffle": "Lecture aléatoire",
+    "playTitle": "Lire {title}",
+    "song": "Titre",
+    "kicker": {
+      "playlist": "Playlist",
+      "genre": "Genre",
+      "artist": "Artiste"
+    },
+    "albumType": {
+      "album": "Album",
+      "single": "Single",
+      "ep": "EP"
+    },
+    "head": {
+      "discover": "Découvrir la musique",
+      "recent": "Musique ajoutée récemment",
+      "history": "Historique d'écoute",
+      "playlists": "Playlists musicales"
+    },
+    "mix": {
+      "mostPlayed": "Les plus écoutés",
+      "recentlyAdded": "Ajoutés récemment",
+      "rediscover": "À redécouvrir",
+      "genre": "Mix {genre}",
+      "liked": "Mix de vos titres likés",
+      "artist": "Mix {name}",
+      "radio": "Radio",
+      "radioFrom": "À partir de {title}",
+      "radioFailed": "Impossible de lancer la radio."
+    },
+    "discover": {
+      "madeForYou": "Conçu pour vous",
+      "browseGenre": "Parcourir par genre",
+      "newAlbums": "Nouveaux albums",
+      "artists": "Artistes à découvrir",
+      "emptyTitle": "Rien à découvrir pour l'instant",
+      "emptyDesc": "Les genres, albums et mix apparaissent ici une fois les titres téléchargés."
+    },
+    "liked": {
+      "emptyTitle": "Aucun titre liké pour l'instant",
+      "emptyDesc": "Touchez le cœur d'un titre pour le garder ici.",
+      "loadFailed": "Impossible de charger les titres likés.",
+      "add": "Ajouter aux titres likés",
+      "remove": "Retirer des titres likés",
+      "addFailed": "Impossible d'ajouter le titre aux titres likés.",
+      "removeFailed": "Impossible de retirer le titre des titres likés."
+    },
+    "recent": {
+      "emptyTitle": "Rien ici pour l'instant",
+      "emptyDesc": "Les titres apparaissent ici dès qu'ils sont téléchargés.",
+      "loadFailed": "Impossible de charger les titres."
+    },
+    "history": {
+      "clear": "Effacer l'historique",
+      "loginTitle": "Connectez-vous pour voir votre historique",
+      "loginDesc": "Les titres que vous écoutez sont conservés par compte.",
+      "emptyTitle": "Aucun historique d'écoute pour l'instant",
+      "emptyDesc": "Les titres que vous écoutez apparaissent ici.",
+      "loadFailed": "Impossible de charger votre historique.",
+      "clearTitle": "Effacer l'historique ?",
+      "clearMessage": "Tous les titres seront retirés de votre historique d'écoute. Cette action est irréversible.",
+      "removeLabel": "Retirer {title} de l'historique",
+      "removeTitle": "Retirer de l'historique",
+      "removeFailed": "Impossible de retirer le titre de votre historique.",
+      "clearFailed": "Impossible d'effacer votre historique."
+    },
+    "genre": {
+      "emptyTitle": "Aucun titre dans ce genre",
+      "emptyDesc": "Les titres de ce genre apparaissent ici une fois téléchargés."
+    },
+    "album": {
+      "notFound": "Album introuvable.",
+      "emptyTitle": "Aucun titre téléchargé",
+      "emptyDesc": "Les titres de cet album apparaissent ici une fois téléchargés."
+    },
+    "userPlaylists": {
+      "new": "Nouvelle playlist",
+      "name": "Nom",
+      "namePlaceholder": "Ma playlist",
+      "description": "Description (facultative)",
+      "emptyTitle": "Aucune playlist pour l'instant",
+      "emptyDesc": "Créez une playlist, puis ajoutez-y des titres depuis n'importe quel titre.",
+      "loadFailed": "Impossible de charger les playlists.",
+      "created": "{title} créée",
+      "createFailed": "Impossible de créer la playlist."
+    },
+    "playlist": {
+      "notFoundTitle": "Playlist introuvable",
+      "notFoundDesc": "Elle a peut-être été supprimée.",
+      "loadFailed": "Impossible de charger la playlist.",
+      "nameAria": "Nom de la playlist",
+      "descriptionAria": "Description de la playlist",
+      "edit": "Modifier",
+      "delete": "Supprimer la playlist",
+      "emptyTitle": "Cette playlist est vide",
+      "emptyDesc": "Ajoutez des titres depuis la bibliothèque Musique avec le bouton playlist de n'importe quel titre.",
+      "moveUpLabel": "Monter {title}",
+      "moveUp": "Monter",
+      "moveDownLabel": "Descendre {title}",
+      "moveDown": "Descendre",
+      "removeLabel": "Retirer {title} de cette playlist",
+      "remove": "Retirer de cette playlist",
+      "deleteTitle": "Supprimer la playlist ?",
+      "deleteText": "« {title} » sera supprimée. Les titres restent dans votre bibliothèque.",
+      "saveFailed": "Impossible d'enregistrer la playlist.",
+      "reorderFailed": "Impossible de réorganiser la playlist.",
+      "removeFailed": "Impossible de retirer le titre de la playlist.",
+      "deleted": "Playlist supprimée",
+      "deleteFailed": "Impossible de supprimer la playlist."
+    },
+    "extras": {
+      "clipTitle": "Voir le clip",
+      "clip": "Clip"
+    },
+    "artist": {
+      "notFound": "Artiste introuvable.",
+      "sections": "Sections de l'artiste",
+      "tabOverview": "Aperçu",
+      "tabAlbums": "Albums",
+      "tabSongs": "Titres",
+      "emptyTitle": "Aucun titre archivé",
+      "emptyDesc": "Aucun titre terminé pour cet artiste pour l'instant.",
+      "noAlbumsTitle": "Aucun album pour l'instant",
+      "noAlbumsDesc": "Les titres de cet artiste sont listés dans l'onglet Titres.",
+      "albums": "Albums",
+      "singles": "Singles et EP",
+      "popular": "Populaires",
+      "latest": "Dernière sortie",
+      "sortBy": "Trier par",
+      "sortPopular": "Populaires",
+      "sortNewest": "Plus récents",
+      "sortOldest": "Plus anciens",
+      "sortTitle": "A–Z",
+      "noSongsTitle": "Aucun titre pour l'instant",
+      "noSongsDesc": "Les titres de cet artiste apparaissent ici une fois téléchargés.",
+      "loadSongsFailed": "Impossible de charger les titres."
+    },
+    "player": {
+      "audioMode": "Retour au mode audio",
+      "previous": "Précédent",
+      "next": "Suivant",
+      "moreControls": "Autres commandes du lecteur",
+      "more": "Plus",
+      "seek": "Position de lecture",
+      "seekValue": "{current} sur {total}",
+      "repeat": "Répéter : {mode}",
+      "repeatMode": {
+        "off": "désactivé",
+        "all": "tout",
+        "one": "un titre"
+      },
+      "radio": "Lancer une radio",
+      "volume": "Volume",
+      "error": "Erreur de lecture audio."
     }
   }
 }

@@ -5,8 +5,8 @@
     class="track-like-btn"
     :class="{ liked }"
     :aria-pressed="liked"
-    :aria-label="liked ? 'Remove from Liked songs' : 'Add to Liked songs'"
-    :title="liked ? 'Remove from Liked songs' : 'Add to Liked songs'"
+    :aria-label="liked ? t('music.liked.remove') : t('music.liked.add')"
+    :title="liked ? t('music.liked.remove') : t('music.liked.add')"
     :disabled="busy"
     @click.stop="onClick"
   >
@@ -24,6 +24,7 @@ import { useMusicLikes } from '~/composables/useMusicLikes';
 const props = defineProps<{ trackId: string }>();
 
 const { user } = useAuth();
+const { t } = useI18n();
 const likes = useMusicLikes();
 const busy = ref(false);
 const liked = computed(() => likes.isLiked(props.trackId));

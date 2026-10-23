@@ -7,7 +7,7 @@
       :class="{ 'now-playing': activeId === track.id, 'is-unplayable': !track.local_file_path }"
       role="button"
       tabindex="0"
-      :aria-label="`Play ${track.title}`"
+      :aria-label="t('music.playTitle', { title: track.title })"
       @click="emit('play', track)"
       @keydown.enter.self.prevent="emit('play', track)"
       @keydown.space.self.prevent="emit('play', track)"
@@ -45,6 +45,7 @@ import { thumbUrl } from '~/utils/thumb';
 // Clicking a row emits `play`; the `actions` slot adds per-row buttons after
 // like/add. `trackNumbers` numbers rows by album track number instead of
 // position; `hideAlbum` leaves out the album column link (album page).
+const { t } = useI18n();
 defineProps<{ tracks: any[]; activeId?: string | null; trackNumbers?: boolean; hideAlbum?: boolean }>();
 const emit = defineEmits<{ play: [track: any] }>();
 

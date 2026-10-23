@@ -6,8 +6,9 @@ import { groupByDay } from '~/utils/historyDays';
 interface Options<T> {
   // When the item was last listened to (ms), for the order and the day headings.
   timestampOf: (item: T) => number;
-  removeError: string;
-  clearError: string;
+  // Plain text, or a function so the wording follows the UI language when it fires.
+  removeError: string | (() => string);
+  clearError: string | (() => string);
   onRemove?: (item: T) => void;
   onRestore?: (item: T) => void;
   onClear?: () => void;
@@ -20,13 +21,18 @@ interface Options<T> {
 // still starts at the number of items shown.
 export function useHistoryList<T extends { id: string }>(url: string, opts: Options<T>) {
   const toast = useToast();
+  const { t, locale } = useI18n();
   const list = useRecentList(url, 'items');
   const items = list.items as unknown as { value: T[] };
   const removing = ref(new Set<string>());
   const confirmingClear = ref(false);
   const clearing = ref(false);
 
-  const days = computed(() => groupByDay(items.value, opts.timestampOf));
+  const days = computed(() => groupByDay(items.value, opts.timestampOf, Date.now(), {
+    locale: locale.value,
+    today: t('common.today'),
+    yesterday: t('common.yesterday'),
+  }));
 
   function newestFirst(a: T, b: T): number {
     return opts.timestampOf(b) - opts.timestampOf(a) || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
@@ -44,7 +50,7 @@ export function useHistoryList<T extends { id: string }>(url: string, opts: Opti
       items.value = [...items.value, item].sort(newestFirst);
       list.total.value += 1;
       opts.onRestore?.(item);
-      toast.error(opts.removeError);
+      toast.error(typeof opts.removeError === 'function' ? opts.removeError() : opts.removeError);
     } finally {
       removing.value.delete(item.id);
     }
@@ -59,9 +65,9 @@ export function useHistoryList<T extends { id: string }>(url: string, opts: Opti
       list.total.value = 0;
       opts.onClear?.();
       confirmingClear.value = false;
-      toast.success('History cleared');
+      toast.success(t('common.historyCleared'));
     } catch {
-      toast.error(opts.clearError);
+      toast.error(typeof opts.clearError === 'function' ? opts.clearError() : opts.clearError);
     } finally {
       clearing.value = false;
     }

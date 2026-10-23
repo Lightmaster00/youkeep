@@ -2,7 +2,7 @@
   <div class="mah" :class="{ 'has-banner': !!artist.banner_url }">
     <img v-if="artist.banner_url" :src="artist.banner_url" class="mah-banner" alt="" @error="hideBanner" />
     <MusicCollectionHeader
-      kicker="Artist"
+      :kicker="t('music.kicker.artist')"
       :subtitle="countsLabel"
       :can-play="canPlay"
       @play="emit('play')"
@@ -39,13 +39,14 @@ const emit = defineEmits<{ play: []; shuffle: [] }>();
 
 const { isAdmin } = useAuth();
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const { t, locale } = useI18n();
 const countsLabel = computed(() => {
   const c = props.counts;
   if (!c) return '';
-  const parts = [plural(c.tracks, 'song', 'songs')];
-  if (c.albums > 0) parts.push(plural(c.albums, 'album', 'albums'));
-  if (c.singles > 0) parts.push(plural(c.singles, 'single or EP', 'singles and EPs'));
+  const n = (count: number) => count.toLocaleString(locale.value);
+  const parts = [t('music.songCount', { count: n(c.tracks) }, c.tracks)];
+  if (c.albums > 0) parts.push(t('music.albumCount', { count: n(c.albums) }, c.albums));
+  if (c.singles > 0) parts.push(t('music.singleCount', { count: n(c.singles) }, c.singles));
   return parts.join(' · ');
 });
 

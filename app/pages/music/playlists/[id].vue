@@ -2,24 +2,24 @@
   <div class="playlist-detail-page">
     <NuxtLink to="/music/playlists" class="btn btn-secondary pd-back">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-      Playlists
+      {{ t('nav.playlists') }}
     </NuxtLink>
 
-    <div v-if="pending" class="pd-status">Loading...</div>
+    <div v-if="pending" class="pd-status">{{ t('common.loadingDots') }}</div>
     <EmptyState
       v-else-if="notFound"
       icon="folder"
-      title="Playlist not found"
-      description="It may have been deleted."
+      :title="t('music.playlist.notFoundTitle')"
+      :description="t('music.playlist.notFoundDesc')"
     />
     <div v-else-if="loadError" class="pd-status">
-      Failed to load the playlist.
-      <button class="btn btn-secondary" @click="load">Retry</button>
+      {{ t('music.playlist.loadFailed') }}
+      <button class="btn btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
 
     <template v-else-if="playlist">
       <MusicCollectionHeader
-        kicker="Playlist"
+        :kicker="t('music.kicker.playlist')"
         :subtitle="countLabel"
         :can-play="tracks.length > 0"
         @play="playAll(tracks)"
@@ -35,20 +35,20 @@
               v-model="editTitle"
               type="text"
               class="form-input pd-edit-title"
-              aria-label="Playlist name"
+              :aria-label="t('music.playlist.nameAria')"
               :maxlength="PLAYLIST_TITLE_MAX"
             />
             <textarea
               v-model="editDescription"
               class="form-input pd-edit-description"
               rows="2"
-              placeholder="Description (optional)"
-              aria-label="Playlist description"
+              :placeholder="t('music.userPlaylists.description')"
+              :aria-label="t('music.playlist.descriptionAria')"
               :maxlength="PLAYLIST_DESCRIPTION_MAX"
             ></textarea>
             <div class="pd-edit-actions">
-              <button type="button" class="btn btn-secondary" @click="editing = false">Cancel</button>
-              <button type="submit" class="btn btn-primary" :disabled="saving || !editTitle.trim()">Save</button>
+              <button type="button" class="btn btn-secondary" @click="editing = false">{{ t('common.cancel') }}</button>
+              <button type="submit" class="btn btn-primary" :disabled="saving || !editTitle.trim()">{{ t('common.save') }}</button>
             </div>
           </form>
           <template v-else>
@@ -57,16 +57,16 @@
           </template>
         </template>
         <template #buttons>
-          <button v-if="!editing" type="button" class="btn btn-secondary" @click="startEdit">Edit</button>
-          <button type="button" class="btn btn-danger-outline" @click="confirmingDelete = true">Delete playlist</button>
+          <button v-if="!editing" type="button" class="btn btn-secondary" @click="startEdit">{{ t('music.playlist.edit') }}</button>
+          <button type="button" class="btn btn-danger-outline" @click="confirmingDelete = true">{{ t('music.playlist.delete') }}</button>
         </template>
       </MusicCollectionHeader>
 
       <EmptyState
         v-if="tracks.length === 0"
         icon="music"
-        title="This playlist is empty"
-        description="Add songs from the Music library with the playlist button on any track."
+        :title="t('music.playlist.emptyTitle')"
+        :description="t('music.playlist.emptyDesc')"
       />
       <MusicTrackList
         v-else
@@ -78,8 +78,8 @@
           <button
             type="button"
             class="pd-row-btn"
-            :aria-label="`Move ${track.title} up`"
-            title="Move up"
+            :aria-label="t('music.playlist.moveUpLabel', { title: track.title })"
+            :title="t('music.playlist.moveUp')"
             :disabled="reordering || index === 0"
             @click="move(index, -1)"
           >
@@ -88,8 +88,8 @@
           <button
             type="button"
             class="pd-row-btn"
-            :aria-label="`Move ${track.title} down`"
-            title="Move down"
+            :aria-label="t('music.playlist.moveDownLabel', { title: track.title })"
+            :title="t('music.playlist.moveDown')"
             :disabled="reordering || index === tracks.length - 1"
             @click="move(index, 1)"
           >
@@ -98,8 +98,8 @@
           <button
             type="button"
             class="pd-row-btn pd-remove"
-            :aria-label="`Remove ${track.title} from this playlist`"
-            title="Remove from this playlist"
+            :aria-label="t('music.playlist.removeLabel', { title: track.title })"
+            :title="t('music.playlist.remove')"
             :disabled="reordering"
             @click="removeTrack(track)"
           >
@@ -109,13 +109,13 @@
       </MusicTrackList>
     </template>
 
-    <BaseModal :show="confirmingDelete" title="Delete playlist?" @close="confirmingDelete = false">
+    <BaseModal :show="confirmingDelete" :title="t('music.playlist.deleteTitle')" @close="confirmingDelete = false">
       <p class="pd-confirm-text">
-        "{{ playlist?.title }}" will be deleted. The songs stay in your library.
+        {{ t('music.playlist.deleteText', { title: playlist?.title ?? '' }) }}
       </p>
       <template #footer>
-        <button type="button" class="btn btn-secondary" @click="confirmingDelete = false">Cancel</button>
-        <button type="button" class="btn btn-danger" :disabled="deleting" @click="deletePlaylist">Delete</button>
+        <button type="button" class="btn btn-secondary" @click="confirmingDelete = false">{{ t('common.cancel') }}</button>
+        <button type="button" class="btn btn-danger" :disabled="deleting" @click="deletePlaylist">{{ t('common.delete') }}</button>
       </template>
     </BaseModal>
   </div>
@@ -135,9 +135,10 @@ const router = useRouter();
 const toast = useToast();
 const { playAll, shuffleAll, playFrom, currentTrack } = usePlayTrackList();
 
+const { t, locale } = useI18n();
 const id = computed(() => String(route.params.id || ''));
 const playlist = ref<PlaylistInfo | null>(null);
-useHead({ title: computed(() => playlist.value?.title || 'Playlist') });
+useHead({ title: computed(() => playlist.value?.title || t('music.kicker.playlist')) });
 const tracks = ref<any[]>([]);
 const pending = ref(true);
 const notFound = ref(false);
@@ -153,7 +154,7 @@ const reordering = ref(false);
 const confirmingDelete = ref(false);
 const deleting = ref(false);
 
-const countLabel = computed(() => (tracks.value.length === 1 ? '1 song' : `${tracks.value.length} songs`));
+const countLabel = computed(() => t('music.songCount', { count: tracks.value.length.toLocaleString(locale.value) }, tracks.value.length));
 const coverUrls = computed(() =>
   tracks.value.slice(0, 4).map((t) => t.local_thumbnail_path || t.album_cover_url).filter(Boolean)
 );
@@ -197,7 +198,7 @@ async function saveEdit() {
     playlist.value = { ...playlist.value, title: updated.title, description: updated.description };
     editing.value = false;
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not save the playlist.');
+    toast.error(err?.data?.statusMessage || t('music.playlist.saveFailed'));
   } finally {
     saving.value = false;
   }
@@ -215,7 +216,7 @@ async function move(index: number, delta: number) {
     await $fetch(`${base()}/order`, { method: 'PUT', body: { trackIds: next.map((t) => t.id) } });
   } catch (err: any) {
     tracks.value = previous;
-    toast.error(err?.data?.statusMessage || 'Could not reorder the playlist.');
+    toast.error(err?.data?.statusMessage || t('music.playlist.reorderFailed'));
   } finally {
     reordering.value = false;
   }
@@ -230,7 +231,7 @@ async function removeTrack(track: any) {
     await $fetch(`${base()}/tracks/${encodeURIComponent(track.id)}`, { method: 'DELETE' });
   } catch (err: any) {
     tracks.value = previous;
-    toast.error(err?.data?.statusMessage || 'Could not remove the song from the playlist.');
+    toast.error(err?.data?.statusMessage || t('music.playlist.removeFailed'));
   } finally {
     reordering.value = false;
   }
@@ -241,11 +242,11 @@ async function deletePlaylist() {
   deleting.value = true;
   try {
     await $fetch(base(), { method: 'DELETE' });
-    toast.success('Playlist deleted');
+    toast.success(t('music.playlist.deleted'));
     confirmingDelete.value = false;
     await router.push('/music/playlists');
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not delete the playlist.');
+    toast.error(err?.data?.statusMessage || t('music.playlist.deleteFailed'));
   } finally {
     deleting.value = false;
   }

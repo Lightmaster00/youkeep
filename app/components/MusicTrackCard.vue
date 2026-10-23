@@ -4,7 +4,7 @@
     :class="{ 'now-playing': active, 'is-unplayable': !track.local_file_path }"
     role="button"
     tabindex="0"
-    :aria-label="`Play ${track.title}`"
+    :aria-label="t('music.playTitle', { title: track.title })"
     @click="emit('play', track)"
     @keydown.enter.self.prevent="emit('play', track)"
     @keydown.space.self.prevent="emit('play', track)"
@@ -32,6 +32,7 @@ import { computed } from 'vue';
 // Card for one track (Home "Recently added music" row, /music/recent). Same
 // markup and look as the show cards of the Podcasts library. `showActions`
 // adds the like and "Add to playlist" buttons (logged-in users only).
+const { t } = useI18n();
 const props = defineProps<{ track: any; active?: boolean; showActions?: boolean }>();
 const emit = defineEmits<{ play: [track: any] }>();
 

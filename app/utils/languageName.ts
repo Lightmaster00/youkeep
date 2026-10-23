@@ -1,17 +1,23 @@
-// "fr" -> "French", "pt-BR" -> "Brazilian Portuguese"; the code itself when
-// the runtime cannot name it (or it is not a language code at all).
-let names: Intl.DisplayNames | null | undefined;
+// "fr" -> "French", "pt-BR" -> "Brazilian Portuguese" (named in the UI
+// language when a locale is given); the code itself when the runtime cannot
+// name it (or it is not a language code at all).
+const namers = new Map<string, Intl.DisplayNames | null>();
 
-export function languageName(code: string | null | undefined): string {
-  const value = (code || '').trim();
-  if (!value) return '';
-  if (names === undefined) {
+function namerFor(locale: string): Intl.DisplayNames | null {
+  if (!namers.has(locale)) {
     try {
-      names = new Intl.DisplayNames(['en'], { type: 'language', fallback: 'code' });
+      namers.set(locale, new Intl.DisplayNames(locale, { type: 'language', fallback: 'code' }));
     } catch {
-      names = null;
+      namers.set(locale, null);
     }
   }
+  return namers.get(locale) ?? null;
+}
+
+export function languageName(code: string | null | undefined, locale: string = 'en'): string {
+  const value = (code || '').trim();
+  if (!value) return '';
+  const names = namerFor(locale);
   if (!names) return value;
   try {
     const label = names.of(value);

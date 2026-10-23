@@ -1,12 +1,13 @@
 <template>
   <NuxtLink :to="`/music/genre/${encodeURIComponent(genre)}`" class="genre-tile">
     <span class="genre-tile-name">{{ genre }}</span>
-    <span class="genre-tile-meta">{{ trackCount === 1 ? '1 track' : `${trackCount} tracks` }}</span>
+    <span class="genre-tile-meta">{{ t('music.trackCount', { count: trackCount.toLocaleString(locale) }, trackCount) }}</span>
   </NuxtLink>
 </template>
 
 <script setup lang="ts">
 // One "Browse by genre" tile of the Music Discover page; opens the genre page.
+const { t, locale } = useI18n();
 defineProps<{ genre: string; trackCount: number }>();
 </script>
 

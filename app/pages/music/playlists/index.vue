@@ -1,25 +1,25 @@
 <template>
   <div class="user-playlists-page">
     <header class="upl-header">
-      <h1 class="page-title">Playlists</h1>
+      <h1 class="page-title">{{ t('nav.playlists') }}</h1>
       <button v-if="!showForm" type="button" class="btn btn-primary upl-new-btn" @click="openForm">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        New playlist
+        {{ t('music.userPlaylists.new') }}
       </button>
     </header>
 
     <form v-if="showForm" class="upl-form glass-panel" @submit.prevent="create">
-      <label class="upl-label" for="upl-title">Name</label>
+      <label class="upl-label" for="upl-title">{{ t('music.userPlaylists.name') }}</label>
       <input
         id="upl-title"
         ref="titleInput"
         v-model="newTitle"
         type="text"
         class="form-input"
-        placeholder="My playlist"
+        :placeholder="t('music.userPlaylists.namePlaceholder')"
         :maxlength="PLAYLIST_TITLE_MAX"
       />
-      <label class="upl-label" for="upl-description">Description (optional)</label>
+      <label class="upl-label" for="upl-description">{{ t('music.userPlaylists.description') }}</label>
       <textarea
         id="upl-description"
         v-model="newDescription"
@@ -28,21 +28,21 @@
         :maxlength="PLAYLIST_DESCRIPTION_MAX"
       ></textarea>
       <div class="upl-form-actions">
-        <button type="button" class="btn btn-secondary" @click="closeForm">Cancel</button>
-        <button type="submit" class="btn btn-primary" :disabled="creating || !newTitle.trim()">Create</button>
+        <button type="button" class="btn btn-secondary" @click="closeForm">{{ t('common.cancel') }}</button>
+        <button type="submit" class="btn btn-primary" :disabled="creating || !newTitle.trim()">{{ t('common.create') }}</button>
       </div>
     </form>
 
-    <div v-if="pending" class="upl-status">Loading...</div>
+    <div v-if="pending" class="upl-status">{{ t('common.loadingDots') }}</div>
     <div v-else-if="loadError" class="upl-status">
-      Failed to load playlists.
-      <button class="btn btn-secondary" @click="load">Retry</button>
+      {{ t('music.userPlaylists.loadFailed') }}
+      <button class="btn btn-secondary" @click="load">{{ t('common.retry') }}</button>
     </div>
     <EmptyState
       v-else-if="playlists.length === 0"
       icon="folder"
-      title="No playlists yet"
-      description="Create a playlist, then add songs to it from any track."
+      :title="t('music.userPlaylists.emptyTitle')"
+      :description="t('music.userPlaylists.emptyDesc')"
     />
     <div v-else class="upl-grid">
       <NuxtLink
@@ -53,18 +53,19 @@
       >
         <PlaylistCoverMosaic :urls="p.coverUrls" class="upl-cover" />
         <span class="upl-card-title">{{ p.title }}</span>
-        <span class="upl-card-meta">{{ p.trackCount === 1 ? '1 song' : `${p.trackCount} songs` }}</span>
+        <span class="upl-card-meta">{{ t('music.songCount', { count: p.trackCount.toLocaleString(locale) }, p.trackCount) }}</span>
       </NuxtLink>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { PLAYLIST_TITLE_MAX, PLAYLIST_DESCRIPTION_MAX } from '#shared/musicPlaylists';
 
-useHead({ title: 'Music playlists' });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => t('music.head.playlists')) });
 
 interface PlaylistEntry { id: string; title: string; trackCount: number; coverUrls: string[] }
 
@@ -112,10 +113,10 @@ async function create() {
       body: { title, description: newDescription.value.trim() || null },
     });
     playlists.value = [created, ...playlists.value];
-    toast.success(`Created ${created.title}`);
+    toast.success(t('music.userPlaylists.created', { title: created.title }));
     closeForm();
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not create the playlist.');
+    toast.error(err?.data?.statusMessage || t('music.userPlaylists.createFailed'));
   } finally {
     creating.value = false;
   }
