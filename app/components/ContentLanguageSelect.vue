@@ -35,3 +35,7 @@ async function onChange(event: Event) {
   if (!(await change(value))) resync.value++;
 }
 </script>
+
+<style scoped>
+.section-desc { margin-top: 8px; font-size: 13px; line-height: 1.4; }
+</style>
