@@ -8,20 +8,33 @@ export const DENSITIES: readonly Density[] = ['compact', 'comfortable', 'spaciou
 export const LANDING_SPACES: readonly LandingSpace[] = ['auto', 'video', 'music', 'podcasts'];
 export const HIDEABLE_NAV_LINKS = ['/shorts', '/channels', '/subscriptions', '/playlists'] as const;
 
-export type HomeSectionId = 'popular' | 'suggested' | 'subscriptions' | 'recentMusic' | 'newEpisodes';
+export type HomeSectionId =
+  | 'continue' | 'subscriptions' | 'forYou' | 'popular' | 'becauseYouWatched' | 'byCategory'
+  | 'shorts' | 'playlists' | 'discoverChannels' | 'recentMusic' | 'newEpisodes';
 export type PopularRanking = 'localViewers' | 'youtubeViews' | 'trending7d' | 'watchTime';
 
-export const HOME_SECTION_IDS: readonly HomeSectionId[] = ['popular', 'suggested', 'subscriptions', 'recentMusic', 'newEpisodes'];
+export const HOME_SECTION_IDS: readonly HomeSectionId[] = [
+  'continue', 'subscriptions', 'forYou', 'popular', 'becauseYouWatched', 'byCategory',
+  'shorts', 'playlists', 'discoverChannels', 'recentMusic', 'newEpisodes',
+];
 // Home section ids that existed once and were removed ('recent' was the video
 // "Recently added" row). Stored or submitted lists that still name one are
 // accepted and the id is dropped, so old preferences never fail to load.
 export const RETIRED_HOME_SECTION_IDS: readonly string[] = ['recent'];
+// Old ids that were renamed: accepted and read as the new id.
+export const RENAMED_HOME_SECTION_IDS: Readonly<Record<string, HomeSectionId>> = { suggested: 'forYou' };
+// The app defaults of earlier versions. A stored list equal to one of them was
+// never chosen by anyone: it reads as absent, so the current default applies.
+export const OLD_DEFAULT_HOME_SECTIONS: readonly (readonly string[])[] = [
+  ['popular', 'suggested', 'subscriptions'],
+  ['recent', 'popular', 'suggested', 'subscriptions'],
+];
 // Sections a logged-out visitor can see (the others need a user). The server
-// mirrors this by returning null for guests in the suggested/subscriptions
-// builders of server/api/home/feed.get.ts: update both together.
+// mirrors this by returning null for guests in the personal builders of
+// server/api/home/feed.get.ts: update both together.
 // recentMusic/newEpisodes are listed because guests may see public content;
 // the music/podcast visibility rules still filter what they get.
-export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['popular', 'recentMusic', 'newEpisodes'];
+export const GUEST_HOME_SECTIONS: readonly HomeSectionId[] = ['popular', 'byCategory', 'shorts', 'recentMusic', 'newEpisodes'];
 // The home rows that belong to a module other than Video (hidden when it is off).
 export const MEDIA_HOME_SECTION_MODULE: Readonly<Partial<Record<HomeSectionId, 'music' | 'podcasts'>>> = {
   recentMusic: 'music',
@@ -49,14 +62,13 @@ export const PREF_KEYS: readonly PrefKey[] = [
   'homeSections', 'homeHero', 'popularRanking', 'rowSize', 'subscriptionChannels',
 ];
 
-// The default home list leaves out recentMusic/newEpisodes on purpose: an install that
-// never stored homeSections inherits this list, so adding them here would
-// change existing users' homes without anyone choosing it. They are opt-in.
+// The default home list leaves out recentMusic/newEpisodes on purpose: they
+// are opt-in rows of other modules.
 export const APP_DEFAULTS: DisplayPrefs = {
   density: 'comfortable',
   hiddenNavLinks: [],
   landingSpace: 'auto',
-  homeSections: ['popular', 'suggested', 'subscriptions'],
+  homeSections: ['continue', 'subscriptions', 'forYou', 'popular', 'becauseYouWatched', 'byCategory', 'shorts', 'playlists', 'discoverChannels'],
   homeHero: true,
   popularRanking: 'localViewers',
   rowSize: 15,
@@ -116,12 +128,18 @@ function validateValue(key: PrefKey, value: unknown): DisplayPrefs[PrefKey] {
     if (!Array.isArray(value)) throw new InvalidPrefError(key, 'homeSections must be an array.');
     const seen = new Set<string>();
     const kept: string[] = [];
-    for (const item of value) {
-      if (typeof item === 'string' && RETIRED_HOME_SECTION_IDS.includes(item)) continue;
+    for (const raw of value) {
+      if (typeof raw === 'string' && RETIRED_HOME_SECTION_IDS.includes(raw)) continue;
+      const renamed = typeof raw === 'string' && Object.prototype.hasOwnProperty.call(RENAMED_HOME_SECTION_IDS, raw);
+      const item = renamed ? RENAMED_HOME_SECTION_IDS[raw as string]! : raw;
       if (typeof item !== 'string' || !(HOME_SECTION_IDS as readonly string[]).includes(item)) {
         throw new InvalidPrefError(key, `homeSections may only contain: ${HOME_SECTION_IDS.join(', ')}.`);
       }
-      if (seen.has(item)) throw new InvalidPrefError(key, 'homeSections must not contain duplicates.');
+      if (seen.has(item)) {
+        // An old and a new name of the same row: keep the first.
+        if (renamed || Object.values(RENAMED_HOME_SECTION_IDS).includes(item as HomeSectionId)) continue;
+        throw new InvalidPrefError(key, 'homeSections must not contain duplicates.');
+      }
       seen.add(item);
       kept.push(item);
     }
@@ -174,6 +192,12 @@ export function validatePartial(input: unknown): ValidatedChange {
   return { set, remove };
 }
 
+/** A stored homeSections list that is exactly an earlier app default. */
+function isOldDefaultHomeSections(value: unknown): boolean {
+  return Array.isArray(value)
+    && OLD_DEFAULT_HOME_SECTIONS.some((old) => old.length === value.length && old.every((id, i) => value[i] === id));
+}
+
 // Stored JSON that is missing or corrupt is an empty partial; otherwise each
 // known key is validated alone so one bad value never discards the others.
 // null is a write-time removal marker only and is dropped here.
@@ -191,6 +215,7 @@ export function parseStoredPartial(raw: string | null | undefined): PrefsPartial
     if (!(key in parsed)) continue;
     const value = (parsed as Record<string, unknown>)[key];
     if (value === null) continue;
+    if (key === 'homeSections' && isOldDefaultHomeSections(value)) continue;
     try {
       (out as Record<string, unknown>)[key] = validateValue(key, value);
     } catch {

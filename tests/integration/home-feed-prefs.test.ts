@@ -74,7 +74,7 @@ describe('Shorts never mix into the video rows', () => {
     insertSubscription(db, { userId: 'viewer', channelId: 'c3' });
     insertUserHistory(db, { userId: 'viewer', videoId: 'c1s0', watchTimeSeconds: 5000, watchedAt: Date.now() });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['popular', 'suggested', 'subscriptions']);
+    expect(sectionIds(r)).toEqual(['subscriptions', 'forYou', 'popular']);
     const all = everyVideoId(r);
     expect(all.length).toBeGreaterThan(10);
     expect(all.filter((id: string) => /s\d/.test(id))).toEqual([]);
@@ -200,7 +200,8 @@ describe('logged-in viewers', () => {
     insertUserHistory(db, { userId: 'viewer', videoId: 'c1v0', watchTimeSeconds: 50, watchedAt: Date.now() });
     setAdminDefaults({ homeHero: false, homeSections: ['suggested', 'popular'] });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['suggested', 'popular']);
+    // The old id is read as the new one.
+    expect(sectionIds(r)).toEqual(['forYou', 'popular']);
     const all = allIds(r);
     expect(new Set(all).size).toBe(all.length);
   });
@@ -212,7 +213,7 @@ describe('logged-in viewers', () => {
     insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
     insertUserHistory(db, { userId: 'viewer', videoId: 'c2v0', watchTimeSeconds: 50, watchedAt: Date.now() });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['popular', 'suggested', 'subscriptions']);
+    expect(sectionIds(r)).toEqual(['subscriptions', 'forYou', 'popular']);
     expect(r.featured.large).not.toBeNull();
     const all = allIds(r);
     expect(all.length).toBeGreaterThan(5);

@@ -50,9 +50,9 @@ const FEED_VIDEO_COLUMNS = `
   c.title as channel_title, c.avatar_url as channel_avatar
 `;
 
-const SECTION_TITLES: Record<HomeSectionId, string> = {
+const SECTION_TITLES: Partial<Record<HomeSectionId, string>> = {
   popular: 'Popular',
-  suggested: 'Suggested for you',
+  forYou: 'Suggested for you',
   subscriptions: 'By followed channel',
   recentMusic: 'Recently added music',
   newEpisodes: 'New podcast episodes',
@@ -186,16 +186,16 @@ export default defineEventHandler(async (event) => {
 
   // Lazy builders re-query sized from what earlier sections already claimed, so
   // moving 'popular' below big sections never starves it.
-  const builders: Record<HomeSectionId, () => any | null> = {
+  const builders: Partial<Record<HomeSectionId, () => any | null>> = {
     popular: () => {
       const videos = claim(queryPool('popular', usedIds.size + rowSize).filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'popular', title: SECTION_TITLES.popular, videos } : null;
     },
-    suggested: () => {
+    forYou: () => {
       if (!session) return null;
       const suggestions = getRecommendedVideos(db, session, { type: 'video', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
       const videos = claim(suggestions.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
-      return videos.length > 0 ? { id: 'suggested', title: SECTION_TITLES.suggested, videos } : null;
+      return videos.length > 0 ? { id: 'forYou', title: SECTION_TITLES.forYou, videos } : null;
     },
     subscriptions: () => {
       if (!session) return null;

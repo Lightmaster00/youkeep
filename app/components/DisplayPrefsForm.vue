@@ -182,9 +182,15 @@ function onNavChange(to: string, event: Event) {
 }
 
 const SECTION_LABELS: Record<HomeSectionId, string> = {
-  popular: 'Popular',
-  suggested: 'Suggested for you',
+  continue: 'Continue watching',
   subscriptions: 'From channels you follow',
+  forYou: 'Recommended for you',
+  popular: 'Popular',
+  becauseYouWatched: 'Because you watched',
+  byCategory: 'By category',
+  shorts: 'Shorts',
+  playlists: 'Your playlists',
+  discoverChannels: 'Channels to discover',
   recentMusic: 'Recently added music',
   newEpisodes: 'New podcast episodes',
 };
