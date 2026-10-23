@@ -256,7 +256,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { passwordProblemKey } from '~/utils/passwordRules';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 useHead({ title: computed(() => t('account.title')) });
 
@@ -464,8 +464,9 @@ const tokenExpiryText = (token: ApiToken): string => {
   return t('account.expiresIn', days);
 };
 
+// Follows the UI language; the locale is the same on server and client (cookie), so SSR and CSR agree.
 const formatTokenDate = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(timestamp).toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 onMounted(() => {

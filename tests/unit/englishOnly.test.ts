@@ -67,8 +67,19 @@ const FRENCH_WORDS = [
 ];
 
 // Text allowed to match despite the rules above. Keep this list short and give
-// a reason for every entry. Currently empty: no admin file needs French text.
-const ALLOWLIST: Array<{ file: string; text: string; reason: string }> = [];
+// a reason for every entry.
+const ALLOWLIST: Array<{ file: string; text: string; reason: string }> = [
+  {
+    file: join('shared', 'languages.ts'),
+    text: 'Français',
+    reason: 'native language names are what the language selector shows (the app is multilingual)',
+  },
+  {
+    file: join('shared', 'languages.ts'),
+    text: 'Português',
+    reason: 'native language name, same as above',
+  },
+];
 
 function frenchHits(source: string, file: string): string[] {
   const allowed = ALLOWLIST.filter((a) => a.file === file).map((a) => a.text);
