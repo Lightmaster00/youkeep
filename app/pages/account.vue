@@ -80,6 +80,9 @@
             <label class="form-label" for="ui_language">{{ t('language.interface') }}</label>
             <LanguageSelect id="ui_language" />
           </div>
+          <div class="form-group mt-3">
+            <ContentLanguageSelect />
+          </div>
         </div>
 
         <div v-if="!currentUser?.mustChangePassword" class="profile-box glass-panel">

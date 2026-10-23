@@ -117,7 +117,7 @@
             </MediaFrame>
 
             <div class="video-info">
-              <h3 class="video-title">{{ video.title }}</h3>
+              <h3 class="video-title" :title="video.original_title || undefined">{{ video.title }}</h3>
               <p class="video-channel">{{ video.channel_title }}</p>
               <span class="video-views">{{ t('video.views', { views: formatNumber(video.view_count) }) }}</span>
             </div>

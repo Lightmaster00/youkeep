@@ -38,7 +38,12 @@
   "language": {
     "title": "Sprache",
     "interface": "Sprache der Oberfläche",
-    "saveFailed": "Deine Sprache konnte nicht gespeichert werden."
+    "saveFailed": "Deine Sprache konnte nicht gespeichert werden.",
+    "content": "Videotitel und Beschreibungen",
+    "contentOriginal": "Original (wie hochgeladen)",
+    "contentHelp": "Übersetzungen stammen von YouTube, wenn der Uploader sie bereitstellt; sonst wird das Original angezeigt. Neue Übersetzungen können nach einem Neuladen erscheinen.",
+    "contentUnavailable": "Bitte einen Administrator, den YouTube-Data-API-Schlüssel (Einstellungen) einzurichten, um übersetzte Titel zu aktivieren.",
+    "contentSaveFailed": "Die Videosprache konnte nicht gespeichert werden."
   },
   "header": {
     "search": "Suchen",
@@ -556,7 +561,9 @@
       "MB": "MB",
       "GB": "GB",
       "TB": "TB"
-    }
+    },
+    "showOriginalTitle": "Originaltitel anzeigen",
+    "showTranslatedTitle": "Übersetzten Titel anzeigen"
   },
   "music": {
     "title": "Musik",

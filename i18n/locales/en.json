@@ -38,7 +38,12 @@
   "language": {
     "title": "Language",
     "interface": "Interface language",
-    "saveFailed": "Couldn't save your language."
+    "saveFailed": "Couldn't save your language.",
+    "content": "Video titles and descriptions",
+    "contentOriginal": "Original (as uploaded)",
+    "contentHelp": "Translations come from YouTube when the uploader provides them; otherwise the original shows. New translations may appear after a reload.",
+    "contentUnavailable": "Ask an administrator to configure the YouTube Data API key (Settings) to enable translated titles.",
+    "contentSaveFailed": "Couldn't save your video language."
   },
   "header": {
     "search": "Search",
@@ -556,7 +561,9 @@
       "MB": "MB",
       "GB": "GB",
       "TB": "TB"
-    }
+    },
+    "showOriginalTitle": "Show original title",
+    "showTranslatedTitle": "Show translated title"
   },
   "music": {
     "title": "Music",

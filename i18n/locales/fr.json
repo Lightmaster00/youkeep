@@ -38,7 +38,12 @@
   "language": {
     "title": "Langue",
     "interface": "Langue de l'interface",
-    "saveFailed": "Impossible d'enregistrer votre langue."
+    "saveFailed": "Impossible d'enregistrer votre langue.",
+    "content": "Titres et descriptions des vidéos",
+    "contentOriginal": "Original (tel que mis en ligne)",
+    "contentHelp": "Les traductions viennent de YouTube lorsque l'auteur les fournit ; sinon, l'original s'affiche. De nouvelles traductions peuvent apparaître après un rechargement.",
+    "contentUnavailable": "Demandez à un administrateur de configurer la clé de l'API YouTube Data (Paramètres) pour activer les titres traduits.",
+    "contentSaveFailed": "Impossible d'enregistrer la langue des vidéos."
   },
   "header": {
     "search": "Rechercher",
@@ -556,7 +561,9 @@
       "MB": "Mo",
       "GB": "Go",
       "TB": "To"
-    }
+    },
+    "showOriginalTitle": "Afficher le titre original",
+    "showTranslatedTitle": "Afficher le titre traduit"
   },
   "music": {
     "title": "Musique",

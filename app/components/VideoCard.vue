@@ -44,7 +44,7 @@
 
     <!-- Video Details -->
     <div class="video-info">
-      <h4 class="video-title" :title="video.title">
+      <h4 class="video-title" :title="video.original_title || video.title">
         <!-- The title is the card's keyboard/screen-reader entry point; a click
              anywhere else on the card goes to the same place. -->
         <NuxtLink v-if="clickable" :to="watchTarget" class="video-title-link" @click.stop>
@@ -106,6 +106,8 @@ const props = withDefaults(defineProps<{
     local_thumbnail_path?: string;
     local_video_path?: string;
     was_live?: number;
+    /** Uploaded title, present when `title` is a translation. */
+    original_title?: string;
     is_short?: number | boolean;
   };
   showChannelInfo?: boolean;

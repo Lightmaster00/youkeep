@@ -38,7 +38,12 @@
   "language": {
     "title": "Idioma",
     "interface": "Idioma de la interfaz",
-    "saveFailed": "No se pudo guardar tu idioma."
+    "saveFailed": "No se pudo guardar tu idioma.",
+    "content": "Títulos y descripciones de los vídeos",
+    "contentOriginal": "Original (tal como se subió)",
+    "contentHelp": "Las traducciones vienen de YouTube cuando el autor las proporciona; si no, se muestra el original. Pueden aparecer nuevas traducciones tras recargar.",
+    "contentUnavailable": "Pide a un administrador que configure la clave de la API de YouTube Data (Ajustes) para activar los títulos traducidos.",
+    "contentSaveFailed": "No se pudo guardar el idioma de los vídeos."
   },
   "header": {
     "search": "Buscar",
@@ -556,7 +561,9 @@
       "MB": "MB",
       "GB": "GB",
       "TB": "TB"
-    }
+    },
+    "showOriginalTitle": "Mostrar el título original",
+    "showTranslatedTitle": "Mostrar el título traducido"
   },
   "music": {
     "title": "Música",

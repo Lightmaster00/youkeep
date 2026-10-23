@@ -38,7 +38,12 @@
   "language": {
     "title": "语言",
     "interface": "界面语言",
-    "saveFailed": "无法保存你的语言设置。"
+    "saveFailed": "无法保存你的语言设置。",
+    "content": "视频标题和描述",
+    "contentOriginal": "原文（上传时的语言）",
+    "contentHelp": "上传者提供翻译时，翻译内容来自 YouTube；否则显示原文。重新加载后可能会出现新的翻译。",
+    "contentUnavailable": "请联系管理员在“设置”中配置 YouTube Data API 密钥，以启用标题翻译。",
+    "contentSaveFailed": "无法保存视频语言设置。"
   },
   "header": {
     "search": "搜索",
@@ -556,7 +561,9 @@
       "MB": "MB",
       "GB": "GB",
       "TB": "TB"
-    }
+    },
+    "showOriginalTitle": "显示原标题",
+    "showTranslatedTitle": "显示翻译标题"
   },
   "music": {
     "title": "音乐",

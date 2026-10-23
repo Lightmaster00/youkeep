@@ -10,6 +10,8 @@ export interface UserSession {
   role: 'admin' | 'user';
   mustChangePassword?: boolean;
   uiLanguage?: LanguageCode | null;
+  /** Language of video titles/descriptions; 'original' = as uploaded. */
+  contentLanguage?: LanguageCode | 'original';
 }
 
 export const useAuth = () => {

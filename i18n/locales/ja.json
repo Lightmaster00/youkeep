@@ -38,7 +38,12 @@
   "language": {
     "title": "言語",
     "interface": "表示言語",
-    "saveFailed": "言語を保存できませんでした。"
+    "saveFailed": "言語を保存できませんでした。",
+    "content": "動画のタイトルと説明",
+    "contentOriginal": "原文（投稿時のまま）",
+    "contentHelp": "翻訳は、投稿者が提供している場合に YouTube から取得されます。提供がない場合は原文が表示されます。新しい翻訳は再読み込み後に表示されることがあります。",
+    "contentUnavailable": "タイトルの翻訳を有効にするには、管理者に YouTube Data API キー（設定）の登録を依頼してください。",
+    "contentSaveFailed": "動画の言語を保存できませんでした。"
   },
   "header": {
     "search": "検索",
@@ -556,7 +561,9 @@
       "MB": "MB",
       "GB": "GB",
       "TB": "TB"
-    }
+    },
+    "showOriginalTitle": "元のタイトルを表示",
+    "showTranslatedTitle": "翻訳されたタイトルを表示"
   },
   "music": {
     "title": "音楽",

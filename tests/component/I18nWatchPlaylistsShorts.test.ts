@@ -51,6 +51,26 @@ describe('watch page in French', () => {
     return w;
   };
 
+  it('toggles between the translated and the original title, per page view', async () => {
+    const w = await mountWatch({ video: { ...video, title: 'Titre traduit', original_title: 'Original title' }, comments: [] });
+    const title = () => w.find('[data-testid="watch-title"]');
+    const toggle = () => w.find('[data-testid="original-title-toggle"]');
+    expect(title().text()).toBe('Titre traduit');
+    expect(title().attributes('title')).toBe('Original title');
+    expect(toggle().text()).toBe('Afficher le titre original');
+    await toggle().trigger('click');
+    expect(title().text()).toBe('Original title');
+    expect(toggle().text()).toBe('Afficher le titre traduit');
+    await toggle().trigger('click');
+    expect(title().text()).toBe('Titre traduit');
+  });
+
+  it('has no toggle when the title was not replaced', async () => {
+    const w = await mountWatch({ video, comments: [] });
+    expect(w.find('[data-testid="original-title-toggle"]').exists()).toBe(false);
+    expect(w.find('[data-testid="watch-title"]').attributes('title')).toBeUndefined();
+  });
+
   it('words the video header, counts, dates, sizes and empty states in French', async () => {
     const w = await mountWatch({ video, comments: [] });
     const text = w.text().replace(/\s/g, ' ');

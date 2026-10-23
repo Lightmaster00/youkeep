@@ -57,12 +57,21 @@
 
         <!-- Video Header Info -->
         <div class="title-row">
-          <h1 class="video-title">{{ video.title }}</h1>
+          <h1 class="video-title" data-testid="watch-title" :title="video.original_title || undefined">{{ shownTitle }}</h1>
           <span v-if="video.was_live === 1" class="replay-pill">{{ t('video.replayBadge') }}</span>
         </div>
 
 
         
+        <button
+          v-if="video.original_title"
+          type="button"
+          class="original-title-toggle"
+          data-testid="original-title-toggle"
+          :aria-pressed="showOriginalTitle"
+          @click="showOriginalTitle = !showOriginalTitle"
+        >{{ showOriginalTitle ? t('watch.showTranslatedTitle') : t('watch.showOriginalTitle') }}</button>
+
         <!-- Channel Row -->
         <div class="channel-row">
           <div
@@ -275,7 +284,7 @@
               </MediaFrame>
               
               <div class="rec-info" style="display: flex; flex-direction: column; min-width: 0; flex: 1; justify-content: center;">
-                <h4 class="rec-title" :title="rel.title" style="font-size: 12.5px; font-weight: 600; line-height: 1.3; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ rel.title }}</h4>
+                <h4 class="rec-title" :title="rel.original_title || rel.title" style="font-size: 12.5px; font-weight: 600; line-height: 1.3; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ rel.title }}</h4>
                 <div class="rec-metadata" style="font-size: 11px; margin-top: 4px;">
                   <span v-if="rel.download_status !== 'completed'" style="color: #ef4444; font-weight: 500;">{{ t('watch.notDownloaded') }}</span>
                   <span v-else style="color: var(--text-secondary);">{{ t('watch.downloaded') }}</span>
@@ -318,7 +327,7 @@
             </MediaFrame>
             
             <div class="rec-info">
-              <h4 class="rec-title" :title="rel.title">{{ rel.title }}</h4>
+              <h4 class="rec-title" :title="rel.original_title || rel.title">{{ rel.title }}</h4>
               <p class="rec-channel">{{ rel.channel_title }}</p>
               <div class="rec-metadata">
                 <span>{{ t('video.views', { views: formatViews(rel.view_count) }) }}</span>
@@ -435,7 +444,11 @@ const { data: videoResponse, pending, error, refresh: refreshVideo } = await use
   return `/api/videos/${videoId.value}${token.value ? `?token=${token.value}` : ''}`;
 });
 const video = computed(() => videoResponse.value?.video || null);
-useHead({ title: computed(() => video.value?.title || (error.value ? t('watch.notFoundTitle') : t('watch.titleFallback'))) });
+// The server swaps in the translated title and keeps the uploaded one as original_title.
+const showOriginalTitle = ref(false);
+const shownTitle = computed(() => (showOriginalTitle.value && video.value?.original_title) || video.value?.title || '');
+watch(() => video.value?.id, () => { showOriginalTitle.value = false; });
+useHead({ title: computed(() => shownTitle.value || (error.value ? t('watch.notFoundTitle') : t('watch.titleFallback'))) });
 const comments = computed(() => videoResponse.value?.comments || []);
 const subtitles = computed(() => videoResponse.value?.subtitles || []);
 const chapters = computed(() => videoResponse.value?.chapters || []);
@@ -744,6 +757,17 @@ function toggleMiniPlayerPlayback() {
 </script>
 
 <style scoped>
+.original-title-toggle {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 2px 0 6px;
+  color: var(--text-muted, #9ca3af);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.original-title-toggle:hover { color: inherit; }
 .dropdown-item {
   display: flex;
   align-items: center;

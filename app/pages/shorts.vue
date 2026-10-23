@@ -92,7 +92,7 @@
                 </h4>
                 <span class="video-date-badge">• {{ formatVideoDate(video.upload_date) }}</span>
               </div>
-              <p class="video-title">{{ video.title }}</p>
+              <p class="video-title" :title="video.original_title || undefined">{{ video.title }}</p>
               <div v-if="video.description && video.description.trim()" class="description-container">
                 <p class="description-text">
                   {{ video.description }}
@@ -197,6 +197,7 @@ interface Video {
   channel_avatar: string;
   upload_date: string | null;
   watchTimeTracked?: number;
+  original_title?: string;
 }
 
 const toast = useToast();
