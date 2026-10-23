@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatViewCount, formatUploadDate } from '../../app/utils/formatCount';
+import { formatViewCount, formatUploadDate, formatDateTime } from '../../app/utils/formatCount';
 
 describe('formatViewCount', () => {
   it('keeps the short English spelling', () => {
@@ -21,24 +21,35 @@ describe('formatViewCount', () => {
 });
 
 describe('formatViewCount in the other UI languages', () => {
-  it.each(['es', 'de', 'pt', 'it', 'zh', 'ja', 'ru'])('%s: compact units, no English "k" / "M" shortcut', (lang) => {
-    const out = formatViewCount(1234, lang);
-    expect(out).toBe(new Intl.NumberFormat(lang, { notation: 'compact', maximumFractionDigits: 1 }).format(1234));
-    expect(out).not.toBe('1.2k');
+  // Own unit tables, not Intl compact notation: server and browser CLDR data differ.
+  it.each([
+    ['es', '1,2\u00a0mil', '1,5\u00a0M'], ['de', '1.234', '1,5\u00a0Mio.'], ['pt', '1,2\u00a0mil', '1,5\u00a0mi'],
+    ['it', '1,2\u00a0K', '1,5\u00a0Mln'], ['zh', '1,234', '150万'], ['ja', '1,234', '150万'], ['ru', '1,2\u00a0тыс.', '1,5\u00a0млн'],
+  ])('%s: %s / %s, never the English k / M', (lang, thousand, million) => {
+    expect(formatViewCount(1234, lang)).toBe(thousand);
+    expect(formatViewCount(1_500_000, lang)).toBe(million);
     expect(formatViewCount(999, lang)).toBe('999');
     expect(formatViewCount(0, lang)).toBe('0');
+    expect(formatViewCount(1234, lang)).not.toBe('1.2k');
   });
-  it('uses each language\'s own separator and unit', () => {
-    const n = (lang: string) => formatViewCount(1_500_000, lang).replace(/\s/g, ' ');
-    expect(n('de')).toBe('1,5 Mio.');
-    expect(n('es')).toMatch(/^1,5 M$/);
-    expect(n('zh')).toBe('150万');
-    expect(n('ja')).toBe('150万');
-    expect(n('ru')).toMatch(/^1,5 млн$/);
-    expect(n('pt')).toMatch(/^1,5 mi$/);
-    expect(n('it')).toMatch(/^1,5 Mln$/);
+  it('steps up a unit instead of printing "1000 unit"', () => {
+    expect(formatViewCount(999_960, 'ru')).toBe('1\u00a0млн');
+    expect(formatViewCount(99_999_999, 'zh')).toBe('1亿');
+  });
+  it('uses the 10 000 based units of Chinese and Japanese', () => {
     expect(formatViewCount(12_000, 'zh')).toBe('1.2万');
-    expect(formatViewCount(12_000, 'ru').replace(/\s/g, ' ')).toBe('12 тыс.');
+    expect(formatViewCount(250_000_000, 'ja')).toBe('2.5億');
+    expect(formatViewCount(420_000, 'ru')).toBe('420\u00a0тыс.');
+  });
+});
+
+describe('formatDateTime', () => {
+  it('joins separately formatted date and time (no engine-specific "a las")', () => {
+    const d = new Date(2026, 9, 24, 9, 5);
+    const opts = { day: 'numeric', month: 'long', year: 'numeric' } as const;
+    expect(formatDateTime(d, 'es', opts)).toBe('24 de octubre de 2026, 09:05');
+    expect(formatDateTime(d, 'zh', opts)).toBe('2026年10月24日 09:05');
+    expect(formatDateTime(d, 'en', opts)).toMatch(/^October 24, 2026, 09:05\s?AM$/);
   });
 });
 

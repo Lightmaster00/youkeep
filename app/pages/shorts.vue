@@ -551,7 +551,7 @@ const formatVideoDate = (dateStr: string | null | undefined): string => {
 const formatCommentDate = (timestamp: number | null): string => {
   if (!timestamp) return t('common.unknownDate');
   const date = new Date(timestamp);
-  return date.toLocaleDateString(locale.value, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(date, locale.value, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
 const formatSeconds = (sec: number): string => {

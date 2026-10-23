@@ -359,7 +359,7 @@ import VideoPlayer from '~/components/VideoPlayer.vue';
 import SaveToPlaylistModal from '~/components/SaveToPlaylistModal.vue';
 import ReportVideoModal from '~/components/ReportVideoModal.vue';
 import { canShareVideo, shareVideoLink } from '~/utils/shareVideo';
-import { formatViewCount } from '~/utils/formatCount';
+import { formatViewCount, formatDateTime } from '~/utils/formatCount';
 import { parseStartTime } from '~/utils/videoResume';
 import { useVideoWatchProgress } from '~/composables/useVideoWatchProgress';
 
@@ -653,7 +653,7 @@ const formatUploadDate = (dateStr: string | null): string => {
 const formatTimestamp = (ts: number | null): string => {
   if (!ts) return t('watch.unknown');
   const date = new Date(ts);
-  return date.toLocaleString(locale.value, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatDateTime(date, locale.value, { day: 'numeric', month: 'long', year: 'numeric' });
 };
 
 const formatBytes = (bytes: number | null): string => {
