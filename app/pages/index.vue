@@ -1,10 +1,19 @@
 <template>
   <div class="home-container">
 
-    <!-- Loading -->
-    <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
-      <p>Loading library...</p>
+    <!-- Loading: the hero and each chosen row hold their place. -->
+    <div v-if="loading" class="netflix-feed" data-testid="home-loading">
+      <div v-if="displayPrefs.homeHero" class="featured-bento featured-bento--skeleton" aria-hidden="true">
+        <div class="featured-large skeleton-block"></div>
+        <div v-for="n in 4" :key="n" class="featured-small"><div class="skeleton-thumb skeleton-block"></div></div>
+      </div>
+      <HomeRow
+        v-for="id in skeletonRows"
+        :key="id"
+        :title="HOME_SECTION_LABELS[id]"
+        :variant="SKELETON_VARIANT[id] ?? 'video'"
+        loading
+      />
     </div>
 
     <!-- Home deliberately emptied by the viewer's preferences -->
@@ -19,7 +28,7 @@
 
     <!-- Empty library -->
     <EmptyState
-      v-else-if="!featuredLarge && feedSections.length === 0 && !searchQuery"
+      v-else-if="!heroVideo && feedSections.length === 0 && !searchQuery"
       data-testid="home-empty"
       title="Nothing here yet"
       :description="emptyLibraryCopy"
@@ -82,35 +91,44 @@
       </div>
     </div>
 
-    <!-- Netflix-style Home Feed -->
+    <!-- Home feed: the hero, then each row in the viewer's order -->
     <div v-else class="netflix-feed">
 
       <!-- Featured Bento Block -->
-      <div v-if="featuredLarge" class="featured-bento">
-        <div class="featured-large" @click="navigateTo(`/watch/${featuredLarge.id}`)">
-          <div class="hero-backdrop">
-            <img :src="featuredLarge.local_thumbnail_path || youtubeThumb(featuredLarge.id, 'hero')" @error="handleHeroError" class="hero-bg-img media-frame__media" alt="" width="1280" height="720" fetchpriority="high" decoding="async" />
-            <div class="hero-gradient-left"></div>
-            <div class="hero-gradient-bottom"></div>
-          </div>
+      <div v-if="heroVideo" class="featured-bento" :class="{ 'featured-bento--solo': featuredSmall.length === 0 }">
+        <div class="featured-large" data-testid="home-hero" @click="navigateTo(`/watch/${heroVideo.id}`)">
+          <MediaFrame
+            class="hero-backdrop"
+            kind="video"
+            :src="heroVideo.local_thumbnail_path || youtubeThumb(heroVideo.id, 'hero')"
+            :fallback="youtubeThumb(heroVideo.id)"
+            img-class="hero-bg-img"
+            width="1280"
+            height="720"
+            loading="eager"
+            fetchpriority="high"
+          />
+          <div class="hero-gradient-left"></div>
+          <div class="hero-gradient-bottom"></div>
           <div class="hero-content">
+            <span v-if="heroVideo.reason?.label" class="hero-reason">{{ heroVideo.reason.label }}</span>
             <div class="hero-channel-badge">
-              <img :src="featuredLarge.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
-              <span>{{ featuredLarge.channel_title }}</span>
+              <img :src="heroVideo.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
+              <span>{{ heroVideo.channel_title }}</span>
             </div>
-            <h1 class="hero-title">{{ featuredLarge.title }}</h1>
+            <h1 class="hero-title">{{ heroVideo.title }}</h1>
             <div class="hero-meta">
-              <span>{{ formatViews(featuredLarge.view_count) }} views</span>
+              <span>{{ formatViews(heroVideo.view_count) }} views</span>
               <span class="meta-dot">•</span>
-              <span>{{ formatUploadDate(featuredLarge.upload_date) }}</span>
+              <span>{{ formatUploadDate(heroVideo.upload_date) }}</span>
               <span class="meta-dot">•</span>
-              <span>{{ formatDuration(featuredLarge.duration) }}</span>
+              <span>{{ formatDuration(heroVideo.duration) }}</span>
             </div>
             <div class="hero-actions">
-              <button class="hero-play-btn" @click.stop="navigateTo(`/watch/${featuredLarge.id}`)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <NuxtLink :to="`/watch/${heroVideo.id}`" class="hero-play-btn" @click.stop>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                 Play
-              </button>
+              </NuxtLink>
             </div>
           </div>
         </div>
@@ -119,65 +137,19 @@
         </div>
       </div>
 
-      <!-- Content Discovery Rows (a simple rendering; the full home design is separate) -->
-      <template v-for="section in feedSections" :key="section.id">
-        <div v-if="section.videos" class="content-row" :data-testid="`home-row-${section.id}`">
-          <div class="row-header">
-            <h3 class="row-title">{{ section.title }}</h3>
-            <NuxtLink v-if="SEE_ALL[section.id]" :to="SEE_ALL[section.id]" class="see-all-link">See all →</NuxtLink>
-          </div>
-          <div class="scroll-row">
-            <div class="scroll-track">
-              <div v-for="video in section.videos" :key="video.id" class="scroll-card">
-                <VideoCard :video="video" @hidden="onVideoHidden" />
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- A guest gets the public rows only: say what signing in adds. -->
+      <div v-if="!auth.isLoggedIn.value" class="guest-hint" data-testid="home-guest-hint">
+        <span>Log in to continue watching, follow channels and get recommendations.</span>
+        <NuxtLink to="/login" class="btn btn-sm btn-primary">Log in</NuxtLink>
+      </div>
 
-        <template v-else-if="section.groups">
-          <div v-for="group in section.groups" :key="group.category" class="content-row" :data-testid="`home-row-${section.id}`">
-            <h3 class="row-title">{{ group.title }}</h3>
-            <div class="scroll-row">
-              <div class="scroll-track">
-                <div v-for="video in group.videos" :key="video.id" class="scroll-card">
-                  <VideoCard :video="video" @hidden="onVideoHidden" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <div v-else-if="section.playlists" class="content-row" :data-testid="`home-row-${section.id}`">
-          <div class="row-header">
-            <h3 class="row-title">{{ section.title }}</h3>
-            <NuxtLink to="/playlists" class="see-all-link">See all →</NuxtLink>
-          </div>
-          <div class="channels-row">
-            <NuxtLink v-for="pl in section.playlists" :key="pl.id" :to="`/playlists/${pl.id}`" class="search-channel-pill">
-              <div class="pill-info">
-                <span class="pill-name">{{ pl.title }}</span>
-                <span class="pill-count">{{ pl.video_count }} videos</span>
-              </div>
-            </NuxtLink>
-          </div>
-        </div>
-
-        <div v-else-if="section.channels" class="content-row" :data-testid="`home-row-${section.id}`">
-          <h3 class="row-title">{{ section.title }}</h3>
-          <div class="channels-row">
-            <NuxtLink v-for="channel in section.channels" :key="channel.id" :to="`/channels?channelId=${channel.id}`" class="search-channel-pill">
-              <img :src="channel.avatar_url || fallbackAvatar" @error="handleAvatarError" class="pill-avatar" alt="" />
-              <div class="pill-info">
-                <span class="pill-name">{{ channel.title }}</span>
-                <span class="pill-count">{{ channel.video_count }} videos</span>
-              </div>
-            </NuxtLink>
-          </div>
-        </div>
-
-        <HomeMediaRow v-else-if="section.tracks || section.episodes" :section="section" />
-      </template>
+      <HomeSection
+        v-for="section in feedSections"
+        :key="section.id"
+        :section="section"
+        :logged-in="auth.isLoggedIn.value"
+        @hidden="onVideoHidden"
+      />
 
     </div>
   </div>
@@ -191,6 +163,11 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 
 import { isHomeFullyHidden } from '~/utils/displayPrefs';
+import { MEDIA_HOME_SECTION_MODULE, type HomeSectionId } from '#shared/displayPrefs';
+import { HOME_SECTION_LABELS, isGuestHomeSection } from '~/utils/homeSectionLabels';
+import { prepareHomeSections } from '~/utils/homeFeed';
+import HomeRow from '~/components/home/HomeRow.vue';
+import HomeSection from '~/components/home/HomeSection.vue';
 
 const auth = useAuth();
 const { isAdmin } = auth;
@@ -247,7 +224,9 @@ const { data: homeFeedData, pending: homeFeedPending } = await useAsyncData<{
 } | null>(
   'home-feed',
   () => (inSearch.value ? Promise.resolve(null) : requestFetch<any>('/api/home/feed')),
-  { watch: [inSearch] }
+  // lazy: a client-side visit shows the skeleton rows at once instead of
+  // waiting on the old page (the server render still waits for the data).
+  { watch: [inSearch], lazy: true }
 );
 
 // Fetch channels for search
@@ -274,12 +253,41 @@ const emptyLibraryCopy = computed(() => (auth.isLoggedIn.value
   ? (isAdmin.value ? 'Your archive is empty. Add channels, music or podcasts in Settings.' : 'Nothing has been archived yet.')
   : 'Your archive is empty. Log in as administrator to add channels, music or podcasts.'));
 
-const featuredLarge = computed(() => homeFeedData.value?.featured?.large ?? null);
-const featuredSmall = computed(() => homeFeedData.value?.featured?.small ?? []);
-const feedSections = computed(() => homeFeedData.value?.sections ?? []);
+// Videos hidden from this page (the card menu's "Hide"). The feed data is a
+// shallow ref, so the rows are filtered through this set instead of mutated.
+const hiddenIds = ref<Set<string>>(new Set());
+const featuredLarge = computed(() => {
+  const large = homeFeedData.value?.featured?.large ?? null;
+  return large && !hiddenIds.value.has(large.id) ? large : null;
+});
+const featuredSmall = computed(() => (homeFeedData.value?.featured?.small ?? []).filter((v: any) => !hiddenIds.value.has(v.id)));
+const isGuest = computed(() => !auth.isLoggedIn.value);
 
-// Rows with a page that lists everything.
-const SEE_ALL: Record<string, string> = { subscriptions: '/subscriptions', shorts: '/shorts' };
+// The hero is the feed's featured video; without one (but with the featured
+// block on), the first "Recommended for you" video takes its place and leaves
+// that row.
+const heroFromForYou = computed(() => {
+  if (featuredLarge.value || !displayPrefs.value.homeHero || isGuest.value) return null;
+  const forYou = (homeFeedData.value?.sections ?? []).find((s: any) => s?.id === 'forYou');
+  return forYou?.videos?.find((v: any) => v && !v.is_short && !hiddenIds.value.has(v.id)) ?? null;
+});
+const heroVideo = computed(() => featuredLarge.value ?? heroFromForYou.value);
+const feedSections = computed(() => prepareHomeSections(homeFeedData.value?.sections, {
+  guest: isGuest.value,
+  heroId: heroFromForYou.value?.id ?? null,
+  hidden: hiddenIds.value,
+}));
+
+// While the feed loads: one skeleton row per row the viewer will get.
+const skeletonRows = computed(() => (displayPrefs.value.homeSections as HomeSectionId[])
+  .filter((id) => !isGuest.value || isGuestHomeSection(id))
+  .filter((id) => {
+    const module = MEDIA_HOME_SECTION_MODULE[id];
+    return !module || enabledModules.value.includes(module);
+  }));
+const SKELETON_VARIANT: Partial<Record<HomeSectionId, 'video' | 'short' | 'playlist' | 'channel' | 'media'>> = {
+  shorts: 'short', playlists: 'playlist', discoverChannels: 'channel', recentMusic: 'media', newEpisodes: 'media',
+};
 
 const changePage = (newPage: number) => {
   router.push({ path: '/', query: { ...route.query, page: newPage } });
@@ -291,27 +299,8 @@ const handleAvatarError = (event: Event) => {
   setImageFallback(event, fallbackAvatar);
 };
 
-const handleHeroError = (event: Event) => {
-  setImageFallback(event, youtubeThumb(featuredLarge.value?.id));
-};
-
 const onVideoHidden = (id: string) => {
-  if (homeFeedData.value) {
-    homeFeedData.value.featured.small = homeFeedData.value.featured.small.filter((v: any) => v.id !== id);
-    if (homeFeedData.value.featured.large?.id === id) {
-      homeFeedData.value.featured.large = null;
-    }
-    for (const section of homeFeedData.value.sections) {
-      if (section.videos) {
-        section.videos = section.videos.filter((v: any) => v.id !== id);
-      }
-      if (section.groups) {
-        for (const group of section.groups) {
-          group.videos = group.videos.filter((v: any) => v.id !== id);
-        }
-      }
-    }
-  }
+  hiddenIds.value = new Set([...hiddenIds.value, id]);
   allVideos.value = allVideos.value.filter(v => v.id !== id);
   searchShorts.value = searchShorts.value.filter(v => v.id !== id);
 };
@@ -407,16 +396,15 @@ const formatUploadDate = (dateStr: string | null): string => {
 .hero-backdrop {
   position: absolute;
   inset: 0;
-  overflow: hidden;
-  background: var(--media-placeholder, #15121d);
+  height: 100%;
 }
 
-.hero-bg-img {
+.featured-large :deep(.hero-bg-img) {
   filter: brightness(0.55);
   transition: transform 8s ease, filter 0.5s ease;
 }
 
-.featured-large:hover .hero-bg-img {
+.featured-large:hover :deep(.hero-bg-img) {
   transform: scale(1.03);
   filter: brightness(0.45);
 }
@@ -491,7 +479,19 @@ const formatUploadDate = (dateStr: string | null): string => {
   gap: 12px;
 }
 
+.hero-reason {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.3);
+  color: #e9d5ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .hero-play-btn {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -506,10 +506,22 @@ const formatUploadDate = (dateStr: string | null): string => {
   transition: all 0.2s ease;
 }
 
+.hero-play-btn:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 3px;
+}
+
 .hero-play-btn:hover {
   background: rgba(255, 255, 255, 0.85);
   transform: scale(1.03);
 }
+
+/* No small cards: the hero takes the whole width. */
+.featured-bento--solo {
+  grid-template-columns: 1fr;
+  min-height: 0;
+}
+.featured-bento--solo .featured-large { min-height: 360px; }
 
 .featured-small {
   min-height: 0;
@@ -553,18 +565,7 @@ const formatUploadDate = (dateStr: string | null): string => {
   .featured-large { height: 220px; }
 }
 
-/* ===== Content Rows ===== */
-.content-row {
-  margin-bottom: 32px;
-}
-
-.row-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-}
-
+/* ===== Search result titles ===== */
 .row-title {
   font-size: 18px;
   font-weight: 700;
@@ -573,64 +574,40 @@ const formatUploadDate = (dateStr: string | null): string => {
   letter-spacing: -0.01em;
 }
 
-.row-header .row-title {
-  margin-bottom: 0;
-}
-
-.see-all-link {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-primary);
-  text-decoration: none;
-  transition: color 0.2s;
-  white-space: nowrap;
-}
-
-.see-all-link:hover {
-  color: var(--accent-primary-hover);
-}
-
-/* ===== Horizontal Scroll ===== */
-.scroll-row {
-  position: relative;
-  width: calc(100% + 48px);
-  margin-left: -24px;
-  padding: 0 24px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-  -webkit-overflow-scrolling: touch;
-}
-
-.scroll-row::-webkit-scrollbar {
-  height: 6px;
-}
-
-.scroll-row::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.scroll-row::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-.scroll-track {
+/* ===== Guest hint ===== */
+.guest-hint {
   display: flex;
-  gap: 16px;
-  padding-bottom: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -8px 0 28px;
+  padding: 12px 16px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background: rgba(139, 92, 246, 0.07);
+  font-size: 13.5px;
+  color: var(--text-secondary);
 }
 
-.scroll-card {
-  flex: 0 0 calc(260px * var(--grid-min-scale, 1));
-  min-width: 0;
+/* ===== Loading skeleton ===== */
+.skeleton-block {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.09) 37%, rgba(255, 255, 255, 0.04) 63%);
+  background-size: 400% 100%;
+  animation: home-skeleton-pulse 1.6s ease-in-out infinite;
 }
-
-@media (max-width: 900px) {
-  .scroll-card {
-    flex: 0 0 calc(220px * var(--grid-min-scale, 1));
-  }
+.featured-bento--skeleton .featured-large { cursor: default; }
+.skeleton-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+}
+@keyframes home-skeleton-pulse {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; }
 }
 
 /* ===== Search Grid ===== */
