@@ -70,7 +70,7 @@ describe('ChannelSettingsDrawer', () => {
       route: { path: '/channels', query: { channelId: 'UC1' } },
     });
     await flushPromises();
-    await w.find('form').trigger('submit');
+    await w.find('[data-testid="channel-prefs-form"]').trigger('submit');
     await flushPromises();
     const put = fetchMock.mock.calls.find(([u, o]) => u === '/api/admin/channels/UC1/options' && o?.method === 'PUT')!;
     expect(put).toBeDefined();

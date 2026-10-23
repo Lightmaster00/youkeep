@@ -42,10 +42,20 @@
 
         <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); margin: 8px 0;" />
 
+        <!-- Categories -->
+        <ChannelCategoryEditor
+          :channel-id="channel.id"
+          :categories="channel.categories ?? []"
+          :override="channel.categories_override ?? null"
+          @saved="onCategoriesSaved"
+        />
+
+        <hr style="border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08); margin: 8px 0;" />
+
         <!-- Archiving Preferences -->
         <div style="display: flex; flex-direction: column; gap: 16px;">
           <h4 style="font-size: 14px; font-weight: 600; color: white; margin: 0;">Archiving Preferences</h4>
-          <form @submit.prevent="handleSavePreferences" style="display: flex; flex-direction: column; gap: 16px;">
+          <form data-testid="channel-prefs-form" @submit.prevent="handleSavePreferences" style="display: flex; flex-direction: column; gap: 16px;">
             <div style="display: flex; gap: 24px;">
               <!-- Toggle switch Videos -->
               <label class="toggle-switch">
@@ -107,6 +117,7 @@ import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { useChannelDetail } from '~/composables/useChannelDetail';
 import { useChannelsList } from '~/composables/useChannelsList';
+import ChannelCategoryEditor from '~/components/channels/ChannelCategoryEditor.vue';
 
 const props = defineProps<{ showDrawer: boolean }>();
 const emit = defineEmits<{ 'update:showDrawer': [value: boolean] }>();
@@ -183,6 +194,12 @@ watch(channel, (newVal) => {
     // date_after is deprecated
   }
 }, { immediate: true });
+
+function onCategoriesSaved() {
+  refreshSingleChannel();
+  // The directory's chip counts and filters use them too.
+  clearNuxtData(['channel-categories', 'channel-directory']);
+}
 
 const handleUpdateChannelVisibility = async (event: Event) => {
   const select = event.target as HTMLSelectElement;

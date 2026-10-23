@@ -416,6 +416,18 @@ onUnmounted(() => poller.stop());
   font-weight: 500;
 }
 
+.channels-page .channel-profile-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 600px) {
+  .channels-page .channel-profile-categories {
+    justify-content: center;
+  }
+}
+
 .channels-page .channel-profile-desc {
   font-size: 13px;
   color: var(--text-secondary);

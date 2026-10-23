@@ -23,7 +23,7 @@
     </NuxtLink>
     <div class="sub-card__footer">
       <span class="sub-card__chips">
-        <span v-for="cat in channel.categories" :key="cat" class="sub-card__chip">{{ cat }}</span>
+        <CategoryChip v-for="cat in channel.categories" :key="cat" :name="cat" />
       </span>
       <button
         type="button"
@@ -42,6 +42,7 @@ import { computed } from 'vue';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { relativeDay } from '~/utils/dayGroups';
 import type { SubscribedChannel } from '~/utils/subscriptionTypes';
+import CategoryChip from '~/components/channels/CategoryChip.vue';
 
 // A followed channel on the Channels tab of the Subscriptions page.
 const props = defineProps<{ channel: SubscribedChannel; busy?: boolean }>();
@@ -138,16 +139,6 @@ function onAvatarError(event: Event) {
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
-}
-
-.sub-card__chip {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(139, 92, 246, 0.12);
-  color: #c4b5fd;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
 }
 
 .sub-card__unsubscribe { flex-shrink: 0; }
