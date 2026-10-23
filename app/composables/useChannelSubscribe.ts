@@ -1,5 +1,6 @@
 import { ref, watch, type Ref } from 'vue';
 import { useToast } from '~/composables/useToast';
+import { apiErrorMessage } from '~/utils/apiError';
 
 /**
  * Optimistic Subscribe / Unsubscribe for one channel: the state flips at once
@@ -31,7 +32,7 @@ export function useChannelSubscribe(
       onChange?.(id, next);
     } catch (err: any) {
       subscribed.value = !next;
-      toast.error(err?.data?.statusMessage || (next ? t('channels.subscribeFailed') : t('channels.unsubscribeFailed')));
+      toast.error(apiErrorMessage(err, t, next ? 'channels.subscribeFailed' : 'channels.unsubscribeFailed'));
     } finally {
       busy.value = false;
     }

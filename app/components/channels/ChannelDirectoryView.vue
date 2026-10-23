@@ -131,6 +131,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
@@ -243,7 +244,7 @@ async function showMore() {
     const res = await $fetch<{ channels: any[] }>('/api/channels', { params: { ...listParams.value, page, limit: PAGE_SIZE } });
     if (request === moreRequest) morePages.value = [...morePages.value, ...(res?.channels ?? [])];
   } catch (err: any) {
-    if (request === moreRequest) toast.error(err?.data?.statusMessage || t('channels.loadMoreFailed'));
+    if (request === moreRequest) toast.error(apiErrorMessage(err, t, 'channels.loadMoreFailed'));
   } finally {
     if (request === moreRequest) loadingMore.value = false;
   }

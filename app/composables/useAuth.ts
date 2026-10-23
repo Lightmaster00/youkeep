@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import type { LanguageCode } from '#shared/languages';
+import { apiErrorMessage } from '~/utils/apiError';
 import { clearClientCaches } from '~/utils/clientCaches';
 import { clearUserClientState, readClientOwner, writeClientOwner } from '~/utils/userClientState';
 
@@ -50,11 +51,12 @@ export const useAuth = () => {
         user.value = response.user;
         return { success: true };
       }
-      return { success: false, message: 'Authentication failed' };
+      return { success: false, message: nuxtApp.$i18n.t('login.authFailed') };
     } catch (err: any) {
-      return { 
-        success: false, 
-        message: err.data?.statusMessage || 'Invalid username or password.' 
+      // Known server messages are shown in the UI language; no message at all reads as bad credentials.
+      return {
+        success: false,
+        message: apiErrorMessage(err, (key, params) => nuxtApp.$i18n.t(key, params ?? {}), 'errors.invalidCredentials')
       };
     }
   };

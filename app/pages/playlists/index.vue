@@ -126,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { ref } from 'vue';
 import { thumbUrl } from '~/utils/thumb';
 import { useAuth } from '~/composables/useAuth';
@@ -162,7 +163,7 @@ const fetchPlaylists = async () => {
     playlists.value = data.playlists || [];
   } catch (e: any) {
     // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
-    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || t('playlists.loadFailed'));
+    if (!isUnauthorizedError(e)) toast.error(apiErrorMessage(e, t, 'playlists.loadFailed'));
   } finally {
     pending.value = false;
   }
@@ -182,7 +183,7 @@ const handleCreatePlaylist = async () => {
     newPlaylist.value = { title: '', description: '', visibility: 'private' };
     await fetchPlaylists();
   } catch (e: any) {
-    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || t('playlists.createFailed'));
+    if (!isUnauthorizedError(e)) toast.error(apiErrorMessage(e, t, 'playlists.createFailed'));
   } finally {
     creating.value = false;
   }

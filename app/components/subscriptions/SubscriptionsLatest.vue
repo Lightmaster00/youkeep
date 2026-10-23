@@ -104,6 +104,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { computed, onMounted, ref, watch, type Directive } from 'vue';
 import { groupByUploadDay } from '~/utils/dayGroups';
 import { useSeenTracker } from '~/composables/useSeenTracker';
@@ -203,7 +204,7 @@ async function load() {
     shorts.value = [];
     total.value = 0;
     shortsTotal.value = 0;
-    loadError.value = err?.data?.statusMessage || t('subscriptions.loadFailed');
+    loadError.value = apiErrorMessage(err, t, 'subscriptions.loadFailed');
   } finally {
     if (id === requestId) pending.value = false;
   }
@@ -229,7 +230,7 @@ async function loadMore(type: 'video' | 'short') {
       shortsTotal.value = res?.total ?? shortsTotal.value;
     }
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('subscriptions.loadMoreFailed'));
+    toast.error(apiErrorMessage(err, t, 'subscriptions.loadMoreFailed'));
   } finally {
     busy.value = false;
   }
@@ -245,7 +246,7 @@ async function markAllSeen() {
     shorts.value = shorts.value.map((v) => (v.isNew ? { ...v, isNew: false } : v));
     emit('all-seen');
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('subscriptions.markFailed'));
+    toast.error(apiErrorMessage(err, t, 'subscriptions.markFailed'));
   } finally {
     markingAll.value = false;
   }

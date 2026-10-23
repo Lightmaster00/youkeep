@@ -32,7 +32,8 @@
     "loadMore": "Charger plus",
     "today": "Aujourd'hui",
     "yesterday": "Hier",
-    "historyCleared": "Historique effacé"
+    "historyCleared": "Historique effacé",
+    "confirm": "Confirmer"
   },
   "language": {
     "title": "Langue",
@@ -91,7 +92,8 @@
     "setupSubmit": "Configurer YouKeep",
     "passwordsMismatch": "Les mots de passe ne correspondent pas.",
     "setupFailed": "Échec de la configuration.",
-    "incorrect": "Identifiants incorrects."
+    "incorrect": "Identifiants incorrects.",
+    "authFailed": "Échec de l'authentification"
   },
   "error": {
     "home": "Accueil YouKeep",
@@ -839,5 +841,41 @@
       "rate": "{rate}×",
       "error": "Erreur de lecture de l'épisode."
     }
+  },
+  "errors": {
+    "generic": "Une erreur est survenue. Veuillez réessayer.",
+    "sessionExpired": "Votre session a expiré. Veuillez vous reconnecter.",
+    "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect.",
+    "credentialsRequired": "Le nom d'utilisateur et le mot de passe sont obligatoires.",
+    "credentialsTooLong": "Le nom d'utilisateur ou le mot de passe est trop long.",
+    "alreadySetUp": "Le profil administrateur a déjà été configuré.",
+    "tooManyLogins": "Trop de tentatives de connexion échouées. Réessayez dans {minutes} minute(s).",
+    "tooManyAttempts": "Trop de tentatives échouées. Réessayez dans {minutes} minute(s).",
+    "notWithToken": "Indisponible avec un jeton d'API.",
+    "tokenReadOnly": "Ce jeton d'API est en lecture seule.",
+    "unauthorized": "Non autorisé. Veuillez vous connecter.",
+    "currentPasswordRequired": "Le mot de passe actuel est obligatoire.",
+    "currentPasswordIncorrect": "Le mot de passe actuel est incorrect.",
+    "chooseDifferentPassword": "Choisissez un autre mot de passe.",
+    "invalidEmail": "Format d'adresse e-mail invalide.",
+    "invalidPhone": "Format de numéro de téléphone invalide.",
+    "invalidDob": "Format de date de naissance invalide (AAAA-MM-JJ attendu).",
+    "usernameChars": "Le nom d'utilisateur ne peut contenir que des lettres, des chiffres, des espaces et . _ {'@'} -",
+    "usernameLength": "Le nom d'utilisateur doit contenir entre 1 et {max} caractères.",
+    "tokenLabelLength": "Le nom doit contenir entre 1 et 100 caractères.",
+    "tokenNotFound": "Jeton introuvable.",
+    "playlistNotFound": "Playlist introuvable.",
+    "videoNotFound": "Vidéo introuvable.",
+    "trackNotFound": "Titre introuvable.",
+    "playlistNoEdit": "Vous n'avez pas la permission de modifier cette playlist.",
+    "playlistNoDelete": "Vous n'avez pas la permission de supprimer cette playlist.",
+    "playlistLimit": "Vous pouvez avoir {max} playlists au maximum.",
+    "playlistTracksLimit": "Une playlist contient {max} titres au maximum.",
+    "titleRequired": "Un titre est obligatoire.",
+    "titleTooLong": "Le titre ne peut pas dépasser {max} caractères.",
+    "descriptionTooLong": "La description ne peut pas dépasser {max} caractères.",
+    "reasonRequired": "Indiquez quel est le problème.",
+    "reasonTooLong": "Le motif ne peut pas dépasser {max} caractères.",
+    "tooManyReports": "Trop de signalements. Réessayez plus tard."
   }
 }

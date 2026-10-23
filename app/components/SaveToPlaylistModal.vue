@@ -57,6 +57,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 // "Save to playlist" for one video: only the signed-in user's OWN playlists
 // (the list endpoint also returns other users' public playlists, which a
 // member may view but never edit).
@@ -130,7 +131,7 @@ async function toggle(pl: any, checked: boolean, event?: Event) {
     pl.contains_video = checked ? 1 : 0;
     toast.success(checked ? t('savePlaylist.added', { title: pl.title }) : t('savePlaylist.removed', { title: pl.title }));
   } catch (err: any) {
-    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || t('savePlaylist.updateFailed'));
+    if (!isUnauthorizedError(err)) toast.error(apiErrorMessage(err, t, 'savePlaylist.updateFailed'));
     if (event) (event.target as HTMLInputElement).checked = !checked;
   } finally {
     busyId.value = '';
@@ -162,7 +163,7 @@ async function create() {
     newVisibility.value = 'private';
     showForm.value = false;
   } catch (err: any) {
-    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || t('savePlaylist.createFailed'));
+    if (!isUnauthorizedError(err)) toast.error(apiErrorMessage(err, t, 'savePlaylist.createFailed'));
   } finally {
     creating.value = false;
   }

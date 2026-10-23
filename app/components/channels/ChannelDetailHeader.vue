@@ -83,6 +83,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { cssUrl } from '~/utils/cssUrl';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { ref, watch } from 'vue';
@@ -125,7 +126,7 @@ const handleToggleSubscription = async () => {
     subscribed.value = !subscribed.value;
     toast.success(subscribed.value ? t('channels.subscriptionSaved') : t('channels.subscriptionRemoved'));
   } catch (err: any) {
-    toast.error(err.data?.statusMessage || t('channels.actionFailed'));
+    toast.error(apiErrorMessage(err, t, 'channels.actionFailed'));
   }
 };
 

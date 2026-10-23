@@ -122,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from '~/composables/useToast';
@@ -198,7 +199,7 @@ async function saveEdit() {
     playlist.value = { ...playlist.value, title: updated.title, description: updated.description };
     editing.value = false;
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('music.playlist.saveFailed'));
+    toast.error(apiErrorMessage(err, t, 'music.playlist.saveFailed'));
   } finally {
     saving.value = false;
   }
@@ -216,7 +217,7 @@ async function move(index: number, delta: number) {
     await $fetch(`${base()}/order`, { method: 'PUT', body: { trackIds: next.map((t) => t.id) } });
   } catch (err: any) {
     tracks.value = previous;
-    toast.error(err?.data?.statusMessage || t('music.playlist.reorderFailed'));
+    toast.error(apiErrorMessage(err, t, 'music.playlist.reorderFailed'));
   } finally {
     reordering.value = false;
   }
@@ -231,7 +232,7 @@ async function removeTrack(track: any) {
     await $fetch(`${base()}/tracks/${encodeURIComponent(track.id)}`, { method: 'DELETE' });
   } catch (err: any) {
     tracks.value = previous;
-    toast.error(err?.data?.statusMessage || t('music.playlist.removeFailed'));
+    toast.error(apiErrorMessage(err, t, 'music.playlist.removeFailed'));
   } finally {
     reordering.value = false;
   }
@@ -246,7 +247,7 @@ async function deletePlaylist() {
     confirmingDelete.value = false;
     await router.push('/music/playlists');
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('music.playlist.deleteFailed'));
+    toast.error(apiErrorMessage(err, t, 'music.playlist.deleteFailed'));
   } finally {
     deleting.value = false;
   }

@@ -28,7 +28,8 @@ export function confirmAction(opts: { title: string; message: string; confirmLab
     pendingConfirm.value = {
       title: opts.title,
       message: opts.message,
-      confirmLabel: opts.confirmLabel || 'Confirm',
+      // Empty: ConfirmHost words the default in the UI language.
+      confirmLabel: opts.confirmLabel || '',
       resolve,
     };
   });

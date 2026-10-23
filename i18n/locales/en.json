@@ -32,7 +32,8 @@
     "loadMore": "Load more",
     "today": "Today",
     "yesterday": "Yesterday",
-    "historyCleared": "History cleared"
+    "historyCleared": "History cleared",
+    "confirm": "Confirm"
   },
   "language": {
     "title": "Language",
@@ -91,7 +92,8 @@
     "setupSubmit": "Setup YouKeep",
     "passwordsMismatch": "Passwords do not match.",
     "setupFailed": "Setup failed.",
-    "incorrect": "Incorrect credentials."
+    "incorrect": "Incorrect credentials.",
+    "authFailed": "Authentication failed"
   },
   "error": {
     "home": "YouKeep home",
@@ -839,5 +841,41 @@
       "rate": "{rate}x",
       "error": "Error playing the episode."
     }
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "sessionExpired": "Your session expired. Please log in again.",
+    "invalidCredentials": "Invalid username or password.",
+    "credentialsRequired": "Username and password are required.",
+    "credentialsTooLong": "Username or password is too long.",
+    "alreadySetUp": "The admin profile has already been set up.",
+    "tooManyLogins": "Too many failed login attempts. Try again in {minutes} minute(s).",
+    "tooManyAttempts": "Too many failed attempts. Try again in {minutes} minute(s).",
+    "notWithToken": "Not available with an API token.",
+    "tokenReadOnly": "This API token is read-only.",
+    "unauthorized": "Unauthorized. Please log in.",
+    "currentPasswordRequired": "Current password is required.",
+    "currentPasswordIncorrect": "Current password is incorrect.",
+    "chooseDifferentPassword": "Choose a different password.",
+    "invalidEmail": "Invalid email address format.",
+    "invalidPhone": "Invalid phone number format.",
+    "invalidDob": "Invalid date of birth format (must be YYYY-MM-DD).",
+    "usernameChars": "Username may only contain letters, digits, spaces and . _ {'@'} -",
+    "usernameLength": "Username must be between 1 and {max} characters.",
+    "tokenLabelLength": "Label must be between 1 and 100 characters.",
+    "tokenNotFound": "Token not found.",
+    "playlistNotFound": "Playlist not found.",
+    "videoNotFound": "Video not found.",
+    "trackNotFound": "Track not found.",
+    "playlistNoEdit": "You do not have permission to edit this playlist.",
+    "playlistNoDelete": "You do not have permission to delete this playlist.",
+    "playlistLimit": "You can have at most {max} playlists.",
+    "playlistTracksLimit": "A playlist holds at most {max} tracks.",
+    "titleRequired": "A title is required.",
+    "titleTooLong": "The title must be at most {max} characters.",
+    "descriptionTooLong": "The description must be at most {max} characters.",
+    "reasonRequired": "Please say what is wrong.",
+    "reasonTooLong": "The reason must be at most {max} characters.",
+    "tooManyReports": "Too many reports. Try again later."
   }
 }

@@ -348,6 +348,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
@@ -445,7 +446,7 @@ const errorStatus = computed(() => (error.value as any)?.statusCode ?? (error.va
 const errorMsg = computed(() => {
   if (error.value) {
     const e = error.value as any;
-    return e.data?.statusMessage || e.message;
+    return apiErrorMessage(e, t, 'watch.loadErrorDesc');
   }
   return '';
 });

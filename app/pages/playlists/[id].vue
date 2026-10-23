@@ -186,6 +186,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
@@ -228,7 +229,7 @@ const fetchPlaylistDetails = async () => {
     playlist.value = data.playlist;
     videos.value = data.videos || [];
   } catch (e: any) {
-    error.value = e.statusMessage || t('playlists.detail.loadFailed');
+    error.value = apiErrorMessage(e, t, 'playlists.detail.loadFailed');
     // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
     if (!isUnauthorizedError(e)) toast.error(error.value || t('playlists.detail.loadFailedToast'));
   } finally {

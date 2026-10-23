@@ -11,8 +11,6 @@ const EXCLUDED_PATHS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth
 
 const PUBLIC_PATHS = new Set(['/login', '/', '/channels', '/shorts']);
 
-export const SESSION_EXPIRED_MESSAGE = 'Your session expired. Please log in again.';
-
 /** Pages a guest may open (the auth middleware lets them through). */
 export function isPublicRoute(path: string, query: Record<string, unknown> = {}): boolean {
   // A personal playlist opened from its share link (?token=...) is readable by

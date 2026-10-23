@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '~/utils/apiError';
 import { copyToClipboard } from '~/utils/clipboard';
 
 // Who may share a video, and with which link (R10): an admin gets the share
@@ -33,7 +34,7 @@ export async function shareVideoLink(
   try {
     url = await videoShareUrl(video, isAdmin);
   } catch (err: any) {
-    return { ok: false, message: err?.data?.statusMessage || t('common.shareLinkFailed') };
+    return { ok: false, message: apiErrorMessage(err, t, 'common.shareLinkFailed') };
   }
   const result = await copyToClipboard(url);
   return { ok: true, message: result === 'copied' ? t('common.shareLinkCopied') : null };

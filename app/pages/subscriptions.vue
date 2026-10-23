@@ -96,6 +96,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import HomeChannelCard from '~/components/home/HomeChannelCard.vue';
@@ -173,7 +174,7 @@ async function loadChannels() {
     const res = await $fetch<{ channels: SubscribedChannel[] }>('/api/subscriptions/channels');
     channels.value = res?.channels ?? [];
   } catch (err: any) {
-    channelsError.value = err?.data?.statusMessage || t('subscriptions.loadFailed');
+    channelsError.value = apiErrorMessage(err, t, 'subscriptions.loadFailed');
   } finally {
     channelsPending.value = false;
   }
@@ -219,7 +220,7 @@ async function unsubscribe(channel: SubscribedChannel) {
     toast.success(t('subscriptions.unsubscribed', { title: channel.title }));
     if (channels.value.length === 0) await loadSuggestions();
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('subscriptions.unsubscribeFailed'));
+    toast.error(apiErrorMessage(err, t, 'subscriptions.unsubscribeFailed'));
   } finally {
     unsubscribing.value = null;
   }

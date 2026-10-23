@@ -60,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { ref, computed, nextTick, onMounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { PLAYLIST_TITLE_MAX, PLAYLIST_DESCRIPTION_MAX } from '#shared/musicPlaylists';
@@ -116,7 +117,7 @@ async function create() {
     toast.success(t('music.userPlaylists.created', { title: created.title }));
     closeForm();
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('music.userPlaylists.createFailed'));
+    toast.error(apiErrorMessage(err, t, 'music.userPlaylists.createFailed'));
   } finally {
     creating.value = false;
   }

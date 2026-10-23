@@ -71,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { ref, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { safeRedirectPath } from '~/utils/safeRedirect';
@@ -141,7 +142,7 @@ const handleSetup = async () => {
       navigateTo(afterLogin());
     }
   } catch (err: any) {
-    errorMessage.value = err.data?.statusMessage || t('login.setupFailed');
+    errorMessage.value = apiErrorMessage(err, t, 'login.setupFailed');
   } finally {
     loadingSubmit.value = false;
   }

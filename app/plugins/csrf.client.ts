@@ -1,6 +1,6 @@
 import { watch } from 'vue';
 import { readCsrfToken, withCsrfHeader } from '~/utils/csrfFetch';
-import { createSessionExpiryHandler, SESSION_EXPIRED_MESSAGE } from '~/utils/sessionExpiry';
+import { createSessionExpiryHandler } from '~/utils/sessionExpiry';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 
@@ -28,7 +28,8 @@ export default defineNuxtPlugin((nuxtApp) => {
     },
     expire: (target) => {
       auth.user.value = null;
-      toast.error(SESSION_EXPIRED_MESSAGE, 6000);
+      // The instance is read when the toast fires, so it follows the current UI language.
+      toast.error(nuxtApp.$i18n.t('errors.sessionExpired'), 6000);
       nuxtApp.runWithContext(() => navigateTo(target));
     },
   });

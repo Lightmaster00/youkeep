@@ -26,6 +26,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 // Report a video to the admins (POST /api/videos/:id/report). Signed-in
 // users only; the server keeps one report per user and video.
 import { ref, watch, nextTick } from 'vue';
@@ -68,7 +69,7 @@ async function submit() {
     sending.value = false;
     emit('close');
   } catch (err: any) {
-    errorMessage.value = err?.data?.statusMessage || t('report.failed');
+    errorMessage.value = apiErrorMessage(err, t, 'report.failed');
     sending.value = false;
   }
 }

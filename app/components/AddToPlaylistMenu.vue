@@ -71,6 +71,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { ref, nextTick, onBeforeUnmount } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
@@ -198,7 +199,7 @@ async function togglePlaylist(p: PlaylistEntry) {
     toast.success(had ? t('addToPlaylist.removed', { title: p.title }) : t('addToPlaylist.added', { title: p.title }));
   } catch (err: any) {
     p.containsTrack = had;
-    toast.error(err?.data?.statusMessage || (had ? t('addToPlaylist.removeFailed') : t('addToPlaylist.addFailed')));
+    toast.error(apiErrorMessage(err, t, had ? 'addToPlaylist.removeFailed' : 'addToPlaylist.addFailed'));
   } finally {
     const done = new Set(pendingIds.value);
     done.delete(p.id);
@@ -217,7 +218,7 @@ async function createAndAdd() {
     newTitle.value = '';
     await togglePlaylist(playlists.value[0]!);
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || t('addToPlaylist.createFailed'));
+    toast.error(apiErrorMessage(err, t, 'addToPlaylist.createFailed'));
   } finally {
     creating.value = false;
   }

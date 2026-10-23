@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { uiLiteralHits } from '../helpers/uiLiterals';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -45,95 +46,47 @@ describe('i18n catalogues', () => {
   });
 });
 
-// Hard-coded text guard: migrated files must take every visible string from the catalogue.
-const MIGRATED = [
-  'app/layouts/default.vue',
-  'app/components/SidebarPanels.vue',
-  'app/pages/login.vue',
-  'app/pages/account.vue',
-  'app/error.vue',
-  'app/components/LanguageSelect.vue',
-  // Video discovery (batch A). The admin-only ChannelCategoryEditor, ChannelSettingsDrawer and
-  // ChannelStatsPanel stay English on purpose (see englishOnly.test.ts) and are not listed.
-  'app/pages/index.vue',
-  'app/pages/subscriptions.vue',
-  'app/pages/channels.vue',
-  'app/pages/search.vue',
-  'app/components/home/HomeChannelCard.vue',
-  'app/components/home/HomePlaylistCard.vue',
-  'app/components/home/HomeRow.vue',
-  'app/components/home/HomeSection.vue',
-  'app/components/HomeMediaRow.vue',
-  'app/components/VideoCard.vue',
-  'app/components/MediaFrame.vue',
-  'app/components/DiscoverRow.vue',
-  'app/components/EmptyState.vue',
-  'app/components/subscriptions/SubscriptionsChannelCard.vue',
-  'app/components/subscriptions/SubscriptionsChipBar.vue',
-  'app/components/subscriptions/SubscriptionsLatest.vue',
-  'app/components/channels/CategoryChip.vue',
-  'app/components/channels/CategoryChipBar.vue',
-  'app/components/channels/ChannelDetailHeader.vue',
-  'app/components/channels/ChannelDirectoryCard.vue',
-  'app/components/channels/ChannelDirectoryView.vue',
-  'app/components/channels/ChannelPlaylistsTab.vue',
-  'app/components/channels/ChannelVideoGrid.vue',
-  // Watch, playlists and Shorts (batch B).
-  'app/pages/watch/[id].vue',
-  'app/pages/playlists/index.vue',
-  'app/pages/playlists/[id].vue',
-  'app/pages/shorts.vue',
-  'app/components/VideoPlayer.vue',
-  'app/components/VideoDropdownMenu.vue',
-  'app/components/SaveToPlaylistModal.vue',
-  'app/components/AddToPlaylistMenu.vue',
-  'app/components/ReportVideoModal.vue',
-  'app/components/PlaylistCoverMosaic.vue',
-  'app/components/BaseModal.vue',
-  'app/components/ClipboardFallbackHost.vue',
-  // Music (batch C). The admin-only MusicTrackEditModal and MusicAlbumEditModal (they save through
-  // /api/admin routes) stay English on purpose (see englishOnly.test.ts) and are not listed.
-  'app/pages/music/index.vue',
-  'app/pages/music/discover.vue',
-  'app/pages/music/liked.vue',
-  'app/pages/music/recent.vue',
-  'app/pages/music/history.vue',
-  'app/pages/music/genre/[name].vue',
-  'app/pages/music/album/[id].vue',
-  'app/pages/music/playlists/index.vue',
-  'app/pages/music/playlists/[id].vue',
-  'app/components/MusicMiniPlayer.vue',
-  'app/components/MusicArtistPage.vue',
-  'app/components/MusicArtistHeader.vue',
-  'app/components/MusicArtistOverview.vue',
-  'app/components/MusicArtistSongs.vue',
-  'app/components/MusicArtistTile.vue',
-  'app/components/MusicTrackList.vue',
-  'app/components/MusicTrackCard.vue',
-  'app/components/MusicTrackActions.vue',
-  'app/components/MusicTrackExtras.vue',
-  'app/components/MusicAlbumTile.vue',
-  'app/components/MusicCollectionHeader.vue',
-  'app/components/MusicMixTile.vue',
-  'app/components/MusicGenreTile.vue',
-  'app/components/TrackLikeButton.vue',
-  // Podcasts (batch D). The admin-only PodcastEpisodeEditModal (it saves through /api/admin routes)
-  // stays English on purpose (see englishOnly.test.ts) and is not listed.
-  'app/pages/podcasts/index.vue',
-  'app/pages/podcasts/discover.vue',
-  'app/pages/podcasts/subscribed.vue',
-  'app/pages/podcasts/recent.vue',
-  'app/pages/podcasts/history.vue',
-  'app/components/PodcastContinueRow.vue',
-  'app/components/PodcastEpisodeCard.vue',
-  'app/components/PodcastEpisodeMenu.vue',
-  'app/components/PodcastEpisodeProgress.vue',
-  'app/components/PodcastEpisodeRow.vue',
-  'app/components/PodcastLanguageChips.vue',
-  'app/components/PodcastMiniPlayer.vue',
-  'app/components/PodcastShowCard.vue',
-  'app/components/ShowFollowButton.vue',
+// Hard-coded text guard: every non-admin file under app/ must take its visible words from the
+// catalogue. The scan covers ALL of app/ except the admin files below (they stay English on
+// purpose, see englishOnly.test.ts), so a new file is checked without anyone remembering to list it.
+function filesUnder(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) return filesUnder(full);
+    return /\.(vue|ts)$/.test(name) ? [full] : [];
+  });
+}
+
+const ADMIN_PREFIXES = [
+  // englishOnly.test.ts: 'settings components and pages'
+  'app/components/settings/',
+  'app/pages/settings.vue',
+  'app/pages/admin/',
+  'app/components/DisplayPrefsForm.vue',
 ];
+const ADMIN_FILES = new Set([
+  // englishOnly.test.ts: 'admin copy in shared utils/composables'
+  'app/utils/librarySources.ts',
+  'app/utils/allDownloads.ts',
+  'app/utils/schedulePresets.ts',
+  'app/utils/settingsTabs.ts',
+  'app/composables/useAllDownloads.ts',
+  'app/composables/useActiveCounts.ts',
+  // Used only by admin screens (Settings > Library auto-sync, the downloads queue, the admin channel list).
+  'app/utils/syncStatus.ts',
+  'app/composables/useDownloadsQueue.ts',
+  'app/composables/useAdminChannels.ts',
+  // Admin-only editors and panels: they save through /api/admin routes.
+  'app/components/channels/ChannelCategoryEditor.vue',
+  'app/components/channels/ChannelSettingsDrawer.vue',
+  'app/components/channels/ChannelStatsPanel.vue',
+  'app/components/MusicTrackEditModal.vue',
+  'app/components/MusicAlbumEditModal.vue',
+  'app/components/PodcastEpisodeEditModal.vue',
+]);
+const isAdminFile = (rel: string) => ADMIN_FILES.has(rel) || ADMIN_PREFIXES.some(p => rel.startsWith(p));
+
+const SCANNED = filesUnder(join(ROOT, 'app')).map(f => relative(ROOT, f)).filter(f => !isAdminFile(f)).sort();
 
 export function templateOf(source: string): string {
   const m = source.match(/<template>[\s\S]*<\/template>/);
@@ -150,6 +103,8 @@ export function templateOf(source: string): string {
 const LITERAL_ALLOWLIST: Array<{ file: string; attr: string; reason: string }> = [
   { file: 'app/pages/login.vue', attr: 'placeholder="admin"', reason: 'example username, not a sentence' },
   { file: 'app/pages/account.vue', attr: 'placeholder="name@example.com"', reason: 'example e-mail address format' },
+  { file: 'app/components/AppLogo.vue', attr: 'text "You"', reason: 'brand name YouKeep, split for styling' },
+  { file: 'app/components/AppLogo.vue', attr: 'text "Keep"', reason: 'brand name YouKeep, split for styling' },
   // Admin-only controls inside shared pages: the admin side stays English (englishOnly.test.ts).
   { file: 'app/components/channels/ChannelDetailHeader.vue', attr: 'text "Tracking options"', reason: 'admin-only button' },
   { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Copy share link"', reason: 'admin-only thumbnail action' },
@@ -182,9 +137,125 @@ describe('no hard-coded text in migrated files', () => {
     expect(hardCodedText('<template><input :placeholder="t(\'x\')"><b>{{ t(\'y\') }}</b></template>')).toHaveLength(0);
   });
 
-  it.each(MIGRATED)('%s', (file) => {
+  it('scans the whole non-admin app (and not the admin files)', () => {
+    expect(SCANNED.length).toBeGreaterThan(120);
+    expect(SCANNED).toContain('app/pages/login.vue');
+    expect(SCANNED).toContain('app/composables/useAuth.ts');
+    expect(SCANNED).not.toContain('app/pages/settings.vue');
+    expect(SCANNED).not.toContain('app/components/settings/DownloadsTab.vue');
+  });
+
+  it.each(SCANNED.filter(f => f.endsWith('.vue')))('%s has no hard-coded template text', (file) => {
     const allowed = LITERAL_ALLOWLIST.filter(a => a.file === file).map(a => a.attr);
     const hits = hardCodedText(readFileSync(join(ROOT, file), 'utf8')).filter(h => !allowed.includes(h));
     expect(hits, `hard-coded text in ${file}: ${hits.join('; ')}`).toEqual([]);
+  });
+});
+
+// String literals bound in templates or written in scripts that read as English UI text.
+// Each entry names the exact literal; add one only with a reason (non-UI string, admin-only
+// control in a shared file, English default that callers override through the catalogue).
+const BOUND_LITERAL_ALLOWLIST: Array<{ file: string; text: string; reason: string }> = [
+  { file: 'app/app.vue', text: 'YouKeep', reason: 'brand name, never translated' },
+  { file: 'app/components/VideoPlayer.vue', text: "YouKeep", reason: 'brand name used as the media-session artist, never translated' },
+  { file: 'app/components/MusicTrackExtras.vue', text: "Downloading the clip\u2026", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/MusicTrackExtras.vue', text: "Download clip", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/MusicTrackExtras.vue', text: "Downloading the clip", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/MusicTrackExtras.vue', text: "Clip download started \u2014 reload the page in a few minutes to see the badge.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/MusicTrackExtras.vue', text: "Failed to start the clip download.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/PodcastShowCard.vue', text: "Public", reason: 'visibility badge shown to admins only (showVisibility / isAdmin)' },
+  { file: 'app/components/PodcastShowCard.vue', text: "Private", reason: 'visibility badge shown to admins only (showVisibility / isAdmin)' },
+  { file: 'app/components/PodcastShowCard.vue', text: "Ultra Private", reason: 'visibility badge shown to admins only (showVisibility / isAdmin)' },
+  { file: 'app/pages/podcasts/index.vue', text: "Public", reason: 'visibility badge shown to admins only (showVisibility / isAdmin)' },
+  { file: 'app/pages/podcasts/index.vue', text: "Private", reason: 'visibility badge shown to admins only (showVisibility / isAdmin)' },
+  { file: 'app/pages/podcasts/index.vue', text: "Ultra Private", reason: 'visibility badge shown to admins only (showVisibility / isAdmin)' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Sync Active", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Sync Paused", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Pause Sync", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Resume Sync", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Initial video search...", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Empty or unsynced channel", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "YouKeep is querying YouTube to retrieve the list of videos for this channel. Please wait.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "No videos have been discovered for this channel yet. YouKeep will automatically launch a search in the background to synchronize the list.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Sync resumed.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Sync paused.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Action failed.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Channel update completed.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDetailHeader.vue', text: "Failed to search videos.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelDirectoryView.vue', text: "Add a channel", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelPlaylistsTab.vue', text: "Sync Playlists", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelPlaylistsTab.vue', text: "Playlist sync started.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelPlaylistsTab.vue', text: "Failed to start playlist sync.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Start initial sync", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Video visibility updated.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Update failed.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Delete video?", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Permanently delete the video \"{}\"? The local file will be deleted.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Delete video", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Video deleted.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Deletion failed.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Synchronization started.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Synchronization paused.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', text: "Action failed.", reason: 'admin-only control in a shared file (it calls /api/admin routes); the admin side stays English' },
+  { file: 'app/spaces/index.ts', text: "Video", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Home", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Shorts", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Channels", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Subscriptions", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Playlists", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Music", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Library", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Discover", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Liked songs", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Recent", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "History", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Podcasts", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/spaces/index.ts', text: "Subscribed", reason: 'English text kept for non-Vue code next to labelKey; the UI renders t(labelKey)' },
+  { file: 'app/utils/dayGroups.ts', text: "This week", reason: 'English default of a helper; the pages pass the catalogue words in' },
+  { file: 'app/utils/historyDays.ts', text: "Today", reason: 'English default of a helper; the pages pass the catalogue words in' },
+  { file: 'app/utils/historyDays.ts', text: "Yesterday", reason: 'English default of a helper; the pages pass the catalogue words in' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Continue watching", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "From your subscriptions", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Recommended for you", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Because you watched", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Browse by category", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Your playlists", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Channels to discover", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "Recently added music", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/homeSectionLabels.ts', text: "New podcast episodes", reason: 'English names for the admin Display preferences form; the home page words rows through the catalogue' },
+  { file: 'app/utils/musicVisibilityBadge.ts', text: "Ultra Private", reason: 'visibility badge shown to admins only' },
+  { file: 'app/utils/musicVisibilityBadge.ts', text: "Public", reason: 'visibility badge shown to admins only' },
+  { file: 'app/utils/musicVisibilityBadge.ts', text: "Private", reason: 'visibility badge shown to admins only' },
+  { file: 'app/utils/passwordRules.ts', text: "Password must be at least {} characters long.", reason: 'English text of passwordProblem(), used by the admin users tab; account.vue uses passwordProblemKey' },
+  { file: 'app/utils/passwordRules.ts', text: "Password is too long: at most {} bytes (fewer characters if you use accents or emoji).", reason: 'English text of passwordProblem(), used by the admin users tab; account.vue uses passwordProblemKey' },
+];
+
+// Files that hold English on purpose, as a whole.
+const WHOLE_FILE_ALLOWLIST: Array<{ file: string; reason: string }> = [
+  { file: 'app/utils/apiError.ts', reason: 'the English server messages it recognises and maps to catalogue keys; none is displayed as is' },
+];
+
+export function boundLiteralHits(file: string, source: string): string[] {
+  if (WHOLE_FILE_ALLOWLIST.some(a => a.file === file)) return [];
+  const allowed = BOUND_LITERAL_ALLOWLIST.filter(a => a.file === file).map(a => a.text);
+  return uiLiteralHits(source, file.endsWith('.vue')).filter(h => !allowed.includes(h.replace(/^line \d+: "(.*)"$/, '$1')));
+}
+
+describe('no English literals bound in templates or scripts', () => {
+  it('the guard itself detects bound literals (self-test)', () => {
+    const vue = (tpl: string, script = '') => `<template>${tpl}</template>\n<script setup lang="ts">\n${script}\n</script>`;
+    expect(boundLiteralHits('x.vue', vue('<UiButton :label="\'Foo bar\'" />'))).toHaveLength(1);
+    expect(boundLiteralHits('x.vue', vue('<p>{{ ok ? \'Saved\' : \'Not saved\' }}</p>'))).toHaveLength(2);
+    expect(boundLiteralHits('x.vue', vue('', "toast.error('Something failed');"))).toHaveLength(1);
+    expect(boundLiteralHits('x.vue', vue('', "const o = { message: 'Nope' };"))).toHaveLength(1);
+    expect(boundLiteralHits('x.ts', "export const x = { title: 'Delete this?' };")).toHaveLength(1);
+    // Not UI text: keys, classes, routes, events, console and error messages, comments.
+    expect(boundLiteralHits('x.vue', vue('<div :class="[\'btn btn-primary\', { on: a }]" :title="t(\'a.b\')" @click="emit(\'close\')" />', "navigateTo('/login'); console.error('Logout error:', e); // 'Hello there friend'"))).toEqual([]);
+    expect(boundLiteralHits('x.ts', "throw new Error('Something went wrong here'); const k = 'user_prefs';")).toEqual([]);
+  });
+
+  it.each(SCANNED)('%s', (file) => {
+    const hits = boundLiteralHits(file, readFileSync(join(ROOT, file), 'utf8'));
+    expect(hits, `English UI literal in ${file}: ${hits.join('; ')}`).toEqual([]);
   });
 });

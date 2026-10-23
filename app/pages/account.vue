@@ -250,6 +250,7 @@
 </template>
 
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/apiError';
 import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { ref, reactive, computed, onMounted } from 'vue';
@@ -304,7 +305,7 @@ const handleSavePersonalInfo = async () => {
     profileMessage.value = t('account.profileSaved');
   } catch (err: any) {
     profileSuccess.value = false;
-    profileMessage.value = err.data?.statusMessage || t('account.profileSaveFailed');
+    profileMessage.value = apiErrorMessage(err, t, 'account.profileSaveFailed');
   } finally {
     savingProfile.value = false;
   }
@@ -362,7 +363,7 @@ const handleChangeOwnPassword = async () => {
       fetchApiTokens();
     }
   } catch (err: any) {
-    failPassword(err.data?.statusMessage || t('account.passwordChangeFailed'));
+    failPassword(apiErrorMessage(err, t, 'account.passwordChangeFailed'));
   } finally {
     savingOwnPassword.value = false;
   }
@@ -417,7 +418,7 @@ const handleCreateToken = async () => {
     await fetchApiTokens();
   } catch (err: any) {
     tokenSuccess.value = false;
-    tokenMessage.value = err.data?.statusMessage || t('account.tokenCreateFailed');
+    tokenMessage.value = apiErrorMessage(err, t, 'account.tokenCreateFailed');
   } finally {
     creatingToken.value = false;
   }
