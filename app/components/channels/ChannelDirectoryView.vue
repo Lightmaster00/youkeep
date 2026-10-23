@@ -281,6 +281,9 @@ watch(firstPage, () => subscriptionChanges.clear());
   gap: 16px;
   min-width: 0;
 }
+/* The page is a column inside a fixed-height scroller: no row may shrink
+   (the chip bar, an overflow-x scroller, was squashed to a few pixels). */
+.channel-directory-view > * { flex-shrink: 0; }
 
 .dir-head {
   display: flex;
@@ -337,7 +340,8 @@ watch(firstPage, () => subscriptionChanges.clear());
 .dir-select { min-width: 0; }
 .dir-select .form-input {
   height: 38px;
-  padding: 0 10px;
+  padding: 0 36px 0 12px;
+  background-position: right 10px center;
   font-size: 13px;
   max-width: 100%;
 }
