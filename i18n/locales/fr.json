@@ -1,1 +1,10 @@
-{ "common": { "loading": "Chargement…" } }
+{
+  "common": {
+    "loading": "Chargement…"
+  },
+  "language": {
+    "title": "Langue",
+    "interface": "Langue de l'interface",
+    "saveFailed": "Impossible d'enregistrer votre langue."
+  }
+}

@@ -1,1 +1,10 @@
-{ "common": { "loading": "Loading…" } }
+{
+  "common": {
+    "loading": "Loading…"
+  },
+  "language": {
+    "title": "Language",
+    "interface": "Interface language",
+    "saveFailed": "Couldn't save your language."
+  }
+}

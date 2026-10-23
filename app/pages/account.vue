@@ -74,6 +74,14 @@
           </form>
         </div>
 
+        <div class="profile-box glass-panel" data-testid="language-box">
+          <h4>{{ t('language.title') }}</h4>
+          <div class="form-group mt-3">
+            <label class="form-label" for="ui_language">{{ t('language.interface') }}</label>
+            <LanguageSelect id="ui_language" />
+          </div>
+        </div>
+
         <div v-if="!currentUser?.mustChangePassword" class="profile-box glass-panel">
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -247,6 +255,8 @@ import { confirmAction } from '~/composables/useConfirm';
 import { ref, reactive, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { passwordProblem } from '~/utils/passwordRules';
+
+const { t } = useI18n();
 
 useHead({ title: 'Account' });
 
