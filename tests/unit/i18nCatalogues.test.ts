@@ -53,6 +53,31 @@ const MIGRATED = [
   'app/pages/account.vue',
   'app/error.vue',
   'app/components/LanguageSelect.vue',
+  // Video discovery (batch A). The admin-only ChannelCategoryEditor, ChannelSettingsDrawer and
+  // ChannelStatsPanel stay English on purpose (see englishOnly.test.ts) and are not listed.
+  'app/pages/index.vue',
+  'app/pages/subscriptions.vue',
+  'app/pages/channels.vue',
+  'app/pages/search.vue',
+  'app/components/home/HomeChannelCard.vue',
+  'app/components/home/HomePlaylistCard.vue',
+  'app/components/home/HomeRow.vue',
+  'app/components/home/HomeSection.vue',
+  'app/components/HomeMediaRow.vue',
+  'app/components/VideoCard.vue',
+  'app/components/MediaFrame.vue',
+  'app/components/DiscoverRow.vue',
+  'app/components/EmptyState.vue',
+  'app/components/subscriptions/SubscriptionsChannelCard.vue',
+  'app/components/subscriptions/SubscriptionsChipBar.vue',
+  'app/components/subscriptions/SubscriptionsLatest.vue',
+  'app/components/channels/CategoryChip.vue',
+  'app/components/channels/CategoryChipBar.vue',
+  'app/components/channels/ChannelDetailHeader.vue',
+  'app/components/channels/ChannelDirectoryCard.vue',
+  'app/components/channels/ChannelDirectoryView.vue',
+  'app/components/channels/ChannelPlaylistsTab.vue',
+  'app/components/channels/ChannelVideoGrid.vue',
 ];
 
 export function templateOf(source: string): string {
@@ -70,6 +95,11 @@ export function templateOf(source: string): string {
 const LITERAL_ALLOWLIST: Array<{ file: string; attr: string; reason: string }> = [
   { file: 'app/pages/login.vue', attr: 'placeholder="admin"', reason: 'example username, not a sentence' },
   { file: 'app/pages/account.vue', attr: 'placeholder="name@example.com"', reason: 'example e-mail address format' },
+  // Admin-only controls inside shared pages: the admin side stays English (englishOnly.test.ts).
+  { file: 'app/components/channels/ChannelDetailHeader.vue', attr: 'text "Tracking options"', reason: 'admin-only button' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Copy share link"', reason: 'admin-only thumbnail action' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Edit visibility"', reason: 'admin-only thumbnail action' },
+  { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Delete video"', reason: 'admin-only thumbnail action' },
 ];
 
 export function hardCodedText(source: string): string[] {
