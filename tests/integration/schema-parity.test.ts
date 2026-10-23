@@ -57,7 +57,7 @@ const REAL_ONLY: Record<string, { reason: string; names: string[] }> = {
       'idx_podcast_episode_progress_episode_id', 'idx_podcast_episodes_pub_ts', 'idx_podcast_episodes_show_id',
       'idx_podcast_episodes_show_status', 'idx_podcast_show_follows_show_id', 'idx_reports_video_id',
       'idx_sessions_expires_at', 'idx_sessions_user_id', 'idx_user_channel_access_channel_id',
-      'idx_user_hidden_videos_video_id', 'idx_user_history_user_id', 'idx_user_history_video_id',
+      'idx_user_hidden_videos_video_id', 'idx_user_history_user_id', 'idx_user_history_user_watched', 'idx_user_history_video_id',
       'idx_user_subscriptions_channel_id', 'idx_users_username_nocase', 'idx_video_chapters_video_id',
       'idx_videos_channel_id', 'idx_videos_channel_upload', 'idx_videos_channel_visibility_status', 'idx_user_seen_videos_video_id', 'idx_videos_download_status',
       'idx_videos_share_token', 'idx_videos_visibility',

@@ -521,6 +521,7 @@ export function openDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_music_tracks_artist_status ON music_tracks(artist_id, download_status);
     CREATE INDEX IF NOT EXISTS idx_podcast_episodes_show_status ON podcast_episodes(show_id, download_status);
     CREATE INDEX IF NOT EXISTS idx_videos_channel_upload ON videos(channel_id, upload_date);
+    CREATE INDEX IF NOT EXISTS idx_user_history_user_watched ON user_history(user_id, watched_at);
     CREATE INDEX IF NOT EXISTS idx_user_seen_videos_video_id ON user_seen_videos(video_id);
   `);
 
