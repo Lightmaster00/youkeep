@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import type { LanguageCode } from '#shared/languages';
 import { clearClientCaches } from '~/utils/clientCaches';
 import { clearUserClientState, readClientOwner, writeClientOwner } from '~/utils/userClientState';
 
@@ -7,6 +8,7 @@ export interface UserSession {
   username: string;
   role: 'admin' | 'user';
   mustChangePassword?: boolean;
+  uiLanguage?: LanguageCode | null;
 }
 
 export const useAuth = () => {

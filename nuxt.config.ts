@@ -7,7 +7,20 @@ const buildId = process.env.YOUKEEP_BUILD_ID || Date.now().toString(36);
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
+  modules: ['@nuxtjs/i18n'],
   devtools: { enabled: true },
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'en',
+    locales: [
+      { code: 'en', language: 'en-US', name: 'English', file: 'en.json' },
+      { code: 'fr', language: 'fr-FR', name: 'Français', file: 'fr.json' }
+    ],
+    langDir: 'locales',
+    vueI18n: 'i18n.config.ts',
+    detectBrowserLanguage: { useCookie: true, cookieKey: 'yk_ui_lang', fallbackLocale: 'en', redirectOn: 'root' },
+    compilation: { strictMessage: false }
+  },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {
     public: {
