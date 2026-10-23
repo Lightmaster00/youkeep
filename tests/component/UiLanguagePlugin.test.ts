@@ -28,3 +28,18 @@ describe('applyUserLanguage', () => {
     expect(app.$i18n.locale.value).toBe('en');
   });
 });
+
+describe('saved language wins over locale detection', () => {
+  it('overrides a locale switch requested by detection', async () => {
+    const app = useNuxtApp();
+    setUser('fr');
+    await app.$i18n.setLocale('en');
+    expect(app.$i18n.locale.value).toBe('fr');
+  });
+  it('does not interfere when nothing is saved', async () => {
+    const app = useNuxtApp();
+    setUser(null);
+    await app.$i18n.setLocale('fr');
+    expect(app.$i18n.locale.value).toBe('fr');
+  });
+});

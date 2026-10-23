@@ -2,6 +2,7 @@ import { moduleForPagePath } from '~/utils/moduleRouting';
 import { shouldApplyLanding } from '~/utils/displayPrefs';
 import { safeRedirectPath } from '~/utils/safeRedirect';
 import { isPublicRoute } from '~/utils/sessionExpiry';
+import { applyUserLanguage } from '~/plugins/uiLanguage';
 
 export default defineNuxtRouteMiddleware(async (to, from) => {
   const auth = useAuth();
@@ -10,6 +11,11 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   if (import.meta.server || auth.loading.value) {
     await auth.fetchUser();
   }
+
+  // The plugin's watcher cannot do this on the server (watchers are inert
+  // during SSR and the plugin runs before the session is known): apply the
+  // saved language here so the first HTML is already in it.
+  await applyUserLanguage(useNuxtApp());
 
   // No page matches this path: let it through so app/error.vue renders the
   // 404 (a guest must not be sent to the login page for a typo).

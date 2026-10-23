@@ -14,8 +14,9 @@ export function useUiLanguage() {
   async function change(code: LanguageCode): Promise<boolean> {
     const previous = current.value;
     const previousSaved = user.value?.uiLanguage ?? null;
-    await apply(code);
+    // Saved language first: it overrides locale detection in every switch.
     if (user.value) user.value = { ...user.value, uiLanguage: code };
+    await apply(code);
     try {
       await $fetch('/api/account/language', { method: 'PUT', body: { uiLanguage: code } });
       return true;

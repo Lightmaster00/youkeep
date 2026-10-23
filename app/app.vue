@@ -11,6 +11,9 @@ import { onMounted } from 'vue';
 import { serviceWorkerUrl } from '~/utils/clientCaches';
 
 const config = useRuntimeConfig();
+const { locale } = useI18n();
+
+useHead({ htmlAttrs: { lang: computed(() => locale.value), dir: 'ltr' } });
 
 // "Channels — YouKeep"; a page without a title of its own is just "YouKeep".
 useHead({

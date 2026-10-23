@@ -58,6 +58,8 @@ describe('layout follows the UI language', () => {
     await setUp('en');
     const w = await mountOpenMenu();
     expect(w.find('.sidebar-link').text()).toBe('Home');
+    // As the selector does: the saved language is updated first.
+    useState<any>('auth_user').value = { ...useState<any>('auth_user').value, uiLanguage: 'fr' };
     await useNuxtApp().$i18n.setLocale('fr');
     await flushPromises();
     expect(w.find('.sidebar-link').text()).toBe('Accueil');
