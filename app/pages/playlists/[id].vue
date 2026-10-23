@@ -2,13 +2,13 @@
   <div class="playlist-detail-container">
     <div v-if="pending" class="loading-state">
       <div class="spinner"></div>
-      <p>Loading playlist...</p>
+      <p>{{ t('playlists.detail.loading') }}</p>
     </div>
 
     <div v-else-if="error" class="error-state glass-panel">
-      <h2>Error Loading Playlist</h2>
+      <h2>{{ t('playlists.detail.errorTitle') }}</h2>
       <p>{{ error }}</p>
-      <button class="btn btn-secondary mt-4" @click="navigateTo('/playlists')">Back to Playlists</button>
+      <button class="btn btn-secondary mt-4" @click="navigateTo('/playlists')">{{ t('playlists.detail.back') }}</button>
     </div>
 
     <div v-else-if="playlist" class="playlist-grid-layout">
@@ -24,7 +24,7 @@
           :fallback="youtubeThumb(videos[0].id, videos[0].is_short ? 'short' : 'video')"
           img-class="playlist-cover-img"
           loading="eager"
-          alt="Playlist Cover"
+          :alt="t('playlists.detail.coverAlt')"
         />
         <div v-else class="sidebar-cover sidebar-cover--empty">
           <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(255,255,255,0.6);"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
@@ -34,15 +34,15 @@
           
           <div class="playlist-meta-tags">
             <span :class="['visibility-tag', playlist.visibility]">
-              {{ playlist.visibility }}
+              {{ visibilityLabel(playlist.visibility) }}
             </span>
-            <span class="meta-item">{{ videos.length }} videos</span>
+            <span class="meta-item">{{ t('video.count', { count: videos.length.toLocaleString(locale) }, videos.length) }}</span>
           </div>
 
           <p v-if="playlist.description" class="playlist-desc">{{ playlist.description }}</p>
           
           <div class="playlist-author">
-            <span>Created by <strong>{{ playlist.owner_name }}</strong></span>
+            <i18n-t keypath="playlists.detail.createdBy" tag="span" scope="global"><template #name><strong>{{ playlist.owner_name }}</strong></template></i18n-t>
           </div>
 
           <div class="sidebar-actions">
@@ -52,7 +52,7 @@
               @click="playAll"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              Play All
+              {{ t('playlists.detail.playAll') }}
             </button>
 
             <!-- Settings Modal Trigger -->
@@ -63,7 +63,7 @@
               style="width: 100%; justify-content: center; margin-top: 8px;"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-              Settings
+              {{ t('playlists.detail.settings') }}
             </button>
           </div>
         </div>
@@ -74,10 +74,10 @@
       <div class="playlist-videos-section">
         <EmptyState
           v-if="!videos.length"
-          title="No videos in this playlist yet"
-          description="Go to any video watch page to add items to this playlist."
+          :title="t('playlists.detail.noVideosTitle')"
+          :description="t('playlists.detail.noVideosDesc')"
           icon="video"
-          action-text="Browse Videos"
+          :action-text="t('playlists.detail.browse')"
           @action="navigateTo('/')"
         />
 
@@ -97,7 +97,7 @@
             class="video-row glass-panel"
             role="link"
             tabindex="0"
-            :aria-label="`Play ${video.title}`"
+            :aria-label="t('playlists.detail.play', { title: video.title })"
             @click="playVideo(video.id)"
             @keydown.enter.self.prevent="playVideo(video.id)"
             @keydown.space.self.prevent="playVideo(video.id)"
@@ -110,16 +110,16 @@
               :src="videoThumbSrc(video, 320)"
               :fallback="youtubeThumb(video.id, video.is_short ? 'short' : 'video')"
               img-class="video-thumbnail"
-              alt="Thumbnail"
+              :alt="t('video.thumbnail')"
             >
-              <span v-if="video.is_short" class="video-short-badge" data-testid="short-badge">SHORT</span>
+              <span v-if="video.is_short" class="video-short-badge" data-testid="short-badge">{{ t('video.shortBadge') }}</span>
               <span class="video-duration">{{ formatDuration(video.duration) }}</span>
             </MediaFrame>
 
             <div class="video-info">
               <h3 class="video-title">{{ video.title }}</h3>
               <p class="video-channel">{{ video.channel_title }}</p>
-              <span class="video-views">{{ formatNumber(video.view_count) }} views</span>
+              <span class="video-views">{{ t('video.views', { views: formatNumber(video.view_count) }) }}</span>
             </div>
 
             <div class="video-row-actions">
@@ -127,7 +127,7 @@
                 v-if="isAdmin || playlist.owner_name === user?.username" 
                 class="btn-remove-video" 
                 @click.stop="removeVideo(video.id)"
-                title="Remove from Playlist"
+                :title="t('playlists.detail.remove')"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
@@ -139,47 +139,47 @@
     </div>
 
     <!-- Settings Modal -->
-    <BaseModal :show="showSettingsModal" title="Playlist Settings" @close="showSettingsModal = false">
+    <BaseModal :show="showSettingsModal" :title="t('playlists.detail.settingsTitle')" @close="showSettingsModal = false">
       <div style="padding: 4px 0;">
         <div class="form-group mb-4">
-          <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">Privacy Mode</label>
+          <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">{{ t('playlists.detail.privacyMode') }}</label>
           <select v-model="playlist.visibility" @change="updateVisibility" class="form-input" style="width: 100%; background: rgba(0,0,0,0.3); padding: 12px; font-size: 14px; border: 1px solid rgba(255,255,255,0.1);">
-            <option value="private">🔒 Private (Only you)</option>
-            <option value="unlisted">🔗 Unlisted (Anyone with link)</option>
-            <option value="public">🌍 Public (Discoverable)</option>
+            <option value="private">{{ t('playlists.detail.visPrivate') }}</option>
+            <option value="unlisted">{{ t('playlists.detail.visUnlisted') }}</option>
+            <option value="public">{{ t('playlists.detail.visPublic') }}</option>
           </select>
         </div>
         
         <div class="form-group" style="margin-top: 16px;">
-          <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">Share Link</label>
+          <label style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px; display: block; font-weight: 600;">{{ t('playlists.detail.shareLink') }}</label>
           <button class="btn btn-secondary" @click="copyShareLink" style="width: 100%; justify-content: center; gap: 8px; display: flex; align-items: center;" :disabled="playlist.visibility === 'private'">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
-            Copy Link to Clipboard
+            {{ t('playlists.detail.copyLink') }}
           </button>
           <p v-if="playlist.visibility === 'private'" style="font-size: 12px; color: var(--text-muted); text-align: center; margin-top: 12px;">
-            Your playlist is private. Change it to Unlisted or Public to share.
+            {{ t('playlists.detail.privateHint') }}
           </p>
         </div>
         <div class="form-group" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
           <button class="btn" style="width: 100%; display: flex; align-items: center; justify-content: center; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);" @click="showSettingsModal = false; showDeleteModal = true">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-            Delete Playlist
+            {{ t('playlists.detail.deleteBtn') }}
           </button>
         </div>
       </div>
       <template #footer>
-        <button class="btn btn-primary" @click="showSettingsModal = false">Done</button>
+        <button class="btn btn-primary" @click="showSettingsModal = false">{{ t('common.done') }}</button>
       </template>
     </BaseModal>
 
     <!-- Delete Confirmation Modal -->
-    <BaseModal :show="showDeleteModal" title="Delete Playlist" @close="showDeleteModal = false">
+    <BaseModal :show="showDeleteModal" :title="t('playlists.detail.deleteBtn')" @close="showDeleteModal = false">
       <p style="color: var(--text-secondary); line-height: 1.5; margin: 0;">
-        Are you sure you want to delete the playlist <strong style="color: white;">"{{ playlist.title }}"</strong>? This action cannot be undone.
+        <i18n-t keypath="playlists.detail.deleteConfirm" scope="global"><template #title><strong style="color: white;">"{{ playlist.title }}"</strong></template></i18n-t>
       </p>
       <template #footer>
-        <button class="btn btn-secondary" @click="showDeleteModal = false">Cancel</button>
-        <button class="btn" style="background: #ef4444; color: white;" @click="deletePlaylist">Delete</button>
+        <button class="btn btn-secondary" @click="showDeleteModal = false">{{ t('common.cancel') }}</button>
+        <button class="btn" style="background: #ef4444; color: white;" @click="deletePlaylist">{{ t('common.delete') }}</button>
       </template>
     </BaseModal>
   </div>
@@ -190,6 +190,7 @@ import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
 import { videoThumbSrc, youtubeThumb } from '~/utils/thumb';
 import { ref, computed, onMounted } from 'vue';
+import { formatViewCount } from '~/utils/formatCount';
 import { splitShorts } from '~/utils/videoKinds';
 import { useRoute } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
@@ -197,17 +198,18 @@ import { useToast } from '~/composables/useToast';
 import { isUnauthorizedError } from '~/utils/sessionExpiry';
 
 const route = useRoute();
+const { t, locale } = useI18n();
 const { user, isAdmin } = useAuth();
 const toast = useToast();
 
 const playlist = ref<any>(null);
-useHead({ title: computed(() => playlist.value?.title || 'Playlist') });
+useHead({ title: computed(() => playlist.value?.title || t('playlists.detail.title')) });
 const videos = ref<any[]>([]);
 const videoGroups = computed(() => {
   const { videos: long, shorts } = splitShorts(videos.value);
   return [
-    { kind: 'videos', title: 'Videos', items: long },
-    { kind: 'shorts', title: 'Shorts', items: shorts },
+    { kind: 'videos', title: t('playlists.detail.kindVideos'), items: long },
+    { kind: 'shorts', title: t('playlists.detail.kindShorts'), items: shorts },
   ].filter((g) => g.items.length > 0);
 });
 const placeOf = (video: any) => videos.value.indexOf(video) + 1;
@@ -226,9 +228,9 @@ const fetchPlaylistDetails = async () => {
     playlist.value = data.playlist;
     videos.value = data.videos || [];
   } catch (e: any) {
-    error.value = e.statusMessage || 'Failed to load playlist.';
+    error.value = e.statusMessage || t('playlists.detail.loadFailed');
     // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
-    if (!isUnauthorizedError(e)) toast.error(error.value || 'Error loading playlist.');
+    if (!isUnauthorizedError(e)) toast.error(error.value || t('playlists.detail.loadFailedToast'));
   } finally {
     pending.value = false;
   }
@@ -244,14 +246,14 @@ const updateVisibility = async () => {
       method: 'PUT',
       body: { visibility: playlist.value.visibility }
     });
-    toast.success('Playlist visibility updated');
+    toast.success(t('playlists.detail.visUpdated'));
   } catch (e: any) {
-    toast.error('Failed to update visibility');
+    toast.error(t('playlists.detail.visFailed'));
   }
 };
 
 const removeVideo = async (videoId: string) => {
-  if (!(await confirmAction({ title: 'Remove video?', message: 'Remove this video from the playlist?', confirmLabel: 'Remove' }))) {
+  if (!(await confirmAction({ title: t('playlists.detail.removeTitle'), message: t('playlists.detail.removeMessage'), confirmLabel: t('common.remove') }))) {
     return;
   }
   
@@ -260,20 +262,20 @@ const removeVideo = async (videoId: string) => {
       method: 'POST',
       body: { action: 'remove', videoId }
     });
-    toast.success('Video removed from playlist.');
+    toast.success(t('playlists.detail.removed'));
     await fetchPlaylistDetails();
   } catch (e: any) {
-    toast.error(e.message || 'Failed to remove video.');
+    toast.error(e.message || t('playlists.detail.removeFailed'));
   }
 };
 
 const deletePlaylist = async () => {
   try {
     await $fetch(`/api/playlists/personal/${route.params.id}`, { method: 'DELETE' });
-    toast.success('Playlist deleted.');
+    toast.success(t('playlists.detail.deleted'));
     navigateTo('/playlists');
   } catch (e: any) {
-    toast.error(e.message || 'Failed to delete playlist.');
+    toast.error(e.message || t('playlists.detail.deleteFailed'));
   }
 };
 
@@ -295,7 +297,7 @@ const copyShareLink = () => {
   }
   
   copyToClipboard(shareUrl).then((result) => {
-    if (result === 'copied') toast.success('Share link copied.');
+    if (result === 'copied') toast.success(t('common.shareLinkCopied'));
   });
 };
 
@@ -310,8 +312,12 @@ const formatDuration = (seconds?: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
+const visibilityLabel = (v: string) => t(`home.visibility.${['private', 'public', 'unlisted'].includes(v) ? v : 'playlist'}`);
+
+// English keeps its "1.5K" spelling; other languages get Intl's compact notation.
 const formatNumber = (num?: number) => {
   if (!num) return '0';
+  if (!locale.value.startsWith('en')) return formatViewCount(num, locale.value);
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
   return String(num);

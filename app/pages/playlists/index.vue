@@ -2,26 +2,26 @@
   <div class="playlists-container">
     <header v-if="playlists.length > 0" class="playlists-header">
       <div>
-        <h1 class="page-title">Personal Playlists</h1>
-        <p class="page-subtitle">Organize and share your custom video collections</p>
+        <h1 class="page-title">{{ t('playlists.personalTitle') }}</h1>
+        <p class="page-subtitle">{{ t('playlists.subtitle') }}</p>
       </div>
       <button class="btn-create" @click="showCreateModal = true">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        Create Playlist
+        {{ t('playlists.create') }}
       </button>
     </header>
 
     <div v-if="pending" class="loading-state">
       <div class="spinner"></div>
-      <p>Loading playlists...</p>
+      <p>{{ t('playlists.loading') }}</p>
     </div>
 
     <EmptyState
       v-else-if="!playlists.length"
-      title="Your collection starts here"
-      description="Create personalized playlists to easily group, organize, and share your favorite videos with others."
+      :title="t('playlists.emptyTitle')"
+      :description="t('playlists.emptyDesc')"
       icon="folder"
-      action-text="Create your first playlist"
+      :action-text="t('playlists.emptyAction')"
       @action="showCreateModal = true"
     >
       <template #button-icon>
@@ -36,13 +36,13 @@
         class="playlist-card premium-card"
         role="link"
         tabindex="0"
-        :aria-label="`Open ${playlist.title}`"
+        :aria-label="t('playlists.open', { title: playlist.title })"
         @click="navigateToPlaylist(playlist)"
         @keydown.enter.self.prevent="navigateToPlaylist(playlist)"
         @keydown.space.self.prevent="navigateToPlaylist(playlist)"
       >
         <!-- Thumbnail Wrapper -->
-        <MediaFrame class="thumbnail-wrapper" kind="video" :src="thumbUrl(playlist.thumbnail_path, 480)" img-class="thumbnail-img" alt="Playlist cover">
+        <MediaFrame class="thumbnail-wrapper" kind="video" :src="thumbUrl(playlist.thumbnail_path, 480)" img-class="thumbnail-img" :alt="t('playlists.cover')">
           <div v-if="!playlist.thumbnail_path" class="empty-cover-gradient">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="playlist-center-icon"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
           </div>
@@ -50,12 +50,12 @@
           <!-- Playlist Badge floating on bottom-right, matching duration-badge -->
           <span class="duration-badge playlist-badge">
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1" style="display: inline-block; vertical-align: middle;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-            <span style="vertical-align: middle;">{{ playlist.video_count }} videos</span>
+            <span style="vertical-align: middle;">{{ t('video.count', { count: playlist.video_count.toLocaleString(locale) }, playlist.video_count) }}</span>
           </span>
 
           <div class="play-hover-overlay">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            <span>PLAY ALL</span>
+            <span>{{ t('playlists.playAllHover') }}</span>
           </div>
         </MediaFrame>
 
@@ -68,11 +68,11 @@
             <div class="card-title-row" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
               <h4 class="video-title" :title="playlist.title" style="margin: 0; font-size: 15px;">{{ playlist.title }}</h4>
               <span :class="['visibility-tag', playlist.visibility]" style="flex-shrink: 0; font-size: 9px; padding: 2px 6px;">
-                {{ playlist.visibility }}
+                {{ visibilityLabel(playlist.visibility) }}
               </span>
             </div>
             
-            <p class="channel-title" style="margin: 2px 0 0 0;">by {{ playlist.owner_name }}</p>
+            <p class="channel-title" style="margin: 2px 0 0 0;">{{ t('playlists.by', { name: playlist.owner_name }) }}</p>
             
             <div class="metadata-row" style="margin-top: 4px;">
               <span>{{ formatDate(playlist.created_at) }}</span>
@@ -83,41 +83,41 @@
     </div>
 
     <!-- Create Playlist Modal -->
-    <BaseModal :show="showCreateModal" title="Create New Playlist" @close="showCreateModal = false">
+    <BaseModal :show="showCreateModal" :title="t('playlists.createTitle')" @close="showCreateModal = false">
       <form @submit.prevent="handleCreatePlaylist">
         <div class="form-group">
-          <label for="title">Title *</label>
+          <label for="title">{{ t('playlists.fieldTitle') }}</label>
           <input 
             type="text" 
             id="title" 
             v-model="newPlaylist.title" 
-            placeholder="e.g. My Favorite Science Videos" 
+            :placeholder="t('playlists.titlePlaceholder')" 
             required 
             class="form-input"
           />
         </div>
         <div class="form-group" style="margin-top: 16px;">
-          <label for="description">Description</label>
+          <label for="description">{{ t('playlists.fieldDescription') }}</label>
           <textarea 
             id="description" 
             v-model="newPlaylist.description" 
-            placeholder="Give your playlist a short description..." 
+            :placeholder="t('playlists.descriptionPlaceholder')" 
             rows="3" 
             class="form-input"
           ></textarea>
         </div>
         <div class="form-group" style="margin-top: 16px;">
-          <label for="visibility">Visibility</label>
+          <label for="visibility">{{ t('playlists.fieldVisibility') }}</label>
           <select id="visibility" v-model="newPlaylist.visibility" class="form-input">
-            <option value="private">Private (Only you)</option>
-            <option value="unlisted">Unlisted (Anyone with share link)</option>
-            <option value="public">Public (Everyone can see)</option>
+            <option value="private">{{ t('playlists.visPrivateLong') }}</option>
+            <option value="unlisted">{{ t('playlists.visUnlistedLong') }}</option>
+            <option value="public">{{ t('playlists.visPublicLong') }}</option>
           </select>
         </div>
         <div class="modal-footer" style="margin-top: 24px; padding: 0; border: none;">
-          <button type="button" class="btn btn-secondary" @click="showCreateModal = false">Cancel</button>
+          <button type="button" class="btn btn-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
           <button type="submit" class="btn btn-primary" :disabled="creating">
-            {{ creating ? 'Creating...' : 'Create' }}
+            {{ creating ? t('common.creating') : t('common.create') }}
           </button>
         </div>
       </form>
@@ -132,7 +132,8 @@ import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { isUnauthorizedError } from '~/utils/sessionExpiry';
 
-useHead({ title: 'Playlists' });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => t('playlists.title')) });
 
 const { user, isAdmin } = useAuth();
 const toast = useToast();
@@ -161,7 +162,7 @@ const fetchPlaylists = async () => {
     playlists.value = data.playlists || [];
   } catch (e: any) {
     // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
-    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || 'Failed to load playlists.');
+    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || t('playlists.loadFailed'));
   } finally {
     pending.value = false;
   }
@@ -175,24 +176,26 @@ const handleCreatePlaylist = async () => {
       body: newPlaylist.value
     });
     
-    toast.success('Playlist created successfully!');
+    toast.success(t('playlists.createdOk'));
     
     showCreateModal.value = false;
     newPlaylist.value = { title: '', description: '', visibility: 'private' };
     await fetchPlaylists();
   } catch (e: any) {
-    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || 'Failed to create playlist.');
+    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || t('playlists.createFailed'));
   } finally {
     creating.value = false;
   }
 };
 
 
+const visibilityLabel = (v: string) => t(`home.visibility.${['private', 'public', 'unlisted'].includes(v) ? v : 'playlist'}`);
+
 const formatDate = (timestamp: any) => {
-  if (!timestamp) return 'Unknown date';
+  if (!timestamp) return t('common.unknownDate');
   const date = new Date(Number(timestamp));
   if (isNaN(date.getTime())) return String(timestamp);
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const navigateToPlaylist = (playlist: any) => {
