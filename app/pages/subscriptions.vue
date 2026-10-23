@@ -187,7 +187,7 @@ async function loadSuggestions() {
       .filter((c) => (c.completed_count ?? 0) > 0)
       .sort((a, b) => (b.completed_count ?? 0) - (a.completed_count ?? 0))
       .slice(0, SUGGESTION_COUNT)
-      .map((c) => ({ id: c.id, title: c.title, avatar_url: c.avatar_url, video_count: c.completed_count, categories: [] }));
+      .map((c) => ({ id: c.id, title: c.title, avatar_url: c.avatar_url, video_count: c.completed_count, categories: c.categories ?? [] }));
   } catch {
     suggestions.value = [];
   }
