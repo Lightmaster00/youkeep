@@ -1,7 +1,7 @@
 <template>
   <div class="subscriptions-page">
     <header class="subs-header">
-      <h1 class="page-title subs-title">Subscriptions</h1>
+      <h1 class="page-title subs-title">{{ t('subscriptions.title') }}</h1>
     </header>
 
     <!-- Loading the followed channels -->
@@ -14,14 +14,14 @@
     <!-- Not following anyone yet: a few channels to start with. -->
     <section v-else-if="channels.length === 0" class="subs-start" data-testid="subs-empty">
       <EmptyState
-        title="You are not following any channel yet"
-        description="Subscribe to channels of the archive to see their new videos here, newest first."
+        :title="t('subscriptions.emptyTitle')"
+        :description="t('subscriptions.emptyDesc')"
         icon="book"
-        action-text="Browse all channels"
+        :action-text="t('subscriptions.browseAll')"
         action-route="/channels"
       />
       <div v-if="suggestions.length > 0" class="subs-suggestions" data-testid="subs-suggestions">
-        <h2 class="subs-suggestions__title">Channels to start with</h2>
+        <h2 class="subs-suggestions__title">{{ t('subscriptions.startWith') }}</h2>
         <div class="subs-suggestions__grid">
           <HomeChannelCard
             v-for="channel in suggestions"
@@ -37,23 +37,23 @@
     <template v-else>
       <SubscriptionsChipBar :channels="channels" :model-value="activeChannelId" @update:model-value="selectChannel" />
 
-      <div class="subs-tabs" role="tablist" aria-label="Subscriptions view" @keydown="onTabKeydown">
+      <div class="subs-tabs" role="tablist" :aria-label="t('subscriptions.view')" @keydown="onTabKeydown">
         <button
-          v-for="t in TABS"
-          :id="`subs-tab-${t.id}`"
-          :key="t.id"
+          v-for="tb in TABS"
+          :id="`subs-tab-${tb.id}`"
+          :key="tb.id"
           type="button"
           role="tab"
           class="subs-tab"
-          :class="{ 'is-active': tab === t.id }"
-          :aria-selected="tab === t.id ? 'true' : 'false'"
-          :aria-controls="`subs-panel-${t.id}`"
-          :tabindex="tab === t.id ? 0 : -1"
-          :data-testid="`subs-tab-${t.id}`"
-          @click="selectTab(t.id)"
+          :class="{ 'is-active': tab === tb.id }"
+          :aria-selected="tab === tb.id ? 'true' : 'false'"
+          :aria-controls="`subs-panel-${tb.id}`"
+          :tabindex="tab === tb.id ? 0 : -1"
+          :data-testid="`subs-tab-${tb.id}`"
+          @click="selectTab(tb.id)"
         >
-          {{ t.label }}
-          <span v-if="t.id === 'channels'" class="subs-tab__count">{{ channels.length }}</span>
+          {{ t(tb.labelKey) }}
+          <span v-if="tb.id === 'channels'" class="subs-tab__count">{{ channels.length }}</span>
         </button>
       </div>
 
@@ -106,12 +106,13 @@ import { confirmAction } from '~/composables/useConfirm';
 import { useToast } from '~/composables/useToast';
 import type { SubscribedChannel } from '~/utils/subscriptionTypes';
 
-useHead({ title: 'Subscriptions' });
+const { t } = useI18n();
+useHead({ title: computed(() => t('subscriptions.title')) });
 
 type Tab = 'latest' | 'channels';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'latest', label: 'Latest' },
-  { id: 'channels', label: 'Channels' },
+const TABS: { id: Tab; labelKey: string }[] = [
+  { id: 'latest', labelKey: 'subscriptions.tabLatest' },
+  { id: 'channels', labelKey: 'subscriptions.tabChannels' },
 ];
 const SUGGESTION_COUNT = 6;
 
@@ -155,7 +156,7 @@ function selectChannel(id: string) {
 function onTabKeydown(event: KeyboardEvent) {
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
   event.preventDefault();
-  const i = TABS.findIndex((t) => t.id === tab.value);
+  const i = TABS.findIndex((tb) => tb.id === tab.value);
   const next = TABS[(i + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]!;
   selectTab(next.id);
   // Keep the keyboard on the newly selected tab.
@@ -172,7 +173,7 @@ async function loadChannels() {
     const res = await $fetch<{ channels: SubscribedChannel[] }>('/api/subscriptions/channels');
     channels.value = res?.channels ?? [];
   } catch (err: any) {
-    channelsError.value = err?.data?.statusMessage || 'Could not load your subscriptions.';
+    channelsError.value = err?.data?.statusMessage || t('subscriptions.loadFailed');
   } finally {
     channelsPending.value = false;
   }
@@ -204,9 +205,9 @@ function onAllSeen() {
 
 async function unsubscribe(channel: SubscribedChannel) {
   const ok = await confirmAction({
-    title: 'Unsubscribe?',
-    message: `Stop following ${channel.title}? Its videos stay in the archive.`,
-    confirmLabel: 'Unsubscribe',
+    title: t('subscriptions.unsubscribeTitle'),
+    message: t('subscriptions.unsubscribeMessage', { title: channel.title }),
+    confirmLabel: t('common.unsubscribe'),
   });
   if (!ok) return;
   unsubscribing.value = channel.id;
@@ -215,10 +216,10 @@ async function unsubscribe(channel: SubscribedChannel) {
     channels.value = channels.value.filter((c) => c.id !== channel.id);
     if (queryChannel.value === channel.id) await replaceQuery({ channel: undefined });
     reloadKey.value++;
-    toast.success(`Unsubscribed from ${channel.title}.`);
+    toast.success(t('subscriptions.unsubscribed', { title: channel.title }));
     if (channels.value.length === 0) await loadSuggestions();
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not unsubscribe.');
+    toast.error(err?.data?.statusMessage || t('subscriptions.unsubscribeFailed'));
   } finally {
     unsubscribing.value = null;
   }

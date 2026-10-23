@@ -16,10 +16,10 @@
       <span class="sub-card__text">
         <span class="sub-card__name">{{ channel.title }}</span>
         <span class="sub-card__meta">
-          {{ videoLabel }}<template v-if="lastUpload"> · Last upload {{ lastUpload }}</template>
+          {{ videoLabel }}<template v-if="lastUpload"> · {{ t('subscriptions.lastUpload', { when: lastUpload }) }}</template>
         </span>
       </span>
-      <span v-if="channel.newCount > 0" class="sub-card__new" data-testid="sub-channel-new">{{ channel.newCount }} new</span>
+      <span v-if="channel.newCount > 0" class="sub-card__new" data-testid="sub-channel-new">{{ t('subscriptions.newCount', { count: channel.newCount }, channel.newCount) }}</span>
     </NuxtLink>
     <div class="sub-card__footer">
       <span class="sub-card__chips">
@@ -28,11 +28,11 @@
       <button
         type="button"
         class="btn btn-sm btn-secondary sub-card__unsubscribe"
-        :aria-label="`Unsubscribe from ${channel.title}`"
+        :aria-label="t('subscriptions.unsubscribeFrom', { title: channel.title })"
         :disabled="busy"
         data-testid="sub-channel-unsubscribe"
         @click="emit('unsubscribe', channel)"
-      >Unsubscribe</button>
+      >{{ t('common.unsubscribe') }}</button>
     </div>
   </div>
 </template>
@@ -48,8 +48,9 @@ import CategoryChip from '~/components/channels/CategoryChip.vue';
 const props = defineProps<{ channel: SubscribedChannel; busy?: boolean }>();
 const emit = defineEmits<{ (e: 'unsubscribe', channel: SubscribedChannel): void }>();
 
-const videoLabel = computed(() => `${props.channel.videoCount.toLocaleString('en-US')} ${props.channel.videoCount === 1 ? 'video' : 'videos'}`);
-const lastUpload = computed(() => relativeDay(props.channel.lastUploadDate));
+const { t, locale } = useI18n();
+const videoLabel = computed(() => t('video.count', { count: props.channel.videoCount.toLocaleString(locale.value) }, props.channel.videoCount));
+const lastUpload = computed(() => relativeDay(props.channel.lastUploadDate, new Date(), locale.value));
 
 function onAvatarError(event: Event) {
   setImageFallback(event, FALLBACK_AVATAR);

@@ -3,18 +3,18 @@
     <div class="subs-toolbar">
       <div class="subs-filters">
         <label v-if="categories.length > 0" class="subs-filter">
-          <span class="subs-filter__label">Category</span>
+          <span class="subs-filter__label">{{ t('subscriptions.category') }}</span>
           <select v-model="category" class="form-input subs-select" data-testid="subs-category">
-            <option value="">All categories</option>
+            <option value="">{{ t('subscriptions.allCategories') }}</option>
             <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
           </select>
         </label>
         <label class="subs-filter">
-          <span class="subs-filter__label">Sort</span>
+          <span class="subs-filter__label">{{ t('subscriptions.sort') }}</span>
           <select v-model="sort" class="form-input subs-select" data-testid="subs-sort">
-            <option value="new">Newest</option>
-            <option value="popular">Most viewed</option>
-            <option value="oldest">Oldest</option>
+            <option value="new">{{ t('subscriptions.sortNew') }}</option>
+            <option value="popular">{{ t('subscriptions.sortPopular') }}</option>
+            <option value="oldest">{{ t('subscriptions.sortOld') }}</option>
           </select>
         </label>
       </div>
@@ -24,7 +24,7 @@
         data-testid="subs-mark-all-seen"
         :disabled="markingAll || !(hasNew || anyNew)"
         @click="markAllSeen"
-      >{{ markingAll ? 'Marking...' : 'Mark all as seen' }}</button>
+      >{{ markingAll ? t('subscriptions.marking') : t('subscriptions.markAllSeen') }}</button>
     </div>
 
     <!-- Loading: a grid of placeholders the size of the cards. -->
@@ -39,12 +39,12 @@
     <p v-else-if="loadError" class="subs-empty" role="alert">{{ loadError }}</p>
 
     <template v-else>
-      <section class="subs-section" data-testid="subs-videos" aria-label="Videos">
+      <section class="subs-section" data-testid="subs-videos" :aria-label="t('subscriptions.videos')">
         <p v-if="videos.length === 0" class="subs-empty" data-testid="subs-videos-empty">
-          {{ filtered ? 'No videos match these filters.' : 'No long videos from these channels yet.' }}
+          {{ filtered ? t('subscriptions.noMatch') : t('subscriptions.noLong') }}
         </p>
         <div v-for="group in groups" :key="group.key" class="subs-day" :data-testid="`subs-day-${group.bucket}`">
-          <h2 v-if="group.label" class="subs-day__title">{{ group.label }}</h2>
+          <h2 v-if="group.label" class="subs-day__title">{{ t(`subscriptions.day.${group.bucket}`) }}</h2>
           <div class="subs-grid">
             <div
               v-for="video in group.items"
@@ -60,7 +60,7 @@
                   <span class="watched-bar" aria-hidden="true"><span class="watched-bar__fill" :style="{ width: `${video.watchedPercent}%` }"></span></span>
                 </template>
                 <template #info-extra>
-                  <span v-if="video.isNew" class="new-mark" data-testid="new-dot">New</span>
+                  <span v-if="video.isNew" class="new-mark" data-testid="new-dot">{{ t('common.new') }}</span>
                 </template>
               </VideoCard>
             </div>
@@ -68,14 +68,14 @@
         </div>
         <div v-if="videos.length < total" class="subs-more">
           <button type="button" class="btn btn-secondary" data-testid="subs-videos-more" :disabled="loadingMore" @click="loadMore('video')">
-            {{ loadingMore ? 'Loading...' : 'Show more' }}
+            {{ loadingMore ? t('common.loadingDots') : t('common.showMore') }}
           </button>
         </div>
       </section>
 
       <!-- Shorts: their own section, fetched apart, never mixed in above. -->
       <section v-if="shorts.length > 0" class="subs-section" data-testid="subs-shorts" aria-labelledby="subs-shorts-title">
-        <h2 id="subs-shorts-title" class="subs-section-title">Shorts</h2>
+        <h2 id="subs-shorts-title" class="subs-section-title">{{ t('nav.shorts') }}</h2>
         <div class="video-shorts-grid">
           <div
             v-for="video in shorts"
@@ -88,14 +88,14 @@
           >
             <VideoCard :video="video" @hidden="onHidden">
               <template #info-extra>
-                <span v-if="video.isNew" class="new-mark" data-testid="new-dot">New</span>
+                <span v-if="video.isNew" class="new-mark" data-testid="new-dot">{{ t('common.new') }}</span>
               </template>
             </VideoCard>
           </div>
         </div>
         <div v-if="shorts.length < shortsTotal" class="subs-more">
           <button type="button" class="btn btn-secondary" data-testid="subs-shorts-more" :disabled="loadingMoreShorts" @click="loadMore('short')">
-            {{ loadingMoreShorts ? 'Loading...' : 'Show more Shorts' }}
+            {{ loadingMoreShorts ? t('common.loadingDots') : t('subscriptions.showMoreShorts') }}
           </button>
         </div>
       </section>
@@ -123,6 +123,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ (e: 'all-seen'): void }>();
 
+const { t } = useI18n();
 const VIDEO_LIMIT = 24;
 const SHORT_LIMIT = 12;
 
@@ -202,7 +203,7 @@ async function load() {
     shorts.value = [];
     total.value = 0;
     shortsTotal.value = 0;
-    loadError.value = err?.data?.statusMessage || 'Could not load your subscriptions.';
+    loadError.value = err?.data?.statusMessage || t('subscriptions.loadFailed');
   } finally {
     if (id === requestId) pending.value = false;
   }
@@ -228,7 +229,7 @@ async function loadMore(type: 'video' | 'short') {
       shortsTotal.value = res?.total ?? shortsTotal.value;
     }
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not load more videos.');
+    toast.error(err?.data?.statusMessage || t('subscriptions.loadMoreFailed'));
   } finally {
     busy.value = false;
   }
@@ -244,7 +245,7 @@ async function markAllSeen() {
     shorts.value = shorts.value.map((v) => (v.isNew ? { ...v, isNew: false } : v));
     emit('all-seen');
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not mark the videos as seen.');
+    toast.error(err?.data?.statusMessage || t('subscriptions.markFailed'));
   } finally {
     markingAll.value = false;
   }

@@ -3,7 +3,7 @@
     ref="bar"
     class="chip-bar"
     role="tablist"
-    aria-label="Filter by channel"
+    :aria-label="t('subscriptions.filterByChannel')"
     aria-orientation="horizontal"
     data-testid="subs-chip-bar"
     @keydown="onKeydown"
@@ -17,7 +17,7 @@
       :tabindex="!modelValue ? 0 : -1"
       data-testid="chip-all"
       @click="select('')"
-    >All</button>
+    >{{ t('common.all') }}</button>
     <button
       v-for="channel in channels"
       :key="channel.id"
@@ -45,7 +45,7 @@
         <span v-if="channel.newCount > 0" class="chip__dot" data-testid="chip-new-dot"></span>
       </span>
       <span class="chip__label">{{ channel.title }}</span>
-      <span v-if="channel.newCount > 0" class="sr-only">, {{ channel.newCount }} new</span>
+      <span v-if="channel.newCount > 0" class="sr-only">{{ t('subscriptions.newCountSr', { count: channel.newCount }, channel.newCount) }}</span>
     </button>
   </div>
 </template>
@@ -57,6 +57,7 @@ import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
 // The channel filter of the Subscriptions page: "All", then each followed
 // channel with a dot while it has new videos. A tab list: one tab stop, the
 // arrow keys (and Home/End) move between chips, Enter/Space or a click picks.
+const { t } = useI18n();
 defineProps<{
   channels: { id: string; title: string; avatar_url?: string | null; newCount: number }[];
   modelValue: string;
