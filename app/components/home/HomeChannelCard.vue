@@ -1,0 +1,170 @@
+<template>
+  <div class="channel-card" :data-testid="`channel-card-${channel.id}`">
+    <NuxtLink :to="`/channels?channelId=${channel.id}`" class="channel-card__link">
+      <img
+        :src="channel.avatar_url || FALLBACK_AVATAR"
+        class="channel-card__avatar"
+        alt=""
+        width="72"
+        height="72"
+        loading="lazy"
+        referrerpolicy="no-referrer"
+        @error="onAvatarError"
+      />
+      <span class="channel-card__name">{{ channel.title }}</span>
+      <span class="channel-card__count">{{ countLabel }}</span>
+    </NuxtLink>
+    <span v-if="channel.categories?.length" class="channel-card__chips">
+      <span v-for="cat in channel.categories.slice(0, 2)" :key="cat" class="channel-card__chip">{{ cat }}</span>
+    </span>
+    <button
+      v-if="canSubscribe"
+      type="button"
+      class="btn btn-sm channel-card__subscribe"
+      :class="subscribed ? 'btn-secondary' : 'btn-primary'"
+      :aria-pressed="subscribed ? 'true' : 'false'"
+      :aria-label="`${subscribed ? 'Unsubscribe from' : 'Subscribe to'} ${channel.title}`"
+      :disabled="busy"
+      data-testid="channel-subscribe"
+      @click="toggle"
+    >{{ subscribed ? 'Subscribed' : 'Subscribe' }}</button>
+    <NuxtLink v-else to="/login" class="channel-card__login" data-testid="channel-login-hint">Log in to subscribe</NuxtLink>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, ref } from 'vue';
+import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
+import { useToast } from '~/composables/useToast';
+
+// A channel to discover: avatar, name, video count, top categories and a
+// Subscribe button. Subscribing is optimistic: the button flips at once and
+// flips back (with an error toast) when the server refuses.
+const props = withDefaults(defineProps<{
+  channel: { id: string; title: string; avatar_url?: string | null; video_count?: number; categories?: string[] };
+  canSubscribe?: boolean;
+  initiallySubscribed?: boolean;
+}>(), { canSubscribe: true, initiallySubscribed: false });
+
+const emit = defineEmits<{ (e: 'subscription', id: string, subscribed: boolean): void }>();
+
+const toast = useToast();
+const subscribed = ref(props.initiallySubscribed);
+const busy = ref(false);
+
+const countLabel = computed(() => {
+  const n = props.channel.video_count ?? 0;
+  return `${n.toLocaleString('en-US')} ${n === 1 ? 'video' : 'videos'}`;
+});
+
+function onAvatarError(event: Event) {
+  setImageFallback(event, FALLBACK_AVATAR);
+}
+
+async function toggle() {
+  if (busy.value) return;
+  const next = !subscribed.value;
+  subscribed.value = next;
+  busy.value = true;
+  try {
+    await $fetch(`/api/channels/${encodeURIComponent(props.channel.id)}/${next ? 'subscribe' : 'unsubscribe'}`, { method: 'POST' });
+    emit('subscription', props.channel.id, next);
+  } catch (err: any) {
+    subscribed.value = !next;
+    toast.error(err?.data?.statusMessage || (next ? 'Could not subscribe.' : 'Could not unsubscribe.'));
+  } finally {
+    busy.value = false;
+  }
+}
+</script>
+
+<style scoped>
+.channel-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+  padding: 18px 14px 14px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+  background: rgba(17, 17, 34, 0.4);
+  text-align: center;
+  transition: border-color 0.25s ease, background 0.25s ease;
+}
+.channel-card:hover { border-color: rgba(139, 92, 246, 0.3); background: rgba(28, 24, 38, 0.6); }
+
+.channel-card__link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
+}
+.channel-card__link:focus-visible,
+.channel-card__login:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 3px;
+}
+
+.channel-card__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.05);
+  margin-bottom: 6px;
+}
+
+.channel-card__name {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-card__count {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.channel-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 20px;
+}
+
+.channel-card__chip {
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-card__subscribe {
+  margin-top: auto;
+  min-width: 112px;
+}
+
+.channel-card__login {
+  margin-top: auto;
+  font-size: 12.5px;
+  color: var(--accent-primary-hover);
+}
+</style>

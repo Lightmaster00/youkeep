@@ -34,11 +34,11 @@ const episodeSection = {
 describe('HomeMediaRow', () => {
   it('renders a music row with title, cards and a link to the Recent page', async () => {
     const w = await mountSuspended(HomeMediaRow, { props: { section: musicSection } });
-    expect(w.find('.row-title').text()).toBe('Recently added music');
+    expect(w.find('.home-row__title').text()).toBe('Recently added music');
     expect(w.findAll('.media-card').map((c) => c.find('.media-card-title').text())).toEqual(['First song', 'Second song']);
     expect(w.find('.media-card-sub').text()).toBe('The Band');
     expect(w.find('.media-card-sub').attributes('href')).toBe('/music?artistId=a1');
-    expect(w.find('.see-all-link').attributes('href')).toBe('/music/recent');
+    expect(w.find('[data-testid="row-see-all"]').attributes('href')).toBe('/music/recent');
   });
 
   it('plays a clicked track with the row as its queue', async () => {
@@ -51,11 +51,11 @@ describe('HomeMediaRow', () => {
 
   it('renders an episode row and plays the clicked episode with its show info', async () => {
     const w = await mountSuspended(HomeMediaRow, { props: { section: episodeSection } });
-    expect(w.find('.row-title').text()).toBe('New podcast episodes');
+    expect(w.find('.home-row__title').text()).toBe('New podcast episodes');
     expect(w.find('.media-card-title').text()).toBe('Pilot');
     expect(w.find('.media-card-sub').attributes('href')).toBe('/podcasts?showId=s1');
     expect(w.find('.media-card-meta').text()).toBe('Oct 6, 2026');
-    expect(w.find('.see-all-link').attributes('href')).toBe('/podcasts/recent');
+    expect(w.find('[data-testid="row-see-all"]').attributes('href')).toBe('/podcasts/recent');
     await w.find('.media-card').trigger('click');
     expect(usePodcastPlayer().currentEpisode.value).toMatchObject({
       id: 'e1', title: 'Pilot', show_title: 'The Show', show_cover_url: 'https://img/s.jpg', local_file_path: '/p/e1.mp3',

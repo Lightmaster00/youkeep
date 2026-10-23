@@ -78,6 +78,8 @@
         <span class="dot">•</span>
         <span>{{ formattedUploadDate }}</span>
       </div>
+      <!-- A line under the details (a home row's reason, a resume hint, a "New" mark). -->
+      <slot name="info-extra" />
     </div>
   </UiCard>
 </template>
