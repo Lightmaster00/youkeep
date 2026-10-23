@@ -1,18 +1,18 @@
 <template>
-  <BaseModal :show="!!manualCopy" :title="manualCopy?.title || 'Copy this link'" @close="manualCopy = null">
-    <p class="clipboard-fallback-hint">Copying is not available here. The text is selected: press Ctrl+C (or Cmd+C) to copy it.</p>
+  <BaseModal :show="!!manualCopy" :title="manualCopy?.title || t('common.copyLink')" @close="manualCopy = null">
+    <p class="clipboard-fallback-hint">{{ t('common.copyUnavailable') }}</p>
     <input
       ref="inputEl"
       class="form-input clipboard-fallback-input"
       data-testid="clipboard-fallback-input"
       type="text"
       readonly
-      aria-label="Text to copy"
+      :aria-label="t('common.textToCopy')"
       :value="manualCopy?.text || ''"
       @focus="selectAll"
     />
     <template #footer>
-      <button type="button" class="btn btn-primary" @click="manualCopy = null">Done</button>
+      <button type="button" class="btn btn-primary" @click="manualCopy = null">{{ t('common.done') }}</button>
     </template>
   </BaseModal>
 </template>
@@ -22,6 +22,7 @@
 import { ref, watch, nextTick } from 'vue';
 import { manualCopy } from '~/utils/clipboard';
 
+const { t } = useI18n();
 const inputEl = ref<HTMLInputElement | null>(null);
 
 function selectAll() {

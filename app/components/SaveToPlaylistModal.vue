@@ -1,14 +1,14 @@
 <template>
-  <BaseModal :show="show" title="Save to playlist" @close="emit('close')">
-    <p class="stp-desc">Choose the playlists for <strong>{{ videoTitle || 'this video' }}</strong>:</p>
+  <BaseModal :show="show" :title="t('savePlaylist.title')" @close="emit('close')">
+    <p class="stp-desc"><i18n-t keypath="savePlaylist.choose" scope="global"><template #title><strong>{{ videoTitle || t('savePlaylist.thisVideo') }}</strong></template></i18n-t></p>
 
     <div v-if="!user" class="stp-empty" data-testid="stp-signed-out">
-      Sign in to save videos to your playlists.
-      <NuxtLink to="/login" class="stp-signin" @click="emit('close')">Sign in</NuxtLink>
+      {{ t('savePlaylist.signInPrompt') }}
+      <NuxtLink to="/login" class="stp-signin" @click="emit('close')">{{ t('savePlaylist.signIn') }}</NuxtLink>
     </div>
-    <div v-else-if="loading" class="stp-empty">Loading playlists...</div>
+    <div v-else-if="loading" class="stp-empty">{{ t('savePlaylist.loading') }}</div>
     <div v-else-if="ownPlaylists.length === 0" class="stp-empty" data-testid="stp-empty">
-      You have no playlists yet. Create one below.
+      {{ t('savePlaylist.empty') }}
     </div>
     <ul v-else class="stp-list" data-testid="stp-list">
       <li v-for="pl in ownPlaylists" :key="pl.id">
@@ -30,28 +30,28 @@
     <div v-if="user" class="stp-create">
       <button v-if="!showForm" type="button" class="btn btn-secondary stp-full" @click="openForm">
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        Create new playlist
+        {{ t('savePlaylist.createNew') }}
       </button>
       <form v-else class="stp-form" @submit.prevent="create">
-        <label class="stp-label" :for="titleInputId">Playlist title</label>
+        <label class="stp-label" :for="titleInputId">{{ t('savePlaylist.playlistTitle') }}</label>
         <input :id="titleInputId" ref="titleInput" v-model="newTitle" class="form-input" maxlength="200" />
-        <label class="stp-label" :for="visInputId">Visibility</label>
+        <label class="stp-label" :for="visInputId">{{ t('savePlaylist.visibility') }}</label>
         <select :id="visInputId" v-model="newVisibility" class="form-input">
-          <option value="private">Private</option>
-          <option value="unlisted">Unlisted</option>
-          <option value="public">Public</option>
+          <option value="private">{{ t('home.visibility.private') }}</option>
+          <option value="unlisted">{{ t('home.visibility.unlisted') }}</option>
+          <option value="public">{{ t('home.visibility.public') }}</option>
         </select>
         <div class="stp-form-actions">
           <button type="submit" class="btn btn-primary" :disabled="!newTitle.trim() || creating">
-            {{ creating ? 'Creating...' : 'Create' }}
+            {{ creating ? t('common.creating') : t('common.create') }}
           </button>
-          <button type="button" class="btn btn-secondary" @click="showForm = false">Cancel</button>
+          <button type="button" class="btn btn-secondary" @click="showForm = false">{{ t('common.cancel') }}</button>
         </div>
       </form>
     </div>
 
     <template #footer>
-      <button type="button" class="btn btn-primary" @click="emit('close')">Done</button>
+      <button type="button" class="btn btn-primary" @click="emit('close')">{{ t('common.done') }}</button>
     </template>
   </BaseModal>
 </template>
@@ -70,6 +70,7 @@ const emit = defineEmits<{ close: [] }>();
 
 const { user } = useAuth();
 const toast = useToast();
+const { t } = useI18n();
 
 const uid = `stp-${Math.random().toString(36).slice(2, 8)}`;
 const titleInputId = `${uid}-title`;
@@ -90,7 +91,7 @@ const ownPlaylists = computed(() => {
 });
 
 function visibilityLabel(v: string) {
-  return v === 'public' ? 'Public' : v === 'unlisted' ? 'Unlisted' : 'Private';
+  return t(`home.visibility.${v === 'public' ? 'public' : v === 'unlisted' ? 'unlisted' : 'private'}`);
 }
 
 async function load() {
@@ -106,7 +107,7 @@ async function load() {
   } catch (err) {
     playlists.value = [];
     // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
-    if (!isUnauthorizedError(err)) toast.error('Failed to load playlists.');
+    if (!isUnauthorizedError(err)) toast.error(t('savePlaylist.loadFailed'));
   } finally {
     loading.value = false;
   }
@@ -127,9 +128,9 @@ async function toggle(pl: any, checked: boolean, event?: Event) {
       body: { action: checked ? 'add' : 'remove', videoId: props.videoId },
     });
     pl.contains_video = checked ? 1 : 0;
-    toast.success(checked ? `Added to ${pl.title}.` : `Removed from ${pl.title}.`);
+    toast.success(checked ? t('savePlaylist.added', { title: pl.title }) : t('savePlaylist.removed', { title: pl.title }));
   } catch (err: any) {
-    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || 'Failed to update the playlist.');
+    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || t('savePlaylist.updateFailed'));
     if (event) (event.target as HTMLInputElement).checked = !checked;
   } finally {
     busyId.value = '';
@@ -156,12 +157,12 @@ async function create() {
       body: { action: 'add', videoId: props.videoId },
     });
     playlists.value.unshift({ ...playlist, owner_name: user.value?.username, contains_video: 1 });
-    toast.success('Playlist created and video added.');
+    toast.success(t('savePlaylist.created'));
     newTitle.value = '';
     newVisibility.value = 'private';
     showForm.value = false;
   } catch (err: any) {
-    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || 'Failed to create the playlist.');
+    if (!isUnauthorizedError(err)) toast.error(err?.data?.statusMessage || t('savePlaylist.createFailed'));
   } finally {
     creating.value = false;
   }

@@ -11,7 +11,7 @@
     >
       <div class="modal-header">
         <h3 :id="titleId">{{ title }}</h3>
-        <button type="button" class="close-modal-btn" aria-label="Close" @click="$emit('close')">&times;</button>
+        <button type="button" class="close-modal-btn" :aria-label="$t('common.close')" @click="$emit('close')">&times;</button>
       </div>
       <div class="modal-body">
         <slot></slot>

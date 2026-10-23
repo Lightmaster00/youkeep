@@ -4,7 +4,7 @@
       ref="toggleEl"
       type="button"
       class="btn-dropdown-toggle"
-      aria-label="More options"
+      :aria-label="t('common.moreOptions')"
       aria-haspopup="menu"
       :aria-expanded="isOpen ? 'true' : 'false'"
       @click.stop="toggleMenu"
@@ -16,17 +16,17 @@
       <div v-if="isOpen" class="dropdown-menu glass-panel" role="menu">
         <button v-if="isLoggedIn" type="button" role="menuitem" class="dropdown-item" @click="openPlaylistModal">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="15" y1="10" x2="9" y2="10"/></svg>
-          Save
+          {{ t('common.save') }}
         </button>
         <button v-if="video?.local_video_path" type="button" role="menuitem" class="dropdown-item" @click="downloadVideo">
           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Download
+          {{ t('common.download') }}
         </button>
         <template v-if="isLoggedIn">
           <div class="dropdown-divider" role="separator"></div>
           <button type="button" role="menuitem" class="dropdown-item text-danger" @click="openReport">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-            Report
+            {{ t('common.report') }}
           </button>
         </template>
       </div>
@@ -64,6 +64,7 @@ const props = defineProps<{
 
 defineEmits(['hidden']);
 const toast = useToast();
+const { t } = useI18n();
 const { isLoggedIn } = useAuth();
 
 const isOpen = ref(false);
@@ -109,9 +110,9 @@ const downloadVideo = () => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    toast.success('Download started');
+    toast.success(t('video.downloadStarted'));
   } else {
-    toast.error('Video file not available for download');
+    toast.error(t('video.downloadUnavailable'));
   }
 };
 

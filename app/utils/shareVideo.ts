@@ -20,14 +20,21 @@ export async function videoShareUrl(video: { id: string }, isAdmin: boolean): Pr
   return `${origin}/watch/${encodeURIComponent(video.id)}`;
 }
 
-/** Copies the share link; resolves the toast to show (null when the user copies by hand). */
-export async function shareVideoLink(video: { id: string }, isAdmin: boolean): Promise<{ ok: boolean; message: string | null }> {
+/**
+ * Copies the share link; resolves the toast to show (null when the user copies by hand).
+ * `t` is the caller's useI18n().t, so the toast words follow the UI language.
+ */
+export async function shareVideoLink(
+  video: { id: string },
+  isAdmin: boolean,
+  t: (key: string) => string,
+): Promise<{ ok: boolean; message: string | null }> {
   let url: string;
   try {
     url = await videoShareUrl(video, isAdmin);
   } catch (err: any) {
-    return { ok: false, message: err?.data?.statusMessage || 'Could not create the share link.' };
+    return { ok: false, message: err?.data?.statusMessage || t('common.shareLinkFailed') };
   }
   const result = await copyToClipboard(url);
-  return { ok: true, message: result === 'copied' ? 'Share link copied.' : null };
+  return { ok: true, message: result === 'copied' ? t('common.shareLinkCopied') : null };
 }

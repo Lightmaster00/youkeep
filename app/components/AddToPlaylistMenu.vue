@@ -5,8 +5,8 @@
       type="button"
       class="add-to-playlist-btn"
       :class="{ open }"
-      aria-label="Add to playlist"
-      title="Add to playlist"
+      :aria-label="t('addToPlaylist.label')"
+      :title="t('addToPlaylist.label')"
       aria-haspopup="menu"
       :aria-expanded="open"
       @click.stop="toggleOpen"
@@ -20,20 +20,20 @@
         ref="panelEl"
         class="add-to-playlist-panel"
         role="menu"
-        aria-label="Add to playlist"
+        :aria-label="t('addToPlaylist.label')"
         :style="panelStyle"
         @click.stop
         @keydown.esc.stop="close"
       >
-        <p class="atp-heading">Add to playlist</p>
+        <p class="atp-heading">{{ t('addToPlaylist.label') }}</p>
 
-        <div v-if="loading" class="atp-status">Loading...</div>
+        <div v-if="loading" class="atp-status">{{ t('addToPlaylist.loading') }}</div>
         <div v-else-if="loadError" class="atp-status">
-          Failed to load playlists.
-          <button type="button" class="atp-link" @click="load">Retry</button>
+          {{ t('addToPlaylist.loadFailed') }}
+          <button type="button" class="atp-link" @click="load">{{ t('common.retry') }}</button>
         </div>
         <template v-else>
-          <p v-if="playlists.length === 0" class="atp-status">No playlists yet</p>
+          <p v-if="playlists.length === 0" class="atp-status">{{ t('addToPlaylist.none') }}</p>
           <ul v-else class="atp-list">
             <li v-for="p in playlists" :key="p.id">
               <button
@@ -59,11 +59,11 @@
             v-model="newTitle"
             type="text"
             class="form-input atp-new-input"
-            placeholder="New playlist"
-            aria-label="New playlist name"
+            :placeholder="t('addToPlaylist.newPlaylist')"
+            :aria-label="t('addToPlaylist.newName')"
             :maxlength="PLAYLIST_TITLE_MAX"
           />
-          <button type="submit" class="btn btn-primary atp-new-btn" :disabled="creating || !newTitle.trim()">Create</button>
+          <button type="submit" class="btn btn-primary atp-new-btn" :disabled="creating || !newTitle.trim()">{{ t('common.create') }}</button>
         </form>
       </div>
     </Teleport>
@@ -87,6 +87,7 @@ interface PlaylistEntry { id: string; title: string; trackCount: number; contain
 
 const { user } = useAuth();
 const toast = useToast();
+const { t } = useI18n();
 
 const open = ref(false);
 const loading = ref(false);
@@ -194,10 +195,10 @@ async function togglePlaylist(p: PlaylistEntry) {
       ? await $fetch<{ trackCount: number }>(`/api/music/user-playlists/${encodeURIComponent(p.id)}/tracks/${encodeURIComponent(props.trackId)}`, { method: 'DELETE' })
       : await $fetch<{ trackCount: number }>(`/api/music/user-playlists/${encodeURIComponent(p.id)}/tracks`, { method: 'POST', body: { trackId: props.trackId } });
     if (typeof res?.trackCount === 'number') p.trackCount = res.trackCount;
-    toast.success(had ? `Removed from ${p.title}` : `Added to ${p.title}`);
+    toast.success(had ? t('addToPlaylist.removed', { title: p.title }) : t('addToPlaylist.added', { title: p.title }));
   } catch (err: any) {
     p.containsTrack = had;
-    toast.error(err?.data?.statusMessage || (had ? 'Could not remove the song from the playlist.' : 'Could not add the song to the playlist.'));
+    toast.error(err?.data?.statusMessage || (had ? t('addToPlaylist.removeFailed') : t('addToPlaylist.addFailed')));
   } finally {
     const done = new Set(pendingIds.value);
     done.delete(p.id);
@@ -216,7 +217,7 @@ async function createAndAdd() {
     newTitle.value = '';
     await togglePlaylist(playlists.value[0]!);
   } catch (err: any) {
-    toast.error(err?.data?.statusMessage || 'Could not create the playlist.');
+    toast.error(err?.data?.statusMessage || t('addToPlaylist.createFailed'));
   } finally {
     creating.value = false;
   }

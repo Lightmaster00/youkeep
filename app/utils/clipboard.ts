@@ -35,7 +35,7 @@ function execCommandCopy(text: string): boolean {
  * Copies `text`. Resolves 'copied' when it reached the clipboard, 'manual'
  * when the user was shown the text to copy by hand.
  */
-export async function copyToClipboard(text: string, title = 'Copy this link'): Promise<'copied' | 'manual'> {
+export async function copyToClipboard(text: string, title = ''): Promise<'copied' | 'manual'> {
   try {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);

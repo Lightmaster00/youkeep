@@ -1,7 +1,7 @@
 <template>
-  <BaseModal :show="show" title="Report video" @close="close">
+  <BaseModal :show="show" :title="t('report.title')" @close="close">
     <form :id="formId" class="report-form" @submit.prevent="submit">
-      <label class="report-label" :for="reasonId">What is wrong with this video?</label>
+      <label class="report-label" :for="reasonId">{{ t('report.label') }}</label>
       <textarea
         :id="reasonId"
         ref="reasonEl"
@@ -17,9 +17,9 @@
       <p v-if="errorMessage" class="report-error" role="alert">{{ errorMessage }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn btn-secondary" @click="close">Cancel</button>
+      <button type="button" class="btn btn-secondary" @click="close">{{ t('common.cancel') }}</button>
       <button type="submit" class="btn btn-danger" :form="formId" data-testid="report-submit" :disabled="!reason.trim() || sending">
-        {{ sending ? 'Sending...' : 'Report' }}
+        {{ sending ? t('report.sending') : t('common.report') }}
       </button>
     </template>
   </BaseModal>
@@ -34,6 +34,7 @@ import { useToast } from '~/composables/useToast';
 const props = defineProps<{ show: boolean; videoId: string }>();
 const emit = defineEmits<{ close: [] }>();
 const toast = useToast();
+const { t } = useI18n();
 
 const uid = `report-${Math.random().toString(36).slice(2, 8)}`;
 const formId = `${uid}-form`;
@@ -63,11 +64,11 @@ async function submit() {
   errorMessage.value = '';
   try {
     await $fetch(`/api/videos/${encodeURIComponent(props.videoId)}/report`, { method: 'POST', body: { reason: text } });
-    toast.success('Thanks, the video was reported to the administrators.');
+    toast.success(t('report.thanks'));
     sending.value = false;
     emit('close');
   } catch (err: any) {
-    errorMessage.value = err?.data?.statusMessage || 'The report could not be sent.';
+    errorMessage.value = err?.data?.statusMessage || t('report.failed');
     sending.value = false;
   }
 }

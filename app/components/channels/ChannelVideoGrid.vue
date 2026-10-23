@@ -176,7 +176,7 @@ const onVideoHidden = (id: string) => {
 };
 
 const copyShareLink = async (video: any) => {
-  const res = await shareVideoLink(video, isAdmin.value);
+  const res = await shareVideoLink(video, isAdmin.value, t);
   if (!res.ok) toast.error(res.message || t('channels.shareFailed'));
   else if (res.message) toast.success(res.message);
 };
