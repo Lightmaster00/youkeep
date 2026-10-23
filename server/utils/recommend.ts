@@ -47,7 +47,19 @@ export interface RecommendOptions {
   /** Attach the English `reason` to each video (default true). */
   reasonLabels?: boolean;
   now?: number;
+  /** Shares the candidate pool and the profile between calls of one request. */
+  cache?: RecommendCache;
 }
+
+/** Per-request memo of the pools and the viewer profile (one request = one viewer). */
+export interface RecommendCache {
+  pools: Map<RecommendType, PoolVideo[]>;
+  profile?: UserProfile;
+  /** Candidate ids already checked against the full history. */
+  checked: Set<string>;
+}
+
+export const createRecommendCache = (): RecommendCache => ({ pools: new Map(), checked: new Set() });
 
 export const NEWEST_POOL_SIZE = 600;
 export const POPULAR_POOL_SIZE = 200;
@@ -139,16 +151,46 @@ export function loadProfile(db: Database.Database, viewer: VideoViewer | null, n
   const subs = (db.prepare('SELECT channel_id FROM user_subscriptions WHERE user_id = ?').all(viewer.id) as { channel_id: string }[])
     .map((r) => r.channel_id);
   const profile = buildProfile(history, subs, now);
-  // Watched long ago (outside the recent rows): still never recommended again.
-  if (candidateIds.length > 0) {
-    const watched = db.prepare(`
-      SELECT video_id FROM user_history
-      WHERE user_id = ? AND video_id IN (SELECT value FROM json_each(?))
-        AND (watch_time_seconds > 0 OR position_seconds >= 10)
-    `).all(viewer.id, JSON.stringify(candidateIds)) as { video_id: string }[];
-    for (const r of watched) profile.excluded.add(r.video_id);
-  }
+  excludeWatched(db, viewer, profile, candidateIds);
   return profile;
+}
+
+/** Watched long ago (outside the recent rows the profile reads): still never recommended again. */
+export function excludeWatched(db: Database.Database, viewer: VideoViewer | null, profile: UserProfile, ids: string[]): void {
+  if (!viewer || ids.length === 0) return;
+  const watched = db.prepare(`
+    SELECT video_id FROM user_history
+    WHERE user_id = ? AND video_id IN (SELECT value FROM json_each(?))
+      AND (watch_time_seconds > 0 OR position_seconds >= 10)
+  `).all(viewer.id, JSON.stringify(ids)) as { video_id: string }[];
+  for (const r of watched) profile.excluded.add(r.video_id);
+}
+
+function cachedPool(db: Database.Database, viewer: VideoViewer | null, type: RecommendType, cache?: RecommendCache): PoolVideo[] {
+  const hit = cache?.pools.get(type);
+  if (hit) return hit;
+  const pool = loadCandidatePool(db, viewer, type);
+  cache?.pools.set(type, pool);
+  return pool;
+}
+
+/** The viewer profile, with every candidate of `pool` checked against the full history. */
+function cachedProfile(db: Database.Database, viewer: VideoViewer | null, now: number, pool: PoolVideo[], cache?: RecommendCache): UserProfile {
+  if (!cache) return loadProfile(db, viewer, now, pool.map((v) => v.id));
+  if (!cache.profile) {
+    cache.profile = loadProfile(db, viewer, now, pool.map((v) => v.id));
+    for (const v of pool) cache.checked.add(v.id);
+    return cache.profile;
+  }
+  const unchecked = pool.map((v) => v.id).filter((id) => !cache.checked.has(id));
+  excludeWatched(db, viewer, cache.profile, unchecked);
+  for (const id of unchecked) cache.checked.add(id);
+  return cache.profile;
+}
+
+/** The viewer's profile for this request (cached when a cache is given). */
+export function getViewerProfile(db: Database.Database, viewer: VideoViewer | null, cache?: RecommendCache, now: number = Date.now()): UserProfile {
+  return cachedProfile(db, viewer, now, cachedPool(db, viewer, 'video', cache), cache);
 }
 
 function present(ranked: Ranked<PoolVideo>[], reasonLabels: boolean): RecommendedVideo[] {
@@ -160,9 +202,9 @@ function present(ranked: Ranked<PoolVideo>[], reasonLabels: boolean): Recommende
 
 export function getRecommendedVideos(db: Database.Database, viewer: VideoViewer | null, opts: RecommendOptions): RecommendedVideo[] {
   const now = opts.now ?? Date.now();
-  const pool = loadCandidatePool(db, viewer, opts.type);
+  const pool = cachedPool(db, viewer, opts.type, opts.cache);
   if (pool.length === 0) return [];
-  const profile = loadProfile(db, viewer, now, pool.map((v) => v.id));
+  const profile = cachedProfile(db, viewer, now, pool, opts.cache);
   const ranked = rankCandidates(pool, profile, {
     now,
     seed: opts.seed ?? defaultSeed(now),
@@ -180,7 +222,7 @@ export function getRecommendedVideos(db: Database.Database, viewer: VideoViewer 
 export function getBecauseYouWatched(
   db: Database.Database,
   viewer: VideoViewer,
-  opts: { limit: number; seed?: string; exclude?: Iterable<string>; now?: number },
+  opts: { limit: number; seed?: string; exclude?: Iterable<string>; now?: number; cache?: RecommendCache },
 ): { seed: { id: string; title: string }; videos: RecommendedVideo[] } | null {
   const now = opts.now ?? Date.now();
   const visible = videoVisibilitySql(viewer);
@@ -195,7 +237,7 @@ export function getBecauseYouWatched(
     LIMIT 1
   `).get(viewer.id, ...visible.params) as { id: string; title: string; channel_id: string; categories: string | null; tags: string | null } | undefined;
   if (!seedRow) return null;
-  const pool = loadCandidatePool(db, viewer, 'video');
+  const pool = cachedPool(db, viewer, 'video', opts.cache);
   // Same-channel videos may be older than the pool: add the channel's newest ones.
   const channelRows = db.prepare(`
     SELECT v.id FROM videos v JOIN channels c ON c.id = v.channel_id
@@ -206,7 +248,7 @@ export function getBecauseYouWatched(
   const missing = channelRows.map((r) => r.id).filter((id) => !inPool.has(id));
   const extra = missing.length > 0 ? loadVideosByIds(db, viewer, missing) : [];
   const candidates = [...pool, ...extra];
-  const profile = loadProfile(db, viewer, now, candidates.map((v) => v.id));
+  const profile = cachedProfile(db, viewer, now, candidates, opts.cache);
   const ranked = rankSimilar(candidates, {
     id: seedRow.id,
     title: seedRow.title,

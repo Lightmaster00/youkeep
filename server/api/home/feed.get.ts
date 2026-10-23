@@ -1,27 +1,29 @@
 import { defineEventHandler } from 'h3';
-import { getRecommendedVideos } from '../../utils/recommend';
+import { createRecommendCache, getBecauseYouWatched, getRecommendedVideos, getViewerProfile } from '../../utils/recommend';
 import { getUserFromSession } from '../../utils/auth';
 import type { UserSession } from '../../utils/auth';
 import { getDisplayView } from '../../utils/displayPrefsStore';
 import { isModuleEnabled } from '../../utils/modules';
 import { queryRecentEpisodes, queryRecentTracks } from '../../utils/recentMedia';
+import { queryContinueWatching } from '../../utils/watchProgress';
+import {
+  FEED_VIDEO_COLUMNS,
+  queryCategoryVideos,
+  queryCommonCategories,
+  queryDiscoverChannels,
+  queryHomePlaylists,
+  queryShortsShelf,
+  querySubscriptionLatest,
+  type FeedVideo,
+} from '../../utils/homeSections';
 import { APP_DEFAULTS } from '../../../shared/displayPrefs';
 import type { DisplayPrefs, HomeSectionId, PopularRanking } from '../../../shared/displayPrefs';
 
-interface FeedVideo {
-  id: string;
-  title: string;
-  duration: number | null;
-  view_count: number | null;
-  upload_date: string | null;
-  created_at?: number; // present on pool-sourced videos (newest/popular/subscriptions), absent on suggestion-sourced ones — not read by any consumer, so this is safe
-  local_video_path: string | null;
-  local_thumbnail_path: string | null;
-  was_live?: number;
-  channel_id: string;
-  channel_title: string;
-  channel_avatar: string | null;
-}
+// GET /api/home/feed: { featured: { large, small }, sections: [...] }. Each
+// section is { id, title, ... } with one payload key (videos, groups,
+// playlists, channels, tracks or episodes), built in the viewer's order and
+// left out when empty. A video appears at most once across the hero and the
+// video rows. Long videos only, except the "shorts" shelf.
 
 function getVisibilityFilter(session: UserSession | null): { sql: string; params: any[] } {
   if (!session) {
@@ -44,19 +46,23 @@ function getHiddenFilter(session: UserSession | null): { sql: string; params: an
   return { sql: 'AND v.id NOT IN (SELECT video_id FROM user_hidden_videos WHERE user_id = ?)', params: [session.id] };
 }
 
-const FEED_VIDEO_COLUMNS = `
-  v.id, v.title, v.duration, v.view_count, v.upload_date, v.created_at,
-  v.local_video_path, v.local_thumbnail_path, v.was_live, v.channel_id, v.is_short,
-  c.title as channel_title, c.avatar_url as channel_avatar
-`;
-
-const SECTION_TITLES: Partial<Record<HomeSectionId, string>> = {
+const SECTION_TITLES: Record<HomeSectionId, string> = {
+  continue: 'Continue watching',
+  subscriptions: 'From your subscriptions',
+  forYou: 'Recommended for you',
   popular: 'Popular',
-  forYou: 'Suggested for you',
-  subscriptions: 'By followed channel',
+  becauseYouWatched: 'Because you watched',
+  byCategory: 'Browse by category',
+  shorts: 'Shorts',
+  playlists: 'Your playlists',
+  discoverChannels: 'Channels to discover',
   recentMusic: 'Recently added music',
   newEpisodes: 'New podcast episodes',
 };
+
+/** Rows of the byCategory section, and personal playlists shown. */
+const CATEGORY_ROWS = 3;
+const HOME_PLAYLISTS = 6;
 
 const POPULAR_ORDER: Record<PopularRanking, string> = {
   localViewers: 'local_viewers DESC, v.view_count DESC',
@@ -132,6 +138,8 @@ export default defineEventHandler(async (event) => {
   const newestPool = queryPool('newest', POOL_SIZE);
 
   const usedIds = new Set<string>();
+  // One candidate pool and viewer profile for every recommendation row of this request.
+  const cache = createRecommendCache();
 
   // Claims every video's id into usedIds so later sections can't re-include
   // videos already picked by an earlier section, and returns the same list
@@ -164,7 +172,7 @@ export default defineEventHandler(async (event) => {
     if (large) usedIds.add(large.id);
 
     if (session) {
-      const suggestions = getRecommendedVideos(db, session, { type: 'video', limit: 10 }) as unknown as FeedVideo[];
+      const suggestions = getRecommendedVideos(db, session, { type: 'video', limit: 10, cache }) as unknown as FeedVideo[];
       const suggestion = suggestions.find(v => !usedIds.has(v.id) && !subscribedChannelIds.has(v.channel_id));
       if (suggestion) {
         small.push(suggestion);
@@ -186,55 +194,69 @@ export default defineEventHandler(async (event) => {
 
   // Lazy builders re-query sized from what earlier sections already claimed, so
   // moving 'popular' below big sections never starves it.
-  const builders: Partial<Record<HomeSectionId, () => any | null>> = {
+  const builders: Record<HomeSectionId, () => any | null> = {
+    continue: () => {
+      if (!session) return null;
+      const videos = claim(queryContinueWatching(db, session, rowSize, usedIds) as unknown as FeedVideo[]);
+      return videos.length > 0 ? { id: 'continue', title: SECTION_TITLES.continue, videos } : null;
+    },
+    subscriptions: () => {
+      if (!session) return null;
+      const videos = claim(querySubscriptionLatest(db, session, { limit: rowSize, maxChannels: prefs.subscriptionChannels, exclude: usedIds }));
+      return videos.length > 0 ? { id: 'subscriptions', title: SECTION_TITLES.subscriptions, videos } : null;
+    },
+    forYou: () => {
+      if (!session) return null;
+      const videos = claim(getRecommendedVideos(db, session, { type: 'video', limit: rowSize, exclude: usedIds, cache }) as unknown as FeedVideo[]);
+      return videos.length > 0 ? { id: 'forYou', title: SECTION_TITLES.forYou, videos } : null;
+    },
     popular: () => {
       const videos = claim(queryPool('popular', usedIds.size + rowSize).filter(v => !usedIds.has(v.id)).slice(0, rowSize));
       return videos.length > 0 ? { id: 'popular', title: SECTION_TITLES.popular, videos } : null;
     },
-    forYou: () => {
+    becauseYouWatched: () => {
       if (!session) return null;
-      const suggestions = getRecommendedVideos(db, session, { type: 'video', limit: Math.max(20, rowSize + 10) }) as unknown as FeedVideo[];
-      const videos = claim(suggestions.filter(v => !usedIds.has(v.id)).slice(0, rowSize));
-      return videos.length > 0 ? { id: 'forYou', title: SECTION_TITLES.forYou, videos } : null;
+      const result = getBecauseYouWatched(db, session, { limit: rowSize, exclude: usedIds, cache });
+      if (!result) return null;
+      const videos = claim(result.videos as unknown as FeedVideo[]);
+      return { id: 'becauseYouWatched', title: `${SECTION_TITLES.becauseYouWatched} ${result.seed.title}`, seed: result.seed, videos };
     },
-    subscriptions: () => {
-      if (!session) return null;
-      const subChannels = db.prepare(`
-        SELECT c.id, c.title, c.avatar_url
-        FROM channels c
-        JOIN user_subscriptions us ON us.channel_id = c.id
-        WHERE us.user_id = ?
-        ORDER BY us.created_at DESC
-      `).all(session.id) as { id: string; title: string; avatar_url: string | null }[];
-
-      const subscriptionChannels: any[] = [];
-      for (const ch of subChannels) {
-        if (subscriptionChannels.length >= prefs.subscriptionChannels) break;
-        const chVideos = db.prepare(`
-          SELECT ${FEED_VIDEO_COLUMNS}
-          FROM videos v
-          JOIN channels c ON v.channel_id = c.id
-          WHERE v.channel_id = ?
-            AND v.download_status = 'completed'
-            AND v.is_short = 0
-            AND ${visibility.sql}
-            ${hidden.sql}
-          ORDER BY v.created_at DESC
-          LIMIT 20
-        `).all(ch.id, ...visibility.params, ...hidden.params) as FeedVideo[];
-        const filtered = chVideos.filter(v => !usedIds.has(v.id));
-        if (filtered.length >= 2) {
-          subscriptionChannels.push({
-            channelId: ch.id,
-            channelTitle: ch.title,
-            channelAvatar: ch.avatar_url,
-            videos: claim(filtered.slice(0, 12))
-          });
+    byCategory: () => {
+      // The viewer's top categories, completed by the most common ones of the library.
+      const categories: string[] = [];
+      if (session) {
+        const profile = getViewerProfile(db, session, cache);
+        categories.push(...[...profile.categoryAffinity.entries()]
+          .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+          .slice(0, CATEGORY_ROWS)
+          .map(([category]) => category));
+      }
+      if (categories.length < CATEGORY_ROWS) {
+        for (const category of queryCommonCategories(db, session, CATEGORY_ROWS * 2)) {
+          if (categories.length >= CATEGORY_ROWS) break;
+          if (!categories.includes(category)) categories.push(category);
         }
       }
-      return subscriptionChannels.length > 0
-        ? { id: 'subscriptions', title: SECTION_TITLES.subscriptions, channels: subscriptionChannels }
-        : null;
+      const groups: { category: string; title: string; videos: FeedVideo[] }[] = [];
+      for (const category of categories) {
+        const videos = claim(queryCategoryVideos(db, session, category, { limit: rowSize, exclude: usedIds }));
+        if (videos.length > 0) groups.push({ category, title: category, videos });
+      }
+      return groups.length > 0 ? { id: 'byCategory', title: SECTION_TITLES.byCategory, groups } : null;
+    },
+    shorts: () => {
+      const videos = claim(queryShortsShelf(db, session, rowSize));
+      return videos.length > 0 ? { id: 'shorts', title: SECTION_TITLES.shorts, videos } : null;
+    },
+    playlists: () => {
+      if (!session) return null;
+      const playlists = queryHomePlaylists(db, session, HOME_PLAYLISTS);
+      return playlists.length > 0 ? { id: 'playlists', title: SECTION_TITLES.playlists, playlists } : null;
+    },
+    discoverChannels: () => {
+      if (!session) return null;
+      const channels = queryDiscoverChannels(db, session, getViewerProfile(db, session, cache), rowSize);
+      return channels.length > 0 ? { id: 'discoverChannels', title: SECTION_TITLES.discoverChannels, channels } : null;
     },
     // Music and podcast rows: never share ids with the video sections, so no
     // claim(); a module that is off contributes nothing.

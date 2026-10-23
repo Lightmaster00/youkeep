@@ -119,10 +119,13 @@
         </div>
       </div>
 
-      <!-- Content Discovery Rows -->
+      <!-- Content Discovery Rows (a simple rendering; the full home design is separate) -->
       <template v-for="section in feedSections" :key="section.id">
-        <div v-if="section.videos" class="content-row">
-          <h3 class="row-title">{{ section.title }}</h3>
+        <div v-if="section.videos" class="content-row" :data-testid="`home-row-${section.id}`">
+          <div class="row-header">
+            <h3 class="row-title">{{ section.title }}</h3>
+            <NuxtLink v-if="SEE_ALL[section.id]" :to="SEE_ALL[section.id]" class="see-all-link">See all →</NuxtLink>
+          </div>
           <div class="scroll-row">
             <div class="scroll-track">
               <div v-for="video in section.videos" :key="video.id" class="scroll-card">
@@ -132,23 +135,48 @@
           </div>
         </div>
 
-        <HomeMediaRow v-else-if="section.tracks || section.episodes" :section="section" />
-
-        <template v-else-if="section.channels">
-          <div v-for="channelRow in section.channels" :key="channelRow.channelId" class="content-row">
-            <div class="row-header">
-              <h3 class="row-title">{{ channelRow.channelTitle }}</h3>
-              <NuxtLink :to="`/channels?channelId=${channelRow.channelId}`" class="see-all-link">See all →</NuxtLink>
-            </div>
+        <template v-else-if="section.groups">
+          <div v-for="group in section.groups" :key="group.category" class="content-row" :data-testid="`home-row-${section.id}`">
+            <h3 class="row-title">{{ group.title }}</h3>
             <div class="scroll-row">
               <div class="scroll-track">
-                <div v-for="video in channelRow.videos" :key="video.id" class="scroll-card">
-                  <VideoCard :video="video" :show-channel-info="false" @hidden="onVideoHidden" />
+                <div v-for="video in group.videos" :key="video.id" class="scroll-card">
+                  <VideoCard :video="video" @hidden="onVideoHidden" />
                 </div>
               </div>
             </div>
           </div>
         </template>
+
+        <div v-else-if="section.playlists" class="content-row" :data-testid="`home-row-${section.id}`">
+          <div class="row-header">
+            <h3 class="row-title">{{ section.title }}</h3>
+            <NuxtLink to="/playlists" class="see-all-link">See all →</NuxtLink>
+          </div>
+          <div class="channels-row">
+            <NuxtLink v-for="pl in section.playlists" :key="pl.id" :to="`/playlists/${pl.id}`" class="search-channel-pill">
+              <div class="pill-info">
+                <span class="pill-name">{{ pl.title }}</span>
+                <span class="pill-count">{{ pl.video_count }} videos</span>
+              </div>
+            </NuxtLink>
+          </div>
+        </div>
+
+        <div v-else-if="section.channels" class="content-row" :data-testid="`home-row-${section.id}`">
+          <h3 class="row-title">{{ section.title }}</h3>
+          <div class="channels-row">
+            <NuxtLink v-for="channel in section.channels" :key="channel.id" :to="`/channels?channelId=${channel.id}`" class="search-channel-pill">
+              <img :src="channel.avatar_url || fallbackAvatar" @error="handleAvatarError" class="pill-avatar" alt="" />
+              <div class="pill-info">
+                <span class="pill-name">{{ channel.title }}</span>
+                <span class="pill-count">{{ channel.video_count }} videos</span>
+              </div>
+            </NuxtLink>
+          </div>
+        </div>
+
+        <HomeMediaRow v-else-if="section.tracks || section.episodes" :section="section" />
       </template>
 
     </div>
@@ -250,6 +278,9 @@ const featuredLarge = computed(() => homeFeedData.value?.featured?.large ?? null
 const featuredSmall = computed(() => homeFeedData.value?.featured?.small ?? []);
 const feedSections = computed(() => homeFeedData.value?.sections ?? []);
 
+// Rows with a page that lists everything.
+const SEE_ALL: Record<string, string> = { subscriptions: '/subscriptions', shorts: '/shorts' };
+
 const changePage = (newPage: number) => {
   router.push({ path: '/', query: { ...route.query, page: newPage } });
 };
@@ -274,9 +305,9 @@ const onVideoHidden = (id: string) => {
       if (section.videos) {
         section.videos = section.videos.filter((v: any) => v.id !== id);
       }
-      if (section.channels) {
-        for (const ch of section.channels) {
-          ch.videos = ch.videos.filter((v: any) => v.id !== id);
+      if (section.groups) {
+        for (const group of section.groups) {
+          group.videos = group.videos.filter((v: any) => v.id !== id);
         }
       }
     }

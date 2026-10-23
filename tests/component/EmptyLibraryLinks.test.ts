@@ -38,11 +38,11 @@ describe('empty-library calls to action', () => {
 describe('channel links on the home page', () => {
   it('use the channelId query the channels page reads, never ?id=', async () => {
     feed = { featured: { large: null, small: [] }, sections: [
-      { id: 'subscriptions', title: 'Subscriptions', channels: [{ channelId: 'UC1', channelTitle: 'Chan', channelAvatar: null, videos: [] }] },
+      { id: 'discoverChannels', title: 'Channels to discover', channels: [{ id: 'UC1', title: 'Chan', avatar_url: null, video_count: 3, categories: [] }] },
     ] };
     const w = await mountSuspended(IndexPage, { route: '/' });
     await flushPromises();
-    const link = w.findAll('a').find((a) => a.text().includes('See all'));
+    const link = w.findAll('a').find((a) => a.text().includes('Chan'));
     expect(link?.attributes('href')).toBe('/channels?channelId=UC1');
   });
 });

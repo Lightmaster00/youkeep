@@ -121,3 +121,25 @@ describe('home search (/?q=): Videos then Shorts', () => {
     w.unmount();
   });
 });
+
+describe('home page with the sections of the new feed', () => {
+  const video = (id: string, extra: object = {}) => ({ id, title: `Title ${id}`, channel_id: 'c1', channel_title: 'Chan', channel_avatar: null, duration: 60, view_count: 1, upload_date: null, local_video_path: '/v.mp4', local_thumbnail_path: null, ...extra });
+
+  it('renders video rows, category groups, playlists and channels in the feed order', async () => {
+    useState('display_prefs').value = buildView({ homeHero: false }, null);
+    feed.sections = [
+      { id: 'continue', title: 'Continue watching', videos: [video('a', { positionSeconds: 30, durationSeconds: 60, progress: 0.5 })] },
+      { id: 'forYou', title: 'Recommended for you', videos: [video('b', { reason: { kind: 'new', label: 'New' } })] },
+      { id: 'byCategory', title: 'Browse by category', groups: [{ category: 'Gaming', title: 'Gaming', videos: [video('c')] }, { category: 'Music', title: 'Music', videos: [video('d')] }] },
+      { id: 'playlists', title: 'Your playlists', playlists: [{ id: 'p1', title: 'Road trip', visibility: 'private', created_at: 1, video_count: 4, cover_video_id: 'a', thumbnail_path: null }] },
+      { id: 'discoverChannels', title: 'Channels to discover', channels: [{ id: 'UC9', title: 'Fresh channel', avatar_url: null, video_count: 7, categories: ['Gaming'] }] },
+    ];
+    const w = await mountHome();
+    expect(w.findAll('[data-testid^="home-row-"]').map((r) => r.attributes('data-testid')))
+      .toEqual(['home-row-continue', 'home-row-forYou', 'home-row-byCategory', 'home-row-byCategory', 'home-row-playlists', 'home-row-discoverChannels']);
+    const text = w.text();
+    for (const t of ['Continue watching', 'Title a', 'Title b', 'Gaming', 'Music', 'Title c', 'Road trip', '4 videos', 'Fresh channel']) expect(text).toContain(t);
+    expect(w.find('a[href="/playlists/p1"]').exists()).toBe(true);
+    expect(w.find('a[href="/channels?channelId=UC9"]').exists()).toBe(true);
+  });
+});

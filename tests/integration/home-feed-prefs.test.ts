@@ -53,7 +53,8 @@ describe('Shorts never mix into the video rows', () => {
   const everyVideoId = (r: any) => [
     r.featured.large?.id,
     ...r.featured.small.map((v: any) => v.id),
-    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : (s.channels || []).flatMap((c: any) => c.videos.map((v: any) => v.id))),
+    // Every row except the dedicated Shorts shelf.
+    ...r.sections.filter((s: any) => s.id !== 'shorts').flatMap((s: any) => s.videos ? ids(s) : (s.groups || []).flatMap((g: any) => g.videos.map((v: any) => v.id))),
   ].filter(Boolean);
 
   it('for a guest (hero and popular)', async () => {
@@ -74,7 +75,9 @@ describe('Shorts never mix into the video rows', () => {
     insertSubscription(db, { userId: 'viewer', channelId: 'c3' });
     insertUserHistory(db, { userId: 'viewer', videoId: 'c1s0', watchTimeSeconds: 5000, watchedAt: Date.now() });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['subscriptions', 'forYou', 'popular']);
+    expect(sectionIds(r)).toEqual(expect.arrayContaining(['subscriptions', 'forYou', 'popular', 'shorts']));
+    // Shorts have their own shelf, and only there.
+    expect(r.sections.find((s: any) => s.id === 'shorts').videos.every((v: any) => v.is_short === 1)).toBe(true);
     const all = everyVideoId(r);
     expect(all.length).toBeGreaterThan(10);
     expect(all.filter((id: string) => /s\d/.test(id))).toEqual([]);
@@ -190,7 +193,7 @@ describe('logged-in viewers', () => {
   const allIds = (r: any) => [
     r.featured.large?.id,
     ...r.featured.small.map((v: any) => v.id),
-    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : s.channels.flatMap((c: any) => c.videos.map((v: any) => v.id))),
+    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : (s.groups || []).flatMap((g: any) => g.videos.map((v: any) => v.id))),
   ].filter(Boolean);
 
   it('with the hero off, suggested then popular both appear without duplicates', async () => {
@@ -213,7 +216,7 @@ describe('logged-in viewers', () => {
     insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
     insertUserHistory(db, { userId: 'viewer', videoId: 'c2v0', watchTimeSeconds: 50, watchedAt: Date.now() });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['subscriptions', 'forYou', 'popular']);
+    expect(sectionIds(r)).toEqual(['subscriptions', 'forYou', 'popular', 'becauseYouWatched', 'discoverChannels']);
     expect(r.featured.large).not.toBeNull();
     const all = allIds(r);
     expect(all.length).toBeGreaterThan(5);
@@ -258,7 +261,8 @@ describe('sizes', () => {
     }
     setAdminDefaults({ homeHero: false, homeSections: ['subscriptions'], subscriptionChannels: 4 });
     const r: any = await handler(event);
-    expect(r.sections[0].channels).toHaveLength(4);
+    expect(new Set(r.sections[0].videos.map((v: any) => v.channel_id)).size).toBe(4);
+    expect(r.sections[0].videos).toHaveLength(8);
   });
 });
 
@@ -313,7 +317,7 @@ describe('lazy popular sizing', () => {
     expect(sectionIds(r)).toEqual(['subscriptions', 'popular']);
     const popular = r.sections.find((s: any) => s.id === 'popular');
     expect(popular.videos).toHaveLength(15);
-    const all = r.sections.flatMap((s: any) => s.id === 'subscriptions' ? s.channels.flatMap(ids) : ids(s));
+    const all = r.sections.flatMap((s: any) => ids(s));
     expect(new Set(all).size).toBe(all.length);
   });
 });
