@@ -29,6 +29,9 @@
         <p class="channel-profile-meta">
           YouTube Channel • ID : {{ channel.id }} • {{ singleChannelData?.stats?.completedCount || 0 }} / {{ singleChannelData?.stats?.totalCount || 0 }} videos archived
         </p>
+        <div v-if="channel.categories?.length" class="channel-profile-categories" data-testid="channel-categories">
+          <CategoryChip v-for="cat in channel.categories" :key="cat" :name="cat" />
+        </div>
         <p class="channel-profile-desc">{{ channel.description || 'No description available.' }}</p>
 
         <div class="channel-actions-row">
@@ -87,6 +90,7 @@ import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
 import { useChannelDetail } from '~/composables/useChannelDetail';
 import { useChannelsList } from '~/composables/useChannelsList';
+import CategoryChip from '~/components/channels/CategoryChip.vue';
 
 defineEmits<{ 'open-drawer': [] }>();
 

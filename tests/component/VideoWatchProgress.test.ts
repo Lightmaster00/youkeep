@@ -29,13 +29,14 @@ function fakeVideo(duration = 1000) {
   };
 }
 
-function host(video: ReturnType<typeof fakeVideo>, opts: { id?: string; loggedIn?: boolean; startAt?: number | null } = {}) {
+function host(video: ReturnType<typeof fakeVideo>, opts: { id?: string; loggedIn?: boolean; startAt?: number | null; serverPosition?: number | null } = {}) {
   const videoId = ref(opts.id ?? 'v1');
   const isLoggedIn = ref(opts.loggedIn ?? true);
   const startAt = ref(opts.startAt ?? null);
+  const serverPosition = ref(opts.serverPosition ?? null);
   const Host = defineComponent({
     setup() {
-      useVideoWatchProgress({ videoEl: () => video.el, videoId, isLoggedIn, startAt });
+      useVideoWatchProgress({ videoEl: () => video.el, videoId, isLoggedIn, startAt, serverPosition });
       return () => h('div');
     },
   });
@@ -62,7 +63,10 @@ describe('watch time tracking', () => {
     await nextTick();
     v.play();
     await v.advance(31);
-    expect(trackCalls()).toEqual([{ videoId: 'v1', watchTimeSeconds: 15 }, { videoId: 'v1', watchTimeSeconds: 15 }]);
+    expect(trackCalls()).toEqual([
+      { videoId: 'v1', watchTimeSeconds: 15, positionSeconds: 15, durationSeconds: 1000 },
+      { videoId: 'v1', watchTimeSeconds: 15, positionSeconds: 30, durationSeconds: 1000 },
+    ]);
     v.pause();
     expect(trackCalls()).toHaveLength(3);
     expect(trackCalls()[2]!.watchTimeSeconds).toBe(1);
@@ -90,7 +94,28 @@ describe('watch time tracking', () => {
     v.play();
     await v.advance(7);
     wrapper.unmount();
-    expect(trackCalls()).toEqual([{ videoId: 'v1', watchTimeSeconds: 7 }]);
+    expect(trackCalls()).toEqual([{ videoId: 'v1', watchTimeSeconds: 7, positionSeconds: 7, durationSeconds: 1000 }]);
+  });
+
+  it('a pause after a seek without playback still sends the new position', async () => {
+    const v = fakeVideo();
+    const { wrapper } = host(v);
+    await nextTick();
+    v.el.currentTime = 400;
+    v.pause();
+    expect(trackCalls()).toEqual([{ videoId: 'v1', watchTimeSeconds: 0, positionSeconds: 400, durationSeconds: 1000 }]);
+    wrapper.unmount();
+  });
+
+  it('reports the end of the video as its last position', async () => {
+    const v = fakeVideo();
+    const { wrapper } = host(v);
+    await nextTick();
+    v.play();
+    await v.advance(2);
+    v.el.dispatchEvent(new Event('ended'));
+    expect(trackCalls().at(-1)).toEqual({ videoId: 'v1', watchTimeSeconds: 2, positionSeconds: 1000, durationSeconds: 1000 });
+    wrapper.unmount();
   });
 });
 
@@ -109,6 +134,33 @@ describe('resume position', () => {
 
     saveResumePosition('v1', 960, 1000);
     expect(getResumePosition('v1')).toBeNull();
+  });
+
+  it('signed in: resumes from the server position, unless the link has ?t=', async () => {
+    saveResumePosition('v1', 321, 1000);
+    const v = fakeVideo();
+    host(v, { serverPosition: 500 });
+    await nextTick();
+    expect(v.el.currentTime).toBe(500);
+
+    const v2 = fakeVideo();
+    host(v2, { serverPosition: 500, startAt: 42 });
+    await nextTick();
+    expect(v2.el.currentTime).toBe(42);
+
+    // A finished video starts over.
+    const v3 = fakeVideo();
+    host(v3, { serverPosition: 990 });
+    await nextTick();
+    expect(v3.el.currentTime).toBe(0);
+  });
+
+  it('a guest keeps the browser position', async () => {
+    saveResumePosition('v1', 321, 1000);
+    const v = fakeVideo();
+    host(v, { loggedIn: false, serverPosition: 500 });
+    await nextTick();
+    expect(v.el.currentTime).toBe(321);
   });
 
   it('saves the position while playing', async () => {

@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3';
 import { channelColumnsSql, videoVisibilitySql } from '../../utils/videoAccess';
+import { effectiveCategoriesSql, parseCategories } from '../../utils/channelCategories';
 
 export default defineEventHandler(async (event) => {
   const channelId = event.context.params?.id;
@@ -12,9 +13,24 @@ export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
 
   // Explicit columns: server paths, import errors and download options are admin-only.
-  const channel = db.prepare(`
-    SELECT ${channelColumnsSql(session)} FROM channels c WHERE c.id = ?
-  `).get(channelId);
+  // Effective categories for everyone; the automatic list and the override
+  // (for the category editor) only for admins.
+  const row = db.prepare(`
+    SELECT ${channelColumnsSql(session)}, ${effectiveCategoriesSql('c')} AS categories_json,
+           c.categories AS categories_auto_json, c.categories_override AS categories_override_json
+    FROM channels c WHERE c.id = ?
+  `).get(channelId) as any;
+  let channel: any = null;
+  if (row) {
+    const { categories_json, categories_auto_json, categories_override_json, ...rest } = row;
+    channel = {
+      ...rest,
+      categories: parseCategories(categories_json),
+      ...(session?.role === 'admin'
+        ? { categories_auto: parseCategories(categories_auto_json), categories_override: categories_override_json === null ? null : parseCategories(categories_override_json) }
+        : {}),
+    };
+  }
 
   // A channel the viewer may not see answers exactly like a missing one.
   if (!channel || !(await canAccessChannel(channelId, event))) {

@@ -35,6 +35,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Video not found.' });
   }
   
+  // Where this viewer left the video (server-side resume), before the visit below.
+  let resumePosition: number | null = null;
+  if (session) {
+    const row = db.prepare('SELECT position_seconds FROM user_history WHERE user_id = ? AND video_id = ?').get(session.id, videoId) as { position_seconds: number } | undefined;
+    resumePosition = row && row.position_seconds > 0 ? row.position_seconds : null;
+  }
+
   // Record in the watch history if the user is logged in
   if (session) {
     try {
@@ -97,5 +104,5 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  return { video, comments, subtitles, chapters };
+  return { video, comments, subtitles, chapters, resume: { positionSeconds: resumePosition } };
 });

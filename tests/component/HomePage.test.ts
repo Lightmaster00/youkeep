@@ -84,7 +84,7 @@ describe('home page', () => {
   });
 
   it('tells only guests to log in on an empty library (#22)', async () => {
-    useState('display_prefs').value = buildView({ homeHero: true, homeSections: ['recent'] }, null);
+    useState('display_prefs').value = buildView({ homeHero: true, homeSections: ['popular'] }, null);
     let w = await mountHome();
     expect(w.find('[data-testid="home-empty"]').text()).toContain('Log in as administrator');
     w.unmount();
@@ -93,5 +93,235 @@ describe('home page', () => {
     w = await mountHome();
     expect(w.find('[data-testid="home-empty"]').text()).not.toContain('Log in');
     w.unmount();
+  });
+});
+
+describe('home search (/?q=): Videos then Shorts', () => {
+  it('shows matching long videos, then matching Shorts in their own section', async () => {
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/channels') return { channels: [] };
+      if (url === '/api/videos') return opts.params?.type === 'short'
+        ? { videos: [{ id: 's1', title: 'Sushi short', is_short: 1 }], pagination: { total: 1, totalPages: 1 } }
+        : { videos: [{ id: 'v1', title: 'Sushi rolls', is_short: 0 }], pagination: { total: 1, totalPages: 1 } };
+      return {};
+    });
+    const w = await mountSuspended(HomePage, { route: '/?q=sushi' });
+    await flushPromises();
+    const types = fetchMock.mock.calls.filter(([u]) => u === '/api/videos').map(([, o]) => o.params.type).sort();
+    expect(types).toEqual(['short', 'video']);
+    const results = w.find('[data-testid="home-search-results"]');
+    const shorts = w.find('[data-testid="home-search-shorts"]');
+    expect(results.text()).toContain('Sushi rolls');
+    expect(results.text()).not.toContain('Sushi short');
+    expect(shorts.text()).toContain('Sushi short');
+    expect(shorts.find('.media-frame--short').exists()).toBe(true);
+    // The Shorts section comes after the videos.
+    const html = w.html();
+    expect(html.indexOf('home-search-results')).toBeLessThan(html.indexOf('home-search-shorts'));
+    w.unmount();
+  });
+});
+
+describe('home page with the sections of the new feed', () => {
+  const video = (id: string, extra: object = {}) => ({ id, title: `Title ${id}`, channel_id: 'c1', channel_title: 'Chan', channel_avatar: null, duration: 60, view_count: 1, upload_date: null, local_video_path: '/v.mp4', local_thumbnail_path: null, ...extra });
+
+  beforeEach(() => {
+    useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
+    useState('display_prefs_for').value = 'u1'; // the prefs set by each test are this user's
+  });
+
+  it('renders video rows, category groups, playlists and channels in the feed order', async () => {
+    useState('display_prefs').value = buildView({ homeHero: false }, null);
+    feed.sections = [
+      { id: 'continue', title: 'Continue watching', videos: [video('a', { positionSeconds: 30, durationSeconds: 60, progress: 0.5 })] },
+      { id: 'forYou', title: 'Recommended for you', videos: [video('b', { reason: { kind: 'new', label: 'New' } })] },
+      { id: 'byCategory', title: 'Browse by category', groups: [{ category: 'Gaming', title: 'Gaming', videos: [video('c')] }, { category: 'Music', title: 'Music', videos: [video('d')] }] },
+      { id: 'playlists', title: 'Your playlists', playlists: [{ id: 'p1', title: 'Road trip', visibility: 'private', created_at: 1, video_count: 4, cover_video_id: 'a', thumbnail_path: null }] },
+      { id: 'discoverChannels', title: 'Channels to discover', channels: [{ id: 'UC9', title: 'Fresh channel', avatar_url: null, video_count: 7, categories: ['Gaming'] }] },
+    ];
+    const w = await mountHome();
+    expect(w.findAll('[data-testid^="home-row-"]').map((r) => r.attributes('data-testid')))
+      .toEqual(['home-row-continue', 'home-row-forYou', 'home-row-byCategory', 'home-row-byCategory', 'home-row-playlists', 'home-row-discoverChannels']);
+    const text = w.text();
+    for (const t of ['Continue watching', 'Title a', 'Title b', 'Gaming', 'Music', 'Title c', 'Road trip', '4 videos', 'Fresh channel']) expect(text).toContain(t);
+    expect(w.find('a[href="/playlists/p1"]').exists()).toBe(true);
+    expect(w.find('a[href="/channels?channelId=UC9"]').exists()).toBe(true);
+  });
+});
+
+describe('home rows (part 2B)', () => {
+  const video = (id: string, extra: object = {}) => ({ id, title: `Title ${id}`, channel_id: 'c1', channel_title: 'Chan', channel_avatar: null, duration: 600, view_count: 1, upload_date: '20261020', local_video_path: '/v.mp4', local_thumbnail_path: null, is_short: 0, ...extra });
+  const short = (id: string) => video(id, { is_short: 1, duration: 30 });
+  const rowIds = (w: any) => w.findAll('[data-testid^="home-row-"]').map((r: any) => r.attributes('data-testid').replace('home-row-', ''));
+  const row = (w: any, id: string) => w.find(`[data-testid="home-row-${id}"]`);
+
+  beforeEach(() => {
+    useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
+    useState('display_prefs_for').value = 'u1'; // the prefs set by each test are this user's
+    useState('display_prefs').value = buildView({ homeHero: false }, null);
+  });
+
+  it('leaves out a row with nothing to show, and an empty category group', async () => {
+    feed.sections = [
+      { id: 'subscriptions', title: 'From your subscriptions', videos: [] },
+      { id: 'popular', title: 'Popular', videos: [video('p1')] },
+      { id: 'byCategory', title: 'Browse by category', groups: [{ category: 'Gaming', title: 'Gaming', videos: [] }, { category: 'Music', title: 'Music', videos: [video('m1')] }] },
+      { id: 'playlists', title: 'Your playlists', playlists: [] },
+    ];
+    const w = await mountHome();
+    expect(rowIds(w)).toEqual(['popular', 'byCategory']);
+    expect(row(w, 'byCategory').text()).toContain('Music');
+    expect(w.text()).not.toContain('Gaming');
+  });
+
+  it('never shows a Short in a video row; the Shorts shelf shows 9:16 Short cards and links to /shorts', async () => {
+    feed.sections = [
+      { id: 'popular', title: 'Popular', videos: [video('p1'), short('stray')] },
+      { id: 'shorts', title: 'Shorts', videos: [short('s1'), short('s2')] },
+    ];
+    const w = await mountHome();
+    expect(row(w, 'popular').text()).toContain('Title p1');
+    expect(row(w, 'popular').text()).not.toContain('Title stray');
+    expect(row(w, 'popular').find('.media-frame--short').exists()).toBe(false);
+    const shelf = row(w, 'shorts');
+    expect(shelf.findAll('.media-frame--short')).toHaveLength(2);
+    const seeAll = shelf.find('[data-testid="row-see-all"]');
+    expect(seeAll.text()).toBe('See all Shorts');
+    expect(seeAll.attributes('href')).toBe('/shorts');
+  });
+
+  it('shows the reason under the cards of Recommended for you and Because you watched only', async () => {
+    feed.sections = [
+      { id: 'forYou', title: 'Recommended for you', videos: [video('f1', { reason: { kind: 'subscription', label: 'From a channel you follow' } })] },
+      { id: 'becauseYouWatched', title: 'Because you watched Seed', seed: { id: 'x', title: 'Seed' }, videos: [video('b1', { reason: { kind: 'because-watched', label: 'Because you watched Seed' } })] },
+      { id: 'popular', title: 'Popular', videos: [video('p1', { reason: { kind: 'popular', label: 'Popular on your server' } })] },
+    ];
+    const w = await mountHome();
+    expect(row(w, 'forYou').find('[data-testid="card-reason"]').text()).toBe('From a channel you follow');
+    expect(row(w, 'becauseYouWatched').find('[data-testid="card-reason"]').text()).toBe('Because you watched Seed');
+    expect(row(w, 'popular').find('[data-testid="card-reason"]').exists()).toBe(false);
+  });
+
+  it('draws the progress of a Continue watching card and opens it without ?t=', async () => {
+    feed.sections = [{ id: 'continue', title: 'Continue watching', videos: [video('c1', { positionSeconds: 245, durationSeconds: 600, progress: 0.4083 })] }];
+    const w = await mountHome();
+    const r = row(w, 'continue');
+    const bar = r.find('[data-testid="resume-bar"]');
+    expect(bar.attributes('aria-valuenow')).toBe('41');
+    expect(bar.find('.resume-bar__fill').attributes('style')).toContain('width: 41%');
+    expect(r.find('[data-testid="resume-hint"]').text()).toContain('Resume from 4:05');
+    expect(r.find('a.video-title-link').attributes('href')).toBe('/watch/c1');
+  });
+
+  it('marks the unseen videos of the subscriptions row as New and links it to /subscriptions', async () => {
+    feed.sections = [{ id: 'subscriptions', title: 'From your subscriptions', videos: [video('n1', { isNew: true }), video('o1', { isNew: false })] }];
+    const w = await mountHome();
+    const r = row(w, 'subscriptions');
+    expect(r.findAll('[data-testid="card-new"]')).toHaveLength(1);
+    expect(r.find('[data-testid="row-see-all"]').attributes('href')).toBe('/subscriptions');
+  });
+
+  it('gives "See all" only to rows with a destination', async () => {
+    feed.sections = [
+      { id: 'popular', title: 'Popular', videos: [video('p1')] },
+      { id: 'byCategory', title: 'Browse by category', groups: [{ category: 'Film & Animation', title: 'Film & Animation', videos: [video('g1')] }] },
+      { id: 'playlists', title: 'Your playlists', playlists: [{ id: 'p1', title: 'Road trip', visibility: 'private', video_count: 1, cover_video_id: 'g1', thumbnail_path: null }] },
+      { id: 'discoverChannels', title: 'Channels to discover', channels: [{ id: 'UC9', title: 'Fresh', avatar_url: null, video_count: 3, categories: [] }] },
+    ];
+    const w = await mountHome();
+    const seeAll = (id: string) => row(w, id).find('[data-testid="row-see-all"]');
+    expect(seeAll('popular').exists()).toBe(false);
+    expect(seeAll('byCategory').attributes('href')).toBe('/search?q=Film%20%26%20Animation');
+    expect(seeAll('playlists').attributes('href')).toBe('/playlists');
+    expect(seeAll('discoverChannels').attributes('href')).toBe('/channels');
+    expect(row(w, 'playlists').text()).toContain('1 video');
+  });
+
+  it('every row has named back/forward arrows', async () => {
+    feed.sections = [{ id: 'popular', title: 'Popular', videos: [video('p1')] }];
+    const w = await mountHome();
+    expect(row(w, 'popular').find('[data-testid="row-prev"]').attributes('aria-label')).toBe('Scroll Popular back');
+    expect(row(w, 'popular').find('[data-testid="row-next"]').attributes('aria-label')).toBe('Scroll Popular forward');
+  });
+
+  it('subscribes from a channel card at once and rolls back when the server refuses', async () => {
+    feed.sections = [{ id: 'discoverChannels', title: 'Channels to discover', channels: [{ id: 'UC9', title: 'Fresh', avatar_url: null, video_count: 3, categories: ['Gaming'] }] }];
+    let reject!: (e: unknown) => void;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/home/feed') return feed;
+      if (url === '/api/channels/UC9/subscribe') return new Promise((_r, rej) => { reject = rej; });
+      return {};
+    });
+    const w = await mountHome();
+    const btn = w.find('[data-testid="channel-subscribe"]');
+    expect(btn.text()).toBe('Subscribe');
+    expect(w.find('[data-testid="channel-card-UC9"]').text()).toContain('Gaming');
+    await btn.trigger('click');
+    expect(btn.text()).toBe('Subscribed');
+    expect(fetchMock).toHaveBeenCalledWith('/api/channels/UC9/subscribe', { method: 'POST' });
+    reject(Object.assign(new Error('nope'), { data: { statusMessage: 'Channel not found.' } }));
+    await flushPromises();
+    expect(btn.text()).toBe('Subscribe');
+  });
+
+  describe('hero', () => {
+    beforeEach(() => {
+      useState('display_prefs').value = buildView({ homeHero: true }, null);
+    });
+
+    it('uses featured.large when the feed has one', async () => {
+      feed.featured.large = video('big', { title: 'Big one' });
+      feed.sections = [{ id: 'forYou', title: 'Recommended for you', videos: [video('f1')] }];
+      const w = await mountHome();
+      expect(w.find('[data-testid="home-hero"]').text()).toContain('Big one');
+      expect(row(w, 'forYou').text()).toContain('Title f1');
+    });
+
+    it('falls back to the first Recommended for you video, which then leaves that row', async () => {
+      feed.sections = [{ id: 'forYou', title: 'Recommended for you', videos: [video('f1', { reason: { kind: 'new', label: 'New' } }), video('f2')] }];
+      const w = await mountHome();
+      const hero = w.find('[data-testid="home-hero"]');
+      expect(hero.text()).toContain('Title f1');
+      expect(hero.find('.media-frame').exists()).toBe(true);
+      expect(row(w, 'forYou').text()).not.toContain('Title f1');
+      expect(row(w, 'forYou').text()).toContain('Title f2');
+    });
+
+    it('shows no hero when the featured block is turned off', async () => {
+      useState('display_prefs').value = buildView({ homeHero: false }, null);
+      feed.sections = [{ id: 'forYou', title: 'Recommended for you', videos: [video('f1')] }];
+      const w = await mountHome();
+      expect(w.find('[data-testid="home-hero"]').exists()).toBe(false);
+      expect(row(w, 'forYou').text()).toContain('Title f1');
+    });
+  });
+
+  it('a guest gets only the public rows, a login hint and no Subscribe button', async () => {
+    useState<any>('auth_user').value = null;
+    useState('display_prefs_for').value = null;
+    feed.sections = [
+      { id: 'continue', title: 'Continue watching', videos: [video('c1', { progress: 0.5 })] },
+      { id: 'subscriptions', title: 'From your subscriptions', videos: [video('s1')] },
+      { id: 'forYou', title: 'Recommended for you', videos: [video('f1')] },
+      { id: 'popular', title: 'Popular', videos: [video('p1')] },
+      { id: 'discoverChannels', title: 'Channels to discover', channels: [{ id: 'UC9', title: 'Fresh', avatar_url: null, video_count: 3, categories: [] }] },
+      { id: 'shorts', title: 'Shorts', videos: [short('sh1')] },
+    ];
+    const w = await mountHome();
+    expect(rowIds(w)).toEqual(['popular', 'shorts']);
+    expect(w.find('[data-testid="home-guest-hint"]').exists()).toBe(true);
+    expect(w.find('[data-testid="channel-subscribe"]').exists()).toBe(false);
+  });
+
+  it('shows a skeleton row per chosen row while the feed loads', async () => {
+    useState('display_prefs').value = buildView({ homeHero: true, homeSections: ['continue', 'popular', 'shorts'] }, null);
+    fetchMock.mockImplementation((url: string) => (url === '/api/home/feed' ? new Promise(() => {}) : Promise.resolve({})));
+    const w = await mountSuspended(HomePage, { route: '/' });
+    await flushPromises();
+    const loading = w.find('[data-testid="home-loading"]');
+    expect(loading.exists()).toBe(true);
+    expect(loading.findAll('.home-row__title').map((t: any) => t.text())).toEqual(['Continue watching', 'Popular', 'Shorts']);
+    expect(loading.findAll('[data-testid="row-skeleton"]').length).toBeGreaterThan(0);
+    expect(loading.find('.home-row__track--short').exists()).toBe(true);
   });
 });

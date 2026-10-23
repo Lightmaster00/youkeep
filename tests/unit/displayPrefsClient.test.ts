@@ -56,9 +56,14 @@ describe('isHomeFullyHidden', () => {
     [{ homeHero: true, homeSections: [] }, true, false],
     [{ homeHero: false, homeSections: [] }, true, true],
     [{ homeHero: false, homeSections: ['subscriptions'] }, true, false],
-    [{ homeHero: false, homeSections: ['suggested', 'subscriptions'] }, false, true],
+    [{ homeHero: false, homeSections: ['forYou', 'subscriptions'] }, false, true],
     [{ homeHero: false, homeSections: ['popular'] }, false, false],
-    [{ homeHero: false, homeSections: ['suggested', 'recent'] }, false, false],
+    [{ homeHero: false, homeSections: ['forYou', 'popular'] }, false, false],
+    // The new rows a guest may see, and the personal ones a guest may not.
+    [{ homeHero: false, homeSections: ['byCategory'] }, false, false],
+    [{ homeHero: false, homeSections: ['shorts'] }, false, false],
+    [{ homeHero: false, homeSections: ['continue', 'playlists', 'discoverChannels', 'becauseYouWatched'] }, false, true],
+    [{ homeHero: false, homeSections: ['continue'] }, true, false],
   ] as const)('%j (loggedIn=%s) → %s', (prefs, loggedIn, expected) => {
     expect(isHomeFullyHidden({ homeHero: prefs.homeHero, homeSections: [...prefs.homeSections] }, loggedIn)).toBe(expected);
   });

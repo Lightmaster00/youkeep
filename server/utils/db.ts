@@ -4,6 +4,8 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getDataDir } from './dataDir';
 import { ensurePodcastPubTs } from './podcastPubDate';
+import { ensureChannelCategories } from './channelCategories';
+import { applyAutoSyncDefaults, SYNC_TYPE_CONFIG } from './autoSync';
 import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migrateFtsRenameTriggers, runPlannerMaintenance } from './dbTuning';
 
 let dbInstance: Database.Database | null = null;
@@ -441,6 +443,30 @@ export function openDatabase(dbPath: string): Database.Database {
   // migration count as "remember me" so nobody is signed out by an upgrade.
   try { db.exec(`ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER;`); } catch (e) {}
   try { db.exec(`ALTER TABLE sessions ADD COLUMN remember INTEGER NOT NULL DEFAULT 1;`); } catch (e) {}
+  // Home, subscriptions and recommendations: YouTube categories and tags (JSON
+  // arrays, filled after a download or by the metadata backfill), the
+  // server-side resume position, and "seen" marks of subscription videos.
+  try { db.exec(`ALTER TABLE videos ADD COLUMN categories TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE videos ADD COLUMN tags TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE videos ADD COLUMN metadata_enriched_at INTEGER;`); } catch (e) {}
+  // Channel categories (server/utils/channelCategories.ts): the automatic
+  // ones (JSON array, recomputed from the enriched videos) and an admin's
+  // override (JSON array, NULL = automatic).
+  try { db.exec(`ALTER TABLE channels ADD COLUMN categories TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE channels ADD COLUMN categories_override TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE user_history ADD COLUMN position_seconds INTEGER NOT NULL DEFAULT 0;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE user_history ADD COLUMN duration_seconds INTEGER;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE user_history ADD COLUMN position_updated_at INTEGER;`); } catch (e) {}
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_seen_videos (
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      seen_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, video_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
+    );
+  `);
   // Security log (server/utils/securityLog.ts): capped and purged after 90 days.
   db.exec(`
     CREATE TABLE IF NOT EXISTS security_events (
@@ -500,6 +526,9 @@ export function openDatabase(dbPath: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_music_tracks_artist_status ON music_tracks(artist_id, download_status);
     CREATE INDEX IF NOT EXISTS idx_podcast_episodes_show_status ON podcast_episodes(show_id, download_status);
+    CREATE INDEX IF NOT EXISTS idx_videos_channel_upload ON videos(channel_id, upload_date);
+    CREATE INDEX IF NOT EXISTS idx_user_history_user_watched ON user_history(user_id, watched_at);
+    CREATE INDEX IF NOT EXISTS idx_user_seen_videos_video_id ON user_seen_videos(video_id);
   `);
 
   // A row without an id cannot be updated or deleted by id (TEXT PRIMARY KEY
@@ -684,8 +713,8 @@ export function openDatabase(dbPath: string): Database.Database {
 
   const cronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'sync_cron_schedule'").get() as { count: number };
   if (cronScheduleCheck.count === 0) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('sync_cron_schedule', '0 3 * * *')").run();
-    console.log('Seeded setting sync_cron_schedule: 0 3 * * *');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('sync_cron_schedule', ?)").run(SYNC_TYPE_CONFIG.video.defaultSchedule);
+    console.log(`Seeded setting sync_cron_schedule: ${SYNC_TYPE_CONFIG.video.defaultSchedule}`);
   }
 
   const musicSyncAllCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_all_active'").get() as { count: number };
@@ -702,8 +731,8 @@ export function openDatabase(dbPath: string): Database.Database {
 
   const musicCronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'music_sync_cron_schedule'").get() as { count: number };
   if (musicCronScheduleCheck.count === 0) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_schedule', '30 3 * * *')").run();
-    console.log('Seeded setting music_sync_cron_schedule: 30 3 * * *');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('music_sync_cron_schedule', ?)").run(SYNC_TYPE_CONFIG.music.defaultSchedule);
+    console.log(`Seeded setting music_sync_cron_schedule: ${SYNC_TYPE_CONFIG.music.defaultSchedule}`);
   }
 
   const podcastSyncAllCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_all_active'").get() as { count: number };
@@ -720,9 +749,12 @@ export function openDatabase(dbPath: string): Database.Database {
 
   const podcastCronScheduleCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'podcast_sync_cron_schedule'").get() as { count: number };
   if (podcastCronScheduleCheck.count === 0) {
-    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_cron_schedule', '0 4 * * *')").run();
-    console.log('Seeded setting podcast_sync_cron_schedule: 0 4 * * *');
+    db.prepare("INSERT INTO settings (key, value) VALUES ('podcast_sync_cron_schedule', ?)").run(SYNC_TYPE_CONFIG.podcast.defaultSchedule);
+    console.log(`Seeded setting podcast_sync_cron_schedule: ${SYNC_TYPE_CONFIG.podcast.defaultSchedule}`);
   }
+
+  // One-time: automatic sync on by default (new and existing installs).
+  applyAutoSyncDefaults(db);
 
   const defaultDirCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'default_downloads_dir'").get() as { count: number };
   if (defaultDirCheck.count === 0) {
@@ -845,6 +877,16 @@ export function openDatabase(dbPath: string): Database.Database {
     db.prepare("INSERT INTO settings (key, value) VALUES ('album_matching_enabled', '1')").run();
     console.log('Seeded setting album_matching_enabled: 1');
   }
+
+  const metadataBackfillCheck = db.prepare("SELECT COUNT(*) as count FROM settings WHERE key = 'metadata_backfill_enabled'").get() as { count: number };
+  if (metadataBackfillCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES ('metadata_backfill_enabled', '1')").run();
+    console.log('Seeded setting metadata_backfill_enabled: 1');
+  }
+
+  // The one-off channel categories migration, then the startup pass for
+  // channels whose categories were never computed.
+  ensureChannelCategories(db);
 
   // After the migrations: planner statistics (ANALYZE when there are none).
   runPlannerMaintenance(db);

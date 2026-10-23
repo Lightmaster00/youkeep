@@ -1,434 +1,318 @@
 <template>
   <div class="subscriptions-page">
-    <h1 v-if="channels && channels.length > 0" class="page-title">Subscriptions</h1>
+    <header class="subs-header">
+      <h1 class="page-title subs-title">Subscriptions</h1>
+    </header>
 
-    <!-- Subscribed Channels UI -->
-    <div v-if="channels && channels.length > 0" class="subscribed-channels-section">
-      <div class="channels-row">
-        <div 
-          v-for="channel in channels" 
-          :key="channel.id" 
-          class="sub-channel-pill"
-          :class="{ 'inactive-channel': inactiveChannelIds.includes(channel.id) }"
-          role="button"
-          tabindex="0"
-          :aria-pressed="!inactiveChannelIds.includes(channel.id)"
-          @click="toggleChannelFilter(channel.id)"
-          @keydown.enter.self.prevent="toggleChannelFilter(channel.id)"
-          @keydown.space.self.prevent="toggleChannelFilter(channel.id)"
-        >
-          <img 
-            :src="channel.avatar_url || FALLBACK_AVATAR"
-            @error="handleAvatarError"
-            class="sub-channel-avatar" 
-            alt="Avatar"
+    <!-- Loading the followed channels -->
+    <div v-if="channelsPending" class="subs-chip-skeleton" data-testid="subs-channels-loading" aria-busy="true">
+      <UiSkeleton v-for="n in 6" :key="n" width="120px" height="36px" rounded="lg" />
+    </div>
+
+    <p v-else-if="channelsError" class="subs-error" role="alert">{{ channelsError }}</p>
+
+    <!-- Not following anyone yet: a few channels to start with. -->
+    <section v-else-if="channels.length === 0" class="subs-start" data-testid="subs-empty">
+      <EmptyState
+        title="You are not following any channel yet"
+        description="Subscribe to channels of the archive to see their new videos here, newest first."
+        icon="book"
+        action-text="Browse all channels"
+        action-route="/channels"
+      />
+      <div v-if="suggestions.length > 0" class="subs-suggestions" data-testid="subs-suggestions">
+        <h2 class="subs-suggestions__title">Channels to start with</h2>
+        <div class="subs-suggestions__grid">
+          <HomeChannelCard
+            v-for="channel in suggestions"
+            :key="channel.id"
+            :channel="channel"
+            :can-subscribe="loggedIn"
+            @subscription="onSuggestionSubscribed"
           />
-          <span class="sub-channel-title">{{ channel.title }}</span>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- Loading State -->
-    <div v-if="pending" class="video-grid">
-      <UiCard v-for="n in 6" :key="n" flat>
-        <UiSkeleton height="140px" rounded="lg" />
-        <div style="padding: var(--space-3, 12px);">
-          <UiSkeleton height="14px" width="70%" />
-          <div style="margin-top: var(--space-2, 8px);">
-            <UiSkeleton height="12px" width="40%" />
-          </div>
-        </div>
-      </UiCard>
-    </div>
+    <template v-else>
+      <SubscriptionsChipBar :channels="channels" :model-value="activeChannelId" @update:model-value="selectChannel" />
 
-    <!-- Empty State -->
-    <EmptyState
-      v-else-if="videos.length === 0"
-      :title="inactiveChannelIds.length === channels.length && channels.length > 0 ? 'All channels are disabled' : 'No videos in your subscriptions'"
-      description="Subscribe to YouTube channels in the archive to see their downloaded videos here."
-      icon="book"
-      action-text="Discover channels"
-      action-route="/channels"
-    />
+      <div class="subs-tabs" role="tablist" aria-label="Subscriptions view" @keydown="onTabKeydown">
+        <button
+          v-for="t in TABS"
+          :id="`subs-tab-${t.id}`"
+          :key="t.id"
+          type="button"
+          role="tab"
+          class="subs-tab"
+          :class="{ 'is-active': tab === t.id }"
+          :aria-selected="tab === t.id ? 'true' : 'false'"
+          :aria-controls="`subs-panel-${t.id}`"
+          :tabindex="tab === t.id ? 0 : -1"
+          :data-testid="`subs-tab-${t.id}`"
+          @click="selectTab(t.id)"
+        >
+          {{ t.label }}
+          <span v-if="t.id === 'channels'" class="subs-tab__count">{{ channels.length }}</span>
+        </button>
+      </div>
 
-    <!-- Video Grid -->
-    <div v-else class="video-grid-wrapper">
-      <div class="video-grid">
-        <VideoCard
-          v-for="video in videos"
-          :key="video.id"
-          :video="video"
-          @hidden="onVideoHidden"
+      <div
+        v-if="tab === 'latest'"
+        id="subs-panel-latest"
+        role="tabpanel"
+        aria-labelledby="subs-tab-latest"
+        data-testid="subs-panel-latest"
+      >
+        <SubscriptionsLatest
+          :channel-id="activeChannelId"
+          :categories="categories"
+          :logged-in="loggedIn"
+          :reload-key="reloadKey"
+          :any-new="anyNew"
+          @all-seen="onAllSeen"
         />
       </div>
 
-      <!-- Infinite Scroll Trigger -->
-      <div ref="loadMoreTrigger" class="infinite-scroll-trigger">
-        <div v-if="loadingMore" class="spinner small-spinner"></div>
+      <div
+        v-else
+        id="subs-panel-channels"
+        role="tabpanel"
+        aria-labelledby="subs-tab-channels"
+        data-testid="subs-panel-channels"
+      >
+        <div class="subs-channel-grid">
+          <SubscriptionsChannelCard
+            v-for="channel in channels"
+            :key="channel.id"
+            :channel="channel"
+            :busy="unsubscribing === channel.id"
+            @unsubscribe="unsubscribe"
+          />
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { FALLBACK_AVATAR, setImageFallback } from '~/utils/imageFallback';
-import { ref, onMounted, onUnmounted, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import HomeChannelCard from '~/components/home/HomeChannelCard.vue';
+import SubscriptionsChipBar from '~/components/subscriptions/SubscriptionsChipBar.vue';
+import SubscriptionsLatest from '~/components/subscriptions/SubscriptionsLatest.vue';
+import SubscriptionsChannelCard from '~/components/subscriptions/SubscriptionsChannelCard.vue';
+import { confirmAction } from '~/composables/useConfirm';
+import { useToast } from '~/composables/useToast';
+import type { SubscribedChannel } from '~/utils/subscriptionTypes';
 
 useHead({ title: 'Subscriptions' });
 
+type Tab = 'latest' | 'channels';
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'latest', label: 'Latest' },
+  { id: 'channels', label: 'Channels' },
+];
+const SUGGESTION_COUNT = 6;
+
+const route = useRoute();
 const router = useRouter();
+const toast = useToast();
+const auth = useAuth();
+const loggedIn = computed(() => auth.isLoggedIn.value);
 
-const handleAvatarError = (event: Event) => {
-  setImageFallback(event, FALLBACK_AVATAR);
-};
+const channels = ref<SubscribedChannel[]>([]);
+const channelsPending = ref(true);
+const channelsError = ref('');
+const suggestions = ref<any[]>([]);
+const unsubscribing = ref<string | null>(null);
+const reloadKey = ref(0);
 
-const channels = ref<any[]>([]);
-const videos = ref<any[]>([]);
-const page = ref(1);
-const inactiveChannelIds = ref<string[]>([]);
-const pending = ref(true);
-const loadingMore = ref(false);
-const hasMore = ref(true);
-const loadMoreTrigger = ref<HTMLElement | null>(null);
+// The tab and the channel filter live in the address (?tab=channels, ?channel=<id>).
+const tab = computed<Tab>(() => (route.query.tab === 'channels' ? 'channels' : 'latest'));
+const queryChannel = computed(() => (typeof route.query.channel === 'string' ? route.query.channel : ''));
+// A channel the viewer no longer follows filters nothing.
+const activeChannelId = computed(() => (channels.value.some((c) => c.id === queryChannel.value) ? queryChannel.value : ''));
 
-const feedSeed = useFeedSeed();
-let observer: IntersectionObserver | null = null;
-let fetchRequestId = 0;
+const categories = computed(() => [...new Set(channels.value.flatMap((c) => c.categories ?? []))].sort((a, b) => a.localeCompare(b, 'en-US')));
+const anyNew = computed(() => channels.value.some((c) => c.newCount > 0));
 
-// Fetch channels
-const fetchChannels = async () => {
-  try {
-    const res = await $fetch<any>('/api/channels', { params: { subscribed: 'true' } });
-    channels.value = res.channels || [];
-  } catch (err) {
-    console.error(err);
+function replaceQuery(patch: Record<string, string | undefined>) {
+  const query: Record<string, any> = { ...route.query, ...patch };
+  for (const key of Object.keys(query)) if (query[key] === undefined || query[key] === '') delete query[key];
+  return router.replace({ query });
+}
+
+function selectTab(id: Tab) {
+  if (id !== tab.value) replaceQuery({ tab: id === 'latest' ? undefined : id });
+}
+
+// Picking a channel shows its latest videos.
+function selectChannel(id: string) {
+  replaceQuery({ channel: id || undefined, tab: undefined });
+}
+
+function onTabKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  event.preventDefault();
+  const i = TABS.findIndex((t) => t.id === tab.value);
+  const next = TABS[(i + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]!;
+  selectTab(next.id);
+  // Keep the keyboard on the newly selected tab.
+  requestAnimationFrame(() => document.getElementById(`subs-tab-${next.id}`)?.focus());
+}
+
+async function loadChannels() {
+  if (!loggedIn.value) {
+    channelsPending.value = false;
+    return;
   }
-};
-
-// Fetch videos
-const fetchVideos = async (isLoadMore = false) => {
-  const requestId = ++fetchRequestId;
-
-  if (isLoadMore) {
-    loadingMore.value = true;
-  } else {
-    pending.value = true;
-    videos.value = [];
-    page.value = 1;
-    hasMore.value = true;
-  }
-
+  channelsError.value = '';
   try {
-    const res = await $fetch<any>('/api/videos', {
-      params: {
-        page: page.value,
-        limit: 16,
-        subscribed: 'true',
-        excludeChannels: inactiveChannelIds.value.length > 0 ? inactiveChannelIds.value.join(',') : undefined,
-        status: 'completed',
-        seed: feedSeed
-      }
-    });
-
-    if (requestId !== fetchRequestId) return;
-
-    if (isLoadMore) {
-      videos.value.push(...res.videos);
-    } else {
-      videos.value = res.videos;
-    }
-
-    if (page.value >= res.pagination.totalPages) {
-      hasMore.value = false;
-    }
-  } catch (err) {
-    if (requestId !== fetchRequestId) return;
-    console.error(err);
+    const res = await $fetch<{ channels: SubscribedChannel[] }>('/api/subscriptions/channels');
+    channels.value = res?.channels ?? [];
+  } catch (err: any) {
+    channelsError.value = err?.data?.statusMessage || 'Could not load your subscriptions.';
   } finally {
-    if (requestId === fetchRequestId) {
-      pending.value = false;
-      loadingMore.value = false;
-    }
+    channelsPending.value = false;
   }
-};
+  if (channels.value.length === 0 && !channelsError.value) await loadSuggestions();
+}
 
-// Setup observer reactively when trigger element is bound
-watch(loadMoreTrigger, (el) => {
-  if (observer) {
-    observer.disconnect();
-    observer = null;
+// Library channels with videos (none is followed yet), as starting points.
+async function loadSuggestions() {
+  try {
+    const res = await $fetch<{ channels: any[] }>('/api/channels');
+    suggestions.value = (res?.channels ?? [])
+      .filter((c) => (c.completed_count ?? 0) > 0)
+      .sort((a, b) => (b.completed_count ?? 0) - (a.completed_count ?? 0))
+      .slice(0, SUGGESTION_COUNT)
+      .map((c) => ({ id: c.id, title: c.title, avatar_url: c.avatar_url, video_count: c.completed_count, categories: c.categories ?? [] }));
+  } catch {
+    suggestions.value = [];
   }
-  if (el) {
-    observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && hasMore.value && !loadingMore.value && !pending.value) {
-        page.value++;
-        fetchVideos(true);
-      }
-    }, { rootMargin: '200px' });
-    observer.observe(el);
+}
+
+async function onSuggestionSubscribed(_id: string, subscribed: boolean) {
+  if (!subscribed) return;
+  await loadChannels();
+}
+
+function onAllSeen() {
+  channels.value = channels.value.map((c) => ({ ...c, newCount: 0 }));
+}
+
+async function unsubscribe(channel: SubscribedChannel) {
+  const ok = await confirmAction({
+    title: 'Unsubscribe?',
+    message: `Stop following ${channel.title}? Its videos stay in the archive.`,
+    confirmLabel: 'Unsubscribe',
+  });
+  if (!ok) return;
+  unsubscribing.value = channel.id;
+  try {
+    await $fetch(`/api/channels/${encodeURIComponent(channel.id)}/unsubscribe`, { method: 'POST' });
+    channels.value = channels.value.filter((c) => c.id !== channel.id);
+    if (queryChannel.value === channel.id) await replaceQuery({ channel: undefined });
+    reloadKey.value++;
+    toast.success(`Unsubscribed from ${channel.title}.`);
+    if (channels.value.length === 0) await loadSuggestions();
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Could not unsubscribe.');
+  } finally {
+    unsubscribing.value = null;
   }
-});
+}
 
-onMounted(async () => {
-  await fetchChannels();
-  await fetchVideos();
-});
-
-onUnmounted(() => {
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
-});
-
-const toggleChannelFilter = (id: string) => {
-  if (inactiveChannelIds.value.includes(id)) {
-    inactiveChannelIds.value = inactiveChannelIds.value.filter(c => c !== id);
-  } else {
-    inactiveChannelIds.value.push(id);
-  }
-};
-
-watch(inactiveChannelIds, () => {
-  fetchVideos();
-}, { deep: true });
-
-const onVideoHidden = (id: string) => {
-  videos.value = videos.value.filter((v: any) => v.id !== id);
-};
+onMounted(loadChannels);
 </script>
 
 <style scoped>
 .subscriptions-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-}
-
-
-
-/* Subscribed Channels Bar */
-.subscribed-channels-section {
-  margin-bottom: 8px;
-}
-.channels-row {
-  display: flex;
-  gap: 16px;
-  overflow-x: auto;
-  padding: 4px 4px 12px 4px; /* padding-top/left/right 4px to avoid box-shadow/transform clipping */
-}
-.channels-row::-webkit-scrollbar {
-  height: 6px;
-}
-.channels-row::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-.channels-row::-webkit-scrollbar-thumb {
-  background: var(--accent-primary);
-  border-radius: 4px;
-}
-
-.sub-channel-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px 6px 6px;
-  border-radius: 40px;
-  cursor: pointer;
-  border: 1px solid var(--accent-primary);
-  transition: all 0.2s ease;
-  background: rgba(139, 92, 246, 0.15);
-  box-shadow: 0 0 16px rgba(139, 92, 246, 0.1);
-  white-space: nowrap;
-}
-.sub-channel-pill:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 16px rgba(139, 92, 246, 0.3);
-}
-.inactive-channel {
-  border-color: var(--border-color) !important;
-  background: rgba(17, 17, 34, 0.4) !important;
-  box-shadow: none !important;
-  opacity: 0.6;
-}
-.inactive-channel:hover {
-  opacity: 1;
-}
-
-.sub-channel-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.sub-channel-title {
-  color: var(--text-primary);
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 0;
-  gap: 16px;
-  color: var(--text-secondary);
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border: 3.5px solid rgba(139, 92, 246, 0.1);
-  border-radius: 50%;
-  border-top-color: var(--accent-primary);
-  animation: spin 0.8s linear infinite;
-}
-
-.small-spinner {
-  width: 24px;
-  height: 24px;
-  border-width: 2.5px;
-}
-
-.infinite-scroll-trigger {
-  width: 100%;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 20px;
-}
-
-
-
-.video-grid {
-  display: grid;
-  /* Same fix as .channels-page .channel-grid: minmax()'s 280px minimum is a
-     hard floor, so any content box under 280px (viewport under ~415px) made
-     the single column wider than its container. This page has no media
-     queries at all, so nothing else covered it. */
-  grid-template-columns: repeat(auto-fill, minmax(min(calc(280px * var(--grid-min-scale, 1)), 100%), 1fr));
-  gap: 24px;
-}
-
-.video-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  cursor: pointer;
-  border-radius: var(--border-radius-md);
-  overflow: hidden;
-}
-
-.thumbnail-wrapper {
-  position: relative;
-  aspect-ratio: 16/9;
-  border-radius: var(--border-radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  background: #000;
-  border: 1px solid transparent;
-  transition: box-shadow 0.25s ease, border-color 0.25s ease;
-}
-
-.thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-.thumbnail-wrapper::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 40%;
-  background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-  pointer-events: none;
-}
-
-.duration-badge {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  background: rgba(0, 0, 0, 0.8);
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.video-info {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-}
-
-.channel-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: var(--bg-surface);
-}
-
-.details-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
+  gap: 14px;
   min-width: 0;
 }
 
-.video-title {
-  font-family: var(--font-title);
-  font-size: 15px;
-  line-height: 1.4;
-  font-weight: 600;
-  color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* The page is a column as tall as the viewport (main.css): its parts keep
+   their own height instead of shrinking into it (the scrolling chip bar,
+   overflow: auto, would otherwise be squashed to a sliver). */
+.subscriptions-page > * {
+  flex-shrink: 0;
 }
 
-.channel-title {
-  font-size: 13px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.subs-title { margin-bottom: 0; }
 
-.metadata-row {
+.subs-chip-skeleton {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 8px;
+  overflow: hidden;
+  padding: 4px 0 8px;
+}
+
+.subs-error {
   color: var(--text-secondary);
 }
 
-.dot {
+.subs-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 18px;
+}
+
+.subs-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.subs-tab:hover { color: var(--text-primary); }
+.subs-tab.is-active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-primary);
+}
+.subs-tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+  border-radius: 6px 6px 0 0;
+}
+
+.subs-tab__count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 11.5px;
+}
+
+.subs-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 14px;
+}
+
+.subs-suggestions { margin-top: 8px; }
+.subs-suggestions__title {
+  font-size: 17px;
   font-weight: 700;
+  margin: 0 0 14px;
+}
+.subs-suggestions__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+  gap: 14px;
 }
 
-.premium-card:hover .thumbnail-img {
-  transform: scale(1.05);
+@media (max-width: 480px) {
+  .subs-suggestions__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 }
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 </style>

@@ -18,6 +18,16 @@ export function videoVisibilitySql(viewer: VideoViewer | null, v = 'v', c = 'c')
   };
 }
 
+/** WHERE fragment over channels `c` the viewer may see (same rule as canAccessChannel). */
+export function channelAccessSql(viewer: VideoViewer | null, c = 'c'): { sql: string; params: string[] } {
+  if (!viewer) return { sql: `${c}.visibility = 'public'`, params: [] };
+  if (viewer.role === 'admin') return { sql: '1=1', params: [] };
+  return {
+    sql: `(${c}.visibility IN ('public', 'private') OR ${c}.id IN (SELECT channel_id FROM user_channel_access WHERE user_id = ?))`,
+    params: [viewer.id],
+  };
+}
+
 /**
  * Video columns any viewer may receive. Download queue internals (errors,
  * retries, priority, progress/speed/eta) and share tokens are admin-only.

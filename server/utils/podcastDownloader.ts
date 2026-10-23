@@ -19,6 +19,7 @@ import { startProgressWriter, finishProgressWriter, stopProgressWriter } from '.
 import { isWipeInProgress } from './libraryWipe';
 import { runInBackground } from './background';
 import { usableStoredSchedule } from './validation';
+import { SYNC_TYPE_CONFIG } from './autoSync';
 
 // Define global-backed state to survive development HMR module hot reloads,
 // same pattern as downloader.ts's and musicDownloader.ts's own worker state.
@@ -977,6 +978,7 @@ export async function syncAllPodcastShows(): Promise<void> {
     activeFlagSettingKey: 'podcast_sync_all_active',
     pausedSettingKey: 'podcast_downloader_paused',
     moduleId: 'podcasts',
+    syncType: 'podcast',
     fetchEntities: () => listPodcastShowsToSync(db),
     processEntity: async (show) => {
       // Paused by an admin since the list was read: leave it paused.
@@ -1039,7 +1041,7 @@ export function initPodcastScheduler(): void {
   const scheduleSetting = db.prepare("SELECT value FROM settings WHERE key = 'podcast_sync_cron_schedule'").get() as { value: string } | undefined;
 
   const enabled = enabledSetting ? enabledSetting.value === '1' : false;
-  const cronExpression = scheduleSetting?.value || '0 4 * * *';
+  const cronExpression = scheduleSetting?.value || SYNC_TYPE_CONFIG.podcast.defaultSchedule;
 
   if (getActivePodcastCronJob()) {
     getActivePodcastCronJob()!.stop();

@@ -42,9 +42,8 @@
         @keydown.space.self.prevent="navigateToPlaylist(playlist)"
       >
         <!-- Thumbnail Wrapper -->
-        <div class="thumbnail-wrapper">
-          <img v-if="playlist.thumbnail_path" :src="playlist.thumbnail_path" class="thumbnail-img" alt="Playlist cover" />
-          <div v-else class="empty-cover-gradient">
+        <MediaFrame class="thumbnail-wrapper" kind="video" :src="thumbUrl(playlist.thumbnail_path, 480)" img-class="thumbnail-img" alt="Playlist cover">
+          <div v-if="!playlist.thumbnail_path" class="empty-cover-gradient">
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="playlist-center-icon"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
           </div>
           
@@ -58,7 +57,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             <span>PLAY ALL</span>
           </div>
-        </div>
+        </MediaFrame>
 
         <!-- Video Info (matching VideoCard structure) -->
         <div class="video-info">
@@ -128,8 +127,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { thumbUrl } from '~/utils/thumb';
 import { useAuth } from '~/composables/useAuth';
 import { useToast } from '~/composables/useToast';
+import { isUnauthorizedError } from '~/utils/sessionExpiry';
 
 useHead({ title: 'Playlists' });
 
@@ -148,12 +149,19 @@ const newPlaylist = ref({
 });
 
 const fetchPlaylists = async () => {
+  // Signed out (an expired session): the user-only API is never called.
+  if (!user.value) {
+    playlists.value = [];
+    pending.value = false;
+    return;
+  }
   pending.value = true;
   try {
     const data = await $fetch<any>('/api/playlists/personal');
     playlists.value = data.playlists || [];
   } catch (e: any) {
-    toast.error(e.message || 'Failed to load playlists.');
+    // A 401 is reported once by the session-expiry handler (plugins/csrf.client.ts).
+    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || 'Failed to load playlists.');
   } finally {
     pending.value = false;
   }
@@ -173,7 +181,7 @@ const handleCreatePlaylist = async () => {
     newPlaylist.value = { title: '', description: '', visibility: 'private' };
     await fetchPlaylists();
   } catch (e: any) {
-    toast.error(e.message || 'Failed to create playlist.');
+    if (!isUnauthorizedError(e)) toast.error(e?.data?.statusMessage || 'Failed to create playlist.');
   } finally {
     creating.value = false;
   }
@@ -297,21 +305,14 @@ onMounted(() => {
   background: linear-gradient(145deg, rgba(40, 40, 65, 0.7) 0%, rgba(20, 20, 35, 0.8) 100%);
 }
 
+/* Ratio, cropping and placeholder come from .media-frame (main.css). */
 .thumbnail-wrapper {
-  position: relative;
-  aspect-ratio: 16/9;
   border-radius: var(--border-radius-md);
-  overflow: hidden;
-  background: #000;
   border: 1px solid transparent;
   transition: all 0.3s ease;
-  width: 100%;
 }
 
-.thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.thumbnail-wrapper :deep(.thumbnail-img) {
   transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 

@@ -123,6 +123,53 @@ describe('channel videos, lazily paged (#2, #34, R15)', () => {
   });
 });
 
+describe('channel page Videos / Shorts tabs', () => {
+  it('has a "Videos" tab and a "Shorts" tab beside it; Shorts are vertical cards with a SHORT badge', async () => {
+    as({ id: 'u', username: 'bob', role: 'user' });
+    stats = { totalCount: 6, completedCount: 6, completedVideosCount: 3, completedShortsCount: 3 };
+    videoTotal = 3;
+    const w = await mountChannel({ tab: 'shorts' });
+    const tabs = w.findAll('.channel-tabs-bar .tab-btn').map((t) => t.text().replace(/\s+\d+$/, '').trim());
+    expect(tabs.slice(0, 2)).toEqual(['Videos', 'Shorts']);
+    const shorts = w.find('[data-testid="channel-shorts-grid"]');
+    expect(shorts.findAll('.thumbnail-wrapper.media-frame--short').length).toBeGreaterThan(0);
+    expect(shorts.findAll('[data-testid="short-badge"]').length).toBe(shorts.findAll('.video-card').length);
+    const videos = w.find('[data-testid="channel-videos-grid"]');
+    expect(videos.findAll('.media-frame--short')).toHaveLength(0);
+    expect(videos.findAll('[data-testid="short-badge"]')).toHaveLength(0);
+    w.unmount();
+  });
+});
+
+describe('channel playlist detail', () => {
+  it('lists a playlist\'s long videos, then its Shorts as vertical cards, under two headers', async () => {
+    as({ id: 'u', username: 'bob', role: 'user' });
+    const base = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/channels/ch1/playlists') return { playlists: [{ id: 'pl1', title: 'Mixed list', video_count: 3, thumbnail_url: 'https://x/p.jpg' }] };
+      if (url === '/api/playlists/pl1') return { playlist: { id: 'pl1', title: 'Mixed list' }, videos: [
+        { id: 'a', title: 'Long A', download_status: 'completed', position: 1, is_short: 0 },
+        { id: 'b', title: 'Short B', download_status: 'completed', position: 2, is_short: 1 },
+        { id: 'c', title: 'Long C', download_status: 'completed', position: 3, is_short: 0 },
+      ] };
+      return base(url, opts);
+    });
+    const w = await mountChannel({ tab: 'playlists' });
+    const card = w.find('.playlists-video-grid .video-card');
+    expect(card.find('.thumbnail-wrapper').classes()).toContain('media-frame--video');
+    await card.trigger('click');
+    await flushPromises();
+    expect(w.findAll('.channel-playlist-kind-title').map((h) => h.text())).toEqual(['Videos', 'Shorts']);
+    const videos = w.find('[data-testid="channel-playlist-videos"]');
+    const shorts = w.find('[data-testid="channel-playlist-shorts"]');
+    expect(videos.findAll('.video-title').map((t) => t.text())).toEqual(['Long A', 'Long C']);
+    expect(shorts.findAll('.video-title').map((t) => t.text())).toEqual(['Short B']);
+    expect(shorts.find('.media-frame--short').exists()).toBe(true);
+    expect(shorts.find('[data-testid="short-badge"]').text()).toBe('SHORT');
+    w.unmount();
+  });
+});
+
 describe('Tracking options drawer (#19)', () => {
   it('is inert while closed and a labelled modal dialog while open; Escape closes it', async () => {
     as({ id: 'a', username: 'boss', role: 'admin' });

@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { isModuleEnabled, isEffectivelyPaused } from './modules';
 import { isShuttingDown } from './processTree';
 import type { ModuleId } from './modules';
+import { recordSyncFinished, recordSyncStarted, type SyncType } from './autoSync';
 
 export const DEFAULT_MAX_CONCURRENT_DOWNLOADS = 2;
 export const MAX_CONCURRENT_DOWNLOADS_CEILING = 10;
@@ -102,6 +103,9 @@ export interface SyncAllEntitiesConfig<T> {
   // When set, a disabled module makes the whole run a no-op, and a module that
   // gets disabled mid-run stops the loop exactly like a pause.
   moduleId?: ModuleId;
+  // When set, the run's start and end are stored (<type>_last_sync_started_at,
+  // <type>_last_sync_at) for the automatic-sync status and startup catch-up.
+  syncType?: SyncType;
 }
 
 export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): Promise<void> {
@@ -118,6 +122,7 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
     afterLoop,
     startWorker,
     moduleId,
+    syncType,
   } = config;
 
   if (moduleId && !isModuleEnabled(db, moduleId)) {
@@ -127,6 +132,7 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
   db.prepare(`UPDATE settings SET value = '1' WHERE key = ?`).run(activeFlagSettingKey);
 
   try {
+    if (syncType) recordSyncStarted(db, syncType);
     const entities = fetchEntities();
     onStart(entities.length);
 
@@ -146,6 +152,8 @@ export async function runSyncAllEntities<T>(config: SyncAllEntitiesConfig<T>): P
     if (isShuttingDown()) return;
     if (afterLoop) await afterLoop();
     if (isShuttingDown()) return;
+    // Finished (a source that failed does not make the whole run a failure).
+    if (syncType) recordSyncFinished(db, syncType);
 
     startWorker();
     onComplete();

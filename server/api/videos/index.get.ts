@@ -17,6 +17,9 @@ const SORTS: Record<string, string> = {
   duration_asc: 'ORDER BY COALESCE(v.duration, 0) ASC, v.id ASC',
 };
 
+// The value of v.is_short each `type` keeps (null: no filter).
+const VIDEO_TYPES: Record<string, 0 | 1 | null> = { video: 0, short: 1, all: null };
+
 /** A non-negative integer query value, `fallback` when absent; anything else is a 400. */
 function queryInt(value: unknown, name: string, fallback: number, min: number, max: number): number {
   if (value === undefined || value === '') return fallback;
@@ -96,10 +99,17 @@ export default defineEventHandler(async (event) => {
     params.push(session.id);
   }
   
-  // is_short filter: default to 0 (videos only) on home feed, but allow all on channel page
-  let isShortQuery = query.is_short !== undefined
-    ? (query.is_short === 'all' ? null : (query.is_short === 'true' || query.is_short === '1' ? 1 : 0))
-    : (channelId ? null : 0);
+  // Long videos and Shorts are kept apart: type=video (the default for every
+  // list), type=short or type=all. The older is_short parameter (1/true,
+  // 0, all) still works when no type is given.
+  let isShortQuery: 0 | 1 | null = 0;
+  if (query.type !== undefined) {
+    const type = Array.isArray(query.type) ? '' : String(query.type);
+    if (!Object.hasOwn(VIDEO_TYPES, type)) badRequest('type must be one of: video, short, all.');
+    isShortQuery = VIDEO_TYPES[type]!;
+  } else if (query.is_short !== undefined) {
+    isShortQuery = query.is_short === 'all' ? null : (query.is_short === 'true' || query.is_short === '1' ? 1 : 0);
+  }
 
   if (isShortQuery !== null) {
     whereClauses.push('v.is_short = ?');

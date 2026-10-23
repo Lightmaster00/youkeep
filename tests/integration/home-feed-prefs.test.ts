@@ -41,18 +41,79 @@ describe('hero', () => {
   });
 });
 
+describe('Shorts never mix into the video rows', () => {
+  // Shorts that would win every ranking: most viewed, newest, from the
+  // followed and most watched channel.
+  function seedWithShorts() {
+    seedVideos(20, 'c1');
+    for (let i = 0; i < 10; i++) {
+      insertVideo(db, { id: `c1s${i}`, channelId: 'c1', uploadDate: '20270101', viewCount: 1e9 - i, createdAt: Date.now() + 1000 + i, isShort: true });
+    }
+  }
+  const everyVideoId = (r: any) => [
+    r.featured.large?.id,
+    ...r.featured.small.map((v: any) => v.id),
+    // Every row except the dedicated Shorts shelf.
+    ...r.sections.filter((s: any) => s.id !== 'shorts').flatMap((s: any) => s.videos ? ids(s) : (s.groups || []).flatMap((g: any) => g.videos.map((v: any) => v.id))),
+  ].filter(Boolean);
+
+  it('for a guest (hero and popular)', async () => {
+    seedWithShorts();
+    const r: any = await handler(guestEvent());
+    expect(everyVideoId(r).length).toBeGreaterThan(5);
+    expect(everyVideoId(r).filter((id: string) => /s\d/.test(id))).toEqual([]);
+  });
+
+  it('for a subscriber who watches Shorts (hero, popular, suggested, by followed channel)', async () => {
+    seedWithShorts();
+    seedVideos(20, 'c2');
+    seedVideos(10, 'c3');
+    insertVideo(db, { id: 'c3s0', channelId: 'c3', uploadDate: '20270101', viewCount: 5, createdAt: Date.now() + 5000, isShort: true });
+    setAdminDefaults({ rowSize: 10 });
+    const event = loginAs('viewer');
+    insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
+    insertSubscription(db, { userId: 'viewer', channelId: 'c3' });
+    insertUserHistory(db, { userId: 'viewer', videoId: 'c1s0', watchTimeSeconds: 5000, watchedAt: Date.now() });
+    const r: any = await handler(event);
+    expect(sectionIds(r)).toEqual(expect.arrayContaining(['subscriptions', 'forYou', 'popular', 'shorts']));
+    // Shorts have their own shelf, and only there.
+    expect(r.sections.find((s: any) => s.id === 'shorts').videos.every((v: any) => v.is_short === 1)).toBe(true);
+    const all = everyVideoId(r);
+    expect(all.length).toBeGreaterThan(10);
+    expect(all.filter((id: string) => /s\d/.test(id))).toEqual([]);
+  });
+});
+
 describe('homeSections', () => {
-  it('keeps the historical guest order recent → popular by default, then honours the configured order and omissions', async () => {
+  it('gives a guest only popular by default, then honours the configured order and omissions', async () => {
     seedVideos(40);
     let r: any = await handler(guestEvent());
-    expect(sectionIds(r)).toEqual(['recent', 'popular']);
+    expect(sectionIds(r)).toEqual(['popular']);
     expect(r.featured.large).not.toBeNull();
-    setAdminDefaults({ homeSections: ['popular', 'recent'] });
+    setAdminDefaults({ homeSections: ['newEpisodes', 'popular', 'recentMusic'] });
     r = await handler(guestEvent());
-    expect(sectionIds(r)).toEqual(['popular', 'recent']);
+    expect(sectionIds(r)).toEqual(['popular']);
+    db.prepare("UPDATE settings SET value = ? WHERE key = 'display_defaults'").run(JSON.stringify({ homeSections: [] }));
+    r = await handler(guestEvent());
+    expect(sectionIds(r)).toEqual([]);
+  });
+
+  it('never builds the removed "Recently added" row, even from stored preferences that still name it', async () => {
+    seedVideos(40);
+    db.prepare("INSERT INTO settings (key, value) VALUES ('display_defaults', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .run(JSON.stringify({ homeSections: ['recent', 'popular'] }));
+    let r: any = await handler(guestEvent());
+    expect(sectionIds(r)).toEqual(['popular']);
+    expect(r.sections.map((s: any) => s.title)).not.toContain('Recently added');
+    // Only the removed id stored: the default list applies, the home is not empty.
     db.prepare("UPDATE settings SET value = ? WHERE key = 'display_defaults'").run(JSON.stringify({ homeSections: ['recent'] }));
     r = await handler(guestEvent());
-    expect(sectionIds(r)).toEqual(['recent']);
+    expect(sectionIds(r)).toEqual(['popular']);
+    const event = loginAs('u1');
+    insertUserPreferences(db, { userId: 'u1', data: JSON.stringify({ homeSections: ['recent'] }) });
+    r = await handler(event);
+    expect(sectionIds(r)).not.toContain('recent');
+    expect(sectionIds(r)).toContain('popular');
   });
 
   it('returns no sections but still a hero when the list is empty', async () => {
@@ -65,14 +126,14 @@ describe('homeSections', () => {
 
   it('ignores suggested and subscriptions for a guest without failing', async () => {
     seedVideos(40);
-    setAdminDefaults({ homeSections: ['suggested', 'subscriptions', 'recent'] });
+    setAdminDefaults({ homeSections: ['suggested', 'subscriptions', 'popular'] });
     const r: any = await handler(guestEvent());
-    expect(sectionIds(r)).toEqual(['recent']);
+    expect(sectionIds(r)).toEqual(['popular']);
   });
 
   it('never repeats a video across hero and sections whatever the order', async () => {
     seedVideos(60);
-    setAdminDefaults({ homeSections: ['popular', 'recent'] });
+    setAdminDefaults({ homeSections: ['popular'] });
     const r: any = await handler(guestEvent());
     const all = [r.featured.large?.id, ...r.featured.small.map((v: any) => v.id), ...r.sections.flatMap(ids)].filter(Boolean);
     expect(new Set(all).size).toBe(all.length);
@@ -132,17 +193,18 @@ describe('logged-in viewers', () => {
   const allIds = (r: any) => [
     r.featured.large?.id,
     ...r.featured.small.map((v: any) => v.id),
-    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : s.channels.flatMap((c: any) => c.videos.map((v: any) => v.id))),
+    ...r.sections.flatMap((s: any) => s.videos ? ids(s) : (s.groups || []).flatMap((g: any) => g.videos.map((v: any) => v.id))),
   ].filter(Boolean);
 
-  it('with the hero off, suggested then recent both appear without duplicates', async () => {
+  it('with the hero off, suggested then popular both appear without duplicates', async () => {
     seedVideos(30, 'c1');
     seedVideos(30, 'c2');
     const event = loginAs('viewer');
     insertUserHistory(db, { userId: 'viewer', videoId: 'c1v0', watchTimeSeconds: 50, watchedAt: Date.now() });
-    setAdminDefaults({ homeHero: false, homeSections: ['suggested', 'recent'] });
+    setAdminDefaults({ homeHero: false, homeSections: ['suggested', 'popular'] });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['suggested', 'recent']);
+    // The old id is read as the new one.
+    expect(sectionIds(r)).toEqual(['forYou', 'popular']);
     const all = allIds(r);
     expect(new Set(all).size).toBe(all.length);
   });
@@ -154,7 +216,7 @@ describe('logged-in viewers', () => {
     insertSubscription(db, { userId: 'viewer', channelId: 'c1' });
     insertUserHistory(db, { userId: 'viewer', videoId: 'c2v0', watchTimeSeconds: 50, watchedAt: Date.now() });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['recent', 'popular', 'suggested', 'subscriptions']);
+    expect(sectionIds(r)).toEqual(['subscriptions', 'forYou', 'popular', 'becauseYouWatched', 'discoverChannels']);
     expect(r.featured.large).not.toBeNull();
     const all = allIds(r);
     expect(all.length).toBeGreaterThan(5);
@@ -185,9 +247,9 @@ describe('sizes', () => {
 
   it('fills a 30-video row even after the hero and earlier sections claimed videos', async () => {
     seedVideos(80);
-    setAdminDefaults({ homeSections: ['recent', 'popular'], rowSize: 30 });
+    setAdminDefaults({ homeSections: ['popular'], rowSize: 30 });
     const r: any = await handler(guestEvent());
-    expect(ids(r.sections.find((s: any) => s.id === 'recent'))).toHaveLength(30);
+    expect(r.featured.small.length).toBeGreaterThan(0);
     expect(ids(r.sections.find((s: any) => s.id === 'popular'))).toHaveLength(30);
   });
 
@@ -199,7 +261,8 @@ describe('sizes', () => {
     }
     setAdminDefaults({ homeHero: false, homeSections: ['subscriptions'], subscriptionChannels: 4 });
     const r: any = await handler(event);
-    expect(r.sections[0].channels).toHaveLength(4);
+    expect(new Set(r.sections[0].videos.map((v: any) => v.channel_id)).size).toBe(4);
+    expect(r.sections[0].videos).toHaveLength(8);
   });
 });
 
@@ -207,7 +270,7 @@ describe('preference sources', () => {
   it('a user override wins over the admin default', async () => {
     seedVideos(40);
     const event = loginAs('u1');
-    setAdminDefaults({ homeSections: ['recent'] });
+    setAdminDefaults({ homeSections: ['suggested'] });
     insertUserPreferences(db, { userId: 'u1', data: JSON.stringify({ homeSections: ['popular'] }) });
     const r: any = await handler(event);
     expect(sectionIds(r)).toEqual(['popular']);
@@ -218,7 +281,7 @@ describe('preference sources', () => {
     const event = loginAs('u1');
     insertUserPreferences(db, { userId: 'u1', data: '{not json' });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toContain('recent');
+    expect(sectionIds(r)).toContain('popular');
   });
 });
 
@@ -234,27 +297,27 @@ describe('Bearer token caller', () => {
   });
 });
 
-describe('lazy recent/popular sizing', () => {
-  it('keeps a full recent row after a section that claims most of the newest videos', async () => {
+describe('lazy popular sizing', () => {
+  it('keeps a full popular row after a section that claims most of the most viewed videos', async () => {
     const now = Date.now();
     insertChannel(db, { id: 'old' });
     for (let i = 0; i < 120; i++) {
-      insertVideo(db, { id: `old${i}`, channelId: 'old', uploadDate: '20250101', viewCount: 10, createdAt: now - 1_000_000 - i * 1000 });
+      insertVideo(db, { id: `old${i}`, channelId: 'old', uploadDate: '20250101', viewCount: 1, createdAt: now - 1_000_000 - i * 1000 });
     }
     const event = loginAs('u1');
     for (let c = 0; c < 8; c++) {
       insertChannel(db, { id: `sub${c}` });
       insertSubscription(db, { userId: 'u1', channelId: `sub${c}` });
       for (let i = 0; i < 12; i++) {
-        insertVideo(db, { id: `sub${c}v${i}`, channelId: `sub${c}`, uploadDate: '20260101', viewCount: 5, createdAt: now - (c * 12 + i) * 10 });
+        insertVideo(db, { id: `sub${c}v${i}`, channelId: `sub${c}`, uploadDate: '20260101', viewCount: 50, createdAt: now - (c * 12 + i) * 10 });
       }
     }
-    insertUserPreferences(db, { userId: 'u1', data: JSON.stringify({ homeSections: ['subscriptions', 'recent'], homeHero: false, rowSize: 15 }) });
+    insertUserPreferences(db, { userId: 'u1', data: JSON.stringify({ homeSections: ['subscriptions', 'popular'], homeHero: false, rowSize: 15 }) });
     const r: any = await handler(event);
-    expect(sectionIds(r)).toEqual(['subscriptions', 'recent']);
-    const recent = r.sections.find((s: any) => s.id === 'recent');
-    expect(recent.videos).toHaveLength(15);
-    const all = r.sections.flatMap((s: any) => s.id === 'subscriptions' ? s.channels.flatMap(ids) : ids(s));
+    expect(sectionIds(r)).toEqual(['subscriptions', 'popular']);
+    const popular = r.sections.find((s: any) => s.id === 'popular');
+    expect(popular.videos).toHaveLength(15);
+    const all = r.sections.flatMap((s: any) => ids(s));
     expect(new Set(all).size).toBe(all.length);
   });
 });

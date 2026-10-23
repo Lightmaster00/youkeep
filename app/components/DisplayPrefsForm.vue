@@ -59,7 +59,7 @@
           <button type="button" class="move-btn" :data-testid="`down-${row.id}`" :disabled="saving || !row.visible || index === visibleCount - 1" :aria-label="`Move ${SECTION_LABELS[row.id]} down`" @click="moveSection(row.id, 1)">↓</button>
         </span>
       </div>
-      <p class="pref-hint">"Suggested for you" and "From channels you follow" only appear for signed-in accounts. Music and podcast rows only appear while their module is on.</p>
+      <p class="pref-hint">Only Popular, Browse by category, Shorts and the music and podcast rows appear for visitors who are not signed in. Music and podcast rows only appear while their module is on. A row with nothing to show is left out.</p>
     </div>
 
     <div class="pref-block">
@@ -110,6 +110,7 @@ import { ref, computed } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { HOME_SECTION_IDS, MEDIA_HOME_SECTION_MODULE, ROW_SIZES, SUBSCRIPTION_CHANNEL_COUNTS } from '#shared/displayPrefs';
 import type { DisplayPrefs, HomeSectionId, PrefKey } from '#shared/displayPrefs';
+import { HOME_SECTION_LABELS } from '~/utils/homeSectionLabels';
 
 const props = defineProps<{ mode: 'user' | 'admin' }>();
 
@@ -181,14 +182,7 @@ function onNavChange(to: string, event: Event) {
   commit({ hiddenNavLinks: next }, () => { el.checked = shown.value.hiddenNavLinks.includes(to); });
 }
 
-const SECTION_LABELS: Record<HomeSectionId, string> = {
-  recent: 'Recently added',
-  popular: 'Popular',
-  suggested: 'Suggested for you',
-  subscriptions: 'From channels you follow',
-  recentMusic: 'Recently added music',
-  newEpisodes: 'New podcast episodes',
-};
+const SECTION_LABELS = HOME_SECTION_LABELS;
 const RANKING_OPTIONS = [
   { value: 'localViewers', label: 'Local viewers' },
   { value: 'youtubeViews', label: 'YouTube views' },

@@ -66,10 +66,10 @@ describe('recentMusic / newEpisodes sections', () => {
     insertPodcastEpisode(db, { id: 'e1', showId: 's1', localFilePath: '/p/e1.mp3', createdAt: 1000 });
     insertPodcastEpisode(db, { id: 'e2', showId: 's1', localFilePath: '/p/e2.mp3', createdAt: 2000 });
     db.prepare("UPDATE podcast_episodes SET pub_date = 'Tue, 06 Oct 2026 10:00:00 GMT' WHERE id = 'e2'").run();
-    setAdminDefaults({ homeHero: false, homeSections: ['newEpisodes', 'recent', 'recentMusic'] });
+    setAdminDefaults({ homeHero: false, homeSections: ['newEpisodes', 'popular', 'recentMusic'] });
 
     const r: any = await handler(guestEvent());
-    expect(sectionIds(r)).toEqual(['newEpisodes', 'recent', 'recentMusic']);
+    expect(sectionIds(r)).toEqual(['newEpisodes', 'popular', 'recentMusic']);
 
     const music = section(r, 'recentMusic');
     expect(music.title).toBe('Recently added music');

@@ -2,7 +2,8 @@
   <div class="search-page">
     <h1 class="search-page-title">Results for "{{ query }}"</h1>
 
-    <section v-if="isEnabled('video')" class="search-section">
+    <!-- Long videos, then Shorts in their own section: never interleaved. -->
+    <section v-if="isEnabled('video')" class="search-section" data-testid="search-videos">
       <h2 class="search-section-title">Videos</h2>
       <div v-if="videosPending" class="search-loading">Loading...</div>
       <div v-else-if="videosError" class="search-error">Failed to load videos.</div>
@@ -10,7 +11,7 @@
         v-else-if="videos.length === 0"
         icon="video"
         title="No videos"
-        description="No videos match this search."
+        :description="shorts.length > 0 ? 'No long videos match this search; matching Shorts are below.' : 'No videos match this search.'"
       />
       <template v-else>
         <div class="video-grid stagger-in">
@@ -18,6 +19,13 @@
         </div>
         <NuxtLink :to="{ path: '/', query: { q: query } }" class="search-see-more">See more videos</NuxtLink>
       </template>
+    </section>
+
+    <section v-if="isEnabled('video') && shorts.length > 0" class="search-section" data-testid="search-shorts">
+      <h2 class="search-section-title">Shorts</h2>
+      <div class="video-shorts-grid">
+        <VideoCard v-for="video in shorts" :key="video.id" :video="video" :search-query="query" />
+      </div>
     </section>
 
     <section v-if="isEnabled('music')" class="search-section">
@@ -100,9 +108,12 @@ const section = (key: string, enabled: () => boolean, load: () => Promise<any[]>
   { default: () => [] },
 );
 
-const [videosState, tracksState, episodesState] = await Promise.all([
+const [videosState, shortsState, tracksState, episodesState] = await Promise.all([
   section('videos', () => isEnabled('video'), async () =>
-    ((await requestFetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 10, seed } }))?.videos || [])),
+    ((await requestFetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 10, seed, type: 'video' } }))?.videos || [])),
+  // A Shorts failure only hides that section: the long videos still show.
+  section('shorts', () => isEnabled('video'), async () =>
+    ((await requestFetch<any>('/api/videos', { params: { q: query.value, status: 'completed', limit: 12, seed, type: 'short' } }).catch(() => null))?.videos || [])),
   section('tracks', () => isEnabled('music'), async () =>
     ((await requestFetch<any>('/api/music/tracks/search', { params: { q: query.value } }))?.tracks || []).slice(0, 10)),
   section('episodes', () => isEnabled('podcasts'), async () =>
@@ -112,6 +123,7 @@ const [videosState, tracksState, episodesState] = await Promise.all([
 const videos = computed(() => videosState.data.value || []);
 const videosPending = computed(() => videosState.pending.value);
 const videosError = computed(() => !!videosState.error.value);
+const shorts = computed(() => shortsState.data.value || []);
 const tracks = computed(() => tracksState.data.value || []);
 const tracksPending = computed(() => tracksState.pending.value);
 const tracksError = computed(() => !!tracksState.error.value);

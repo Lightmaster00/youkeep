@@ -32,19 +32,13 @@
           @click="openPlaylist(playlist.id)"
           style="cursor: pointer;"
         >
-          <div class="thumbnail-wrapper" style="position: relative;">
+          <MediaFrame class="thumbnail-wrapper" kind="video" :src="playlist.thumbnail_url" img-class="thumbnail-img" alt="Playlist Thumbnail">
             <!-- Overlay to make it look like a playlist card -->
             <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 40%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(2px); z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-top-right-radius: inherit; border-bottom-right-radius: inherit;">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: white;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
               <span style="font-size: 12px; font-weight: 700; color: white;">{{ playlist.video_count }}</span>
             </div>
-            <img
-              :src="playlist.thumbnail_url || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 16 9\' fill=\'%23111\'><rect width=\'16\' height=\'9\' fill=\'%23111\'/></svg>'"
-              class="thumbnail-img"
-              alt="Playlist Thumbnail"
-              style="aspect-ratio: 16/9; object-fit: cover;"
-            />
-          </div>
+          </MediaFrame>
           <div class="video-info" style="padding: 10px; display: flex; flex-direction: column; flex: 1;">
             <h4 class="video-title" style="font-size: 14px; font-weight: 600; line-height: 1.4; color: white; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
               {{ playlist.title }}
@@ -78,9 +72,18 @@
         icon="video"
       />
 
-      <div v-else class="video-grid">
+      <!-- Long videos, then Shorts in their own section, never interleaved. -->
+      <template v-else>
+      <section
+        v-for="group in playlistGroups"
+        :key="group.kind"
+        class="channel-playlist-kind"
+        :data-testid="`channel-playlist-${group.kind}`"
+      >
+        <h3 v-if="playlistGroups.length > 1" class="section-title channel-playlist-kind-title">{{ group.title }}</h3>
+      <div :class="group.kind === 'shorts' ? 'shorts-grid' : 'video-grid'">
         <VideoCard
-          v-for="video in selectedPlaylistData.videos"
+          v-for="video in group.items"
           :key="video.id"
           :video="video"
           :show-channel-info="false"
@@ -98,6 +101,8 @@
           </template>
         </VideoCard>
       </div>
+      </section>
+      </template>
     </template>
   </div>
 </template>
@@ -106,6 +111,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue';
 import { useToast } from '~/composables/useToast';
 import { useChannelDetail } from '~/composables/useChannelDetail';
+import { splitShorts } from '~/utils/videoKinds';
 
 const toast = useToast();
 
@@ -123,6 +129,13 @@ const channelPlaylists = computed(() => {
 
 const selectedPlaylistId = ref('');
 const selectedPlaylistData = ref<any>(null);
+const playlistGroups = computed(() => {
+  const { videos, shorts } = splitShorts<any>(selectedPlaylistData.value?.videos);
+  return [
+    { kind: 'videos', title: 'Videos', items: videos },
+    { kind: 'shorts', title: 'Shorts', items: shorts },
+  ].filter((g) => g.items.length > 0);
+});
 const loadingPlaylistDetail = ref(false);
 const syncingPlaylists = ref(false);
 

@@ -48,6 +48,7 @@ export default defineEventHandler(async (event) => {
       v.download_status,
       v.download_progress,
       v.local_thumbnail_path,
+      v.is_short,
       v.local_video_path,
       v.was_live,
       c.title as channel_title,

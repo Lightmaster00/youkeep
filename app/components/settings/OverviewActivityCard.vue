@@ -18,12 +18,17 @@
         </li>
       </ul>
     </template>
+    <div class="activity-sync">
+      <h4 class="activity-sync-title">Automatic sync</h4>
+      <AutoSyncCard compact />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
 import { useActiveCounts } from '~/composables/useActiveCounts';
+import AutoSyncCard from '~/components/settings/AutoSyncCard.vue';
 
 const { counts, downloadingTotal, queuedTotal, pausedTotal, fetchActiveCounts } = useActiveCounts();
 
@@ -55,4 +60,6 @@ onMounted(fetchActiveCounts);
 .activity-list li { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .activity-paused { margin: 0; color: var(--text-muted); font-size: 12px; font-weight: 400; }
 .activity-label { font-weight: 600; color: var(--text-primary, inherit); }
+.activity-sync { border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.activity-sync-title { margin: 0; font-size: 14px; font-weight: 700; }
 </style>

@@ -20,7 +20,7 @@
           @click="activeTab = 'archived'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tab-icon"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"></path><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"></polygon></svg>
-          Archived Videos <span class="tab-count">{{ singleChannelData?.stats?.completedVideosCount || 0 }}</span>
+          Videos <span class="tab-count">{{ singleChannelData?.stats?.completedVideosCount || 0 }}</span>
         </button>
         <button
           type="button"
@@ -416,6 +416,18 @@ onUnmounted(() => poller.stop());
   font-weight: 500;
 }
 
+.channels-page .channel-profile-categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+@media (max-width: 600px) {
+  .channels-page .channel-profile-categories {
+    justify-content: center;
+  }
+}
+
 .channels-page .channel-profile-desc {
   font-size: 13px;
   color: var(--text-secondary);
@@ -507,21 +519,15 @@ onUnmounted(() => poller.stop());
   cursor: pointer;
 }
 
+/* Ratio, cropping and placeholder come from .media-frame (main.css). */
 .channels-page .video-card.premium-card .thumbnail-wrapper {
-  position: relative;
-  aspect-ratio: 16/9;
   border-radius: var(--border-radius-md);
-  overflow: hidden;
   box-shadow: var(--shadow-sm);
-  background: #000;
   border: 1px solid transparent;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .channels-page .video-card.premium-card .thumbnail-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
   transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
@@ -942,24 +948,16 @@ onUnmounted(() => poller.stop());
   display: flex;
   flex-direction: column;
 }
+.channels-page .channel-playlist-kind + .channel-playlist-kind {
+  margin-top: 28px;
+}
+.channels-page .channel-playlist-kind-title {
+  margin-bottom: 14px;
+}
 .channels-page .shorts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 20px;
 }
-.channels-page .short-badge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  background: #ff0000;
-  color: white;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  z-index: 2;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
+
 </style>

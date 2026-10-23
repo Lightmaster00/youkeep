@@ -41,3 +41,45 @@ describe('/search', () => {
     w.unmount();
   });
 });
+
+describe('/search: Videos then Shorts', () => {
+  beforeEach(() => {
+    requestFetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/videos') {
+        return opts.params?.type === 'short'
+          ? { videos: [{ id: 's1', title: 'Sushi short', is_short: 1 }] }
+          : { videos: [{ id: 'v1', title: 'Sushi long video', is_short: 0 }] };
+      }
+      return { tracks: [], episodes: [] };
+    });
+  });
+
+  it('asks for each kind separately and shows two sections, never interleaved', async () => {
+    const w = await mountSuspended(SearchPage, { route: { path: '/search', query: { q: 'sushi' } } });
+    await flushPromises();
+    const types = requestFetchMock.mock.calls.filter(([u]) => u === '/api/videos').map(([, o]) => o.params.type).sort();
+    expect(types).toEqual(['short', 'video']);
+    const titles = w.findAll('h2.search-section-title').map((h) => h.text());
+    expect(titles.slice(0, 2)).toEqual(['Videos', 'Shorts']);
+    const videos = w.find('[data-testid="search-videos"]');
+    const shorts = w.find('[data-testid="search-shorts"]');
+    expect(videos.text()).toContain('Sushi long video');
+    expect(videos.text()).not.toContain('Sushi short');
+    expect(shorts.text()).toContain('Sushi short');
+    expect(shorts.text()).not.toContain('Sushi long video');
+    expect(shorts.find('.thumbnail-wrapper').classes()).toContain('media-frame--short');
+    expect(shorts.find('[data-testid="short-badge"]').text()).toBe('SHORT');
+    expect(videos.find('[data-testid="short-badge"]').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it('shows no Shorts section when no Short matches', async () => {
+    requestFetchMock.mockImplementation(async (url: string, opts: any = {}) =>
+      url === '/api/videos' ? { videos: opts.params?.type === 'short' ? [] : [{ id: 'v1', title: 'Sushi long video' }] } : { tracks: [], episodes: [] });
+    const w = await mountSuspended(SearchPage, { route: { path: '/search', query: { q: 'sushi' } } });
+    await flushPromises();
+    expect(w.find('[data-testid="search-shorts"]').exists()).toBe(false);
+    expect(w.text()).toContain('Sushi long video');
+    w.unmount();
+  });
+});

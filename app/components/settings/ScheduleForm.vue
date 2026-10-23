@@ -17,6 +17,7 @@
         <label class="form-label" :for="`${idPrefix}-preset`">How often</label>
         <select :id="`${idPrefix}-preset`" v-model="form.preset" class="form-select" @change="applyPreset">
           <option value="hourly">Every hour</option>
+          <option value="six_hours">Every 6 hours (default)</option>
           <option value="twelve_hours">Every 12 hours</option>
           <option value="daily">{{ dailyLabel }}</option>
           <option value="weekly">{{ weeklyLabel }}</option>
@@ -55,8 +56,8 @@ const loaded = ref(false);
 const loadFailed = ref(false);
 const form = reactive<{ enabled: boolean; preset: ScheduleKey | 'custom'; schedule: string }>({
   enabled: false,
-  preset: 'daily',
-  schedule: props.presets.daily,
+  preset: 'six_hours',
+  schedule: props.presets.six_hours,
 });
 
 function applyPreset() {
@@ -67,7 +68,7 @@ async function load() {
   try {
     const data = await $fetch<{ enabled?: boolean; schedule?: string }>(props.endpoint);
     form.enabled = !!data?.enabled;
-    form.schedule = data?.schedule || props.presets.daily;
+    form.schedule = data?.schedule || props.presets.six_hours;
     form.preset = presetForSchedule(props.presets, form.schedule);
     loaded.value = true;
     loadFailed.value = false;

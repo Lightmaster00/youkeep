@@ -53,3 +53,58 @@ describe('csrf client plugin', () => {
     expect(underlying.mock.calls[0]![1]).toBe(init);
   });
 });
+
+describe('session expiry (401) handling', () => {
+  let fetchStub: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    const { useToast } = await import('../../app/composables/useToast');
+    useToast().toasts.value = [];
+    fetchStub = vi.fn(async () => ({}));
+    vi.stubGlobal('$fetch', fetchStub);
+    useState('auth_loading').value = false;
+    useState('auth_user').value = { id: 'u1', username: 'bob', role: 'user' };
+    useState('modules_loaded').value = true;
+    window.sessionStorage.setItem('landing_applied', 'u1');
+    await useRouter().push('/playlists?sort=new');
+    underlying.mockImplementation(async () => new Response('{"statusMessage":"Unauthorized. Please log in."}', { status: 401 }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const toastMessages = async () => (await import('../../app/composables/useToast')).useToast().toasts.value.map((t) => t.message);
+
+  it('a 401 from the API signs out once, shows one toast and goes to /login with the original path', async () => {
+    const push = vi.spyOn(useRouter(), 'push');
+    const res = await window.fetch('/api/playlists/personal');
+    expect(res.status).toBe(401);
+    await window.fetch('/api/playlists/personal');
+    await window.fetch('/api/videos/history');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(useState('auth_user').value).toBeNull();
+    expect(await toastMessages()).toEqual(['Your session expired. Please log in again.']);
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(push.mock.calls[0]![0]).toMatchObject({ path: '/login', query: { redirect: '/playlists?sort=new' } });
+    push.mockRestore();
+  });
+
+  it('ignores 401s from login, setup and me', async () => {
+    const push = vi.spyOn(useRouter(), 'push');
+    await window.fetch('/api/auth/login', { method: 'POST' });
+    await window.fetch('/api/auth/setup', { method: 'POST' });
+    await window.fetch('/api/auth/me');
+    expect(useState('auth_user').value).not.toBeNull();
+    expect(await toastMessages()).toEqual([]);
+    expect(push).not.toHaveBeenCalled();
+    push.mockRestore();
+  });
+
+  it('leaves a guest on a public page alone', async () => {
+    useState('auth_user').value = null;
+    await useRouter().push('/watch/abc');
+    const push = vi.spyOn(useRouter(), 'push');
+    await window.fetch('/api/videos/track', { method: 'POST' });
+    expect(await toastMessages()).toEqual([]);
+    expect(push).not.toHaveBeenCalled();
+    push.mockRestore();
+  });
+});

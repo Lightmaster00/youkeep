@@ -123,8 +123,6 @@ describe('timing-safe token comparisons', () => {
   });
 
   it('personal playlist share tokens use crypto.timingSafeEqual and refuse array tokens', async () => {
-    db.exec(`CREATE TABLE personal_playlists (id TEXT PRIMARY KEY, title TEXT, description TEXT, user_id TEXT, visibility TEXT, share_token TEXT, created_at INTEGER);
-      CREATE TABLE personal_playlist_videos (playlist_id TEXT, video_id TEXT, position INTEGER, added_at INTEGER);`);
     db.prepare("INSERT INTO personal_playlists VALUES ('p1', 'T', NULL, 'u1', 'unlisted', 'pp-secret', 0)").run();
     const spy = vi.spyOn(crypto, 'timingSafeEqual');
     await expect(personalPlaylistGet(mockEvent(undefined, { path: '/api/playlists/personal/p1?token=pp-secret', params: { id: 'p1' } }))).resolves.toMatchObject({ playlist: { id: 'p1' } });

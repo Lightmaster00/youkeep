@@ -88,8 +88,9 @@ const route = useRoute();
 const afterLogin = () => safeRedirectPath(route.query.redirect) || '/';
 const username = ref('');
 const password = ref('');
-// Off: the session ends after 24 h unused. On: it lasts its full 7 days.
-const rememberMe = ref(false);
+// On (the default, a personal self-hosted app): the session lasts its full
+// 7 days. Unticked: it ends after 24 h unused.
+const rememberMe = ref(true);
 const confirmPassword = ref('');
 const errorMessage = ref('');
 const loadingSubmit = ref(false);

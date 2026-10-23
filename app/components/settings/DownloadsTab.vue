@@ -8,6 +8,8 @@
       </div>
     </div>
 
+    <AutoSyncCard />
+
     <div class="download-type-cards">
       <DownloadTypeCard v-for="kind in DOWNLOAD_KINDS" :key="kind" :kind="kind" :state="states[kind]" @changed="refreshAll" />
     </div>
@@ -41,6 +43,7 @@ import DownloadTypeCard from '~/components/settings/DownloadTypeCard.vue';
 import DownloadQueueList from '~/components/settings/DownloadQueueList.vue';
 import DownloadsAdvanced from '~/components/settings/DownloadsAdvanced.vue';
 import DownloadsBlockedBanner from '~/components/settings/DownloadsBlockedBanner.vue';
+import AutoSyncCard from '~/components/settings/AutoSyncCard.vue';
 import { useAllDownloads } from '~/composables/useAllDownloads';
 import { useToast } from '~/composables/useToast';
 import { DOWNLOAD_KINDS, FILTERS, queueActionRequest, type QueueAction, type QueueItem } from '~/utils/allDownloads';
