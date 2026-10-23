@@ -4,6 +4,7 @@ import { addLog, buildSpawnEnv, getDownloadsDirState, getYtdlPath, runProcessAsy
 import { isShuttingDown } from './processTree';
 import { isEffectivelyPaused } from './modules';
 import { sanitizeCategories, sanitizeTags } from './videoInfo';
+import { recomputeCategoriesOfVideos } from './channelCategories';
 
 /**
  * Fills the YouTube categories and tags of videos downloaded before they were
@@ -44,6 +45,8 @@ export const METADATA_BACKFILL_MAX_ATTEMPTS = 3;
 export const METADATA_BACKFILL_BLOCKED_POLL_MS = 60_000;
 export const METADATA_BACKFILL_MAX_BACKOFF_MS = 5 * 60_000;
 export const STARTUP_METADATA_BACKFILL_DELAY_MS = 120_000;
+/** The channel categories are recomputed after this many videos, and at the end of a run. */
+export const METADATA_BACKFILL_RECOMPUTE_EVERY = 25;
 /** YouTube video ids: never anything else reaches the yt-dlp command line. */
 const VIDEO_ID_RE = /^[A-Za-z0-9_-]{6,20}$/;
 
@@ -225,6 +228,23 @@ async function runLoop(db: Database.Database): Promise<void> {
   const s = status();
   const attempts = new Map<string, number>();
   let consecutiveFailures = 0;
+  // Videos enriched since the last channel categories recompute.
+  let touched: string[] = [];
+  const flushCategories = () => {
+    if (touched.length === 0) return;
+    const ids = touched;
+    touched = [];
+    try {
+      recomputeCategoriesOfVideos(db, ids);
+    } catch (err) {
+      console.error('[metadata-backfill] Could not recompute the channel categories:', err);
+    }
+  };
+  const enriched = (videoId: string, categories: string[], tags: string[]) => {
+    markEnriched(db, videoId, categories, tags);
+    touched.push(videoId);
+    if (touched.length >= METADATA_BACKFILL_RECOMPUTE_EVERY) flushCategories();
+  };
   try {
     while (true) {
       if (stopRequested(db, s)) break;
@@ -240,7 +260,7 @@ async function runLoop(db: Database.Database): Promise<void> {
       if (!video) break;
       if (!VIDEO_ID_RE.test(video.id)) {
         // Not a YouTube id (an import from elsewhere): nothing to look up.
-        markEnriched(db, video.id, [], []);
+        enriched(video.id, [], []);
         s.processed++;
         continue;
       }
@@ -249,7 +269,7 @@ async function runLoop(db: Database.Database): Promise<void> {
       if (stopRequested(db, s)) break;
       try {
         const info = await fetchInfo(video.id);
-        markEnriched(db, video.id, sanitizeCategories(info?.categories), sanitizeTags(info?.tags));
+        enriched(video.id, sanitizeCategories(info?.categories), sanitizeTags(info?.tags));
         s.processed++;
         s.enriched++;
         consecutiveFailures = 0;
@@ -260,7 +280,7 @@ async function runLoop(db: Database.Database): Promise<void> {
         attempts.set(video.id, tries);
         if (tries >= METADATA_BACKFILL_MAX_ATTEMPTS) {
           // Give up on this one so it never blocks the queue.
-          markEnriched(db, video.id, [], []);
+          enriched(video.id, [], []);
           s.processed++;
           s.failed++;
           addLog(`Video categories: ${video.id} failed ${tries} times and is skipped: ${message}`);
@@ -276,6 +296,7 @@ async function runLoop(db: Database.Database): Promise<void> {
     s.lastError = err?.message || String(err);
     console.error('[metadata-backfill] The run stopped unexpectedly:', err);
   } finally {
+    flushCategories();
     s.waitingReason = null;
     s.finishedAt = metadataBackfillDeps.now();
     _g[G_CANCEL] = false;

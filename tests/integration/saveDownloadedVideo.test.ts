@@ -49,4 +49,13 @@ describe('saveDownloadedVideo', () => {
     saveDownloadedVideo(db, 'v', { videoPath: '/downloads/v.mp4', thumbnailPath: null, sizeBytes: null, info: null });
     expect(row()).toMatchObject({ categories: '["Music"]', tags: null, metadata_enriched_at: null, description: 'old' });
   });
+
+  it('recomputes the channel categories when the info.json brought categories', () => {
+    const channelCats = () => (db.prepare("SELECT categories FROM channels WHERE id = 'c'").get() as any).categories;
+    db.prepare("UPDATE channels SET categories = NULL").run();
+    saveDownloadedVideo(db, 'v', { videoPath: null, thumbnailPath: null, sizeBytes: null, info: null });
+    expect(channelCats()).toBeNull();
+    saveDownloadedVideo(db, 'v', { videoPath: null, thumbnailPath: null, sizeBytes: null, info: extractInfoFields({ categories: ['Gaming'] }) });
+    expect(channelCats()).toBe('["Gaming"]');
+  });
 });

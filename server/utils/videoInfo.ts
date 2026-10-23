@@ -1,3 +1,5 @@
+import type Database from 'better-sqlite3';
+import { recomputeCategoriesOfVideos } from './channelCategories';
 // Pure extraction of the fields we persist from a yt-dlp `<id>.info.json`.
 export interface VideoInfoFields {
   description: string | null;
@@ -85,7 +87,7 @@ export interface DownloadedVideoRow {
  * as enriched (the metadata backfill then skips it).
  */
 export function saveDownloadedVideo(
-  db: { prepare: (sql: string) => { run: (...args: any[]) => unknown } },
+  db: Database.Database,
   videoId: string,
   row: DownloadedVideoRow,
   now: number = Date.now(),
@@ -121,4 +123,6 @@ export function saveDownloadedVideo(
     info ? now : null,
     videoId,
   );
+  // New categories: the channel's automatic categories follow.
+  if (info) recomputeCategoriesOfVideos(db, [videoId]);
 }

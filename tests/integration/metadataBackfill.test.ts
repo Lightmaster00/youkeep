@@ -74,6 +74,26 @@ describe('metadata backfill', () => {
     expect(getMetadataBackfillCounts(db)).toEqual({ total: 3, enriched: 3, pending: 0, enabled: true });
   });
 
+  it('recomputes the channel categories every 25 videos and at the end of the run', async () => {
+    const channelCats = (id: string) => (db.prepare('SELECT categories FROM channels WHERE id = ?').get(id) as any).categories;
+    insertChannel(db, { id: 'c2' });
+    for (let i = 0; i < 30; i++) insertVideo(db, { id: `batchVid${String(i).padStart(3, '0')}`, channelId: 'c1', createdAt: 100 - i });
+    insertVideo(db, { id: 'otherChan01', channelId: 'c2', createdAt: 1 });
+    const seen: Array<string | null> = [];
+    answer = (id) => {
+      seen.push(channelCats('c1'));
+      return ok({ categories: id === 'otherChan01' ? ['Music'] : ['Gaming'], tags: [] });
+    };
+    startMetadataBackfill(db);
+    await waitIdle();
+    // Before the 26th lookup, 25 videos were done: the first recompute ran.
+    expect(seen[24]).toBeNull();
+    expect(seen[25]).toBe('["Gaming"]');
+    expect(channelCats('c1')).toBe('["Gaming"]');
+    // c2's only video was the last one: the end-of-run recompute covers it.
+    expect(channelCats('c2')).toBe('["Music"]');
+  });
+
   it('runs yt-dlp without downloading, for one video, with a 60 s limit', async () => {
     insertVideo(db, { id: 'abcdefghijk', channelId: 'c1' });
     startMetadataBackfill(db);
