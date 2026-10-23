@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { uiLiteralHits } from '../helpers/uiLiterals';
+import { baseCompile } from '@intlify/message-compiler';
+import { uiLiteralHits, blankComments } from '../helpers/uiLiterals';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -36,6 +37,18 @@ describe('i18n catalogues', () => {
     const missing = Object.keys(en).filter(k => !(k in cat));
     const extra = Object.keys(cat).filter(k => !(k in en));
     expect({ missing, extra }, `${code}: missing ${missing.join(', ')}; extra ${extra.join(', ')}`).toEqual({ missing: [], extra: [] });
+  });
+
+  // One message that vue-i18n cannot compile (a bare "@" or "|" is syntax) makes it drop the whole
+  // catalogue at run time, so every key shows raw: catch it here.
+  it.each(Object.entries(catalogues))('%s: every message compiles', (code, cat) => {
+    const bad: string[] = [];
+    for (const [key, msg] of Object.entries(cat)) {
+      const errors: string[] = [];
+      baseCompile(msg, { onError: e => errors.push(e.message) });
+      if (errors.length) bad.push(`${code}.${key}: ${errors[0]}`);
+    }
+    expect(bad).toEqual([]);
   });
 
   it.each(others)('%s keeps the same {placeholders} as en', (code, cat) => {
@@ -249,6 +262,8 @@ describe('no English literals bound in templates or scripts', () => {
     expect(boundLiteralHits('x.vue', vue('', "toast.error('Something failed');"))).toHaveLength(1);
     expect(boundLiteralHits('x.vue', vue('', "const o = { message: 'Nope' };"))).toHaveLength(1);
     expect(boundLiteralHits('x.ts', "export const x = { title: 'Delete this?' };")).toHaveLength(1);
+    expect(boundLiteralHits('x.ts', "const label = pending || 'Confirm';")).toHaveLength(1);
+    expect(boundLiteralHits('x.ts', "switch (v) { case 'a': return 'Public'; }")).toHaveLength(1);
     // Not UI text: keys, classes, routes, events, console and error messages, comments.
     expect(boundLiteralHits('x.vue', vue('<div :class="[\'btn btn-primary\', { on: a }]" :title="t(\'a.b\')" @click="emit(\'close\')" />', "navigateTo('/login'); console.error('Logout error:', e); // 'Hello there friend'"))).toEqual([]);
     expect(boundLiteralHits('x.ts', "throw new Error('Something went wrong here'); const k = 'user_prefs';")).toEqual([]);
@@ -257,5 +272,54 @@ describe('no English literals bound in templates or scripts', () => {
   it.each(SCANNED)('%s', (file) => {
     const hits = boundLiteralHits(file, readFileSync(join(ROOT, file), 'utf8'));
     expect(hits, `English UI literal in ${file}: ${hits.join('; ')}`).toEqual([]);
+  });
+});
+
+// Catalogue hygiene: every key the code asks for exists, and few keys are left unused.
+const strip = (src: string) => blankComments(src).replace(/<!--[\s\S]*?-->/g, '');
+const ALL_APP_SOURCE = filesUnder(join(ROOT, 'app')).map(f => strip(readFileSync(f, 'utf8'))).join('\n');
+
+// t('a.b'), $t("a.b"), i18n.t('a.b'), te(...), tm(...): the key is a plain literal.
+const KEY_CALLS = /(?:\$?\bt|\$?\bte|\$?\btm|\brt|\$i18n\.t|\bi18n\.t)\(\s*(['"`])([^'"`$]+)\1/g;
+// t(`a.${x}`): the key is built at run time, so only its fixed prefix is known.
+const DYNAMIC_KEY_CALLS = /(?:\$?\bt|\$?\bte|\$?\btm)\(\s*`([^`]*\$\{[^`]*)`/g;
+
+export function usedKeys(source: string): { literal: string[]; dynamicPrefixes: string[] } {
+  const literal = [...new Set([...source.matchAll(KEY_CALLS)].map(m => m[2]!))].filter(k => /^[A-Za-z][\w]*(\.[\w]+)+$/.test(k));
+  const dynamicPrefixes = [...new Set([...source.matchAll(DYNAMIC_KEY_CALLS)].map(m => m[1]!.split('${')[0]!))];
+  return { literal, dynamicPrefixes };
+}
+
+describe('catalogue hygiene', () => {
+  it('the key extraction itself works (self-test)', () => {
+    const r = usedKeys("t('a.b') $t(\"c.d\") i18n.t('e.f') t(`g.${x}.h`) t('not a key') tx('z.z')");
+    expect(r.literal.sort()).toEqual(['a.b', 'c.d', 'e.f']);
+    expect(r.dynamicPrefixes).toEqual(['g.']);
+  });
+
+  it('every key used with a literal t(...) call exists in en.json', () => {
+    const { literal } = usedKeys(ALL_APP_SOURCE);
+    expect(literal.length).toBeGreaterThan(300);
+    const missing = literal.filter(k => !(k in en));
+    expect(missing, `keys used in app/ but missing from en.json: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('reports the keys built at run time (skipped by the check above)', () => {
+    const { dynamicPrefixes } = usedKeys(ALL_APP_SOURCE);
+    console.info(`dynamic i18n keys (prefix checked only): ${dynamicPrefixes.join(', ')}`);
+    // Every prefix must still match at least one catalogue key.
+    const dead = dynamicPrefixes.filter(p => !Object.keys(en).some(k => k.startsWith(p)));
+    expect(dead).toEqual([]);
+  });
+
+  // "Used" is generous: the key appears anywhere in app/ as a quoted string (labelKey: 'nav.home',
+  // fallback keys, key tables) or falls under a run-time prefix. The recorded number may only go down.
+  const MAX_UNUSED_KEYS = 0;
+  it(`at most ${MAX_UNUSED_KEYS} catalogue keys are unused (warning list printed)`, () => {
+    const quoted = new Set([...ALL_APP_SOURCE.matchAll(/(['"`])([A-Za-z][\w]*(?:\.[\w]+)+)\1/g)].map(m => m[2]!));
+    const prefixes = [...ALL_APP_SOURCE.matchAll(/`([^`]*\$\{[^`]*)`/g)].map(m => m[1]!.split('${')[0]!).filter(p => /^[A-Za-z][\w.]*\.$/.test(p));
+    const unused = Object.keys(en).filter(k => !quoted.has(k) && !prefixes.some(p => k.startsWith(p)));
+    if (unused.length) console.warn(`unused catalogue keys (${unused.length}):\n${unused.join('\n')}`);
+    expect(unused.length).toBeLessThanOrEqual(MAX_UNUSED_KEYS);
   });
 });

@@ -10,7 +10,7 @@ export interface Literal {
 }
 
 /** Blank out comments, keeping offsets and newlines, so literals inside them are never seen. */
-function blankComments(src: string): string {
+export function blankComments(src: string): string {
   let out = '';
   let i = 0;
   while (i < src.length) {

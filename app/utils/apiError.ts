@@ -8,7 +8,7 @@ export type Translate = (key: string, params?: Record<string, unknown>) => strin
 interface Mapped { key: string; params?: Record<string, string | number> }
 
 // Whole-message matches.
-const EXACT: Record<string, string> = {
+export const EXACT_MESSAGES: Record<string, string> = {
   'Invalid username or password.': 'errors.invalidCredentials',
   'Username and password are required.': 'errors.credentialsRequired',
   'Username or password is too long.': 'errors.credentialsTooLong',
@@ -36,7 +36,7 @@ const EXACT: Record<string, string> = {
 };
 
 // Messages that carry a number: [pattern, key, name of the parameter].
-const WITH_NUMBER: Array<[RegExp, string, string]> = [
+export const NUMBERED_MESSAGES: Array<[RegExp, string, string]> = [
   [/^Too many failed login attempts\. Try again in (\d+) minute\(s\)\.$/, 'errors.tooManyLogins', 'minutes'],
   [/^Too many failed attempts\. Try again in (\d+) minute\(s\)\.$/, 'errors.tooManyAttempts', 'minutes'],
   [/^Password must be at least (\d+) characters long\.$/, 'account.passwordTooShort', 'min'],
@@ -51,9 +51,9 @@ const WITH_NUMBER: Array<[RegExp, string, string]> = [
 
 /** The catalogue key (and parameters) for a known server message, else null. */
 export function mapServerMessage(message: string): Mapped | null {
-  const exact = EXACT[message];
+  const exact = EXACT_MESSAGES[message];
   if (exact) return { key: exact };
-  for (const [pattern, key, name] of WITH_NUMBER) {
+  for (const [pattern, key, name] of NUMBERED_MESSAGES) {
     const m = message.match(pattern);
     if (m) return { key, params: { [name]: Number(m[1]) } };
   }
