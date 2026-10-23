@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mountSuspended } from '@nuxt/test-utils/runtime';
+import { SUPPORTED_LANGUAGES, LANGUAGE_NAMES } from '../../shared/languages';
 import LanguageSelect from '../../app/components/LanguageSelect.vue';
 import { useToast } from '../../app/composables/useToast';
 
@@ -15,11 +16,16 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('LanguageSelect', () => {
-  it('offers only the shipped languages, named in themselves', async () => {
+  it('offers every shipped language, named in itself, in SUPPORTED_LANGUAGES order', async () => {
     const w = await mountSuspended(LanguageSelect);
     const options = w.findAll('option');
-    expect(options.map(o => o.attributes('value'))).toEqual(['en', 'fr']);
-    expect(options.map(o => o.text())).toEqual(['English', 'Français']);
+    expect(options.map(o => o.attributes('value'))).toEqual([...SUPPORTED_LANGUAGES]);
+    expect(options.map(o => o.text())).toEqual(SUPPORTED_LANGUAGES.map(c => LANGUAGE_NAMES[c]));
+  });
+
+  it.each(SUPPORTED_LANGUAGES)('switches to %s', async (code) => {
+    await useNuxtApp().$i18n.setLocale(code);
+    expect(useNuxtApp().$i18n.locale.value).toBe(code);
   });
 
   it('saves the choice and switches the locale', async () => {

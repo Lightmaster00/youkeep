@@ -10,7 +10,7 @@ export function applyUserLanguage(
 ) {
   const code = user.value?.uiLanguage;
   if (isLanguageCode(code) && nuxtApp.$i18n.locale.value !== code) {
-    return nuxtApp.$i18n.setLocale(code as Parameters<typeof nuxtApp.$i18n.setLocale>[0]);
+    return nuxtApp.$i18n.setLocale(code);
   }
 }
 

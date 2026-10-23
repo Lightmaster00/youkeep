@@ -5,8 +5,7 @@ export function useUiLanguage() {
   const { locale, setLocale, t } = useI18n();
   const user = useState<UserSession | null>('auth_user');
   const toast = useToast();
-  // Supported codes are wider than the catalogues shipped so far; unloaded ones fall back to English.
-  const apply = (code: LanguageCode) => setLocale(code as Parameters<typeof setLocale>[0]);
+  const apply = (code: LanguageCode) => setLocale(code);
 
   const current = computed<LanguageCode>(() => (isLanguageCode(locale.value) ? locale.value : 'en'));
 

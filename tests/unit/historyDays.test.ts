@@ -38,3 +38,15 @@ describe('groupByDay', () => {
     expect(groupByDay([], (i: any) => i.ts, NOW)).toEqual([]);
   });
 });
+
+describe('historyDayLabel in the other UI languages', () => {
+  it.each([
+    ['es', 'martes, 6 de octubre'], ['de', 'Dienstag, 6. Oktober'], ['it', 'martedì 6 ottobre'],
+    ['zh', '10月6日星期二'], ['ja', '10月6日火曜日'], ['ru', 'вторник, 6 октября'],
+  ])('%s words the date natively', (locale, expected) => {
+    expect(historyDayLabel(at(2026, 10, 6, 23), NOW, { locale })).toBe(expected);
+  });
+  it('pt', () => {
+    expect(historyDayLabel(at(2026, 10, 6, 23), NOW, { locale: 'pt' })).toBe('terça-feira, 6 de outubro');
+  });
+});
