@@ -20,6 +20,8 @@ const inFlight = new Set<string>();
 export function usePodcastFollows() {
   const { user } = useAuth();
   const toast = useToast();
+  // Resolved now, used when a failure toast fires (possibly outside a component).
+  const { $i18n } = useNuxtApp();
   const state = useState<FollowsState>('podcast_follows', () => ({ owner: null, followed: {} }));
 
   function cache(): Record<string, boolean> {
@@ -83,7 +85,7 @@ export function usePodcastFollows() {
       return !was;
     } catch {
       cache()[showId] = was;
-      toast.error(was ? 'Could not unfollow the show.' : 'Could not follow the show.');
+      toast.error(was ? $i18n.t('podcasts.follow.unfollowFailed') : $i18n.t('podcasts.follow.followFailed'));
       return null;
     } finally {
       inFlight.delete(showId);

@@ -2,13 +2,13 @@
   <div v-if="progress" class="episode-progress" :class="{ played: progress.completed }">
     <span v-if="progress.completed" class="episode-progress-played">
       <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
-      Played
+      {{ t('podcasts.progress.played') }}
     </span>
     <div
       v-else
       class="episode-progress-track"
       role="progressbar"
-      aria-label="Listened"
+      :aria-label="t('podcasts.progress.listened')"
       aria-valuemin="0"
       aria-valuemax="100"
       :aria-valuenow="percent"
@@ -27,6 +27,7 @@ import { progressFraction } from '#shared/podcastProgress';
 // logged-in user. Renders nothing for never-started episodes and for guests.
 const props = defineProps<{ episodeId: string; duration?: number | null }>();
 
+const { t } = useI18n();
 const progressStore = usePodcastProgress();
 const progress = computed(() => progressStore.get(props.episodeId));
 const percent = computed(() => Math.round(progressFraction(progress.value, props.duration) * 100));

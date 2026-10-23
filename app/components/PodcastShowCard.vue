@@ -3,17 +3,17 @@
     class="show-card"
     role="link"
     tabindex="0"
-    :aria-label="`Open ${show.title}`"
+    :aria-label="t('podcasts.episode.openShow', { title: show.title })"
     @click="open"
     @keydown.enter.self.prevent="open"
   >
     <div class="show-card-cover-wrap">
       <img :src="show.cover_url || fallbackCover" @error="onCoverError" class="show-card-cover" alt="" />
-      <span v-if="newCount && newCount > 0" class="show-card-new">{{ newCount }} new</span>
+      <span v-if="newCount && newCount > 0" class="show-card-new">{{ t('podcasts.newBadge', { count: newCount.toLocaleString(locale) }, newCount) }}</span>
     </div>
     <div class="show-card-body">
       <h3 class="show-card-title">{{ show.title }}</h3>
-      <p class="show-card-meta">{{ show.episode_count }} episode(s)</p>
+      <p class="show-card-meta">{{ t('podcasts.episodeCount', { count: Number(show.episode_count).toLocaleString(locale) }, Number(show.episode_count)) }}</p>
       <p v-if="detail" class="show-card-detail">{{ detail }}</p>
       <span v-if="showVisibility" class="badge" :class="visibilityBadgeClass(show.visibility)">{{ formatVisibility(show.visibility) }}</span>
       <ShowFollowButton :show-id="show.id" :show-title="show.title" class="show-card-follow" />
@@ -28,6 +28,7 @@ import { useRouter } from 'vue-router';
 // One show of the Podcasts library grid or of the Subscribed page: cover,
 // title, episode count, the follow toggle, and (Subscribed) the "N new" badge.
 // `detail` adds one more line (Discover: follower count, latest episode).
+const { t, locale } = useI18n();
 const props = defineProps<{ show: any; showVisibility?: boolean; newCount?: number; detail?: string }>();
 
 const router = useRouter();

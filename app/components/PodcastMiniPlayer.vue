@@ -21,15 +21,15 @@
     </div>
 
     <div class="podcast-mini-player-controls">
-      <button @click="skipBack" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Back 15 seconds" aria-label="Back 15 seconds">
+      <button @click="skipBack" class="podcast-mini-player-btn podcast-mini-player-skip-btn" :title="t('podcasts.player.back')" :aria-label="t('podcasts.player.back')">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
         <span class="podcast-mini-player-skip-label">15</span>
       </button>
-      <button type="button" @click="togglePlay" class="podcast-mini-player-btn podcast-mini-player-play-btn" :title="isPlaying ? 'Pause' : 'Play'" :aria-label="isPlaying ? 'Pause' : 'Play'">
+      <button type="button" @click="togglePlay" class="podcast-mini-player-btn podcast-mini-player-play-btn" :title="isPlaying ? t('music.pause') : t('music.play')" :aria-label="isPlaying ? t('music.pause') : t('music.play')">
         <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
         <svg v-else xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
-      <button @click="skipForward" class="podcast-mini-player-btn podcast-mini-player-skip-btn" title="Forward 30 seconds" aria-label="Forward 30 seconds">
+      <button @click="skipForward" class="podcast-mini-player-btn podcast-mini-player-skip-btn" :title="t('podcasts.player.forward')" :aria-label="t('podcasts.player.forward')">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"></path></svg>
         <span class="podcast-mini-player-skip-label">30</span>
       </button>
@@ -46,8 +46,8 @@
         :max="Math.max(0, Math.floor(displayDuration))"
         step="1"
         :value="Math.floor(currentTime)"
-        aria-label="Seek"
-        :aria-valuetext="`${formatPodcastTime(currentTime)} of ${formatPodcastTime(displayDuration)}`"
+        :aria-label="t('podcasts.player.seek')"
+        :aria-valuetext="t('podcasts.player.seekValue', { current: formatPodcastTime(currentTime), total: formatPodcastTime(displayDuration) })"
         :disabled="displayDuration <= 0"
         @input="onSeekInput"
       />
@@ -59,10 +59,10 @@
         class="podcast-mini-player-rate"
         :value="playbackRate"
         @change="onRateChange"
-        title="Playback speed"
-        aria-label="Playback speed"
+        :title="t('podcasts.player.speed')"
+        :aria-label="t('podcasts.player.speed')"
       >
-        <option v-for="rate in PLAYBACK_RATES" :key="rate" :value="rate">{{ rate }}x</option>
+        <option v-for="rate in PLAYBACK_RATES" :key="rate" :value="rate">{{ t('podcasts.player.rate', { rate: rate.toLocaleString(locale) }) }}</option>
       </select>
     </div>
   </div>
@@ -93,6 +93,7 @@ const { activeType } = useActiveMiniPlayer();
 const showBar = computed(() => !!currentEpisode.value && (activeType.value === 'podcast' || !currentTrack.value));
 
 const toast = useToast();
+const { t, locale } = useI18n();
 const audioElRef = ref<HTMLAudioElement | null>(null);
 
 // Before metadata loads, duration.value is 0 — fall back to the RSS duration
@@ -140,7 +141,7 @@ function onPlay() {
 }
 
 function onAudioError() {
-  toast.error('Error playing the episode.');
+  toast.error(t('podcasts.player.error'));
   isPlaying.value = false;
 }
 

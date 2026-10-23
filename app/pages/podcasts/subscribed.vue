@@ -1,38 +1,38 @@
 <template>
   <div class="subscribed-page">
-    <h1 class="page-title subscribed-title">Subscribed</h1>
+    <h1 class="page-title subscribed-title">{{ t('nav.subscribed') }}</h1>
 
     <EmptyState
       v-if="!user"
       icon="music"
-      title="Log in to follow shows"
-      description="Followed shows and your listening progress are kept per account."
+      :title="t('podcasts.subscribed.loginTitle')"
+      :description="t('podcasts.subscribed.loginDesc')"
     />
 
     <template v-else>
       <PodcastContinueRow show-empty />
 
-      <section class="subscribed-section" aria-label="Your shows">
-        <h2 class="subscribed-heading">Your shows</h2>
-        <div v-if="showsLoading" class="subscribed-status">Loading...</div>
+      <section class="subscribed-section" :aria-label="t('podcasts.subscribed.yourShows')">
+        <h2 class="subscribed-heading">{{ t('podcasts.subscribed.yourShows') }}</h2>
+        <div v-if="showsLoading" class="subscribed-status">{{ t('common.loadingDots') }}</div>
         <div v-else-if="showsError" class="subscribed-status">
-          Failed to load your shows.
-          <button class="btn btn-secondary" @click="loadShows">Retry</button>
+          {{ t('podcasts.subscribed.showsLoadFailed') }}
+          <button class="btn btn-secondary" @click="loadShows">{{ t('common.retry') }}</button>
         </div>
         <EmptyState
           v-else-if="visibleShows.length === 0"
           icon="music"
-          title="You are not following any show yet"
-          description="Open a show in the Library and press Follow to see its new episodes here."
+          :title="t('podcasts.subscribed.noneTitle')"
+          :description="t('podcasts.subscribed.noneDesc')"
         />
         <div v-else class="subscribed-grid">
           <PodcastShowCard v-for="s in visibleShows" :key="s.id" :show="s" :new-count="s.newCount" />
         </div>
       </section>
 
-      <section v-if="visibleShows.length > 0" class="subscribed-section" aria-label="Latest from your shows">
-        <h2 class="subscribed-heading">Latest from your shows</h2>
-        <p v-if="loaded && items.length === 0 && !error" class="subscribed-status">No episodes yet.</p>
+      <section v-if="visibleShows.length > 0" class="subscribed-section" :aria-label="t('podcasts.subscribed.latest')">
+        <h2 class="subscribed-heading">{{ t('podcasts.subscribed.latest') }}</h2>
+        <p v-if="loaded && items.length === 0 && !error" class="subscribed-status">{{ t('podcasts.subscribed.noEpisodes') }}</p>
         <div v-else class="media-grid">
           <PodcastEpisodeCard
             v-for="episode in items"
@@ -43,13 +43,13 @@
             @play="playEpisode"
           />
         </div>
-        <div v-if="loading" class="subscribed-status">Loading...</div>
+        <div v-if="loading" class="subscribed-status">{{ t('common.loadingDots') }}</div>
         <div v-else-if="error" class="subscribed-status">
-          Failed to load episodes.
-          <button class="btn btn-secondary" @click="loadMore">Retry</button>
+          {{ t('podcasts.episodesLoadFailed') }}
+          <button class="btn btn-secondary" @click="loadMore">{{ t('common.retry') }}</button>
         </div>
         <div v-else-if="hasMore" class="subscribed-more">
-          <button class="btn btn-secondary" @click="loadMore">Load more</button>
+          <button class="btn btn-secondary" @click="loadMore">{{ t('common.loadMore') }}</button>
         </div>
       </section>
     </template>
@@ -65,7 +65,8 @@ import { usePodcastProgress } from '~/composables/usePodcastProgress';
 import { useRecentList } from '~/composables/useRecentList';
 import { toPlayableEpisode } from '~/utils/playableEpisode';
 
-useHead({ title: 'Subscribed podcasts' });
+const { t } = useI18n();
+useHead({ title: computed(() => t('podcasts.head.subscribed')) });
 
 // The logged-in user's followed shows ("N new" badges), what they are in the
 // middle of, and the latest episodes of those shows.

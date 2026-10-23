@@ -731,5 +731,113 @@
       "volume": "Volume",
       "error": "Erreur de lecture audio."
     }
+  },
+  "podcasts": {
+    "title": "Podcasts",
+    "head": {
+      "discover": "Découvrir les podcasts",
+      "subscribed": "Podcasts suivis",
+      "history": "Historique des podcasts"
+    },
+    "searchPlaceholder": "Rechercher un podcast ou un épisode...",
+    "noResults": "Aucun résultat",
+    "noEpisodesMatch": "Aucun épisode ne correspond à cette recherche.",
+    "searchFailed": "La recherche a échoué.",
+    "loadFailed": "Impossible de charger les podcasts.",
+    "noPodcastsTitle": "Aucun podcast archivé",
+    "noPodcastsDesc": "Aucun podcast archivé pour l'instant.",
+    "back": "Podcasts",
+    "notFound": "Podcast introuvable.",
+    "noEpisodesTitle": "Aucun épisode",
+    "noEpisodesDesc": "Aucun épisode pour ce podcast pour l'instant.",
+    "episodesLoadFailed": "Impossible de charger les épisodes.",
+    "episodeCount": "{count} épisode | {count} épisodes",
+    "newBadge": "{count} nouveau | {count} nouveaux",
+    "followerCount": "{count} abonné | {count} abonnés",
+    "listenerCount": "{count} auditeur | {count} auditeurs",
+    "follow": {
+      "follow": "Suivre",
+      "following": "Suivi",
+      "followLabel": "Suivre {title}",
+      "unfollowLabel": "Ne plus suivre {title}",
+      "thisShow": "cette émission",
+      "followFailed": "Impossible de suivre l'émission.",
+      "unfollowFailed": "Impossible de ne plus suivre l'émission."
+    },
+    "progress": {
+      "played": "Écouté",
+      "listened": "Progression d'écoute",
+      "markPlayed": "Marquer comme écouté",
+      "markUnplayed": "Marquer comme non écouté",
+      "markPlayedFailed": "Impossible de marquer l'épisode comme écouté.",
+      "markUnplayedFailed": "Impossible de marquer l'épisode comme non écouté.",
+      "moreActions": "Plus d'actions"
+    },
+    "episode": {
+      "play": "Lire l'épisode",
+      "playTitle": "Lire {title}",
+      "openShow": "Ouvrir {title}",
+      "status": {
+        "downloaded": "Téléchargé",
+        "inProgress": "En cours",
+        "queued": "En attente",
+        "failed": "Échec"
+      }
+    },
+    "continue": {
+      "title": "Reprendre la lecture",
+      "empty": "Rien en cours"
+    },
+    "discover": {
+      "title": "Découvrir",
+      "browseLanguage": "Parcourir par langue",
+      "filterLanguage": "Filtrer par langue",
+      "allLanguages": "Toutes",
+      "noShowsLanguage": "Aucune émission dans cette langue pour l'instant.",
+      "popular": "Populaires auprès des auditeurs",
+      "recentlyUpdated": "Mises à jour récemment",
+      "trending": "Épisodes tendance",
+      "because": "Parce que vous suivez {title}",
+      "emptyTitle": "Rien à découvrir pour l'instant",
+      "emptyDesc": "Les émissions apparaissent ici une fois les épisodes téléchargés et suivis."
+    },
+    "recent": {
+      "title": "Nouveaux épisodes",
+      "emptyTitle": "Rien ici pour l'instant",
+      "emptyDesc": "Les épisodes apparaissent ici dès qu'ils sont téléchargés."
+    },
+    "subscribed": {
+      "loginTitle": "Connectez-vous pour suivre des émissions",
+      "loginDesc": "Les émissions suivies et votre progression d'écoute sont conservées par compte.",
+      "yourShows": "Vos émissions",
+      "showsLoadFailed": "Impossible de charger vos émissions.",
+      "noneTitle": "Vous ne suivez encore aucune émission",
+      "noneDesc": "Ouvrez une émission dans la Bibliothèque et appuyez sur Suivre pour voir ici ses nouveaux épisodes.",
+      "latest": "Les derniers épisodes de vos émissions",
+      "noEpisodes": "Aucun épisode pour l'instant."
+    },
+    "history": {
+      "clear": "Effacer l'historique",
+      "loginTitle": "Connectez-vous pour voir votre historique",
+      "loginDesc": "Les épisodes que vous écoutez sont conservés par compte.",
+      "emptyTitle": "Aucun historique d'écoute pour l'instant",
+      "emptyDesc": "Les épisodes que vous commencez ou marquez comme écoutés apparaissent ici.",
+      "loadFailed": "Impossible de charger votre historique.",
+      "clearTitle": "Effacer l'historique ?",
+      "clearMessage": "Tous les épisodes seront retirés de votre historique d'écoute, et leurs positions de reprise et marques Écouté seront réinitialisées. Cette action est irréversible.",
+      "removeLabel": "Retirer {title} de l'historique",
+      "removeTitle": "Retirer de l'historique. Réinitialise aussi la position de reprise.",
+      "removeFailed": "Impossible de retirer l'épisode de votre historique.",
+      "clearFailed": "Impossible d'effacer votre historique."
+    },
+    "player": {
+      "back": "Reculer de 15 secondes",
+      "forward": "Avancer de 30 secondes",
+      "seek": "Position de lecture",
+      "seekValue": "{current} sur {total}",
+      "speed": "Vitesse de lecture",
+      "rate": "{rate}×",
+      "error": "Erreur de lecture de l'épisode."
+    }
   }
 }

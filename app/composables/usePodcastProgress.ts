@@ -22,6 +22,8 @@ const inFlight = new Set<string>();
 export function usePodcastProgress() {
   const { user } = useAuth();
   const toast = useToast();
+  // Resolved now, used when a failure toast fires (possibly outside a component).
+  const { $i18n } = useNuxtApp();
   const state = useState<ProgressState>('podcast_progress', () => ({ owner: null, progress: {} }));
 
   function cache(): Record<string, EpisodeProgress | null> {
@@ -129,7 +131,7 @@ export function usePodcastProgress() {
     } catch {
       if (had) cache()[episodeId] = previous;
       else delete cache()[episodeId];
-      toast.error(played ? 'Could not mark the episode as played.' : 'Could not mark the episode as unplayed.');
+      toast.error(played ? $i18n.t('podcasts.progress.markPlayedFailed') : $i18n.t('podcasts.progress.markUnplayedFailed'));
       return false;
     } finally {
       inFlight.delete(episodeId);

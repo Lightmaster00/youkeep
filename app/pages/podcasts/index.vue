@@ -6,19 +6,19 @@
         <input
           v-model="search"
           type="text"
-          placeholder="Search for a podcast or an episode..."
+          :placeholder="t('podcasts.searchPlaceholder')"
           class="form-input podcast-search-input"
         />
       </div>
 
       <template v-if="search">
-        <div v-if="episodeSearchPending || episodeSearchFor !== search" class="podcast-loading">Loading...</div>
-        <div v-else-if="episodeSearchError" class="podcast-error">Search failed.</div>
+        <div v-if="episodeSearchPending || episodeSearchFor !== search" class="podcast-loading">{{ t('common.loadingDots') }}</div>
+        <div v-else-if="episodeSearchError" class="podcast-error">{{ t('podcasts.searchFailed') }}</div>
         <EmptyState
           v-else-if="episodeSearchResults.length === 0"
           icon="music"
-          title="No results"
-          description="No episodes match this search."
+          :title="t('podcasts.noResults')"
+          :description="t('podcasts.noEpisodesMatch')"
         />
         <div v-else class="episode-search-results">
           <div
@@ -36,15 +36,15 @@
       <template v-else>
         <PodcastContinueRow />
 
-        <div v-if="gridPending" class="podcast-loading">Loading...</div>
+        <div v-if="gridPending" class="podcast-loading">{{ t('common.loadingDots') }}</div>
 
-        <div v-else-if="gridError" class="podcast-error">Failed to load podcasts.</div>
+        <div v-else-if="gridError" class="podcast-error">{{ t('podcasts.loadFailed') }}</div>
 
         <EmptyState
           v-else-if="shows.length === 0"
           icon="music"
-          title="No podcasts archived"
-          description="No podcasts archived yet."
+          :title="t('podcasts.noPodcastsTitle')"
+          :description="t('podcasts.noPodcastsDesc')"
         />
 
         <div v-else class="show-grid">
@@ -57,11 +57,11 @@
     <div v-else class="show-detail-view">
       <button @click="goBack" class="btn btn-secondary back-btn">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-        Podcasts
+        {{ t('podcasts.back') }}
       </button>
 
-      <div v-if="detailPending" class="podcast-loading">Loading...</div>
-      <div v-else-if="detailError" class="podcast-error">Podcast not found.</div>
+      <div v-if="detailPending" class="podcast-loading">{{ t('common.loadingDots') }}</div>
+      <div v-else-if="detailError" class="podcast-error">{{ t('podcasts.notFound') }}</div>
 
       <template v-else-if="show">
         <div class="show-detail-header">
@@ -80,8 +80,8 @@
         <EmptyState
           v-if="episodes.length === 0 && !episodesLoading && !episodesError"
           icon="music"
-          title="No episodes"
-          description="No episodes for this podcast yet."
+          :title="t('podcasts.noEpisodesTitle')"
+          :description="t('podcasts.noEpisodesDesc')"
         />
 
         <div v-else class="episode-list">
@@ -94,10 +94,10 @@
             @edit="openEpisodeEdit"
           />
 
-          <div v-if="episodesLoading" class="podcast-loading">Loading...</div>
+          <div v-if="episodesLoading" class="podcast-loading">{{ t('common.loadingDots') }}</div>
           <div v-if="episodesError" class="podcast-error">
-            Failed to load episodes.
-            <button @click="loadEpisodes" :disabled="episodesLoading" class="btn btn-secondary load-more-btn">Retry</button>
+            {{ t('podcasts.episodesLoadFailed') }}
+            <button @click="loadEpisodes" :disabled="episodesLoading" class="btn btn-secondary load-more-btn">{{ t('common.retry') }}</button>
           </div>
           <button
             v-if="episodes.length < episodesTotal"
@@ -105,7 +105,7 @@
             :disabled="episodesLoading"
             class="btn btn-secondary load-more-btn"
           >
-            Load more
+            {{ t('common.loadMore') }}
           </button>
         </div>
       </template>
@@ -128,6 +128,7 @@ import { useAuth } from '~/composables/useAuth';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { highlightMatch } from '../../utils/highlightMatch';
 
+const { t } = useI18n();
 const { isAdmin } = useAuth();
 const { play: playPodcastEpisode } = usePodcastPlayer();
 const route = useRoute();
@@ -239,7 +240,7 @@ watch(
 
 // --- Detail view state ---
 const show = ref<any>(null);
-useHead({ title: computed(() => show.value?.title || 'Podcasts') });
+useHead({ title: computed(() => show.value?.title || t('podcasts.title')) });
 const episodes = ref<any[]>([]);
 const episodesTotal = ref(0);
 const episodesLoading = ref(false);

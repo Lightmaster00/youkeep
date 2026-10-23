@@ -1,28 +1,28 @@
 <template>
   <div class="discover-page">
-    <h1 class="page-title discover-title">Discover</h1>
+    <h1 class="page-title discover-title">{{ t('podcasts.discover.title') }}</h1>
 
-    <div v-if="!loaded" class="discover-status">Loading...</div>
+    <div v-if="!loaded" class="discover-status">{{ t('common.loadingDots') }}</div>
 
     <template v-else>
-      <section v-if="languages.length > 0" class="discover-languages" aria-label="Browse by language">
-        <h2 class="discover-languages-title">Browse by language</h2>
+      <section v-if="languages.length > 0" class="discover-languages" :aria-label="t('podcasts.discover.browseLanguage')">
+        <h2 class="discover-languages-title">{{ t('podcasts.discover.browseLanguage') }}</h2>
         <PodcastLanguageChips :languages="languages" :model-value="language" @update:model-value="setLanguage" />
         <p v-if="language && !filtering && popular.length === 0 && recent.length === 0" class="discover-status">
-          No shows in this language yet.
+          {{ t('podcasts.discover.noShowsLanguage') }}
         </p>
       </section>
 
-      <DiscoverRow v-if="popular.length > 0" title="Popular with listeners">
+      <DiscoverRow v-if="popular.length > 0" :title="t('podcasts.discover.popular')">
         <PodcastShowCard
           v-for="s in popular"
           :key="s.id"
           :show="s"
-          :detail="s.followerCount === 1 ? '1 follower' : `${s.followerCount} followers`"
+          :detail="t('podcasts.followerCount', { count: Number(s.followerCount).toLocaleString(locale) }, Number(s.followerCount))"
         />
       </DiscoverRow>
 
-      <DiscoverRow v-if="recent.length > 0" title="Recently updated">
+      <DiscoverRow v-if="recent.length > 0" :title="t('podcasts.discover.recentlyUpdated')">
         <PodcastShowCard
           v-for="s in recent"
           :key="s.id"
@@ -31,19 +31,19 @@
         />
       </DiscoverRow>
 
-      <DiscoverRow v-if="trending.length > 0" title="Trending episodes" layout="list">
+      <DiscoverRow v-if="trending.length > 0" :title="t('podcasts.discover.trending')" layout="list">
         <PodcastEpisodeRow
           v-for="ep in trending"
           :key="ep.id"
           :episode="ep"
-          :context="`${ep.show_title} · ${ep.listenerCount === 1 ? '1 listener' : `${ep.listenerCount} listeners`}`"
+          :context="`${ep.show_title} · ${t('podcasts.listenerCount', { count: Number(ep.listenerCount).toLocaleString(locale) }, Number(ep.listenerCount))}`"
           @play="playEpisode"
         />
       </DiscoverRow>
 
       <DiscoverRow
         v-if="user && because.basedOn && because.shows.length > 0"
-        :title="`Because you follow ${because.basedOn.title}`"
+        :title="t('podcasts.discover.because', { title: because.basedOn.title })"
       >
         <PodcastShowCard v-for="s in because.shows" :key="s.id" :show="s" />
       </DiscoverRow>
@@ -51,8 +51,8 @@
       <EmptyState
         v-if="isEmpty"
         icon="music"
-        title="Nothing to discover yet"
-        description="Shows appear here once episodes are downloaded and followed."
+        :title="t('podcasts.discover.emptyTitle')"
+        :description="t('podcasts.discover.emptyDesc')"
       />
     </template>
   </div>
@@ -65,7 +65,8 @@ import { usePodcastDiscover } from '~/composables/usePodcastDiscover';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { toPlayableEpisode } from '~/utils/playableEpisode';
 
-useHead({ title: 'Discover podcasts' });
+const { t, locale } = useI18n();
+useHead({ title: computed(() => t('podcasts.head.discover')) });
 
 // Podcasts Discover: popular and recently updated shows (filterable by
 // language), trending episodes, and suggestions based on the logged-in
@@ -82,7 +83,7 @@ const isEmpty = computed(() =>
 function formatDate(ts: number | null | undefined): string {
   if (!ts) return '';
   const d = new Date(ts);
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function latestLine(show: any): string {

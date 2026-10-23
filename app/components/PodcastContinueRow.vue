@@ -1,7 +1,7 @@
 <template>
-  <section v-if="user && (items.length > 0 || (showEmpty && loaded))" class="continue-row" aria-label="Continue listening">
-    <h2 class="continue-title">Continue listening</h2>
-    <p v-if="items.length === 0" class="continue-empty">Nothing in progress</p>
+  <section v-if="user && (items.length > 0 || (showEmpty && loaded))" class="continue-row" :aria-label="t('podcasts.continue.title')">
+    <h2 class="continue-title">{{ t('podcasts.continue.title') }}</h2>
+    <p v-if="items.length === 0" class="continue-empty">{{ t('podcasts.continue.empty') }}</p>
     <div v-else class="continue-scroll">
       <div v-for="episode in items" :key="episode.id" class="continue-card">
         <PodcastEpisodeCard
@@ -27,6 +27,7 @@ import { toPlayableEpisode } from '~/utils/playableEpisode';
 // progress unless `showEmpty`, and always for guests.
 defineProps<{ showEmpty?: boolean }>();
 
+const { t } = useI18n();
 const { user } = useAuth();
 const { currentEpisode, play } = usePodcastPlayer();
 const progressStore = usePodcastProgress();

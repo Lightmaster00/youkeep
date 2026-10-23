@@ -117,6 +117,22 @@ const MIGRATED = [
   'app/components/MusicMixTile.vue',
   'app/components/MusicGenreTile.vue',
   'app/components/TrackLikeButton.vue',
+  // Podcasts (batch D). The admin-only PodcastEpisodeEditModal (it saves through /api/admin routes)
+  // stays English on purpose (see englishOnly.test.ts) and is not listed.
+  'app/pages/podcasts/index.vue',
+  'app/pages/podcasts/discover.vue',
+  'app/pages/podcasts/subscribed.vue',
+  'app/pages/podcasts/recent.vue',
+  'app/pages/podcasts/history.vue',
+  'app/components/PodcastContinueRow.vue',
+  'app/components/PodcastEpisodeCard.vue',
+  'app/components/PodcastEpisodeMenu.vue',
+  'app/components/PodcastEpisodeProgress.vue',
+  'app/components/PodcastEpisodeRow.vue',
+  'app/components/PodcastLanguageChips.vue',
+  'app/components/PodcastMiniPlayer.vue',
+  'app/components/PodcastShowCard.vue',
+  'app/components/ShowFollowButton.vue',
 ];
 
 export function templateOf(source: string): string {
@@ -143,6 +159,9 @@ const LITERAL_ALLOWLIST: Array<{ file: string; attr: string; reason: string }> =
   { file: 'app/pages/music/album/[id].vue', attr: 'text "Edit album"', reason: 'admin-only button (opens the admin album editor)' },
   { file: 'app/components/MusicTrackExtras.vue', attr: 'title="Edit"', reason: 'admin-only row button (opens the admin track editor)' },
   { file: 'app/components/MusicTrackExtras.vue', attr: 'aria-label="Edit track"', reason: 'admin-only row button (opens the admin track editor)' },
+  // Admin-only controls inside shared podcast components.
+  { file: 'app/components/PodcastEpisodeRow.vue', attr: 'title="Edit"', reason: 'admin-only row button (opens the admin episode editor)' },
+  { file: 'app/components/PodcastEpisodeRow.vue', attr: 'aria-label="Edit episode"', reason: 'admin-only row button (opens the admin episode editor)' },
 ];
 
 export function hardCodedText(source: string): string[] {

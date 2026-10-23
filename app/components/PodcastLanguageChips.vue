@@ -1,12 +1,12 @@
 <template>
-  <div class="language-chips" role="group" aria-label="Filter by language">
+  <div class="language-chips" role="group" :aria-label="t('podcasts.discover.filterLanguage')">
     <button
       type="button"
       class="language-chip"
       :class="{ active: !modelValue }"
       :aria-pressed="!modelValue"
       @click="emit('update:modelValue', '')"
-    >All</button>
+    >{{ t('podcasts.discover.allLanguages') }}</button>
     <button
       v-for="l in languages"
       :key="l.language"
@@ -16,7 +16,7 @@
       :aria-pressed="modelValue === l.language"
       :title="l.language"
       @click="emit('update:modelValue', l.language)"
-    >{{ languageName(l.language) }} <span class="language-chip-count">{{ l.showCount }}</span></button>
+    >{{ languageName(l.language, locale) }} <span class="language-chip-count">{{ l.showCount }}</span></button>
   </div>
 </template>
 
@@ -24,6 +24,7 @@
 import { languageName } from '~/utils/languageName';
 // Language filter chips of the Podcasts Discover page. "All" (empty value)
 // clears the filter.
+const { t, locale } = useI18n();
 defineProps<{ languages: Array<{ language: string; showCount: number }>; modelValue: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
 </script>

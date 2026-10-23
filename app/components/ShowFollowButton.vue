@@ -5,14 +5,14 @@
     class="show-follow-btn"
     :class="{ following }"
     :aria-pressed="following"
-    :aria-label="following ? `Unfollow ${label}` : `Follow ${label}`"
+    :aria-label="following ? t('podcasts.follow.unfollowLabel', { title: label }) : t('podcasts.follow.followLabel', { title: label })"
     :disabled="busy"
     @click.stop="onClick"
     @keydown.enter.stop
   >
     <svg v-if="following" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
     <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-    <span>{{ following ? 'Following' : 'Follow' }}</span>
+    <span>{{ following ? t('podcasts.follow.following') : t('podcasts.follow.follow') }}</span>
   </button>
 </template>
 
@@ -26,11 +26,12 @@ import { usePodcastFollows } from '~/composables/usePodcastFollows';
 // in usePodcastFollows. Clicks stop here so a card never also opens the show.
 const props = defineProps<{ showId: string; showTitle?: string }>();
 
+const { t } = useI18n();
 const { user } = useAuth();
 const follows = usePodcastFollows();
 const busy = ref(false);
 const following = computed(() => follows.isFollowed(props.showId));
-const label = computed(() => props.showTitle || 'this show');
+const label = computed(() => props.showTitle || t('podcasts.follow.thisShow'));
 
 onMounted(() => follows.ensure([props.showId]));
 watch(() => props.showId, (id) => follows.ensure([id]));

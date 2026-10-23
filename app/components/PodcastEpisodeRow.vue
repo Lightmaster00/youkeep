@@ -16,8 +16,8 @@
         v-if="playable"
         @click.stop="emit('play', episode)"
         class="episode-play-btn"
-        title="Play episode"
-        aria-label="Play episode"
+        :title="t('podcasts.episode.play')"
+        :aria-label="t('podcasts.episode.play')"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
       </button>
@@ -33,12 +33,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { formatUploadDate } from '~/utils/formatCount';
 
 // One episode of the show detail list: title, meta, the user's progress, and
 // the play / status / "Mark as played" / admin edit actions. On phones the
 // actions move to their own line under the title. `context` adds a line under
 // the title (Discover: show title and listener count). The `actions` slot adds
 // buttons after the built-in ones (History: remove from history).
+const { t, locale } = useI18n();
 const props = defineProps<{ episode: any; canEdit?: boolean; context?: string }>();
 const emit = defineEmits<{ play: [episode: any]; edit: [episode: any] }>();
 
@@ -59,18 +61,16 @@ function formatDuration(seconds: number | null): string {
 // fall back to showing it verbatim rather than "Invalid Date".
 function formatPubDate(raw: string | null): string {
   if (!raw) return '';
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return raw;
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatUploadDate(raw, locale.value);
 }
 
 function formatStatus(status: string): string {
   switch (status) {
-    case 'completed': return 'Downloaded';
-    case 'downloading': return 'In progress';
-    case 'pending': return 'Queued';
-    case 'failed': return 'Failed';
-    default: return status || 'Queued';
+    case 'completed': return t('podcasts.episode.status.downloaded');
+    case 'downloading': return t('podcasts.episode.status.inProgress');
+    case 'pending': return t('podcasts.episode.status.queued');
+    case 'failed': return t('podcasts.episode.status.failed');
+    default: return status || t('podcasts.episode.status.queued');
   }
 }
 

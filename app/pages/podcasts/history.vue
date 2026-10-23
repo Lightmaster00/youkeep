@@ -1,30 +1,30 @@
 <template>
   <div class="history-page">
     <div class="history-header">
-      <h1 class="page-title history-title">History</h1>
+      <h1 class="page-title history-title">{{ t('nav.history') }}</h1>
       <button
         v-if="user && items.length > 0"
         type="button"
         class="btn btn-danger-outline"
         @click="confirmingClear = true"
       >
-        Clear history
+        {{ t('podcasts.history.clear') }}
       </button>
     </div>
 
     <EmptyState
       v-if="!user"
       icon="music"
-      title="Log in to see your history"
-      description="The episodes you listen to are kept per account."
+      :title="t('podcasts.history.loginTitle')"
+      :description="t('podcasts.history.loginDesc')"
     />
 
     <template v-else>
       <EmptyState
         v-if="loaded && items.length === 0 && !hasMore && !error"
         icon="music"
-        title="No listening history yet"
-        description="Episodes you start or mark as played show up here."
+        :title="t('podcasts.history.emptyTitle')"
+        :description="t('podcasts.history.emptyDesc')"
       />
       <section v-for="day in days" :key="day.key" class="history-day" :aria-label="day.label">
         <h2 class="history-day-heading">{{ day.label }}</h2>
@@ -40,8 +40,8 @@
             <button
               type="button"
               class="history-remove-btn"
-              :aria-label="`Remove ${ep.title} from history`"
-              title="Remove from history. Also resets the resume position."
+              :aria-label="t('podcasts.history.removeLabel', { title: ep.title })"
+              :title="t('podcasts.history.removeTitle')"
               @click.stop="remove(ep)"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -50,21 +50,21 @@
         </PodcastEpisodeRow>
       </section>
 
-      <div v-if="loading" class="history-status">Loading...</div>
+      <div v-if="loading" class="history-status">{{ t('common.loadingDots') }}</div>
       <div v-else-if="error" class="history-status">
-        Failed to load your history.
-        <button class="btn btn-secondary" @click="loadMore">Retry</button>
+        {{ t('podcasts.history.loadFailed') }}
+        <button class="btn btn-secondary" @click="loadMore">{{ t('common.retry') }}</button>
       </div>
       <div v-else-if="hasMore" class="history-more">
-        <button class="btn btn-secondary" @click="loadMore">Load more</button>
+        <button class="btn btn-secondary" @click="loadMore">{{ t('common.loadMore') }}</button>
       </div>
     </template>
 
     <ConfirmDialog
       :show="confirmingClear"
-      title="Clear history?"
-      message="Every episode will be removed from your listening history, and their resume positions and Played marks are reset. This cannot be undone."
-      confirm-label="Clear history"
+      :title="t('podcasts.history.clearTitle')"
+      :message="t('podcasts.history.clearMessage')"
+      :confirm-label="t('podcasts.history.clear')"
       :busy="clearing"
       @confirm="clearAll"
       @cancel="confirmingClear = false"
@@ -73,14 +73,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { useHistoryList } from '~/composables/useHistoryList';
 import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { usePodcastProgress } from '~/composables/usePodcastProgress';
 import { toPlayableEpisode } from '~/utils/playableEpisode';
 
-useHead({ title: 'Podcast history' });
+const { t } = useI18n();
+useHead({ title: computed(() => t('podcasts.head.history')) });
 
 // The logged-in user's started or played episodes, most recently listened
 // first, grouped by day. Removing one also drops its resume position (the
@@ -92,8 +93,8 @@ const {
   items, days, loading, error, loaded, hasMore, loadMore, remove, confirmingClear, clearing, clearAll,
 } = useHistoryList<any>('/api/podcasts/history', {
   timestampOf: (ep) => ep.progress?.updatedAt ?? 0,
-  removeError: 'Could not remove the episode from your history.',
-  clearError: 'Could not clear your history.',
+  removeError: () => t('podcasts.history.removeFailed'),
+  clearError: () => t('podcasts.history.clearFailed'),
   onRemove: (ep) => progressStore.record(ep.id, null),
   onRestore: (ep) => progressStore.record(ep.id, ep.progress ?? null),
   onClear: () => progressStore.forgetAll(),

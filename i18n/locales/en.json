@@ -731,5 +731,113 @@
       "volume": "Volume",
       "error": "Error playing audio."
     }
+  },
+  "podcasts": {
+    "title": "Podcasts",
+    "head": {
+      "discover": "Discover podcasts",
+      "subscribed": "Subscribed podcasts",
+      "history": "Podcast history"
+    },
+    "searchPlaceholder": "Search for a podcast or an episode...",
+    "noResults": "No results",
+    "noEpisodesMatch": "No episodes match this search.",
+    "searchFailed": "Search failed.",
+    "loadFailed": "Failed to load podcasts.",
+    "noPodcastsTitle": "No podcasts archived",
+    "noPodcastsDesc": "No podcasts archived yet.",
+    "back": "Podcasts",
+    "notFound": "Podcast not found.",
+    "noEpisodesTitle": "No episodes",
+    "noEpisodesDesc": "No episodes for this podcast yet.",
+    "episodesLoadFailed": "Failed to load episodes.",
+    "episodeCount": "{count} episode(s)",
+    "newBadge": "{count} new",
+    "followerCount": "{count} follower | {count} followers",
+    "listenerCount": "{count} listener | {count} listeners",
+    "follow": {
+      "follow": "Follow",
+      "following": "Following",
+      "followLabel": "Follow {title}",
+      "unfollowLabel": "Unfollow {title}",
+      "thisShow": "this show",
+      "followFailed": "Could not follow the show.",
+      "unfollowFailed": "Could not unfollow the show."
+    },
+    "progress": {
+      "played": "Played",
+      "listened": "Listened",
+      "markPlayed": "Mark as played",
+      "markUnplayed": "Mark as unplayed",
+      "markPlayedFailed": "Could not mark the episode as played.",
+      "markUnplayedFailed": "Could not mark the episode as unplayed.",
+      "moreActions": "More actions"
+    },
+    "episode": {
+      "play": "Play episode",
+      "playTitle": "Play {title}",
+      "openShow": "Open {title}",
+      "status": {
+        "downloaded": "Downloaded",
+        "inProgress": "In progress",
+        "queued": "Queued",
+        "failed": "Failed"
+      }
+    },
+    "continue": {
+      "title": "Continue listening",
+      "empty": "Nothing in progress"
+    },
+    "discover": {
+      "title": "Discover",
+      "browseLanguage": "Browse by language",
+      "filterLanguage": "Filter by language",
+      "allLanguages": "All",
+      "noShowsLanguage": "No shows in this language yet.",
+      "popular": "Popular with listeners",
+      "recentlyUpdated": "Recently updated",
+      "trending": "Trending episodes",
+      "because": "Because you follow {title}",
+      "emptyTitle": "Nothing to discover yet",
+      "emptyDesc": "Shows appear here once episodes are downloaded and followed."
+    },
+    "recent": {
+      "title": "New episodes",
+      "emptyTitle": "Nothing here yet",
+      "emptyDesc": "Episodes appear here as soon as they are downloaded."
+    },
+    "subscribed": {
+      "loginTitle": "Log in to follow shows",
+      "loginDesc": "Followed shows and your listening progress are kept per account.",
+      "yourShows": "Your shows",
+      "showsLoadFailed": "Failed to load your shows.",
+      "noneTitle": "You are not following any show yet",
+      "noneDesc": "Open a show in the Library and press Follow to see its new episodes here.",
+      "latest": "Latest from your shows",
+      "noEpisodes": "No episodes yet."
+    },
+    "history": {
+      "clear": "Clear history",
+      "loginTitle": "Log in to see your history",
+      "loginDesc": "The episodes you listen to are kept per account.",
+      "emptyTitle": "No listening history yet",
+      "emptyDesc": "Episodes you start or mark as played show up here.",
+      "loadFailed": "Failed to load your history.",
+      "clearTitle": "Clear history?",
+      "clearMessage": "Every episode will be removed from your listening history, and their resume positions and Played marks are reset. This cannot be undone.",
+      "removeLabel": "Remove {title} from history",
+      "removeTitle": "Remove from history. Also resets the resume position.",
+      "removeFailed": "Could not remove the episode from your history.",
+      "clearFailed": "Could not clear your history."
+    },
+    "player": {
+      "back": "Back 15 seconds",
+      "forward": "Forward 30 seconds",
+      "seek": "Seek",
+      "seekValue": "{current} of {total}",
+      "speed": "Playback speed",
+      "rate": "{rate}x",
+      "error": "Error playing the episode."
+    }
   }
 }

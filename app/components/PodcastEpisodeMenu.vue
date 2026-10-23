@@ -5,8 +5,8 @@
       type="button"
       class="episode-menu-btn"
       :class="{ open }"
-      aria-label="More actions"
-      title="More actions"
+      :aria-label="t('podcasts.progress.moreActions')"
+      :title="t('podcasts.progress.moreActions')"
       aria-haspopup="menu"
       :aria-expanded="open"
       @click="toggleOpen"
@@ -23,7 +23,7 @@
         @click.stop
       >
         <button type="button" class="episode-menu-item" role="menuitem" @click="togglePlayed">
-          {{ played ? 'Mark as unplayed' : 'Mark as played' }}
+          {{ played ? t('podcasts.progress.markUnplayed') : t('podcasts.progress.markPlayed') }}
         </button>
       </div>
     </Teleport>
@@ -39,6 +39,7 @@ import { usePodcastProgress } from '~/composables/usePodcastProgress';
 // The panel is teleported to <body> so scrolling rows and cards cannot clip it.
 const props = defineProps<{ episodeId: string }>();
 
+const { t } = useI18n();
 const { user } = useAuth();
 const progressStore = usePodcastProgress();
 const played = computed(() => progressStore.get(props.episodeId)?.completed === true);

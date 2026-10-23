@@ -4,7 +4,7 @@
     :class="{ 'now-playing': active, 'is-unplayable': !episode.local_file_path }"
     role="button"
     tabindex="0"
-    :aria-label="`Play ${episode.title}`"
+    :aria-label="t('podcasts.episode.playTitle', { title: episode.title })"
     @click="emit('play', episode)"
     @keydown.enter.self.prevent="emit('play', episode)"
     @keydown.space.self.prevent="emit('play', episode)"
@@ -29,11 +29,13 @@
 import { setImageFallback } from '~/utils/imageFallback';
 import { thumbUrl } from '~/utils/thumb';
 import { computed } from 'vue';
+import { formatUploadDate } from '~/utils/formatCount';
 
 // Card for one episode (Home "New podcast episodes" row, /podcasts/recent,
 // Continue listening). Same markup and look as the show cards of the Podcasts
 // library. The logged-in user's progress shows under the date; `showActions`
 // adds the "Mark as played / unplayed" menu.
+const { t, locale } = useI18n();
 const props = defineProps<{ episode: any; active?: boolean; showActions?: boolean }>();
 const emit = defineEmits<{ play: [episode: any] }>();
 
@@ -45,9 +47,7 @@ const cover = computed(() => thumbUrl(props.episode.local_thumbnail_path, 320) |
 const published = computed(() => {
   const raw = props.episode.pub_date;
   if (!raw) return '';
-  const d = new Date(raw);
-  if (isNaN(d.getTime())) return String(raw);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return formatUploadDate(String(raw), locale.value);
 });
 
 function onCoverError(event: Event) {
