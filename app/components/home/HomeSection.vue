@@ -22,7 +22,7 @@
     variant="short"
     :testid="`home-row-${section.id}`"
   >
-    <div v-for="video in section.videos" :key="video.id" class="row-item">
+    <div v-for="video in section.videos" :key="video.id" class="row-item row-item--short">
       <VideoCard :video="video" @hidden="emit('hidden', $event)" />
     </div>
   </HomeRow>
@@ -109,6 +109,11 @@ function percent(video: any): number {
 </script>
 
 <style scoped>
+/* Narrow Short cards: channel name and views on one line each, no avatar. */
+.row-item--short :deep(.channel-avatar) { display: none; }
+.row-item--short :deep(.metadata-row) { white-space: nowrap; overflow: hidden; }
+.row-item--short :deep(.metadata-row > span:nth-child(n + 2)) { display: none; }
+
 .resume-bar {
   position: absolute;
   left: 0;

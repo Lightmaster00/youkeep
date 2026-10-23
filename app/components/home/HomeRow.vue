@@ -6,10 +6,10 @@
         <template v-else>{{ title }}</template>
       </h2>
       <div class="home-row__tools">
-        <NuxtLink v-if="seeAll && !loading" :to="seeAll" class="home-row__see-all" data-testid="row-see-all">{{ seeAllLabel }}</NuxtLink>
         <!-- Arrows for mouse and keyboard users; touch screens swipe instead
              (hidden there by the hover media query). They keep their place
-             while disabled, so nothing moves when they appear. -->
+             while idle and sit left of "See all", so nothing moves when they
+             appear. -->
         <span class="home-row__arrows" :class="{ 'is-idle': !overflowing }">
           <button
             type="button"
@@ -32,6 +32,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
         </span>
+        <NuxtLink v-if="seeAll && !loading" :to="seeAll" class="home-row__see-all" data-testid="row-see-all">{{ seeAllLabel }}</NuxtLink>
       </div>
     </div>
     <div ref="track" class="home-row__track" :class="`home-row__track--${variant}`" @scroll.passive="update">
@@ -224,12 +225,15 @@ defineExpose({ update, page });
 }
 
 @media (max-width: 480px) {
+  .home-row__title { font-size: 16px; }
   .home-row__track { gap: 12px; }
-  /* Most of a phone screen, with the next card peeking in. */
-  .home-row__track--video { --row-item-width: 78vw; }
-  .home-row__track--playlist { --row-item-width: 66vw; }
-  .home-row__track--short { --row-item-width: 40vw; }
-  .home-row__track--channel { --row-item-width: 44vw; }
+  /* Most of the row's width (not the screen's: the sidebar takes some),
+     with the next card peeking in. */
+  .home-row__track--video { --row-item-width: 86%; }
+  .home-row__track--playlist { --row-item-width: 72%; }
+  .home-row__track--short { --row-item-width: 44%; }
+  .home-row__track--channel { --row-item-width: 52%; }
+  .home-row__track--media { --row-item-width: 44%; }
 }
 
 /* Skeleton tiles: the same box as the real item, so nothing shifts. */

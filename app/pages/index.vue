@@ -465,8 +465,10 @@ const formatUploadDate = (dateStr: string | null): string => {
 
 .hero-meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
+  white-space: nowrap;
   font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   margin-bottom: 18px;
@@ -563,6 +565,19 @@ const formatUploadDate = (dateStr: string | null): string => {
     grid-template-columns: 1fr;
   }
   .featured-large { height: 220px; }
+}
+
+/* Phones: the hero alone (the rows below carry the rest), its text kept
+   inside the banner. */
+@media (max-width: 480px) {
+  .featured-bento { margin-bottom: 24px; grid-template-rows: auto; gap: 0; }
+  .featured-small { display: none; }
+  .featured-large { height: 210px; }
+  .hero-content { left: 16px; right: 16px; bottom: 16px; max-width: none; }
+  .hero-channel-badge { margin-bottom: 6px; font-size: 12px; }
+  .hero-title { font-size: 18px; margin-bottom: 6px; }
+  .hero-meta { font-size: 12px; margin-bottom: 12px; }
+  .hero-play-btn { padding: 8px 20px; font-size: 14px; }
 }
 
 /* ===== Search result titles ===== */
