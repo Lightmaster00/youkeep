@@ -4,6 +4,7 @@
 
 export type DayBucket = 'today' | 'yesterday' | 'week' | 'earlier';
 
+// English headings; the pages word them through the catalogue (subscriptions.day.<bucket>).
 export const DAY_BUCKET_LABELS: Readonly<Record<DayBucket, string>> = {
   today: 'Today',
   yesterday: 'Yesterday',
@@ -59,15 +60,14 @@ export function groupByUploadDay<T extends { upload_date?: string | null }>(list
   return groups;
 }
 
-const RELATIVE = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
-
-/** "today", "yesterday", "3 days ago", "2 weeks ago", "5 months ago", "2 years ago". */
-export function relativeDay(uploadDate: string | null | undefined, now: Date = new Date()): string {
+/** "today", "yesterday", "3 days ago", "2 weeks ago", "5 months ago", "2 years ago" (in the UI language). */
+export function relativeDay(uploadDate: string | null | undefined, now: Date = new Date(), locale: string = 'en'): string {
   const date = parseYmd(uploadDate);
   if (!date) return '';
+  const relative = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
   const days = Math.max(0, daysBetween(date, now));
-  if (days < 7) return RELATIVE.format(-days, 'day');
-  if (days < 30) return RELATIVE.format(-Math.floor(days / 7), 'week');
-  if (days < 365) return RELATIVE.format(-Math.max(1, Math.floor(days / 30)), 'month');
-  return RELATIVE.format(-Math.floor(days / 365), 'year');
+  if (days < 7) return relative.format(-days, 'day');
+  if (days < 30) return relative.format(-Math.floor(days / 7), 'week');
+  if (days < 365) return relative.format(-Math.max(1, Math.floor(days / 30)), 'month');
+  return relative.format(-Math.floor(days / 365), 'year');
 }

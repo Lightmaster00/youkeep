@@ -1,0 +1,51 @@
+import type { HomeSectionId } from '#shared/displayPrefs';
+
+// The wording of server-sent English text (home row titles, recommendation
+// reasons), rebuilt from their stable identifiers in the viewer's language.
+// Anything unknown falls back to the English text the server sent.
+
+const REASON_KEYS: Record<string, string> = {
+  subscription: 'subscription',
+  'because-watched': 'becauseWatched',
+  category: 'category',
+  popular: 'popular',
+  new: 'new',
+};
+
+interface ReasonVideo {
+  reason?: { kind?: string; label?: string; ref?: { category?: string } } | null;
+  reasonKind?: string;
+  reasonParams?: { title?: string; category?: string };
+}
+
+export function useVideoText() {
+  const { t, te } = useI18n();
+
+  /** Title of a home row: its id picks the wording, `seed` fills "Because you watched {title}". */
+  function sectionTitle(section: { id: string; title?: string; seed?: { title?: string } | null }): string {
+    if (section.id === 'becauseYouWatched' && section.seed?.title) {
+      return t('home.sections.becauseYouWatchedTitle', { title: section.seed.title });
+    }
+    const key = `home.sections.${section.id}`;
+    return te(key) ? t(key) : (section.title ?? '');
+  }
+
+  /** The "why this video" line of a recommended card, or '' when it has none. */
+  function reasonLabel(video: ReasonVideo): string {
+    const reason = video.reason;
+    if (!reason) return '';
+    const kind = video.reasonKind ?? reason.kind ?? '';
+    const key = REASON_KEYS[kind];
+    const params = { title: video.reasonParams?.title, category: video.reasonParams?.category ?? reason.ref?.category };
+    const needs = kind === 'because-watched' ? params.title : kind === 'category' ? params.category : true;
+    if (!key || !needs) return reason.label ?? '';
+    return t(`video.reason.${key}`, params as Record<string, string>);
+  }
+
+  /** Name of a home row for the skeleton shown while the feed loads. */
+  function rowName(id: HomeSectionId): string {
+    return t(`home.sections.${id}`);
+  }
+
+  return { sectionTitle, reasonLabel, rowName };
+}

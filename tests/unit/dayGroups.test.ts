@@ -41,12 +41,20 @@ describe('groupByUploadDay', () => {
 
 describe('relativeDay', () => {
   it('says how long ago in English', () => {
-    expect(relativeDay('20261023', now)).toBe('today');
-    expect(relativeDay('20261022', now)).toBe('yesterday');
-    expect(relativeDay('20261020', now)).toBe('3 days ago');
-    expect(relativeDay('20261009', now)).toBe('2 weeks ago');
-    expect(relativeDay('20260601', now)).toBe('4 months ago');
-    expect(relativeDay('20240101', now)).toBe('2 years ago');
-    expect(relativeDay(null, now)).toBe('');
+    expect(relativeDay('20261023', now, 'en')).toBe('today');
+    expect(relativeDay('20261022', now, 'en')).toBe('yesterday');
+    expect(relativeDay('20261020', now, 'en')).toBe('3 days ago');
+    expect(relativeDay('20261009', now, 'en')).toBe('2 weeks ago');
+    expect(relativeDay('20260601', now, 'en')).toBe('4 months ago');
+    expect(relativeDay('20240101', now, 'en')).toBe('2 years ago');
+    expect(relativeDay(null, now, 'en')).toBe('');
+  });
+
+  it('says it in French for the fr UI language', () => {
+    expect(relativeDay('20261023', now, 'fr')).toBe('aujourd’hui');
+    expect(relativeDay('20261022', now, 'fr')).toBe('hier');
+    expect(relativeDay('20261020', now, 'fr')).toBe('il y a 3 jours');
+    expect(relativeDay('20261009', now, 'fr')).toBe('il y a 2 semaines');
+    expect(relativeDay('20240101', now, 'fr')).toBe('il y a 2 ans');
   });
 });
