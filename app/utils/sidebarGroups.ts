@@ -5,6 +5,7 @@ import { filterNavLinks } from './displayPrefs';
 export interface SidebarGroup {
   id: string;
   label: string;
+  labelKey: string;
   icon: string; // raw inline-SVG markup of the space, rendered via v-html
   enabled: boolean;
   links: SpaceNavLink[];
@@ -31,7 +32,7 @@ export function buildSidebarGroups(spaces: Space[], opts: Options): SidebarGroup
       (l) => !(opts.mustChangePassword && l.hideWhenMustChangePassword) && !(opts.isGuest && l.requiresUser)
     );
     if (links.length === 0) continue;
-    groups.push({ id: space.id, label: space.label, icon: space.icon, enabled, links });
+    groups.push({ id: space.id, label: space.label, labelKey: space.labelKey, icon: space.icon, enabled, links });
   }
   return groups;
 }

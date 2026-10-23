@@ -6,15 +6,15 @@
       </div>
       
       <h2 class="login-title">
-        {{ setupRequired ? 'YouKeep Setup' : 'Login to your archive' }}
+        {{ setupRequired ? t('login.setupTitle') : t('login.title') }}
       </h2>
       <p class="login-subtitle">
-        {{ setupRequired ? 'Create your main administrator profile to start.' : 'Enter your credentials to access the archived videos.' }}
+        {{ setupRequired ? t('login.setupSubtitle') : t('login.subtitle') }}
       </p>
 
       <form @submit.prevent="handleSubmit" class="login-form">
         <div class="form-group">
-          <label class="form-label" for="username">Username</label>
+          <label class="form-label" for="username">{{ t('login.username') }}</label>
           <input 
             type="text" 
             id="username" 
@@ -27,7 +27,7 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label" for="password">Password</label>
+          <label class="form-label" for="password">{{ t('login.password') }}</label>
           <input 
             type="password" 
             id="password" 
@@ -41,11 +41,11 @@
 
         <div v-if="!setupRequired" class="remember-row">
           <input type="checkbox" id="remember_me" v-model="rememberMe" :disabled="loadingSubmit" />
-          <label for="remember_me">Keep me signed in</label>
+          <label for="remember_me">{{ t('login.keepSignedIn') }}</label>
         </div>
 
         <div v-if="setupRequired" class="form-group">
-          <label class="form-label" for="confirmPassword">Confirm Password</label>
+          <label class="form-label" for="confirmPassword">{{ t('login.confirmPassword') }}</label>
           <input 
             type="password" 
             id="confirmPassword" 
@@ -63,7 +63,7 @@
         </div>
 
         <UiButton variant="primary" type="submit" class="login-btn" :loading="loadingSubmit">
-          {{ setupRequired ? 'Setup YouKeep' : 'Log in' }}
+          {{ setupRequired ? t('login.setupSubmit') : t('login.submit') }}
         </UiButton>
       </form>
     </div>
@@ -75,7 +75,9 @@ import { ref, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
 import { safeRedirectPath } from '~/utils/safeRedirect';
 
-useHead({ title: 'Log in' });
+const { t } = useI18n();
+
+useHead({ title: t('login.submit') });
 
 // Disable default layout for the login page
 definePageMeta({
@@ -117,7 +119,7 @@ const handleSubmit = async () => {
 
 const handleSetup = async () => {
   if (password.value !== confirmPassword.value) {
-    errorMessage.value = 'Passwords do not match.';
+    errorMessage.value = t('login.passwordsMismatch');
     return;
   }
   
@@ -139,7 +141,7 @@ const handleSetup = async () => {
       navigateTo(afterLogin());
     }
   } catch (err: any) {
-    errorMessage.value = err.data?.statusMessage || 'Setup failed.';
+    errorMessage.value = err.data?.statusMessage || t('login.setupFailed');
   } finally {
     loadingSubmit.value = false;
   }
@@ -155,7 +157,7 @@ const handleLogin = async () => {
   if (res.success) {
     navigateTo(afterLogin());
   } else {
-    errorMessage.value = res.message || 'Incorrect credentials.';
+    errorMessage.value = res.message || t('login.incorrect');
   }
 };
 </script>

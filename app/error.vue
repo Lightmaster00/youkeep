@@ -1,6 +1,6 @@
 <template>
   <div class="error-page">
-    <NuxtLink to="/" class="error-logo" aria-label="YouKeep home">
+    <NuxtLink to="/" class="error-logo" :aria-label="t('error.home')">
       <AppLogo size="lg" />
     </NuxtLink>
     <main class="error-card" role="main">
@@ -8,8 +8,8 @@
       <h1 class="error-title">{{ title }}</h1>
       <p class="error-text">{{ description }}</p>
       <div class="error-actions">
-        <button type="button" class="btn btn-primary" @click="goHome">Back to Home</button>
-        <button v-if="statusCode !== 404" type="button" class="btn btn-secondary" @click="retry">Try again</button>
+        <button type="button" class="btn btn-primary" @click="goHome">{{ t('error.backHome') }}</button>
+        <button v-if="statusCode !== 404" type="button" class="btn btn-secondary" @click="retry">{{ t('error.tryAgain') }}</button>
       </div>
     </main>
   </div>
@@ -20,18 +20,20 @@
 // default one: the app's look, one message, and a way back.
 import { computed } from 'vue';
 
+const { t } = useI18n();
+
 const props = defineProps<{ error: { statusCode?: number; statusMessage?: string; message?: string } | null }>();
 
 const statusCode = computed(() => Number(props.error?.statusCode) || 500);
-const title = computed(() => (statusCode.value === 404 ? 'Page not found' : 'Something went wrong'));
+const title = computed(() => (statusCode.value === 404 ? t('error.notFoundTitle') : t('error.genericTitle')));
 const description = computed(() => (statusCode.value === 404
-  ? 'This page does not exist or has moved.'
-  : 'YouKeep could not show this page. Try again in a moment.'));
+  ? t('error.notFoundText')
+  : t('error.genericText')));
 
 // The error page replaces app.vue (and its title template): full title here.
 useHead({
   titleTemplate: null,
-  title: computed(() => `${statusCode.value === 404 ? 'Page not found' : 'Error'} — YouKeep`),
+  title: computed(() => `${statusCode.value === 404 ? t('error.notFoundTitle') : t('error.errorShort')} — YouKeep`),
 });
 
 function goHome() {

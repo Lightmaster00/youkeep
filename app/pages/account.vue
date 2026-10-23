@@ -1,13 +1,13 @@
 <template>
   <div class="account-container">
     <div class="account-header">
-      <h1 class="page-title text-gradient">My Account</h1>
-      <p class="page-subtitle">Manage your personal information and security settings.</p>
+      <h1 class="page-title text-gradient">{{ t('account.heading') }}</h1>
+      <p class="page-subtitle">{{ t('account.subtitle') }}</p>
     </div>
 
     <!-- Mandatory Password Change Warning -->
     <div v-if="currentUser?.mustChangePassword" class="form-msg error-msg mt-3 mb-4 alert-box" role="alert">
-      <strong>⚠️ Mandatory Security:</strong> You must change your temporary password before you can browse the app.
+      <strong>{{ t('account.mandatoryTitle') }}</strong> {{ t('account.mandatoryText') }}
     </div>
 
     <div class="account-grid">
@@ -21,43 +21,43 @@
             <div class="profile-meta-info">
               <h3>{{ currentUser?.username }}</h3>
               <span class="badge" :class="currentUser?.role === 'admin' ? 'badge-completed' : 'badge-pending'">
-                Account Type: {{ currentUser?.role === 'admin' ? 'Administrator' : 'User' }}
+                {{ t('account.accountType', { type: currentUser?.role === 'admin' ? t('account.typeAdmin') : t('account.typeUser') }) }}
               </span>
             </div>
           </div>
 
           <hr class="separator" />
 
-          <h4>Personal Information</h4>
-          <p class="section-desc">These details will be used to secure your account in the future.</p>
+          <h4>{{ t('account.personalInfo') }}</h4>
+          <p class="section-desc">{{ t('account.personalInfoDesc') }}</p>
           
           <p v-if="currentUser?.mustChangePassword" class="section-desc" data-testid="profile-locked">
-            You can edit these details once your new password is set.
+            {{ t('account.profileLocked') }}
           </p>
           <form v-else @submit.prevent="handleSavePersonalInfo" class="mt-4" data-testid="profile-form">
             <div class="form-row">
               <div class="form-group half-width">
-                <label class="form-label" for="first_name">First Name</label>
-                <input type="text" id="first_name" v-model="profile.firstName" class="form-input" placeholder="e.g. Jane" />
+                <label class="form-label" for="first_name">{{ t('account.firstName') }}</label>
+                <input type="text" id="first_name" v-model="profile.firstName" class="form-input" :placeholder="t('account.firstNamePlaceholder')" />
               </div>
               <div class="form-group half-width">
-                <label class="form-label" for="last_name">Last Name</label>
-                <input type="text" id="last_name" v-model="profile.lastName" class="form-input" placeholder="e.g. Doe" />
+                <label class="form-label" for="last_name">{{ t('account.lastName') }}</label>
+                <input type="text" id="last_name" v-model="profile.lastName" class="form-input" :placeholder="t('account.lastNamePlaceholder')" />
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="email">Email Address</label>
+              <label class="form-label" for="email">{{ t('account.email') }}</label>
               <input type="email" id="email" v-model="profile.email" class="form-input" placeholder="name@example.com" />
             </div>
 
             <div class="form-row">
               <div class="form-group half-width">
-                <label class="form-label" for="phone">Phone Number</label>
+                <label class="form-label" for="phone">{{ t('account.phone') }}</label>
                 <input type="tel" id="phone" v-model="profile.phone" class="form-input" placeholder="+1 234 567 890" />
               </div>
               <div class="form-group half-width">
-                <label class="form-label" for="dob">Date of Birth</label>
+                <label class="form-label" for="dob">{{ t('account.dob') }}</label>
                 <input type="date" id="dob" v-model="profile.dob" class="form-input" />
               </div>
             </div>
@@ -68,7 +68,7 @@
 
             <div class="form-actions mt-4">
               <UiButton variant="primary" type="submit" :loading="savingProfile">
-                Save Information
+                {{ t('account.saveInfo') }}
               </UiButton>
             </div>
           </form>
@@ -86,8 +86,8 @@
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
             <div>
-              <h4>Display</h4>
-              <p class="section-desc mb-0">Adjust grid density, navigation and the space shown at startup. Settings you leave unchanged follow the instance defaults.</p>
+              <h4>{{ t('account.display') }}</h4>
+              <p class="section-desc mb-0">{{ t('account.displayDesc') }}</p>
             </div>
           </div>
 
@@ -103,8 +103,8 @@
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
             <div>
-              <h4>Security & Password</h4>
-              <p class="section-desc mb-0">Update your password to keep your account safe.</p>
+              <h4>{{ t('account.security') }}</h4>
+              <p class="section-desc mb-0">{{ t('account.securityDesc') }}</p>
             </div>
           </div>
 
@@ -112,7 +112,7 @@
 
           <form @submit.prevent="handleChangeOwnPassword" class="password-change-form mt-4" novalidate>
             <div class="form-group">
-              <label class="form-label" for="current_password">{{ currentUser?.mustChangePassword ? 'Temporary password' : 'Current password' }}</label>
+              <label class="form-label" for="current_password">{{ currentUser?.mustChangePassword ? t('account.tempPassword') : t('account.currentPassword') }}</label>
               <input
                 type="password"
                 id="current_password"
@@ -124,7 +124,7 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="own_password">New password</label>
+              <label class="form-label" for="own_password">{{ t('account.newPassword') }}</label>
               <input 
                 type="password" 
                 id="own_password" 
@@ -136,7 +136,7 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="own_password_confirm">Confirm new password</label>
+              <label class="form-label" for="own_password_confirm">{{ t('account.confirmNewPassword') }}</label>
               <input 
                 type="password" 
                 id="own_password_confirm" 
@@ -153,7 +153,7 @@
 
             <div class="form-actions mt-4">
               <UiButton variant="primary" type="submit" class="btn-block" :loading="savingOwnPassword">
-                Update Password
+                {{ t('account.updatePassword') }}
               </UiButton>
             </div>
           </form>
@@ -163,32 +163,32 @@
           <div class="security-header">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="security-icon"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
             <div>
-              <h4>API tokens</h4>
-              <p class="section-desc mb-0">Generate a token to connect an external app (mobile client, script) to your account.</p>
+              <h4>{{ t('account.tokens') }}</h4>
+              <p class="section-desc mb-0">{{ t('account.tokensDesc') }}</p>
             </div>
           </div>
 
           <hr class="separator" />
 
           <div v-if="newToken" class="form-msg success-msg mt-3 mb-4 alert-box new-token-reveal">
-            <strong>⚠️ This token will never be shown again.</strong> Copy it now:
+            <strong>{{ t('account.tokenNeverAgain') }}</strong> {{ t('account.tokenCopyNow') }}
             <div class="new-token-value">
               <code ref="tokenCodeEl">{{ newToken }}</code>
-              <UiButton variant="secondary" @click="copyNewToken">Copy</UiButton>
+              <UiButton variant="secondary" @click="copyNewToken">{{ t('account.copy') }}</UiButton>
             </div>
             <p v-if="copyMessage" class="copy-message" role="status">{{ copyMessage }}</p>
-            <UiButton variant="primary" class="mt-3" @click="dismissNewToken">I've copied my token</UiButton>
+            <UiButton variant="primary" class="mt-3" @click="dismissNewToken">{{ t('account.tokenCopied') }}</UiButton>
           </div>
 
           <form v-else @submit.prevent="handleCreateToken" class="mt-4 token-create-form">
             <div class="form-group">
-              <label class="form-label" for="token_label">Token name</label>
+              <label class="form-label" for="token_label">{{ t('account.tokenName') }}</label>
               <input
                 type="text"
                 id="token_label"
                 v-model="newTokenLabel"
                 class="form-input"
-                placeholder="e.g. iPhone, living-room tablet"
+                :placeholder="t('account.tokenNamePlaceholder')"
                 maxlength="100"
                 required
               />
@@ -196,23 +196,23 @@
 
             <div class="token-options">
               <div class="form-group">
-                <label class="form-label" for="token_scope">Access</label>
+                <label class="form-label" for="token_scope">{{ t('account.access') }}</label>
                 <select id="token_scope" v-model="newTokenScope" class="form-input">
-                  <option value="read">Read-only</option>
-                  <option value="full">Full access</option>
+                  <option value="read">{{ t('account.readOnly') }}</option>
+                  <option value="full">{{ t('account.fullAccess') }}</option>
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label" for="token_expiry">Expires after</label>
+                <label class="form-label" for="token_expiry">{{ t('account.expiresAfter') }}</label>
                 <select id="token_expiry" v-model="newTokenExpiry" class="form-input">
-                  <option value="30">30 days</option>
-                  <option value="90">90 days</option>
-                  <option value="365">1 year</option>
-                  <option value="never">Never</option>
+                  <option value="30">{{ t('account.days', 30) }}</option>
+                  <option value="90">{{ t('account.days', 90) }}</option>
+                  <option value="365">{{ t('account.oneYear') }}</option>
+                  <option value="never">{{ t('account.never') }}</option>
                 </select>
               </div>
             </div>
-            <p class="section-desc token-scope-hint">A read-only token can only read (GET requests); full access can also change things on your behalf.</p>
+            <p class="section-desc token-scope-hint">{{ t('account.scopeHint') }}</p>
 
             <div v-if="tokenMessage" class="form-msg mt-3" :class="tokenSuccess ? 'success-msg' : 'error-msg'" :role="tokenSuccess ? 'status' : 'alert'">
               {{ tokenMessage }}
@@ -220,7 +220,7 @@
 
             <div class="form-actions mt-4">
               <UiButton variant="primary" type="submit" :loading="creatingToken">
-                Generate
+                {{ t('account.generate') }}
               </UiButton>
             </div>
           </form>
@@ -230,16 +230,16 @@
               <div class="api-token-info">
                 <span class="api-token-label">
                   {{ token.label }}
-                  <span class="api-token-scope" :class="token.scope === 'read' ? 'scope-read' : 'scope-full'">{{ token.scope === 'read' ? 'Read-only' : 'Full access' }}</span>
+                  <span class="api-token-scope" :class="token.scope === 'read' ? 'scope-read' : 'scope-full'">{{ token.scope === 'read' ? t('account.readOnly') : t('account.fullAccess') }}</span>
                 </span>
                 <span class="api-token-meta">
-                  Created {{ formatTokenDate(token.createdAt) }} ·
+                  {{ t('account.created', { date: formatTokenDate(token.createdAt) }) }} ·
                   <span :class="{ 'token-expired': isTokenExpired(token) }">{{ tokenExpiryText(token) }}</span> ·
-                  {{ token.lastUsedAt ? `Last used ${formatTokenDate(token.lastUsedAt)}` : 'Never used' }}
+                  {{ token.lastUsedAt ? t('account.lastUsed', { date: formatTokenDate(token.lastUsedAt) }) : t('account.neverUsed') }}
                 </span>
               </div>
               <UiButton variant="danger" :loading="revokingTokenId === token.id" @click="handleRevokeToken(token.id)">
-                Revoke
+                {{ t('account.revoke') }}
               </UiButton>
             </div>
           </div>
@@ -252,13 +252,13 @@
 <script setup lang="ts">
 import { copyToClipboard } from '~/utils/clipboard';
 import { confirmAction } from '~/composables/useConfirm';
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useAuth } from '~/composables/useAuth';
-import { passwordProblem } from '~/utils/passwordRules';
+import { passwordProblemKey } from '~/utils/passwordRules';
 
 const { t } = useI18n();
 
-useHead({ title: 'Account' });
+useHead({ title: computed(() => t('account.title')) });
 
 const { user: currentUser, fetchUser } = useAuth();
 
@@ -301,10 +301,10 @@ const handleSavePersonalInfo = async () => {
       body: profile
     });
     profileSuccess.value = true;
-    profileMessage.value = 'Personal information saved successfully!';
+    profileMessage.value = t('account.profileSaved');
   } catch (err: any) {
     profileSuccess.value = false;
-    profileMessage.value = err.data?.statusMessage || 'Saving profile failed.';
+    profileMessage.value = err.data?.statusMessage || t('account.profileSaveFailed');
   } finally {
     savingProfile.value = false;
   }
@@ -326,13 +326,13 @@ const failPassword = (message: string) => {
 const handleChangeOwnPassword = async () => {
   if (!currentPasswordInput.value) {
     return failPassword(currentUser.value?.mustChangePassword
-      ? 'Enter the temporary password you were given.'
-      : 'Enter your current password.');
+      ? t('account.enterTempPassword')
+      : t('account.enterCurrentPassword'));
   }
-  const problem = passwordProblem(ownPasswordInput.value);
-  if (problem) return failPassword(problem);
+  const problem = passwordProblemKey(ownPasswordInput.value);
+  if (problem) return failPassword(t(problem.key, problem.params));
   if (ownPasswordInput.value !== ownPasswordConfirmInput.value) {
-    return failPassword('Passwords do not match.');
+    return failPassword(t('account.passwordsMismatch'));
   }
 
   savingOwnPassword.value = true;
@@ -349,7 +349,7 @@ const handleChangeOwnPassword = async () => {
     });
 
     ownPasswordSuccess.value = true;
-    ownPasswordMessage.value = 'Your password has been changed successfully.';
+    ownPasswordMessage.value = t('account.passwordChanged');
     currentPasswordInput.value = '';
     ownPasswordInput.value = '';
     ownPasswordConfirmInput.value = '';
@@ -362,7 +362,7 @@ const handleChangeOwnPassword = async () => {
       fetchApiTokens();
     }
   } catch (err: any) {
-    failPassword(err.data?.statusMessage || 'Changing the password failed.');
+    failPassword(err.data?.statusMessage || t('account.passwordChangeFailed'));
   } finally {
     savingOwnPassword.value = false;
   }
@@ -417,7 +417,7 @@ const handleCreateToken = async () => {
     await fetchApiTokens();
   } catch (err: any) {
     tokenSuccess.value = false;
-    tokenMessage.value = err.data?.statusMessage || 'Failed to create the token.';
+    tokenMessage.value = err.data?.statusMessage || t('account.tokenCreateFailed');
   } finally {
     creatingToken.value = false;
   }
@@ -431,8 +431,8 @@ const copyMessage = ref('');
 const copyNewToken = async () => {
   if (!newToken.value) return;
   copyMessage.value = '';
-  const result = await copyToClipboard(newToken.value, 'Copy your API token');
-  copyMessage.value = result === 'copied' ? 'Token copied.' : '';
+  const result = await copyToClipboard(newToken.value, t('account.copyDialogTitle'));
+  copyMessage.value = result === 'copied' ? t('account.tokenCopiedMsg') : '';
 };
 
 const dismissNewToken = () => {
@@ -441,7 +441,7 @@ const dismissNewToken = () => {
 };
 
 const handleRevokeToken = async (tokenId: string) => {
-  if (!(await confirmAction({ title: 'Revoke token?', message: 'Revoke this token? Any app using it will immediately lose access.', confirmLabel: 'Revoke' }))) {
+  if (!(await confirmAction({ title: t('account.revokeTitle'), message: t('account.revokeMessage'), confirmLabel: t('account.revoke') }))) {
     return;
   }
   revokingTokenId.value = tokenId;
@@ -458,10 +458,10 @@ const handleRevokeToken = async (tokenId: string) => {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const isTokenExpired = (token: ApiToken): boolean => token.expiresAt !== null && token.expiresAt <= Date.now();
 const tokenExpiryText = (token: ApiToken): string => {
-  if (token.expiresAt === null) return 'Never expires';
-  if (isTokenExpired(token)) return 'Expired';
+  if (token.expiresAt === null) return t('account.neverExpires');
+  if (isTokenExpired(token)) return t('account.expired');
   const days = Math.ceil((token.expiresAt - Date.now()) / DAY_MS);
-  return days === 1 ? 'Expires in 1 day' : `Expires in ${days} days`;
+  return t('account.expiresIn', days);
 };
 
 const formatTokenDate = (timestamp: number): string => {

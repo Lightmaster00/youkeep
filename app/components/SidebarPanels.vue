@@ -12,15 +12,15 @@
         class="sidebar-panel-header"
         :aria-expanded="openId === group.id ? 'true' : 'false'"
         :aria-controls="`sidebar-panel-${group.id}`"
-        :title="group.label"
-        :aria-label="group.enabled ? group.label : `${group.label} (off)`"
-        :data-label="group.label"
+        :title="t(group.labelKey)"
+        :aria-label="group.enabled ? t(group.labelKey) : t('nav.groupOff', { name: t(group.labelKey) })"
+        :data-label="t(group.labelKey)"
         @click="toggle(group.id)"
       >
         <i class="sidebar-link-icon" aria-hidden="true" v-html="group.icon"></i>
         <span class="sidebar-divider-title">
-          {{ group.label }}
-          <span v-if="!group.enabled" class="badge badge-failed">Off</span>
+          {{ t(group.labelKey) }}
+          <span v-if="!group.enabled" class="badge badge-failed">{{ t('nav.off') }}</span>
         </span>
         <svg class="sidebar-panel-chevron" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
       </button>
@@ -39,12 +39,12 @@
             :to="link.to"
             class="sidebar-link"
             active-class="active"
-            :aria-label="link.label"
-            :title="link.label"
-            :data-label="link.label"
+            :aria-label="t(link.labelKey)"
+            :title="t(link.labelKey)"
+            :data-label="t(link.labelKey)"
           >
             <i class="sidebar-link-icon" aria-hidden="true" v-html="link.icon"></i>
-            <span>{{ link.label }}</span>
+            <span>{{ t(link.labelKey) }}</span>
           </NuxtLink>
         </div>
       </div>
@@ -56,6 +56,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { resolveOpenPanel, type ManualPanelChoice, type SidebarGroup } from '~/utils/sidebarGroups';
 
+const { t } = useI18n();
 const props = defineProps<{ groups: SidebarGroup[]; activeSpaceId: string }>();
 
 const STORAGE_KEY = 'youkeep:sidebar-panel';

@@ -14,3 +14,10 @@ export function passwordProblem(password: string): string | null {
   }
   return null;
 }
+
+// Same rules as passwordProblem, as an i18n key + params for translated UIs.
+export function passwordProblemKey(password: string): { key: string; params: Record<string, number> } | null {
+  if ([...password].length < PASSWORD_MIN_LENGTH) return { key: 'account.passwordTooShort', params: { min: PASSWORD_MIN_LENGTH } };
+  if (new TextEncoder().encode(password).length > PASSWORD_MAX_BYTES) return { key: 'account.passwordTooLong', params: { max: PASSWORD_MAX_BYTES } };
+  return null;
+}

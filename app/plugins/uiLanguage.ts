@@ -5,7 +5,7 @@ import type { UserSession } from '~/composables/useAuth';
 export function applyUserLanguage(nuxtApp: ReturnType<typeof useNuxtApp>) {
   const code = nuxtApp.runWithContext(() => useState<UserSession | null>('auth_user').value?.uiLanguage);
   if (isLanguageCode(code) && nuxtApp.$i18n.locale.value !== code) {
-    return nuxtApp.$i18n.setLocale(code);
+    return nuxtApp.$i18n.setLocale(code as Parameters<typeof nuxtApp.$i18n.setLocale>[0]);
   }
 }
 

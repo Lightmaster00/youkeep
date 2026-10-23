@@ -13,9 +13,9 @@
           <input
             type="text"
             v-model="searchQuery"
-            :placeholder="searchPlaceholder(activeSpace.id)"
+            :placeholder="t(`header.searchPlaceholder.${activeSpace.id}`)"
             class="search-input"
-            aria-label="Search"
+            :aria-label="t('header.search')"
             role="combobox"
             aria-autocomplete="list"
             aria-controls="header-search-listbox"
@@ -28,12 +28,12 @@
             @blur="onSearchBlur"
             @keydown="onSearchKeydown"
           />
-          <button type="submit" class="search-btn" aria-label="Search" title="Search">
+          <button type="submit" class="search-btn" :aria-label="t('header.search')" :title="t('header.search')">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
           </button>
 
           <div v-show="showDropdown" class="search-dropdown">
-            <div id="header-search-listbox" role="listbox" :aria-label="searchQuery.trim() ? 'Suggestions' : 'Recent searches'" data-testid="header-search-listbox">
+            <div id="header-search-listbox" role="listbox" :aria-label="searchQuery.trim() ? t('header.suggestions') : t('header.recentSearches')" data-testid="header-search-listbox">
               <div
                 v-for="(item, index) in dropdownItems"
                 :id="`header-search-option-${index}`"
@@ -55,7 +55,7 @@
               class="search-dropdown-clear"
               @mousedown.prevent="onClearHistory"
             >
-              Clear recent searches
+              {{ t('header.clearRecent') }}
             </button>
           </div>
         </form>
@@ -71,7 +71,7 @@
             aria-haspopup="menu"
             :aria-expanded="dropdownOpen ? 'true' : 'false'"
             aria-controls="header-user-menu"
-            :aria-label="`Account menu for ${user.username}`"
+            :aria-label="t('header.accountMenuFor', { name: user.username })"
             data-testid="user-menu-button"
             @click.stop="toggleDropdown"
           >
@@ -83,39 +83,39 @@
           </button>
 
           <!-- Profile Dropdown Menu -->
-          <div v-if="dropdownOpen" id="header-user-menu" ref="userMenuList" class="dropdown-menu" role="menu" aria-label="Account" data-testid="user-menu" @click.stop>
+          <div v-if="dropdownOpen" id="header-user-menu" ref="userMenuList" class="dropdown-menu" role="menu" :aria-label="t('header.account')" data-testid="user-menu" @click.stop>
             <div class="dropdown-header" role="presentation">
               <p class="dp-username">{{ user.username }}</p>
               <span class="dp-role badge" :class="user.role === 'admin' ? 'badge-completed' : 'badge-pending'">
-                {{ user.role }}
+                {{ t(user.role === 'admin' ? 'header.roleAdmin' : 'header.roleUser') }}
               </span>
             </div>
             <hr class="dropdown-divider" role="separator" />
             <NuxtLink to="/account" class="dropdown-item" role="menuitem" tabindex="-1" @click="closeDropdown()">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-              Account
+              {{ t('header.account') }}
             </NuxtLink>
             <NuxtLink to="/settings" class="dropdown-item" role="menuitem" tabindex="-1" @click="closeDropdown()">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.5 1z"></path></svg>
-              Settings
+              {{ t('header.settings') }}
               <span
                 v-if="isAdmin && activeDownloadCount > 0"
                 class="sidebar-badge"
                 style="margin-left: auto;"
-                :title="pausedTotal > 0 ? `${pausedTotal} more waiting on paused sources` : undefined"
+                :title="pausedTotal > 0 ? t('header.morePaused', { count: pausedTotal }) : undefined"
               >
                 {{ activeDownloadCount }}
               </span>
             </NuxtLink>
-            <p v-if="isAdmin && pausedTotal > 0" class="dropdown-note" role="presentation">+{{ pausedTotal }} waiting on paused sources</p>
+            <p v-if="isAdmin && pausedTotal > 0" class="dropdown-note" role="presentation">{{ t('header.waitingPaused', { count: pausedTotal }) }}</p>
             <button type="button" class="dropdown-item logout-btn" role="menuitem" tabindex="-1" @click="handleLogout">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-              Log out
+              {{ t('header.logOut') }}
             </button>
           </div>
         </div>
         <NuxtLink v-else-if="!authLoading && route.path !== '/login'" :to="loginTarget" class="btn btn-primary header-login" data-testid="header-login">
-          Log in
+          {{ t('header.logIn') }}
         </NuxtLink>
       </div>
     </header>
@@ -124,7 +124,7 @@
       <!-- Sidebar Navigation -->
       <aside class="sidebar">
         <div class="sidebar-inner">
-          <nav class="sidebar-nav" aria-label="Main">
+          <nav class="sidebar-nav" :aria-label="t('nav.main')">
             <SidebarPanels :groups="sidebarGroups" :active-space-id="activeSpace.id" />
           </nav>
         </div>
@@ -166,11 +166,11 @@ import { usePodcastPlayer } from '~/composables/usePodcastPlayer';
 import { useActiveMiniPlayer } from '~/composables/useActiveMiniPlayer';
 import { useActiveCounts, startActiveCountsPolling } from '~/composables/useActiveCounts';
 import { spaces } from '~/spaces';
-import { searchPlaceholder } from '~/utils/searchPlaceholder';
 import { resolveActiveSpaceId } from '~/utils/moduleRouting';
 import { shouldApplyLanding } from '~/utils/displayPrefs';
 import { buildSidebarGroups } from '~/utils/sidebarGroups';
 
+const { t } = useI18n();
 const { user, isAdmin, logout, loading: authLoading } = useAuth();
 const displayPrefs = useDisplayPrefs();
 useHead({ htmlAttrs: { 'data-density': computed(() => displayPrefs.effective.value.density) } });
