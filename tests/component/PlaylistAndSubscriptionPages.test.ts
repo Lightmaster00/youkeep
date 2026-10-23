@@ -3,10 +3,10 @@ import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { flushPromises } from '@vue/test-utils';
 import PlaylistPage from '../../app/pages/playlists/[id].vue';
 import PlaylistsIndex from '../../app/pages/playlists/index.vue';
-import SubscriptionsPage from '../../app/pages/subscriptions.vue';
 
 // Pages that had no component test: a personal playlist opened with and
-// without its share token, the playlists list, and the subscriptions feed.
+// without its share token and the playlists list (the Subscriptions page has
+// its own file, SubscriptionsPage.test.ts).
 let fetchMock: ReturnType<typeof vi.fn>;
 const playlist = { id: 'p1', title: 'Road trip', visibility: 'private', owner_name: 'alice', share_token: null, description: '' };
 const videos = [
@@ -22,8 +22,6 @@ beforeEach(() => {
     if (url.startsWith('/api/playlists/personal/p1')) return { playlist, videos };
     if (url.startsWith('/api/playlists/personal/nope')) throw Object.assign(new Error('404'), { statusCode: 404, statusMessage: 'Playlist not found.' });
     if (url === '/api/playlists/personal') return { playlists: [{ id: 'p1', title: 'Road trip', visibility: 'private', video_count: 2, owner_name: 'alice' }, { id: 'p2', title: 'Chill', visibility: 'public', video_count: 0, owner_name: 'bob' }] };
-    if (url === '/api/channels') return { channels: [{ id: 'c1', title: 'Followed one', avatar_url: null }] };
-    if (url === '/api/videos') return { videos: [{ id: 'sv1', title: 'Subscribed video', channel_id: 'c1', channel_title: 'Followed one', duration: 30 }], totalCount: 1 };
     return {};
   });
   vi.stubGlobal('$fetch', fetchMock);
@@ -133,62 +131,5 @@ describe('playlists index page', () => {
     await mountSuspended(PlaylistsIndex, { route: '/playlists' });
     await flushPromises();
     expect(useToast().toasts.value).toEqual([]);
-  });
-});
-
-describe('subscriptions page', () => {
-  it('loads followed channels and only their completed videos', async () => {
-    useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
-    const w = await mountSuspended(SubscriptionsPage, { route: '/subscriptions' });
-    await flushPromises();
-    const channelsCall = fetchMock.mock.calls.find(([u]) => u === '/api/channels')!;
-    expect(channelsCall[1]).toMatchObject({ params: { subscribed: 'true' } });
-    const videosCall = fetchMock.mock.calls.find(([u]) => u === '/api/videos')!;
-    expect(videosCall[1]).toMatchObject({ params: { subscribed: 'true', status: 'completed' } });
-    expect(w.text()).toContain('Followed one');
-    expect(w.text()).toContain('Subscribed video');
-  });
-});
-
-describe('subscriptions page: Videos then Shorts', () => {
-  beforeEach(() => {
-    useState<any>('auth_user').value = { id: 'u1', username: 'alice', role: 'user' };
-    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
-      if (url === '/api/channels') return { channels: [{ id: 'c1', title: 'Followed one', avatar_url: null }] };
-      if (url === '/api/videos') {
-        if (opts.params?.type === 'short') return { videos: [{ id: 'sh1', title: 'Followed short', is_short: 1 }], pagination: { total: 1, totalPages: 1 } };
-        const p = opts.params?.page ?? 1;
-        return { videos: [{ id: `v${p}`, title: `Long video ${p}`, is_short: 0 }], pagination: { total: 2, totalPages: 2 } };
-      }
-      return {};
-    });
-  });
-
-  it('asks for long videos and Shorts separately and shows them in two sections, Videos first', async () => {
-    const w = await mountSuspended(SubscriptionsPage, { route: '/subscriptions' });
-    await flushPromises();
-    const videoCalls = fetchMock.mock.calls.filter(([u]) => u === '/api/videos');
-    expect(videoCalls.map(([, o]) => o.params.type).sort()).toEqual(['short', 'video']);
-    for (const [, o] of videoCalls) expect(o.params).toMatchObject({ subscribed: 'true', status: 'completed' });
-    expect(w.findAll('h2.subs-section-title').map((h) => h.text())).toEqual(['Videos', 'Shorts']);
-    const videos = w.find('[data-testid="subs-videos"]');
-    const shorts = w.find('[data-testid="subs-shorts"]');
-    expect(videos.text()).toContain('Long video 1');
-    expect(videos.text()).not.toContain('Followed short');
-    expect(shorts.text()).toContain('Followed short');
-    expect(shorts.find('.media-frame--short').exists()).toBe(true);
-    expect(shorts.find('[data-testid="short-badge"]').text()).toBe('SHORT');
-    w.unmount();
-  });
-
-  it('"Show more videos" loads the next page of long videos, keeping the Shorts below', async () => {
-    const w = await mountSuspended(SubscriptionsPage, { route: '/subscriptions' });
-    await flushPromises();
-    await w.find('[data-testid="subs-videos-more"]').trigger('click');
-    await flushPromises();
-    expect(w.find('[data-testid="subs-videos"]').text()).toContain('Long video 2');
-    expect(w.find('[data-testid="subs-videos-more"]').exists()).toBe(false);
-    expect(w.find('[data-testid="subs-shorts"]').text()).toContain('Followed short');
-    w.unmount();
   });
 });
