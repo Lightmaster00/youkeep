@@ -23,12 +23,12 @@
       class="btn btn-sm channel-card__subscribe"
       :class="subscribed ? 'btn-secondary' : 'btn-primary'"
       :aria-pressed="subscribed ? 'true' : 'false'"
-      :aria-label="`${subscribed ? 'Unsubscribe from' : 'Subscribe to'} ${channel.title}`"
+      :aria-label="subscribed ? t('channels.unsubscribeFrom', { title: channel.title }) : t('channels.subscribeTo', { title: channel.title })"
       :disabled="busy"
       data-testid="channel-subscribe"
       @click="toggle"
-    >{{ subscribed ? 'Subscribed' : 'Subscribe' }}</button>
-    <NuxtLink v-else to="/login" class="channel-card__login" data-testid="channel-login-hint">Log in to subscribe</NuxtLink>
+    >{{ subscribed ? t('common.subscribed') : t('common.subscribe') }}</button>
+    <NuxtLink v-else to="/login" class="channel-card__login" data-testid="channel-login-hint">{{ t('home.logInToSubscribe') }}</NuxtLink>
   </div>
 </template>
 
@@ -55,9 +55,10 @@ const { subscribed, busy, toggle } = useChannelSubscribe(
   (id, value) => emit('subscription', id, value),
 );
 
+const { t, locale } = useI18n();
 const countLabel = computed(() => {
   const n = props.channel.video_count ?? 0;
-  return `${n.toLocaleString('en-US')} ${n === 1 ? 'video' : 'videos'}`;
+  return t('video.count', { count: n.toLocaleString(locale.value) }, n);
 });
 
 function onAvatarError(event: Event) {

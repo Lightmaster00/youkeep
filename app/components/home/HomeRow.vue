@@ -15,7 +15,7 @@
             type="button"
             class="home-row__arrow"
             data-testid="row-prev"
-            :aria-label="`Scroll ${title || 'row'} back`"
+            :aria-label="t('home.scrollBack', { title: title || t('home.row') })"
             :disabled="!canPrev"
             @click="page(-1)"
           >
@@ -25,14 +25,14 @@
             type="button"
             class="home-row__arrow"
             data-testid="row-next"
-            :aria-label="`Scroll ${title || 'row'} forward`"
+            :aria-label="t('home.scrollForward', { title: title || t('home.row') })"
             :disabled="!canNext"
             @click="page(1)"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
         </span>
-        <NuxtLink v-if="seeAll && !loading" :to="seeAll" class="home-row__see-all" data-testid="row-see-all">{{ seeAllLabel }}</NuxtLink>
+        <NuxtLink v-if="seeAll && !loading" :to="seeAll" class="home-row__see-all" data-testid="row-see-all">{{ seeAllText }}</NuxtLink>
       </div>
     </div>
     <div ref="track" class="home-row__track" :class="`home-row__track--${variant}`" @scroll.passive="update">
@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 
 // One titled, horizontally scrolling row of the home page. The items are the
 // slot's `.row-item` children, sized by `variant` (16:9 video cards, 9:16
@@ -68,7 +68,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   title: '',
   seeAll: null,
-  seeAllLabel: 'See all',
+  seeAllLabel: '',
   variant: 'video',
   loading: false,
   skeletonCount: 6,
@@ -76,6 +76,8 @@ const props = withDefaults(defineProps<{
 });
 
 // useId: the same id in the server render and after hydration.
+const { t } = useI18n();
+const seeAllText = computed(() => props.seeAllLabel || t('home.seeAll'));
 const headingId = `home-row-${useId()}`;
 const track = ref<HTMLElement | null>(null);
 const canPrev = ref(false);

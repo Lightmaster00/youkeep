@@ -15,7 +15,7 @@
       :src="thumbSrc"
       :fallback="remoteThumb"
       img-class="thumbnail-img"
-      alt="Thumbnail"
+      :alt="t('video.thumbnail')"
     >
       <video
         v-if="isPreviewActive && !previewFailed"
@@ -31,12 +31,12 @@
         @error="handlePreviewError"
         @timeupdate="handlePreviewTimeUpdate"
       ></video>
-      <span v-if="previewShown" class="preview-badge">PREVIEW</span>
+      <span v-if="previewShown" class="preview-badge">{{ t('video.previewBadge') }}</span>
       <div v-if="previewShown" class="preview-progress">
         <div class="preview-progress-fill" :style="{ width: previewProgressPercent + '%' }"></div>
       </div>
-      <span v-if="isShort" class="short-card-badge" data-testid="short-badge">SHORT</span>
-      <span v-if="video.was_live === 1" class="replay-badge">REPLAY</span>
+      <span v-if="isShort" class="short-card-badge" data-testid="short-badge">{{ t('video.shortBadge') }}</span>
+      <span v-if="video.was_live === 1" class="replay-badge">{{ t('video.replayBadge') }}</span>
       <span class="duration-badge">{{ formattedDuration }}</span>
       <VideoDropdownMenu :video="video" @hidden="$emit('hidden', video.id)" />
       <slot name="thumbnail-overlay" />
@@ -61,20 +61,20 @@
           :src="video.channel_avatar || fallbackAvatar"
           @error="handleAvatarError"
           class="channel-avatar"
-          alt="Avatar"
+          :alt="t('video.avatar')"
           referrerpolicy="no-referrer"
         />
         <div class="channel-meta">
           <p class="channel-title">{{ video.channel_title }}</p>
           <div class="metadata-row">
-            <span>{{ formattedViews }} views</span>
+            <span>{{ t('video.views', { views: formattedViews }) }}</span>
             <span class="dot">•</span>
             <span>{{ formattedUploadDate }}</span>
           </div>
         </div>
       </div>
       <div v-else class="metadata-row metadata-row-standalone">
-        <span>{{ formattedViews }} views</span>
+        <span>{{ t('video.views', { views: formattedViews }) }}</span>
         <span class="dot">•</span>
         <span>{{ formattedUploadDate }}</span>
       </div>
@@ -91,7 +91,9 @@ import { computed, onUnmounted, ref, watch } from 'vue';
 import { useVideoPreview } from '~/composables/useVideoPreview';
 import { highlightMatch } from '../utils/highlightMatch';
 import { nextInstanceId } from '../utils/uniqueId';
+import { formatViewCount, formatUploadDate } from '~/utils/formatCount';
 
+const { t, locale } = useI18n();
 const props = withDefaults(defineProps<{
   video: {
     id: string;
@@ -227,33 +229,9 @@ const formattedDuration = computed(() => {
   return `${mStr}:${sStr}`;
 });
 
-const formattedViews = computed(() => {
-  const num = props.video.view_count;
-  if (num === null || num === undefined) return '0';
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  }
-  return String(num);
-});
+const formattedViews = computed(() => formatViewCount(props.video.view_count, locale.value));
 
-const formattedUploadDate = computed(() => {
-  const dateStr = props.video.upload_date;
-  if (!dateStr) return '';
-  if (dateStr.length === 8) {
-    const y = dateStr.slice(0, 4);
-    const m = dateStr.slice(4, 6);
-    const d = dateStr.slice(6, 8);
-    const date = new Date(`${y}-${m}-${d}`);
-    if (isNaN(date.getTime())) return dateStr;
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  }
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return dateStr;
-  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-});
+const formattedUploadDate = computed(() => formatUploadDate(props.video.upload_date, locale.value));
 </script>
 
 <style scoped>

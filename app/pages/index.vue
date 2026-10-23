@@ -10,7 +10,7 @@
       <HomeRow
         v-for="id in skeletonRows"
         :key="id"
-        :title="HOME_SECTION_LABELS[id]"
+        :title="rowName(id)"
         :variant="SKELETON_VARIANT[id] ?? 'video'"
         loading
       />
@@ -22,7 +22,7 @@
       :title="emptyHomeCopy.title"
       :description="emptyHomeCopy.description"
       icon="video"
-      :action-text="auth.isLoggedIn.value ? 'Open my account' : undefined"
+      :action-text="auth.isLoggedIn.value ? t('home.openAccount') : undefined"
       action-route="/account"
     />
 
@@ -30,10 +30,10 @@
     <EmptyState
       v-else-if="!heroVideo && feedSections.length === 0 && !searchQuery"
       data-testid="home-empty"
-      title="Nothing here yet"
+      :title="t('home.emptyTitle')"
       :description="emptyLibraryCopy"
       icon="video"
-      :action-text="isAdmin ? 'Add channels' : (!auth.isLoggedIn.value ? 'Log in' : undefined)"
+      :action-text="isAdmin ? t('home.addChannels') : (!auth.isLoggedIn.value ? t('home.logIn') : undefined)"
       :action-route="isAdmin ? '/settings?tab=library&section=videos' : '/login'"
     />
 
@@ -41,7 +41,7 @@
     <div v-else-if="searchQuery" class="search-results">
       <!-- Channel results -->
       <div v-if="searchedChannels.length > 0" class="search-channels-section">
-        <h3 class="row-title">Channels</h3>
+        <h3 class="row-title">{{ t('home.channelsHeading') }}</h3>
         <div class="channels-row">
           <NuxtLink 
             v-for="channel in searchedChannels.slice(0, 6)" 
@@ -52,18 +52,18 @@
             <img :src="channel.avatar_url || fallbackAvatar" @error="handleAvatarError" class="pill-avatar" alt="" />
             <div class="pill-info">
               <span class="pill-name">{{ channel.title }}</span>
-              <span class="pill-count">{{ channel.total_count }} videos</span>
+              <span class="pill-count">{{ t('video.count', channel.total_count ?? 0) }}</span>
             </div>
           </NuxtLink>
         </div>
       </div>
 
-      <h3 class="row-title">Videos matching "{{ searchQuery }}"</h3>
+      <h3 class="row-title">{{ t('home.videosMatching', { query: searchQuery }) }}</h3>
       <div v-if="searchPending && allVideos.length === 0" class="loading-state" data-testid="home-search-loading">
         <div class="spinner"></div>
       </div>
       <p v-else-if="allVideos.length === 0" class="search-empty" data-testid="home-search-empty">
-        {{ searchShorts.length > 0 ? 'No long videos match' : 'No videos match' }} "{{ searchQuery }}".
+        {{ searchShorts.length > 0 ? t('home.noLongMatch', { query: searchQuery }) : t('home.noMatch', { query: searchQuery }) }}
       </p>
       <div v-else class="video-grid stagger-in" data-testid="home-search-results">
         <VideoCard v-for="video in allVideos" :key="video.id" :video="video" :search-query="searchQuery" @hidden="onVideoHidden" />
@@ -73,18 +73,18 @@
       <div v-if="searchPagination && searchPagination.totalPages > 1" class="pagination">
         <button class="pagination-btn" :disabled="page === 1" @click="changePage(page - 1)">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          Previous
+          {{ t('home.previous') }}
         </button>
-        <span class="pagination-info">Page {{ page }} / {{ searchPagination.totalPages }}</span>
+        <span class="pagination-info">{{ t('home.pageOf', { page, total: searchPagination.totalPages }) }}</span>
         <button class="pagination-btn" :disabled="page === searchPagination.totalPages" @click="changePage(page + 1)">
-          Next
+          {{ t('home.next') }}
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
 
       <!-- Matching Shorts: their own section after the long videos. -->
       <div v-if="searchShorts.length > 0" class="search-shorts-section" data-testid="home-search-shorts">
-        <h3 class="row-title">Shorts matching "{{ searchQuery }}"</h3>
+        <h3 class="row-title">{{ t('home.shortsMatching', { query: searchQuery }) }}</h3>
         <div class="video-shorts-grid">
           <VideoCard v-for="video in searchShorts" :key="video.id" :video="video" :search-query="searchQuery" @hidden="onVideoHidden" />
         </div>
@@ -111,14 +111,14 @@
           <div class="hero-gradient-left"></div>
           <div class="hero-gradient-bottom"></div>
           <div class="hero-content">
-            <span v-if="heroVideo.reason?.label" class="hero-reason">{{ heroVideo.reason.label }}</span>
+            <span v-if="heroVideo.reason?.label" class="hero-reason">{{ reasonLabel(heroVideo) }}</span>
             <div class="hero-channel-badge">
               <img :src="heroVideo.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
               <span>{{ heroVideo.channel_title }}</span>
             </div>
             <h1 class="hero-title">{{ heroVideo.title }}</h1>
             <div class="hero-meta">
-              <span>{{ formatViews(heroVideo.view_count) }} views</span>
+              <span>{{ t('video.views', { views: formatViews(heroVideo.view_count) }) }}</span>
               <span class="meta-dot">•</span>
               <span>{{ formatUploadDate(heroVideo.upload_date) }}</span>
               <span class="meta-dot">•</span>
@@ -127,7 +127,7 @@
             <div class="hero-actions">
               <NuxtLink :to="`/watch/${heroVideo.id}`" class="hero-play-btn" @click.stop>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                Play
+                {{ t('video.play') }}
               </NuxtLink>
             </div>
           </div>
@@ -139,8 +139,8 @@
 
       <!-- A guest gets the public rows only: say what signing in adds. -->
       <div v-if="!auth.isLoggedIn.value" class="guest-hint" data-testid="home-guest-hint">
-        <span>Log in to continue watching, follow channels and get recommendations.</span>
-        <NuxtLink to="/login" class="btn btn-sm btn-primary">Log in</NuxtLink>
+        <span>{{ t('home.guestHint') }}</span>
+        <NuxtLink to="/login" class="btn btn-sm btn-primary">{{ t('home.logIn') }}</NuxtLink>
       </div>
 
       <HomeSection
@@ -158,17 +158,20 @@
 <script setup lang="ts">
 import { setImageFallback } from '~/utils/imageFallback';
 import { youtubeThumb } from '~/utils/thumb';
+import { formatViewCount } from '~/utils/formatCount';
 import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '~/composables/useAuth';
 
 import { isHomeFullyHidden } from '~/utils/displayPrefs';
 import { MEDIA_HOME_SECTION_MODULE, type HomeSectionId } from '#shared/displayPrefs';
-import { HOME_SECTION_LABELS, isGuestHomeSection } from '~/utils/homeSectionLabels';
+import { isGuestHomeSection } from '~/utils/homeSectionLabels';
 import { prepareHomeSections } from '~/utils/homeFeed';
 import HomeRow from '~/components/home/HomeRow.vue';
 import HomeSection from '~/components/home/HomeSection.vue';
 
+const { t, locale } = useI18n();
+const { reasonLabel, rowName } = useVideoText();
 const auth = useAuth();
 const { isAdmin } = auth;
 const { effective: displayPrefs } = useDisplayPrefs();
@@ -177,13 +180,13 @@ const homeFullyHidden = computed(() => isHomeFullyHidden(displayPrefs.value, aut
 
 // A guest cannot change preferences: the admin hid everything, so say that instead.
 const emptyHomeCopy = computed(() => auth.isLoggedIn.value
-  ? { title: 'Your home is empty', description: "You hid the featured block and all sections. Turn some back on in your account's display preferences." }
-  : { title: 'Home is empty', description: "The administrator has hidden every home section on this instance." });
+  ? { title: t('home.hiddenTitle'), description: t('home.hiddenDesc') }
+  : { title: t('home.hiddenGuestTitle'), description: t('home.hiddenGuestDesc') });
 const route = useRoute();
 const router = useRouter();
 
 const searchQuery = computed(() => route.query.q ? String(route.query.q) : '');
-useHead({ title: computed(() => (searchQuery.value ? `Search: ${searchQuery.value}` : 'Home')) });
+useHead({ title: computed(() => (searchQuery.value ? t('home.titleSearch', { query: searchQuery.value }) : t('home.titleHome'))) });
 const page = computed(() => route.query.page ? parseInt(String(route.query.page), 10) : 1);
 
 const allVideos = ref<any[]>([]);
@@ -250,8 +253,8 @@ watch(searchData, (data) => {
 const loading = computed(() => !inSearch.value && homeFeedPending.value && !homeFeedData.value);
 
 const emptyLibraryCopy = computed(() => (auth.isLoggedIn.value
-  ? (isAdmin.value ? 'Your archive is empty. Add channels, music or podcasts in Settings.' : 'Nothing has been archived yet.')
-  : 'Your archive is empty. Log in as administrator to add channels, music or podcasts.'));
+  ? (isAdmin.value ? t('home.emptyAdmin') : t('home.emptyMember'))
+  : t('home.emptyGuest')));
 
 // Videos hidden from this page (the card menu's "Hide"). The feed data is a
 // shallow ref, so the rows are filtered through this set instead of mutated.
@@ -315,17 +318,12 @@ const formatDuration = (seconds: number | null): string => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-const formatViews = (views: number | null): string => {
-  if (!views) return '0';
-  if (views >= 1000000) return (views / 1000000).toFixed(1).replace('.0', '') + 'M';
-  if (views >= 1000) return (views / 1000).toFixed(1).replace('.0', '') + 'k';
-  return views.toString();
-};
+const formatViews = (views: number | null): string => formatViewCount(views, locale.value);
 
 const formatUploadDate = (dateStr: string | null): string => {
   if (!dateStr || dateStr.length !== 8) return '';
   const y = dateStr.slice(0, 4), mo = dateStr.slice(4, 6), d = dateStr.slice(6, 8);
-  return new Date(+y, +mo - 1, +d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(+y, +mo - 1, +d).toLocaleDateString(locale.value, { day: 'numeric', month: 'short', year: 'numeric' });
 };
 </script>
 

@@ -16,9 +16,9 @@
 
   <HomeRow
     v-else-if="section.id === 'shorts'"
-    :title="section.title"
+    :title="title"
     see-all="/shorts"
-    see-all-label="See all Shorts"
+    :see-all-label="t('home.seeAllShorts')"
     variant="short"
     :testid="`home-row-${section.id}`"
   >
@@ -29,7 +29,7 @@
 
   <HomeRow
     v-else-if="section.playlists"
-    :title="section.title"
+    :title="title"
     see-all="/playlists"
     variant="playlist"
     :testid="`home-row-${section.id}`"
@@ -41,7 +41,7 @@
 
   <HomeRow
     v-else-if="section.channels"
-    :title="section.title"
+    :title="title"
     see-all="/channels"
     variant="channel"
     :testid="`home-row-${section.id}`"
@@ -55,7 +55,7 @@
 
   <HomeRow
     v-else-if="section.videos"
-    :title="section.title"
+    :title="title"
     :see-all="SEE_ALL[section.id] ?? null"
     :testid="`home-row-${section.id}`"
   >
@@ -65,7 +65,7 @@
           <span
             class="resume-bar"
             role="progressbar"
-            aria-label="Watched"
+            :aria-label="t('video.watched')"
             aria-valuemin="0"
             aria-valuemax="100"
             :aria-valuenow="percent(video)"
@@ -75,10 +75,10 @@
         <template #info-extra>
           <span v-if="section.id === 'continue'" class="card-note card-note--resume" data-testid="resume-hint">
             <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="6 4 20 12 6 20 6 4"></polygon></svg>
-            Resume from {{ formatResumeAt(video.positionSeconds) }}
+            {{ t('video.resumeFrom', { time: formatResumeAt(video.positionSeconds) }) }}
           </span>
-          <span v-else-if="REASON_ROWS.has(section.id) && video.reason?.label" class="card-note card-note--reason" data-testid="card-reason">{{ video.reason.label }}</span>
-          <span v-else-if="section.id === 'subscriptions' && video.isNew" class="card-note card-note--new" data-testid="card-new">New</span>
+          <span v-else-if="REASON_ROWS.has(section.id) && video.reason?.label" class="card-note card-note--reason" data-testid="card-reason">{{ reasonLabel(video) }}</span>
+          <span v-else-if="section.id === 'subscriptions' && video.isNew" class="card-note card-note--new" data-testid="card-new">{{ t('common.new') }}</span>
         </template>
       </VideoCard>
     </div>
@@ -86,6 +86,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import HomeRow from '~/components/home/HomeRow.vue';
 import HomePlaylistCard from '~/components/home/HomePlaylistCard.vue';
 import HomeChannelCard from '~/components/home/HomeChannelCard.vue';
@@ -94,7 +95,10 @@ import { formatResumeAt, type HomeSectionLike } from '~/utils/homeFeed';
 // One section of the home feed, drawn by its payload: video rows, category
 // rows, the Shorts shelf, playlists, channels to discover, or a music or
 // podcast row.
-defineProps<{ section: HomeSectionLike & { title?: string }; loggedIn: boolean }>();
+const props = defineProps<{ section: HomeSectionLike & { title?: string }; loggedIn: boolean }>();
+const { t } = useI18n();
+const { sectionTitle, reasonLabel } = useVideoText();
+const title = computed(() => sectionTitle(props.section));
 const emit = defineEmits<{ (e: 'hidden', id: string): void }>();
 
 // Rows with a page that lists everything.

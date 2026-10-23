@@ -1,5 +1,5 @@
 <template>
-  <HomeRow :title="section.title" :see-all="seeAllRoute" variant="media" :testid="`home-row-${section.id}`">
+  <HomeRow :title="title" :see-all="seeAllRoute" variant="media" :testid="`home-row-${section.id}`">
     <template v-if="isMusic">
       <div v-for="track in section.tracks" :key="track.id" class="row-item">
         <MusicTrackCard :track="track" :active="currentTrack?.id === track.id" @play="playTrack" />
@@ -30,6 +30,8 @@ const props = defineProps<{
 const { currentTrack, play: playMusicTrack } = useMusicPlayer();
 const { currentEpisode, play: playPodcastEpisode } = usePodcastPlayer();
 
+const { sectionTitle } = useVideoText();
+const title = computed(() => sectionTitle(props.section));
 const isMusic = computed(() => props.section.id === 'recentMusic');
 const seeAllRoute = computed(() => (isMusic.value ? '/music/recent' : '/podcasts/recent'));
 

@@ -26,9 +26,10 @@ const props = defineProps<{
 
 const remoteCover = computed(() => (props.playlist.cover_video_id ? youtubeThumb(props.playlist.cover_video_id) : ''));
 const cover = computed(() => thumbUrl(props.playlist.thumbnail_path, 480) || remoteCover.value);
-const countLabel = computed(() => `${props.playlist.video_count} ${props.playlist.video_count === 1 ? 'video' : 'videos'}`);
-const VISIBILITY: Record<string, string> = { private: 'Private', public: 'Public', unlisted: 'Unlisted' };
-const visibilityLabel = computed(() => VISIBILITY[props.playlist.visibility ?? ''] ?? 'Playlist');
+const { t } = useI18n();
+const countLabel = computed(() => t('video.count', props.playlist.video_count));
+const VISIBILITIES = ['private', 'public', 'unlisted'];
+const visibilityLabel = computed(() => t(`home.visibility.${VISIBILITIES.includes(props.playlist.visibility ?? '') ? props.playlist.visibility : 'playlist'}`));
 </script>
 
 <style scoped>
