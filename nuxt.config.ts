@@ -23,7 +23,7 @@ export default defineNuxtConfig({
     head: {
       title: 'YouKeep',
       meta: [
-        { name: 'theme-color', content: '#4338CA' },
+        { name: 'theme-color', content: '#3B5BFF' },
         // A private, self-hosted app: keep every page out of search engines.
         { name: 'robots', content: 'noindex, nofollow' },
         // The standard name (the apple- one alone is deprecated); iOS still

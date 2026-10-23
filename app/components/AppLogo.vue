@@ -1,18 +1,26 @@
 <template>
   <span class="app-logo" :class="`app-logo-${size}`">
-    <svg class="app-logo-mark" viewBox="0 0 96 96" aria-hidden="true" focusable="false">
-      <rect width="96" height="96" rx="22" fill="#4338CA" />
-      <rect x="21" y="25" width="54" height="13" rx="3.5" fill="#FFFFFF" />
-      <rect x="26" y="42" width="44" height="31" rx="4.5" fill="#FFFFFF" />
-      <path d="M42 50V66L57 58Z" fill="#4338CA" />
+    <svg class="app-logo-mark" viewBox="0 0 256 256" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient :id="gid" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#22D3EE" />
+          <stop offset=".55" stop-color="#3B5BFF" />
+          <stop offset="1" stop-color="#8B5CF6" />
+        </linearGradient>
+      </defs>
+      <rect width="256" height="256" rx="58" :fill="`url(#${gid})`" />
+      <path d="M128 42 L198 68 V128 C198 168 168 196 128 214 C88 196 58 168 58 128 V68 Z" fill="#FFFFFF" />
+      <path d="M111 100 V156 L158 128 Z" fill="#3B5BFF" stroke="#3B5BFF" stroke-width="10" stroke-linejoin="round" />
     </svg>
     <span v-if="wordmark" class="app-logo-word"><span class="app-logo-you">You</span><span class="app-logo-keep">Keep</span></span>
   </span>
 </template>
 
 <script setup lang="ts">
-// The YouKeep mark (an archive box with a play button) and, optionally, the
-// wordmark. One flat colour, no gradient, so it reads the same at any size.
+// The YouKeep mark (a shield with a play button) and, optionally, the wordmark.
+// Each instance gets its own gradient id so several logos on one page don't clash.
+import { useId } from 'vue';
+const gid = `yk-grad-${useId()}`;
 withDefaults(defineProps<{ size?: 'sm' | 'md' | 'lg'; wordmark?: boolean }>(), { size: 'md', wordmark: true });
 </script>
 
@@ -36,5 +44,5 @@ withDefaults(defineProps<{ size?: 'sm' | 'md' | 'lg'; wordmark?: boolean }>(), {
   flex-shrink: 0;
 }
 .app-logo-you { font-weight: 500; }
-.app-logo-keep { color: #A5B4FC; font-weight: 700; }
+.app-logo-keep { color: #7DD3FC; font-weight: 700; }
 </style>
