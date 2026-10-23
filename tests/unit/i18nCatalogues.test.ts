@@ -91,6 +91,32 @@ const MIGRATED = [
   'app/components/PlaylistCoverMosaic.vue',
   'app/components/BaseModal.vue',
   'app/components/ClipboardFallbackHost.vue',
+  // Music (batch C). The admin-only MusicTrackEditModal and MusicAlbumEditModal (they save through
+  // /api/admin routes) stay English on purpose (see englishOnly.test.ts) and are not listed.
+  'app/pages/music/index.vue',
+  'app/pages/music/discover.vue',
+  'app/pages/music/liked.vue',
+  'app/pages/music/recent.vue',
+  'app/pages/music/history.vue',
+  'app/pages/music/genre/[name].vue',
+  'app/pages/music/album/[id].vue',
+  'app/pages/music/playlists/index.vue',
+  'app/pages/music/playlists/[id].vue',
+  'app/components/MusicMiniPlayer.vue',
+  'app/components/MusicArtistPage.vue',
+  'app/components/MusicArtistHeader.vue',
+  'app/components/MusicArtistOverview.vue',
+  'app/components/MusicArtistSongs.vue',
+  'app/components/MusicArtistTile.vue',
+  'app/components/MusicTrackList.vue',
+  'app/components/MusicTrackCard.vue',
+  'app/components/MusicTrackActions.vue',
+  'app/components/MusicTrackExtras.vue',
+  'app/components/MusicAlbumTile.vue',
+  'app/components/MusicCollectionHeader.vue',
+  'app/components/MusicMixTile.vue',
+  'app/components/MusicGenreTile.vue',
+  'app/components/TrackLikeButton.vue',
 ];
 
 export function templateOf(source: string): string {
@@ -113,6 +139,10 @@ const LITERAL_ALLOWLIST: Array<{ file: string; attr: string; reason: string }> =
   { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Copy share link"', reason: 'admin-only thumbnail action' },
   { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Edit visibility"', reason: 'admin-only thumbnail action' },
   { file: 'app/components/channels/ChannelVideoGrid.vue', attr: 'title="Delete video"', reason: 'admin-only thumbnail action' },
+  // Admin-only controls inside shared music pages.
+  { file: 'app/pages/music/album/[id].vue', attr: 'text "Edit album"', reason: 'admin-only button (opens the admin album editor)' },
+  { file: 'app/components/MusicTrackExtras.vue', attr: 'title="Edit"', reason: 'admin-only row button (opens the admin track editor)' },
+  { file: 'app/components/MusicTrackExtras.vue', attr: 'aria-label="Edit track"', reason: 'admin-only row button (opens the admin track editor)' },
 ];
 
 export function hardCodedText(source: string): string[] {
@@ -120,7 +150,7 @@ export function hardCodedText(source: string): string[] {
   const hits: string[] = [];
   for (const m of tpl.matchAll(/>\s*([A-Za-z][A-Za-z' .,!?:…-]{2,}?)\s*</g)) hits.push(`text "${m[1]}"`);
   // Literal (non-bound) attributes: ` placeholder="..."`, not `:placeholder` / `v-bind:`.
-  for (const m of tpl.matchAll(/(?<![:\w@#.-])(placeholder|aria-label|title|alt)="([^"]*[A-Za-z][^"]*)"/g)) hits.push(`${m[1]}="${m[2]}"`);
+  for (const m of tpl.matchAll(/(?<![:\w@#.-])(placeholder|aria-label|title|alt|description|kicker|subtitle|message|confirm-label|action-text)="([^"]*[A-Za-z][^"]*)"/g)) hits.push(`${m[1]}="${m[2]}"`);
   return hits;
 }
 
