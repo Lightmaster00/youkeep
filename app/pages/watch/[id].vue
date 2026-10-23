@@ -428,7 +428,7 @@ const openReport = () => {
 const loginLink = computed(() => `/login?redirect=${encodeURIComponent(route.fullPath)}`);
 
 // Fetch video metadata, comments and categories
-const { data: videoResponse, pending, error, refresh: refreshVideo } = await useFetch<{ video: any; comments?: any[]; categories?: any[]; subtitles?: any[]; chapters?: any[] }>(() => {
+const { data: videoResponse, pending, error, refresh: refreshVideo } = await useFetch<{ video: any; comments?: any[]; categories?: any[]; subtitles?: any[]; chapters?: any[]; resume?: { positionSeconds: number | null } }>(() => {
   return `/api/videos/${videoId.value}${token.value ? `?token=${token.value}` : ''}`;
 });
 const video = computed(() => videoResponse.value?.video || null);
@@ -706,6 +706,7 @@ useVideoWatchProgress({
   videoId,
   isLoggedIn,
   startAt: computed(() => parseStartTime(route.query.t)),
+  serverPosition: computed(() => videoResponse.value?.resume?.positionSeconds ?? null),
 });
 
 onMounted(() => {

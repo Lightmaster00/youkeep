@@ -5,8 +5,10 @@ import { getResumePosition, saveResumePosition, resumeTarget } from '~/utils/vid
 // - watch time for signed-in users (POST /api/videos/track): actual playback
 //   only, sent every 15 s of it and on pause/leave, at most 600 s per call
 //   (the server clamps there anyway); guests post nothing;
-// - resume: the position is kept per video in localStorage and restored on
-//   the next visit, unless the link asks for a start time (?t=).
+// - resume: signed-in users send the position with every watch-time post (and
+//   on pause/end, even without new watch time) and resume from the server
+//   position; the position is also kept per video in localStorage (the only
+//   source for guests). A link that asks for a start time (?t=) wins.
 export const TRACK_FLUSH_SECONDS = 15;
 export const TRACK_MAX_PER_CALL = 600;
 const SAVE_EVERY_MS = 5000;
@@ -19,6 +21,8 @@ export function useVideoWatchProgress(opts: {
   videoId: Ref<string>;
   isLoggedIn: Ref<boolean>;
   startAt: Ref<number | null>;
+  /** The signed-in viewer's stored position (GET /api/videos/:id), or null. */
+  serverPosition?: Ref<number | null>;
 }) {
   let el: HTMLVideoElement | null = null;
   let accumulated = 0;
@@ -27,14 +31,26 @@ export function useVideoWatchProgress(opts: {
   let lastSave = 0;
   let positioned = '';
 
-  function flush(keepalive = false) {
-    const videoId = accumulatedFor;
+  // The playing video's position, only while `videoId` is what the element plays.
+  function positionOf(videoId: string, atEnd = false): { positionSeconds: number; durationSeconds?: number } | null {
+    if (!el || videoId !== opts.videoId.value) return null;
+    const duration = Number.isFinite(el.duration) && el.duration > 0 ? Math.round(el.duration) : undefined;
+    const time = atEnd && duration ? duration : el.currentTime;
+    if (!Number.isFinite(time) || time < 0) return null;
+    return { positionSeconds: Math.floor(time), ...(duration ? { durationSeconds: duration } : {}) };
+  }
+
+  // `positionOnly`: send the position even without new watch time (pause, end, leave).
+  function flush(keepalive = false, positionOnly = false, atEnd = false) {
+    const videoId = accumulatedFor || (positionOnly ? opts.videoId.value : '');
     const seconds = Math.min(TRACK_MAX_PER_CALL, Math.round(accumulated));
     accumulated = 0;
-    if (!videoId || seconds <= 0 || !opts.isLoggedIn.value) return;
+    if (!videoId || !opts.isLoggedIn.value) return;
+    const position = positionOf(videoId, atEnd);
+    if (seconds <= 0 && !(positionOnly && position)) return;
     $fetch('/api/videos/track', {
       method: 'POST',
-      body: { videoId, watchTimeSeconds: seconds },
+      body: { videoId, watchTimeSeconds: Math.max(0, seconds), ...(position ?? {}) },
       ...(keepalive ? { keepalive: true } : {}),
     }).catch(() => {});
   }
@@ -55,7 +71,8 @@ export function useVideoWatchProgress(opts: {
       el.currentTime = Math.min(start, el.duration);
       return;
     }
-    const target = resumeTarget(getResumePosition(opts.videoId.value), el.duration);
+    const server = opts.isLoggedIn.value ? opts.serverPosition?.value ?? null : null;
+    const target = resumeTarget(server ?? getResumePosition(opts.videoId.value), el.duration);
     if (target !== null) el.currentTime = target;
   }
 
@@ -81,13 +98,13 @@ export function useVideoWatchProgress(opts: {
 
   function onPause() {
     lastTick = null;
-    flush();
+    flush(false, true);
     savePosition(true);
   }
 
   function onEnded() {
     lastTick = null;
-    flush();
+    flush(false, true, true);
     if (opts.videoId.value) saveResumePosition(opts.videoId.value, Number.POSITIVE_INFINITY, el?.duration || 0);
   }
 
@@ -119,7 +136,7 @@ export function useVideoWatchProgress(opts: {
   }
 
   function onPageHide() {
-    flush(true);
+    flush(true, true);
     savePosition(true);
   }
 
@@ -137,7 +154,7 @@ export function useVideoWatchProgress(opts: {
 
   onBeforeUnmount(() => {
     if (el && opts.videoId.value) saveResumePosition(opts.videoId.value, el.currentTime, el.duration || 0);
-    flush(true);
+    flush(true, true);
     detach();
     if (typeof window !== 'undefined') window.removeEventListener('pagehide', onPageHide);
   });
