@@ -116,7 +116,7 @@
               <img :src="heroVideo.channel_avatar || fallbackAvatar" @error="handleAvatarError" class="hero-channel-img" alt="" />
               <span>{{ heroVideo.channel_title }}</span>
             </div>
-            <h1 class="hero-title">{{ heroVideo.title }}</h1>
+            <h1 class="hero-title" :title="heroVideo.original_title || undefined">{{ heroVideo.title }}</h1>
             <div class="hero-meta">
               <span>{{ t('video.views', { views: formatViews(heroVideo.view_count) }) }}</span>
               <span class="meta-dot">•</span>
