@@ -409,6 +409,12 @@ watch(firstPage, () => subscriptionChanges.clear());
   .dir-toolbar { justify-content: stretch; flex-basis: 100%; }
   .dir-search { max-width: none; flex-basis: 100%; }
   .dir-select { flex: 1 1 0; }
-  .dir-select .form-input { width: 100%; }
+  .dir-select .form-input {
+    width: 100%;
+    padding: 0 26px 0 10px;
+    background-position: right 6px center;
+    background-size: 14px;
+    font-size: 12.5px;
+  }
 }
 </style>
