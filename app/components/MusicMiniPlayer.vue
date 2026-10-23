@@ -146,7 +146,7 @@ const {
 const toast = useToast();
 const { t } = useI18n();
 
-// "Repeat: off" / "Répéter : désactivé"
+// "Repeat: off", worded in the UI language
 const repeatLabel = computed(() => t('music.player.repeat', { mode: t(`music.player.repeatMode.${repeatMode.value}`) }));
 
 // Podcast playback is a separate <audio> element in PodcastMiniPlayer.vue;
