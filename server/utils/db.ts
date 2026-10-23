@@ -4,6 +4,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import { getDataDir } from './dataDir';
 import { ensurePodcastPubTs } from './podcastPubDate';
+import { ensureChannelCategories } from './channelCategories';
 import { applyAutoSyncDefaults, SYNC_TYPE_CONFIG } from './autoSync';
 import { applyPerformancePragmas, FTS_UPDATE_TRIGGERS, migrateFtsTriggers, migrateFtsRenameTriggers, runPlannerMaintenance } from './dbTuning';
 
@@ -448,6 +449,11 @@ export function openDatabase(dbPath: string): Database.Database {
   try { db.exec(`ALTER TABLE videos ADD COLUMN categories TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN tags TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN metadata_enriched_at INTEGER;`); } catch (e) {}
+  // Channel categories (server/utils/channelCategories.ts): the automatic
+  // ones (JSON array, recomputed from the enriched videos) and an admin's
+  // override (JSON array, NULL = automatic).
+  try { db.exec(`ALTER TABLE channels ADD COLUMN categories TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE channels ADD COLUMN categories_override TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE user_history ADD COLUMN position_seconds INTEGER NOT NULL DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE user_history ADD COLUMN duration_seconds INTEGER;`); } catch (e) {}
   try { db.exec(`ALTER TABLE user_history ADD COLUMN position_updated_at INTEGER;`); } catch (e) {}
@@ -877,6 +883,10 @@ export function openDatabase(dbPath: string): Database.Database {
     db.prepare("INSERT INTO settings (key, value) VALUES ('metadata_backfill_enabled', '1')").run();
     console.log('Seeded setting metadata_backfill_enabled: 1');
   }
+
+  // The one-off channel categories migration, then the startup pass for
+  // channels whose categories were never computed.
+  ensureChannelCategories(db);
 
   // After the migrations: planner statistics (ANALYZE when there are none).
   runPlannerMaintenance(db);

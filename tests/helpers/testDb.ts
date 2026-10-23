@@ -93,7 +93,9 @@ export function createTestDb(): Database.Database {
       sync_status TEXT DEFAULT 'paused',
       import_status TEXT,
       import_error TEXT,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL,
+      categories TEXT,
+      categories_override TEXT
     );
 
     CREATE TABLE videos (
