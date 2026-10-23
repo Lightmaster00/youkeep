@@ -876,6 +876,7 @@
     "descriptionTooLong": "La description ne peut pas dépasser {max} caractères.",
     "reasonRequired": "Indiquez quel est le problème.",
     "reasonTooLong": "Le motif ne peut pas dépasser {max} caractères.",
-    "tooManyReports": "Trop de signalements. Réessayez plus tard."
+    "tooManyReports": "Trop de signalements. Réessayez plus tard.",
+    "tooManyLoginsProxy": "Trop de tentatives de connexion échouées. Réessayez dans {minutes} minute(s). Si YouKeep fonctionne derrière un proxy inverse, l'administrateur doit définir TRUST_PROXY pour que les visiteurs ne soient pas tous comptés comme un seul."
   }
 }

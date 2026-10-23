@@ -43,9 +43,16 @@ describe('apiErrorMessage', () => {
 
   it('shows an unknown server message as the server sent it', () => {
     expect(apiErrorMessage({ data: { statusMessage: 'Disk quota exceeded for this show.' } }, fr, 'errors.generic')).toBe('Disk quota exceeded for this show.');
-    // A proxy hint appended to a rate limit is not an exact match: shown as is.
+    // Another suffix on a rate limit is not an exact match: shown as is.
     const hinted = 'Too many failed login attempts. Try again in 3 minute(s). Behind a proxy? Set X.';
     expect(apiErrorMessage({ data: { statusMessage: hinted } }, fr)).toBe(hinted);
+  });
+
+  it('maps the login rate limit with the reverse-proxy hint the server adds by default', () => {
+    const msg = 'Too many failed login attempts. Try again in 15 minute(s). If YouKeep runs behind a reverse proxy, the administrator must set TRUST_PROXY so visitors are not all counted as one.';
+    expect(apiErrorMessage({ data: { statusMessage: msg } }, en)).toBe(msg);
+    expect(apiErrorMessage({ data: { statusMessage: msg } }, fr)).toContain('Réessayez dans 15 minute(s).');
+    expect(apiErrorMessage({ data: { statusMessage: msg } }, fr)).toContain('TRUST_PROXY');
   });
 
   it('reads statusMessage from createError objects too', () => {

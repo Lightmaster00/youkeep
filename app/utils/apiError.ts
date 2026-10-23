@@ -37,6 +37,8 @@ export const EXACT_MESSAGES: Record<string, string> = {
 
 // Messages that carry a number: [pattern, key, name of the parameter].
 export const NUMBERED_MESSAGES: Array<[RegExp, string, string]> = [
+  // Without TRUST_PROXY the server appends a hint for the administrator (see server/api/auth/login.post.ts).
+  [/^Too many failed login attempts\. Try again in (\d+) minute\(s\)\. If YouKeep runs behind a reverse proxy, the administrator must set TRUST_PROXY so visitors are not all counted as one\.$/, 'errors.tooManyLoginsProxy', 'minutes'],
   [/^Too many failed login attempts\. Try again in (\d+) minute\(s\)\.$/, 'errors.tooManyLogins', 'minutes'],
   [/^Too many failed attempts\. Try again in (\d+) minute\(s\)\.$/, 'errors.tooManyAttempts', 'minutes'],
   [/^Password must be at least (\d+) characters long\.$/, 'account.passwordTooShort', 'min'],

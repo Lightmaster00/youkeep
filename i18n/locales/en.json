@@ -876,6 +876,7 @@
     "descriptionTooLong": "The description must be at most {max} characters.",
     "reasonRequired": "Please say what is wrong.",
     "reasonTooLong": "The reason must be at most {max} characters.",
-    "tooManyReports": "Too many reports. Try again later."
+    "tooManyReports": "Too many reports. Try again later.",
+    "tooManyLoginsProxy": "Too many failed login attempts. Try again in {minutes} minute(s). If YouKeep runs behind a reverse proxy, the administrator must set TRUST_PROXY so visitors are not all counted as one."
   }
 }
