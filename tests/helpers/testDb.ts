@@ -38,6 +38,7 @@ export function createTestDb(): Database.Database {
       role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
       must_change_password INTEGER DEFAULT 0,
       ui_language TEXT,
+      content_language TEXT,
       created_at INTEGER NOT NULL
     );
 
@@ -143,6 +144,16 @@ export function createTestDb(): Database.Database {
       duration_seconds INTEGER,
       position_updated_at INTEGER,
       PRIMARY KEY (user_id, video_id)
+    );
+
+    CREATE TABLE video_translations (
+      video_id TEXT NOT NULL,
+      lang TEXT NOT NULL,
+      title TEXT,
+      description TEXT,
+      fetched_at INTEGER NOT NULL,
+      PRIMARY KEY (video_id, lang),
+      FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
     );
 
     CREATE TABLE user_seen_videos (

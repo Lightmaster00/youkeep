@@ -386,6 +386,18 @@ export function openDatabase(dbPath: string): Database.Database {
       api_secret TEXT NOT NULL DEFAULT '',
       updated_at INTEGER NOT NULL
     );
+
+    -- Translated video text per language (YouTube localizations). A row with
+    -- NULL title and description is a negative entry: no translation exists.
+    CREATE TABLE IF NOT EXISTS video_translations (
+      video_id TEXT NOT NULL,
+      lang TEXT NOT NULL,
+      title TEXT,
+      description TEXT,
+      fetched_at INTEGER NOT NULL,
+      PRIMARY KEY (video_id, lang),
+      FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE
+    );
   `);
 
   // Run schema updates if columns are missing (database migration)
@@ -407,6 +419,7 @@ export function openDatabase(dbPath: string): Database.Database {
   try { db.exec(`ALTER TABLE users ADD COLUMN phone TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE users ADD COLUMN dob TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE users ADD COLUMN ui_language TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN content_language TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE channels ADD COLUMN custom_save_path TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN is_short INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN like_count INTEGER DEFAULT 0;`); } catch (e) {}

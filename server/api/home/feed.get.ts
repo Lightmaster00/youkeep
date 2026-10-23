@@ -1,6 +1,7 @@
 import { defineEventHandler } from 'h3';
 import { createRecommendCache, getBecauseYouWatched, getRecommendedVideos, getViewerProfile } from '../../utils/recommend';
 import { getUserFromSession } from '../../utils/auth';
+import { applyVideoTextLanguage } from '../../utils/videoTranslations';
 import type { UserSession } from '../../utils/auth';
 import { getDisplayView } from '../../utils/displayPrefsStore';
 import { isModuleEnabled } from '../../utils/modules';
@@ -275,6 +276,23 @@ export default defineEventHandler(async (event) => {
   for (const sectionId of prefs.homeSections) {
     const section = builders[sectionId]?.();
     if (section) sections.push(section);
+  }
+
+  // Every video of the page is translated at once (one cache query). The
+  // "because you watched" seed is a video too, and its section title embeds it.
+  const textRows: any[] = [];
+  if (large) textRows.push(large);
+  textRows.push(...small);
+  for (const section of sections) {
+    if (Array.isArray(section.videos)) textRows.push(...section.videos);
+    if (Array.isArray(section.groups)) for (const group of section.groups) textRows.push(...group.videos);
+    if (section.seed) textRows.push(section.seed);
+  }
+  applyVideoTextLanguage(db, session, textRows);
+  for (const section of sections) {
+    if (section.id === 'becauseYouWatched' && section.seed?.original_title) {
+      section.title = `${SECTION_TITLES.becauseYouWatched} ${section.seed.title}`;
+    }
   }
 
   return {

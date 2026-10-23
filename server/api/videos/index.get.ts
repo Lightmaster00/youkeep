@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { badRequest } from '../../utils/validation';
 import { videoColumnsSql, videoVisibilitySql } from '../../utils/videoAccess';
+import { applyVideoTextLanguage } from '../../utils/videoTranslations';
 import { buildFtsQuery } from '../../utils/ftsQuery';
 
 const MAX_LIMIT = 100;
@@ -196,6 +197,8 @@ export default defineEventHandler(async (event) => {
   `;
 
   const videos = db.prepare(listQuery).all(...params, limit, offset);
+  // Admin screens (status filters) keep the original text.
+  if (status === 'completed') applyVideoTextLanguage(db, session, videos);
 
   return {
     videos,

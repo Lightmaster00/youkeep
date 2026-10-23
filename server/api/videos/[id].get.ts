@@ -2,6 +2,7 @@ import { defineEventHandler, createError, getQuery } from 'h3';
 import crypto from 'crypto';
 import { listSubtitleFiles, resolveStoredPath } from '../../utils/videoPaths';
 import { videoColumnsSql } from '../../utils/videoAccess';
+import { applyVideoTextLanguage } from '../../utils/videoTranslations';
 
 export default defineEventHandler(async (event) => {
   const session = await getUserFromSession(event);
@@ -103,6 +104,8 @@ export default defineEventHandler(async (event) => {
       console.error('Error scanning subtitles:', e);
     }
   }
+
+  applyVideoTextLanguage(db, session, [video]);
 
   return { video, comments, subtitles, chapters, resume: { positionSeconds: resumePosition } };
 });

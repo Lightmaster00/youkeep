@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery } from 'h3';
 import { requireUser } from '../../utils/auth';
 import { badRequest } from '../../utils/validation';
+import { applyVideoTextLanguage } from '../../utils/videoTranslations';
 import { querySubscriptionFeed, SUBSCRIPTION_SORTS, type SubscriptionSort } from '../../utils/subscriptionFeed';
 
 const DEFAULT_LIMIT = 24;
@@ -24,7 +25,8 @@ export default defineEventHandler(async (event) => {
     const n = Number.parseInt(String(q[key] ?? ''), 10);
     return Number.isFinite(n) ? Math.min(max, Math.max(1, n)) : fallback;
   };
-  return querySubscriptionFeed(getDb(), session, {
+  const db = getDb();
+  const feed = querySubscriptionFeed(db, session, {
     channelId: text('channelId'),
     category: text('category'),
     sort,
@@ -32,4 +34,6 @@ export default defineEventHandler(async (event) => {
     page: int('page', 1, 10_000),
     limit: int('limit', DEFAULT_LIMIT, MAX_LIMIT),
   });
+  applyVideoTextLanguage(db, session, feed.videos);
+  return feed;
 });

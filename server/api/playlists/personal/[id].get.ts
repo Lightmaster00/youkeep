@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getQuery } from 'h3';
 import { safeEqual } from '../../../utils/auth';
+import { applyVideoTextLanguage } from '../../../utils/videoTranslations';
 
 export default defineEventHandler(async (event) => {
   const id = event.context.params?.id;
@@ -70,6 +71,8 @@ export default defineEventHandler(async (event) => {
 
   // The share token belongs to the owner (and admins).
   if (!isOwner) delete playlist.share_token;
+
+  applyVideoTextLanguage(db, user, accessibleVideos);
 
   return {
     playlist,
