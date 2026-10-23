@@ -2,5 +2,7 @@ import { defineEventHandler } from 'h3';
 
 export default defineEventHandler(async (event) => {
   const user = await getUserFromSession(event);
-  return { user };
+  if (!user) return { user };
+  const row = getDb().prepare('SELECT ui_language FROM users WHERE id = ?').get(user.id) as { ui_language: string | null } | undefined;
+  return { user: { ...user, uiLanguage: row?.ui_language ?? null } };
 });

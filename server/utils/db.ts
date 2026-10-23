@@ -406,6 +406,7 @@ export function openDatabase(dbPath: string): Database.Database {
   try { db.exec(`ALTER TABLE users ADD COLUMN email TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE users ADD COLUMN phone TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE users ADD COLUMN dob TEXT;`); } catch (e) {}
+  try { db.exec(`ALTER TABLE users ADD COLUMN ui_language TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE channels ADD COLUMN custom_save_path TEXT;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN is_short INTEGER DEFAULT 0;`); } catch (e) {}
   try { db.exec(`ALTER TABLE videos ADD COLUMN like_count INTEGER DEFAULT 0;`); } catch (e) {}

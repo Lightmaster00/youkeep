@@ -37,6 +37,7 @@ export function createTestDb(): Database.Database {
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('admin', 'user')),
       must_change_password INTEGER DEFAULT 0,
+      ui_language TEXT,
       created_at INTEGER NOT NULL
     );
 
