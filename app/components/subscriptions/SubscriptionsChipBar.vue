@@ -91,6 +91,7 @@ function onKeydown(event: KeyboardEvent) {
 
 <style scoped>
 .chip-bar {
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
   overflow-x: auto;

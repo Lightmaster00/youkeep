@@ -235,6 +235,13 @@ onMounted(loadChannels);
   min-width: 0;
 }
 
+/* The page is a column as tall as the viewport (main.css): its parts keep
+   their own height instead of shrinking into it (the scrolling chip bar,
+   overflow: auto, would otherwise be squashed to a sliver). */
+.subscriptions-page > * {
+  flex-shrink: 0;
+}
+
 .subs-title { margin-bottom: 0; }
 
 .subs-chip-skeleton {

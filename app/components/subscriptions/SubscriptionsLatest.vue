@@ -376,7 +376,7 @@ onMounted(load);
 
 @media (max-width: 480px) {
   .subs-filters { width: 100%; }
-  .subs-filter { flex: 1 1 140px; }
+  .subs-filter { flex: 1 1 110px; }
   .subs-select { width: 100%; min-width: 0; }
 }
 </style>
