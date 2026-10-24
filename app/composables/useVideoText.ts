@@ -1,4 +1,5 @@
 import type { HomeSectionId } from '#shared/displayPrefs';
+import { categoryLabel as labelOfCategory } from '~/utils/categoryLabel';
 
 // The wording of server-sent English text (home row titles, recommendation
 // reasons), rebuilt from their stable identifiers in the viewer's language.
@@ -36,10 +37,24 @@ export function useVideoText() {
     if (!reason) return '';
     const kind = video.reasonKind ?? reason.kind ?? '';
     const key = REASON_KEYS[kind];
-    const params = { title: video.reasonParams?.title, category: video.reasonParams?.category ?? reason.ref?.category };
+    const rawCategory = video.reasonParams?.category ?? reason.ref?.category;
+    const params = { title: video.reasonParams?.title, category: rawCategory ? categoryLabel(rawCategory) : rawCategory };
     const needs = kind === 'because-watched' ? params.title : kind === 'category' ? params.category : true;
     if (!key || !needs) return reason.label ?? '';
     return t(`video.reason.${key}`, params as Record<string, string>);
+  }
+
+  /** A YouTube category name in the viewer's language (the raw name when it is not a known one). */
+  function categoryLabel(name: string): string {
+    return labelOfCategory(name, key => t(key));
+  }
+
+  /** The "why this channel" line of a Discover card; the server's English text is the fallback. */
+  function discoverReason(channel: { reason?: string; reasonKind?: string; reasonParams?: { name?: string } }): string {
+    const name = channel.reasonParams?.name;
+    if (channel.reasonKind === 'because-watch' && name) return t('channels.reasonBecauseWatch', { name: categoryLabel(name) });
+    if (channel.reasonKind === 'popular') return t('channels.reasonPopular');
+    return channel.reason ?? '';
   }
 
   /** Name of a home row for the skeleton shown while the feed loads. */
@@ -47,5 +62,5 @@ export function useVideoText() {
     return t(`home.sections.${id}`);
   }
 
-  return { sectionTitle, reasonLabel, rowName };
+  return { sectionTitle, reasonLabel, rowName, categoryLabel, discoverReason };
 }

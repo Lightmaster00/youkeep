@@ -190,8 +190,8 @@ describe('GET /api/channels/discover', () => {
     // gamma shares Comedy; then beta and alpha by popularity; priv is followed,
     // empty has no video, ultra is not visible.
     expect(r.channels.map((c: any) => c.id)).toEqual(['gamma', 'beta', 'alpha']);
-    expect(r.channels[0]).toMatchObject({ reason: 'Because you watch Comedy', categories: ['Comedy'] });
-    expect(r.channels[1].reason).toBe('Popular in the library');
+    expect(r.channels[0]).toMatchObject({ reason: 'Because you watch Comedy', reasonKind: 'because-watch', reasonParams: { name: 'Comedy' }, categories: ['Comedy'] });
+    expect(r.channels[1]).toMatchObject({ reason: 'Popular in the library', reasonKind: 'popular', reasonParams: {} });
   });
 
   it('returns at most 8 channels', async () => {

@@ -240,6 +240,9 @@ export interface DiscoverDirectoryChannel {
   video_count: number;
   categories: string[];
   reason: string;
+  /** Stable identifier of `reason`, for clients that word it themselves. */
+  reasonKind: 'because-watch' | 'popular';
+  reasonParams: { name?: string };
 }
 
 /**
@@ -291,6 +294,9 @@ export function queryDirectoryDiscover(db: Database.Database, viewer: VideoViewe
           video_count: r.video_count as number,
           categories,
           reason: best ? `Because you watch ${best.name}` : 'Popular in the library',
+          // Stable identifiers so a client can word the reason in the viewer's language.
+          reasonKind: best ? 'because-watch' as const : 'popular' as const,
+          reasonParams: best ? { name: best.name } : {},
         },
         overlap,
         views: r.views as number,

@@ -4,7 +4,7 @@
     <HomeRow
       v-for="group in section.groups"
       :key="group.category"
-      :title="group.title || group.category"
+      :title="categoryLabel(group.category)"
       :see-all="`/search?q=${encodeURIComponent(group.category)}`"
       :testid="`home-row-${section.id}`"
     >
@@ -97,7 +97,7 @@ import { formatResumeAt, type HomeSectionLike } from '~/utils/homeFeed';
 // podcast row.
 const props = defineProps<{ section: HomeSectionLike & { title?: string }; loggedIn: boolean }>();
 const { t } = useI18n();
-const { sectionTitle, reasonLabel } = useVideoText();
+const { sectionTitle, reasonLabel, categoryLabel } = useVideoText();
 const title = computed(() => sectionTitle(props.section));
 const emit = defineEmits<{ (e: 'hidden', id: string): void }>();
 

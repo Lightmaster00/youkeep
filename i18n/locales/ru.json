@@ -366,7 +366,9 @@
       "downloading": "Скачивается",
       "completed": "Завершено",
       "failed": "Ошибка"
-    }
+    },
+    "reasonBecauseWatch": "Потому что вы смотрите: {name}",
+    "reasonPopular": "Популярное в библиотеке"
   },
   "search": {
     "title": "Поиск",
@@ -885,5 +887,38 @@
     "reasonTooLong": "Максимальная длина причины: {max} симв.",
     "tooManyReports": "Слишком много жалоб. Повторите позже.",
     "tooManyLoginsProxy": "Слишком много неудачных попыток входа. Повторите через {minutes} мин. Если YouKeep работает за обратным прокси, администратору нужно задать TRUST_PROXY, чтобы все посетители не считались одним."
+  },
+  "categories": {
+    "filmAnimation": "Фильмы и анимация",
+    "autosVehicles": "Авто и транспорт",
+    "music": "Музыка",
+    "petsAnimals": "Животные",
+    "sports": "Спорт",
+    "shortMovies": "Короткометражные фильмы",
+    "travelEvents": "Путешествия и события",
+    "gaming": "Игры",
+    "videoblogging": "Видеоблоги",
+    "peopleBlogs": "Люди и блоги",
+    "comedy": "Юмор",
+    "entertainment": "Развлечения",
+    "newsPolitics": "Новости и политика",
+    "howtoStyle": "Стиль и инструкции",
+    "education": "Образование",
+    "scienceTechnology": "Наука и технологии",
+    "nonprofitsActivism": "Некоммерческие организации и активизм",
+    "movies": "Фильмы",
+    "animeAnimation": "Аниме и анимация",
+    "actionAdventure": "Боевики и приключения",
+    "classics": "Классика",
+    "documentary": "Документальные фильмы",
+    "drama": "Драма",
+    "family": "Семейное кино",
+    "foreign": "Зарубежное кино",
+    "horror": "Ужасы",
+    "sciFiFantasy": "Фантастика и фэнтези",
+    "thriller": "Триллеры",
+    "shorts": "Shorts",
+    "shows": "Шоу",
+    "trailers": "Трейлеры"
   }
 }

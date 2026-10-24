@@ -366,7 +366,9 @@
       "downloading": "Baixando",
       "completed": "Concluído",
       "failed": "Falhou"
-    }
+    },
+    "reasonBecauseWatch": "Porque você assiste a {name}",
+    "reasonPopular": "Popular na biblioteca"
   },
   "search": {
     "title": "Pesquisar",
@@ -885,5 +887,38 @@
     "reasonTooLong": "O motivo deve ter no máximo {max} caracteres.",
     "tooManyReports": "Denúncias demais. Tente novamente mais tarde.",
     "tooManyLoginsProxy": "Muitas tentativas de login malsucedidas. Tente novamente em {minutes} minuto(s). Se o YouKeep estiver atrás de um proxy reverso, o administrador deve definir TRUST_PROXY para que os visitantes não sejam todos contados como um só."
+  },
+  "categories": {
+    "filmAnimation": "Filmes e animação",
+    "autosVehicles": "Automóveis e veículos",
+    "music": "Música",
+    "petsAnimals": "Animais de estimação",
+    "sports": "Esportes",
+    "shortMovies": "Curtas-metragens",
+    "travelEvents": "Viagens e eventos",
+    "gaming": "Jogos",
+    "videoblogging": "Videoblogs",
+    "peopleBlogs": "Pessoas e blogs",
+    "comedy": "Comédia",
+    "entertainment": "Entretenimento",
+    "newsPolitics": "Notícias e política",
+    "howtoStyle": "Instruções e estilo",
+    "education": "Educação",
+    "scienceTechnology": "Ciência e tecnologia",
+    "nonprofitsActivism": "ONGs e ativismo",
+    "movies": "Filmes",
+    "animeAnimation": "Anime e animação",
+    "actionAdventure": "Ação e aventura",
+    "classics": "Clássicos",
+    "documentary": "Documentários",
+    "drama": "Drama",
+    "family": "Família",
+    "foreign": "Filmes estrangeiros",
+    "horror": "Terror",
+    "sciFiFantasy": "Ficção científica e fantasia",
+    "thriller": "Suspense",
+    "shorts": "Shorts",
+    "shows": "Programas",
+    "trailers": "Trailers"
   }
 }
