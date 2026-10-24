@@ -44,6 +44,10 @@ describe('cleanupPartialMusicFiles', () => {
 
     const newFile = path.join(artistDir, 't1.mp4.part');
     fs.writeFileSync(newFile, 'x');
+    // Linux stamps files with a coarse clock that can lag Date.now() by a few
+    // milliseconds, so state "created after the cutoff" explicitly.
+    const newTime = new Date(cutoff + 5_000);
+    fs.utimesSync(newFile, newTime, newTime);
 
     cleanupPartialMusicFiles('t1', artistId, { newerThan: cutoff });
 
