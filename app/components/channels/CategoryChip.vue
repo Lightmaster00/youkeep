@@ -5,11 +5,11 @@
     class="category-chip"
     :class="[`category-chip--${size}`, { 'is-active': pressed }]"
     :aria-pressed="pressed ? 'true' : 'false'"
-    :title="pressed ? t('channels.showEveryCategory') : t('channels.showCategory', { name })"
+    :title="pressed ? t('channels.showEveryCategory') : t('channels.showCategory', { name: label })"
     :data-testid="`category-chip-${name}`"
     @click.stop.prevent="emit('select', name)"
   >
-    <span class="category-chip__label">{{ name }}</span>
+    <span class="category-chip__label">{{ label }}</span>
     <span v-if="count !== undefined" class="category-chip__count">{{ count.toLocaleString(locale) }}</span>
   </button>
   <NuxtLink
@@ -17,11 +17,11 @@
     :to="{ path: '/channels', query: { category: name } }"
     class="category-chip"
     :class="`category-chip--${size}`"
-    :title="t('channels.showCategory', { name })"
+    :title="t('channels.showCategory', { name: label })"
     :data-testid="`category-chip-${name}`"
     @click.stop
   >
-    <span class="category-chip__label">{{ name }}</span>
+    <span class="category-chip__label">{{ label }}</span>
   </NuxtLink>
 </template>
 
@@ -31,12 +31,15 @@
 // channels directory filtered by this category. Home, Subscriptions, the
 // channel page and the directory all draw categories with it.
 const { t, locale } = useI18n();
-withDefaults(defineProps<{
+const { categoryLabel } = useVideoText();
+const props = withDefaults(defineProps<{
   name: string;
   pressed?: boolean;
   count?: number;
   size?: 'sm' | 'md';
 }>(), { pressed: undefined, count: undefined, size: 'sm' });
+// The shown name is translated; the emitted value and the link keep the original name.
+const label = computed(() => categoryLabel(props.name));
 
 const emit = defineEmits<{ (e: 'select', name: string): void }>();
 </script>

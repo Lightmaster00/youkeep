@@ -366,7 +366,9 @@
       "downloading": "Downloading",
       "completed": "Completed",
       "failed": "Failed"
-    }
+    },
+    "reasonBecauseWatch": "Because you watch {name}",
+    "reasonPopular": "Popular in the library"
   },
   "search": {
     "title": "Search",
@@ -885,5 +887,38 @@
     "reasonTooLong": "The reason must be at most {max} characters.",
     "tooManyReports": "Too many reports. Try again later.",
     "tooManyLoginsProxy": "Too many failed login attempts. Try again in {minutes} minute(s). If YouKeep runs behind a reverse proxy, the administrator must set TRUST_PROXY so visitors are not all counted as one."
+  },
+  "categories": {
+    "filmAnimation": "Film & Animation",
+    "autosVehicles": "Autos & Vehicles",
+    "music": "Music",
+    "petsAnimals": "Pets & Animals",
+    "sports": "Sports",
+    "shortMovies": "Short Movies",
+    "travelEvents": "Travel & Events",
+    "gaming": "Gaming",
+    "videoblogging": "Videoblogging",
+    "peopleBlogs": "People & Blogs",
+    "comedy": "Comedy",
+    "entertainment": "Entertainment",
+    "newsPolitics": "News & Politics",
+    "howtoStyle": "Howto & Style",
+    "education": "Education",
+    "scienceTechnology": "Science & Technology",
+    "nonprofitsActivism": "Nonprofits & Activism",
+    "movies": "Movies",
+    "animeAnimation": "Anime/Animation",
+    "actionAdventure": "Action/Adventure",
+    "classics": "Classics",
+    "documentary": "Documentary",
+    "drama": "Drama",
+    "family": "Family",
+    "foreign": "Foreign",
+    "horror": "Horror",
+    "sciFiFantasy": "Sci-Fi/Fantasy",
+    "thriller": "Thriller",
+    "shorts": "Shorts",
+    "shows": "Shows",
+    "trailers": "Trailers"
   }
 }

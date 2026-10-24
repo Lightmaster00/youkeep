@@ -366,7 +366,9 @@
       "downloading": "ダウンロード中",
       "completed": "完了",
       "failed": "失敗"
-    }
+    },
+    "reasonBecauseWatch": "「{name}」を視聴しているため",
+    "reasonPopular": "ライブラリで人気"
   },
   "search": {
     "title": "検索",
@@ -885,5 +887,38 @@
     "reasonTooLong": "理由は{max}文字以内にしてください。",
     "tooManyReports": "報告が多すぎます。しばらくしてからもう一度お試しください。",
     "tooManyLoginsProxy": "ログインに何度も失敗しました。{minutes}分後にもう一度お試しください。YouKeepをリバースプロキシの背後で実行している場合、すべての訪問者が1人として数えられないよう、管理者がTRUST_PROXYを設定する必要があります。"
+  },
+  "categories": {
+    "filmAnimation": "映画とアニメ",
+    "autosVehicles": "自動車と乗り物",
+    "music": "音楽",
+    "petsAnimals": "ペットと動物",
+    "sports": "スポーツ",
+    "shortMovies": "ショートムービー",
+    "travelEvents": "旅行とイベント",
+    "gaming": "ゲーム",
+    "videoblogging": "ビデオブログ",
+    "peopleBlogs": "ブログと人物",
+    "comedy": "コメディ",
+    "entertainment": "エンターテイメント",
+    "newsPolitics": "ニュースと政治",
+    "howtoStyle": "ハウツーとスタイル",
+    "education": "教育",
+    "scienceTechnology": "科学と技術",
+    "nonprofitsActivism": "非営利団体と社会活動",
+    "movies": "映画",
+    "animeAnimation": "アニメ",
+    "actionAdventure": "アクション・アドベンチャー",
+    "classics": "クラシック",
+    "documentary": "ドキュメンタリー",
+    "drama": "ドラマ",
+    "family": "ファミリー",
+    "foreign": "海外作品",
+    "horror": "ホラー",
+    "sciFiFantasy": "SF・ファンタジー",
+    "thriller": "スリラー",
+    "shorts": "ショート",
+    "shows": "番組",
+    "trailers": "予告編"
   }
 }

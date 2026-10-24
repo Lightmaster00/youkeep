@@ -6,7 +6,7 @@
           <span class="subs-filter__label">{{ t('subscriptions.category') }}</span>
           <select v-model="category" class="form-input subs-select" data-testid="subs-category">
             <option value="">{{ t('subscriptions.allCategories') }}</option>
-            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+            <option v-for="cat in categories" :key="cat" :value="cat">{{ categoryLabel(cat) }}</option>
           </select>
         </label>
         <label class="subs-filter">
@@ -125,6 +125,7 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'all-seen'): void }>();
 
 const { t } = useI18n();
+const { categoryLabel } = useVideoText();
 const VIDEO_LIMIT = 24;
 const SHORT_LIMIT = 12;
 

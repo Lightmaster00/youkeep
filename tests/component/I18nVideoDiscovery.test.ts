@@ -62,7 +62,7 @@ describe('home page in French', () => {
     await flushPromises();
     const text = (id: string) => w.find(`[data-testid="home-row-${id}"]`).text().replace(/\s/g, ' ');
     expect(text('forYou')).toContain('Recommandé pour vous');
-    expect(text('forYou')).toContain('Populaire dans Gaming');
+    expect(text('forYou')).toContain('Populaire dans Jeux vidéo');
     expect(text('forYou')).toContain('Parce que vous avez regardé Seed');
     // No structured params: the server's English text is the fallback, never an empty line.
     expect(text('forYou')).toContain('Because you watched Old');

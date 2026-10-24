@@ -366,7 +366,9 @@
       "downloading": "下载中",
       "completed": "已完成",
       "failed": "失败"
-    }
+    },
+    "reasonBecauseWatch": "因为你观看了 {name}",
+    "reasonPopular": "媒体库中的热门内容"
   },
   "search": {
     "title": "搜索",
@@ -885,5 +887,38 @@
     "reasonTooLong": "原因最多 {max} 个字符。",
     "tooManyReports": "举报次数过多。请稍后再试。",
     "tooManyLoginsProxy": "登录失败次数过多。请在 {minutes} 分钟后重试。如果 YouKeep 运行在反向代理之后，管理员必须设置 TRUST_PROXY，以免所有访客被算作同一个。"
+  },
+  "categories": {
+    "filmAnimation": "影视和动画",
+    "autosVehicles": "汽车和交通工具",
+    "music": "音乐",
+    "petsAnimals": "宠物和动物",
+    "sports": "体育",
+    "shortMovies": "短片",
+    "travelEvents": "旅游和活动",
+    "gaming": "游戏",
+    "videoblogging": "视频博客",
+    "peopleBlogs": "人物和博客",
+    "comedy": "喜剧",
+    "entertainment": "娱乐",
+    "newsPolitics": "新闻和政治",
+    "howtoStyle": "生活技巧和时尚",
+    "education": "教育",
+    "scienceTechnology": "科学和技术",
+    "nonprofitsActivism": "非营利组织和社会活动",
+    "movies": "电影",
+    "animeAnimation": "动漫",
+    "actionAdventure": "动作和冒险",
+    "classics": "经典",
+    "documentary": "纪录片",
+    "drama": "剧情",
+    "family": "家庭",
+    "foreign": "外国电影",
+    "horror": "恐怖",
+    "sciFiFantasy": "科幻和奇幻",
+    "thriller": "惊悚",
+    "shorts": "Shorts",
+    "shows": "节目",
+    "trailers": "预告片"
   }
 }

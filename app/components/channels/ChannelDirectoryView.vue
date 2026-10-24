@@ -50,7 +50,7 @@
           :key="ch.id"
           class="dir-discover__item"
           :channel="withSubscription(ch)"
-          :reason="ch.reason"
+          :reason="discoverReason(ch)"
           :can-subscribe="isLoggedIn"
           :active-category="filters.category"
           @category="selectCategory"
@@ -149,6 +149,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 const { t, locale } = useI18n();
 const { isAdmin, isLoggedIn } = useAuth();
+const { discoverReason } = useVideoText();
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();

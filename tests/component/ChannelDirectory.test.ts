@@ -237,3 +237,35 @@ describe('Subscribe button', () => {
     w2.unmount();
   });
 });
+
+describe('in French', () => {
+  afterEach(async () => { await useNuxtApp().$i18n.setLocale('en'); });
+
+  it('translates category chips, the discover reason and unknown names stay raw, filters keep the English value', async () => {
+    await useNuxtApp().$i18n.setLocale('fr');
+    signIn();
+    listAnswer = () => ({ channels: [channel('a', { categories: ['Science & Technology', 'Cooking Mastery'] })], total: 1 });
+    fetchMock.mockImplementation(async (url: string, opts: any = {}) => {
+      if (url === '/api/channels' && opts.params?.page) return listAnswer(opts.params);
+      if (url === '/api/channels/categories') return { categories: [{ name: 'Gaming', count: 5 }, { name: 'Science & Technology', count: 2 }] };
+      if (url === '/api/channels/discover') return { channels: [
+        channel('d', { reason: 'Because you watch Gaming', reasonKind: 'because-watch', reasonParams: { name: 'Gaming' }, video_count: 4 }),
+        channel('e', { reason: 'Popular in the library', reasonKind: 'popular', reasonParams: {}, video_count: 2 }),
+        channel('f', { reason: 'Something new', reasonKind: 'brand-new-kind', video_count: 1 }),
+      ] };
+      return {};
+    });
+    const w = await mountDirectory();
+    expect(w.find('[data-testid="category-bar"] [data-testid="category-chip-Gaming"]').text()).toContain('Jeux vidéo');
+    expect(w.find('[data-testid="category-bar"] [data-testid="category-chip-Science & Technology"]').text()).toContain('Science et technologie');
+    expect(w.find('[data-testid="dir-channel-a"]').text()).toContain('Cooking Mastery');
+    expect(w.find('[data-testid="dir-channel-d"] .dir-card__reason').text()).toBe('Parce que vous regardez Jeux vidéo');
+    expect(w.find('[data-testid="dir-channel-e"] .dir-card__reason').text()).toBe('Populaire dans la bibliothèque');
+    expect(w.find('[data-testid="dir-channel-f"] .dir-card__reason').text()).toBe('Something new');
+    await w.find('[data-testid="category-bar"] [data-testid="category-chip-Gaming"]').trigger('click');
+    await flushPromises();
+    await vi.waitFor(() => expect(currentQuery().category).toBe('Gaming'));
+    expect(lastList()).toMatchObject({ category: 'Gaming' });
+    w.unmount();
+  });
+});
