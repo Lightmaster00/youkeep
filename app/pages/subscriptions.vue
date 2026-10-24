@@ -107,7 +107,8 @@ import { confirmAction } from '~/composables/useConfirm';
 import { useToast } from '~/composables/useToast';
 import type { SubscribedChannel } from '~/utils/subscriptionTypes';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
+const { categoryLabel } = useVideoText();
 useHead({ title: computed(() => t('subscriptions.title')) });
 
 type Tab = 'latest' | 'channels';
@@ -136,7 +137,7 @@ const queryChannel = computed(() => (typeof route.query.channel === 'string' ? r
 // A channel the viewer no longer follows filters nothing.
 const activeChannelId = computed(() => (channels.value.some((c) => c.id === queryChannel.value) ? queryChannel.value : ''));
 
-const categories = computed(() => [...new Set(channels.value.flatMap((c) => c.categories ?? []))].sort((a, b) => a.localeCompare(b, 'en-US')));
+const categories = computed(() => [...new Set(channels.value.flatMap((c) => c.categories ?? []))].sort((a, b) => categoryLabel(a).localeCompare(categoryLabel(b), locale.value)));
 const anyNew = computed(() => channels.value.some((c) => c.newCount > 0));
 
 function replaceQuery(patch: Record<string, string | undefined>) {
