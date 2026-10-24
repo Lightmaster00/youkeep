@@ -3,14 +3,13 @@
     <svg class="app-logo-mark" viewBox="0 0 256 256" aria-hidden="true" focusable="false">
       <defs>
         <linearGradient :id="gid" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#22D3EE" />
-          <stop offset=".55" stop-color="#3B5BFF" />
-          <stop offset="1" stop-color="#8B5CF6" />
+          <stop offset="0" stop-color="#8B5CF6" />
+          <stop offset="1" stop-color="#EC4899" />
         </linearGradient>
       </defs>
       <rect width="256" height="256" rx="58" :fill="`url(#${gid})`" />
       <path d="M128 42 L198 68 V128 C198 168 168 196 128 214 C88 196 58 168 58 128 V68 Z" fill="#FFFFFF" />
-      <path d="M111 100 V156 L158 128 Z" fill="#3B5BFF" stroke="#3B5BFF" stroke-width="10" stroke-linejoin="round" />
+      <path d="M111 100 V156 L158 128 Z" fill="#9333EA" stroke="#9333EA" stroke-width="10" stroke-linejoin="round" />
     </svg>
     <span v-if="wordmark" class="app-logo-word"><span class="app-logo-you">You</span><span class="app-logo-keep">Keep</span></span>
   </span>
@@ -44,5 +43,12 @@ withDefaults(defineProps<{ size?: 'sm' | 'md' | 'lg'; wordmark?: boolean }>(), {
   flex-shrink: 0;
 }
 .app-logo-you { font-weight: 500; }
-.app-logo-keep { color: #7DD3FC; font-weight: 700; }
+.app-logo-keep {
+  font-weight: 700;
+  /* Same violet to pink as the buttons and headings (--accent-primary / --accent-secondary). */
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 </style>
